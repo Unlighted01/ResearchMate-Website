@@ -18,9 +18,9 @@ const PORT = process.env.PORT || 3001;
 app.use(
   cors({
     origin: [
-      "http://localhost:3000",
-      "http://localhost:5173",
-      process.env.VITE_SITE_URL || "https://your-production-domain.com", // Update this for production
+      process.env.VITE_SITE_URL,
+      "http://localhost:5173", // Vite default
+      // Add other local ports if needed via env vars
     ],
     methods: ["GET", "POST"],
     credentials: true,
