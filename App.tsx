@@ -2184,6 +2184,47 @@ const CollectionsPage = () => {
 // PART 12: MAIN APP COMPONENT
 // ============================================
 
+// 1. Define a wrapper to protect routes
+const RequireAuth = ({ children }: { children: React.ReactNode }) => {
+  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<any>(null);
+  const location = useLocation();
+
+  useEffect(() => {
+    // Check for active session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    // Listen for changes (like token refresh or sign out)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) {
+    // Show spinner while checking local storage
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    // Redirect to login if no session found, but remember where they were trying to go
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
+};
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -2220,21 +2261,23 @@ export default function App() {
           {/* Auth Callback Route */}
           <Route path="/auth/callback" element={<AuthCallback />} />
 
-          {/* Private Routes */}
+          {/* Private Routes (Wrapped in RequireAuth) */}
           <Route
             path="/app/*"
             element={
-              <DashboardLayout>
-                <Routes>
-                  <Route path="dashboard" element={<Dashboard />} />
-                  <Route path="collections" element={<CollectionsPage />} />
-                  <Route path="ai-assistant" element={<AIAssistant />} />
-                  <Route path="citations" element={<CitationGenerator />} />
-                  <Route path="smart-pen" element={<SmartPenGallery />} />
-                  <Route path="statistics" element={<Statistics />} />
-                  <Route path="settings" element={<SettingsPage />} />
-                </Routes>
-              </DashboardLayout>
+              <RequireAuth>
+                <DashboardLayout>
+                  <Routes>
+                    <Route path="dashboard" element={<Dashboard />} />
+                    <Route path="collections" element={<CollectionsPage />} />
+                    <Route path="ai-assistant" element={<AIAssistant />} />
+                    <Route path="citations" element={<CitationGenerator />} />
+                    <Route path="smart-pen" element={<SmartPenGallery />} />
+                    <Route path="statistics" element={<Statistics />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                  </Routes>
+                </DashboardLayout>
+              </RequireAuth>
             }
           />
 
