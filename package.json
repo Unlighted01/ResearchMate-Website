@@ -1,0 +1,29 @@
+{
+  "name": "researchmate-website",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ResearchMate Website - Full-stack web platform for research management",
+  "scripts": {
+    "dev": "vite",
+    "dev:all": "start cmd /k \"cd researchmate-backend && npm run dev\" && npm run dev",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "react-router-dom": "^7.10.0",
+    "@supabase/supabase-js": "^2.86.0",
+    "lucide-react": "^0.555.0",
+    "recharts": "^3.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

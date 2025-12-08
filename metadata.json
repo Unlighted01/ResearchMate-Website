@@ -1,0 +1,8 @@
+{
+  "name": "ResearchMate",
+  "description": "A research management ecosystem syncing data from extension, mobile app, and smart pen with AI-powered insights.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
