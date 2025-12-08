@@ -20,7 +20,7 @@ app.use(
     origin: [
       "http://localhost:3000",
       "http://localhost:5173",
-      "https://your-production-domain.com", // Update this for production
+      process.env.VITE_SITE_URL || "https://your-production-domain.com", // Update this for production
     ],
     methods: ["GET", "POST"],
     credentials: true,

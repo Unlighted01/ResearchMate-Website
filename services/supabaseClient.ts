@@ -2,7 +2,13 @@
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
 
-import { createClient, SupabaseClient, User, Session, AuthChangeEvent } from '@supabase/supabase-js';
+import {
+  createClient,
+  SupabaseClient,
+  User,
+  Session,
+  AuthChangeEvent,
+} from "@supabase/supabase-js";
 
 // ============================================
 // PART 2: CONFIGURATION & CONSTANTS
@@ -13,8 +19,16 @@ import { createClient, SupabaseClient, User, Session, AuthChangeEvent } from '@s
  * Matches extension's configuration for seamless data sharing
  * In production, these should be environment variables
  */
-const SUPABASE_URL: string = import.meta.env.VITE_SUPABASE_URL || 'https://jxevjkzojfbywxvtcwtl.supabase.co';
-const SUPABASE_ANON_KEY: string = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4ZXZqa3pvamZieXd4dnRjd3RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MDc4MzEsImV4cCI6MjA3NTQ4MzgzMX0.hZL-wGTcmD9H0bsmj_jqzZ2iw1GZyJM5X14meIRKgNQ';
+const SUPABASE_URL: string = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY: string = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL) {
+  throw new Error("Missing VITE_SUPABASE_URL environment variable");
+}
+
+if (!SUPABASE_ANON_KEY) {
+  throw new Error("Missing VITE_SUPABASE_ANON_KEY environment variable");
+}
 
 /**
  * Auth Configuration - Website specific settings
@@ -23,9 +37,9 @@ const AUTH_CONFIG = {
   autoRefreshToken: true,
   persistSession: true,
   detectSessionInUrl: true,
-  storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-  storageKey: 'researchmate-auth',
-  flowType: 'pkce' as const,
+  storage: typeof window !== "undefined" ? window.localStorage : undefined,
+  storageKey: "researchmate-auth",
+  flowType: "pkce" as const,
 };
 
 // ============================================
@@ -42,7 +56,10 @@ export interface SessionResult {
   error: Error | null;
 }
 
-export type AuthEventCallback = (event: AuthChangeEvent, session: Session | null) => void;
+export type AuthEventCallback = (
+  event: AuthChangeEvent,
+  session: Session | null
+) => void;
 
 // ============================================
 // PART 4: SUPABASE CLIENT INITIALIZATION
@@ -52,14 +69,18 @@ export type AuthEventCallback = (event: AuthChangeEvent, session: Session | null
  * Create and export Supabase client
  * Configured to match extension settings for seamless data sharing
  */
-export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: AUTH_CONFIG,
-});
+export const supabase: SupabaseClient = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  {
+    auth: AUTH_CONFIG,
+  }
+);
 
 // Log initialization in development
 if (import.meta.env.DEV) {
-  console.log('🔧 Supabase client initialized');
-  console.log('📍 URL:', SUPABASE_URL);
+  console.log("🔧 Supabase client initialized");
+  console.log("📍 URL:", SUPABASE_URL);
 }
 
 // ============================================
@@ -72,16 +93,19 @@ if (import.meta.env.DEV) {
  */
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
     if (error) {
-      console.error('❌ Get user error:', error.message);
+      console.error("❌ Get user error:", error.message);
       return null;
     }
-    
+
     return user;
   } catch (error) {
-    console.error('❌ Get user exception:', error);
+    console.error("❌ Get user exception:", error);
     return null;
   }
 }
@@ -92,16 +116,19 @@ export async function getCurrentUser(): Promise<User | null> {
  */
 export async function getSession(): Promise<SessionResult> {
   try {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
     if (error) {
-      console.error('❌ Get session error:', error.message);
+      console.error("❌ Get session error:", error.message);
       return { session: null, error };
     }
-    
+
     return { session, error: null };
   } catch (error) {
-    console.error('❌ Get session exception:', error);
+    console.error("❌ Get session exception:", error);
     return { session: null, error: error as Error };
   }
 }
@@ -112,7 +139,9 @@ export async function getSession(): Promise<SessionResult> {
  */
 export async function isAuthenticated(): Promise<boolean> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     return !!session;
   } catch {
     return false;
@@ -129,9 +158,12 @@ export async function isAuthenticated(): Promise<boolean> {
  * @param password - User's password
  * @returns Promise<AuthResult>
  */
-export async function signInWithEmail(email: string, password: string): Promise<AuthResult> {
+export async function signInWithEmail(
+  email: string,
+  password: string
+): Promise<AuthResult> {
   try {
-    console.log('🔑 Signing in with email:', email);
+    console.log("🔑 Signing in with email:", email);
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
@@ -139,14 +171,14 @@ export async function signInWithEmail(email: string, password: string): Promise<
     });
 
     if (error) {
-      console.error('❌ Sign in error:', error.message);
+      console.error("❌ Sign in error:", error.message);
       return { user: null, error };
     }
 
-    console.log('✅ Signed in successfully:', data.user?.id);
+    console.log("✅ Signed in successfully:", data.user?.id);
     return { user: data.user, error: null };
   } catch (error) {
-    console.error('❌ Sign in exception:', error);
+    console.error("❌ Sign in exception:", error);
     return { user: null, error: error as Error };
   }
 }
@@ -157,9 +189,12 @@ export async function signInWithEmail(email: string, password: string): Promise<
  * @param password - User's password (min 6 characters)
  * @returns Promise<AuthResult>
  */
-export async function signUpWithEmail(email: string, password: string): Promise<AuthResult> {
+export async function signUpWithEmail(
+  email: string,
+  password: string
+): Promise<AuthResult> {
   try {
-    console.log('📝 Signing up with email:', email);
+    console.log("📝 Signing up with email:", email);
 
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
@@ -171,14 +206,14 @@ export async function signUpWithEmail(email: string, password: string): Promise<
     });
 
     if (error) {
-      console.error('❌ Sign up error:', error.message);
+      console.error("❌ Sign up error:", error.message);
       return { user: null, error };
     }
 
-    console.log('✅ Sign up successful:', data.user?.id);
+    console.log("✅ Sign up successful:", data.user?.id);
     return { user: data.user, error: null };
   } catch (error) {
-    console.error('❌ Sign up exception:', error);
+    console.error("❌ Sign up exception:", error);
     return { user: null, error: error as Error };
   }
 }
@@ -193,27 +228,27 @@ export async function signUpWithEmail(email: string, password: string): Promise<
  */
 export async function signInWithGoogle(): Promise<{ error: Error | null }> {
   try {
-    console.log('🔑 Starting Google OAuth...');
+    console.log("🔑 Starting Google OAuth...");
 
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider: "google",
       options: {
         redirectTo: `${window.location.origin}/#/auth/callback`,
         queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
+          access_type: "offline",
+          prompt: "consent",
         },
       },
     });
 
     if (error) {
-      console.error('❌ Google OAuth error:', error.message);
+      console.error("❌ Google OAuth error:", error.message);
       return { error };
     }
 
     return { error: null };
   } catch (error) {
-    console.error('❌ Google OAuth exception:', error);
+    console.error("❌ Google OAuth exception:", error);
     return { error: error as Error };
   }
 }
@@ -224,23 +259,23 @@ export async function signInWithGoogle(): Promise<{ error: Error | null }> {
  */
 export async function signInWithGitHub(): Promise<{ error: Error | null }> {
   try {
-    console.log('🔑 Starting GitHub OAuth...');
+    console.log("🔑 Starting GitHub OAuth...");
 
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'github',
+      provider: "github",
       options: {
         redirectTo: `${window.location.origin}/#/auth/callback`,
       },
     });
 
     if (error) {
-      console.error('❌ GitHub OAuth error:', error.message);
+      console.error("❌ GitHub OAuth error:", error.message);
       return { error };
     }
 
     return { error: null };
   } catch (error) {
-    console.error('❌ GitHub OAuth exception:', error);
+    console.error("❌ GitHub OAuth exception:", error);
     return { error: error as Error };
   }
 }
@@ -255,19 +290,19 @@ export async function signInWithGitHub(): Promise<{ error: Error | null }> {
  */
 export async function signOut(): Promise<{ error: Error | null }> {
   try {
-    console.log('🚪 Signing out...');
+    console.log("🚪 Signing out...");
 
     const { error } = await supabase.auth.signOut();
 
     if (error) {
-      console.error('❌ Sign out error:', error.message);
+      console.error("❌ Sign out error:", error.message);
       return { error };
     }
 
-    console.log('✅ Signed out successfully');
+    console.log("✅ Signed out successfully");
     return { error: null };
   } catch (error) {
-    console.error('❌ Sign out exception:', error);
+    console.error("❌ Sign out exception:", error);
     return { error: error as Error };
   }
 }
@@ -282,8 +317,15 @@ export async function signOut(): Promise<{ error: Error | null }> {
  * @returns Subscription object with unsubscribe method
  */
 export function onAuthStateChange(callback: AuthEventCallback) {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    console.log('🔄 Auth state changed:', event, 'User:', session?.user?.id || 'none');
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    console.log(
+      "🔄 Auth state changed:",
+      event,
+      "User:",
+      session?.user?.id || "none"
+    );
     callback(event, session);
   });
 
@@ -299,23 +341,25 @@ export function onAuthStateChange(callback: AuthEventCallback) {
  * @param email - User's email address
  * @returns Promise<{ error: Error | null }>
  */
-export async function resetPassword(email: string): Promise<{ error: Error | null }> {
+export async function resetPassword(
+  email: string
+): Promise<{ error: Error | null }> {
   try {
-    console.log('📧 Sending password reset email to:', email);
+    console.log("📧 Sending password reset email to:", email);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/#/auth/reset-password`,
     });
 
     if (error) {
-      console.error('❌ Password reset error:', error.message);
+      console.error("❌ Password reset error:", error.message);
       return { error };
     }
 
-    console.log('✅ Password reset email sent');
+    console.log("✅ Password reset email sent");
     return { error: null };
   } catch (error) {
-    console.error('❌ Password reset exception:', error);
+    console.error("❌ Password reset exception:", error);
     return { error: error as Error };
   }
 }
@@ -325,21 +369,23 @@ export async function resetPassword(email: string): Promise<{ error: Error | nul
  * @param newPassword - New password
  * @returns Promise<{ error: Error | null }>
  */
-export async function updatePassword(newPassword: string): Promise<{ error: Error | null }> {
+export async function updatePassword(
+  newPassword: string
+): Promise<{ error: Error | null }> {
   try {
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
     });
 
     if (error) {
-      console.error('❌ Update password error:', error.message);
+      console.error("❌ Update password error:", error.message);
       return { error };
     }
 
-    console.log('✅ Password updated successfully');
+    console.log("✅ Password updated successfully");
     return { error: null };
   } catch (error) {
-    console.error('❌ Update password exception:', error);
+    console.error("❌ Update password exception:", error);
     return { error: error as Error };
   }
 }

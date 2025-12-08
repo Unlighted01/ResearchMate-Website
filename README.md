@@ -13,7 +13,7 @@ The full-stack web platform for ResearchMate - part of the ResearchMate ecosyste
 
 ## 📋 Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - npm or yarn
 - Supabase account (shared with extension)
 - Google AI API key (for Gemini)
@@ -50,7 +50,7 @@ In your Supabase dashboard:
 
 1. Go to **Authentication > URL Configuration**
 2. Add these redirect URLs:
-   - `http://localhost:3000/#/auth/callback` (development)
+   - `YOUR_SITE_URL/#/auth/callback` (development)
    - `https://your-domain.com/#/auth/callback` (production)
 
 ### 4. Run Development Server
@@ -59,7 +59,7 @@ In your Supabase dashboard:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [YOUR_SITE_URL](YOUR_SITE_URL) in your browser.
 
 ## 🏗️ Project Structure
 
@@ -84,25 +84,26 @@ researchmate-website/
 
 ## 🔧 Available Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm run preview` | Preview production build |
+| Command              | Description                  |
+| -------------------- | ---------------------------- |
+| `npm run dev`        | Start development server     |
+| `npm run build`      | Build for production         |
+| `npm run preview`    | Preview production build     |
 | `npm run type-check` | Run TypeScript type checking |
 
 ## 🔗 Ecosystem Integration
 
 This website is designed to work seamlessly with:
 
-| Component | Function | Data Flow |
-|-----------|----------|-----------|
-| **Browser Extension** | Highlight & save text | → Supabase → Website |
-| **Mobile App** | Camera scanning, offline access | → Supabase → Website |
-| **Smart Pen** | Handwritten notes with OCR | → Supabase → Website |
-| **Website** | View, manage, analyze | ← Supabase (real-time) |
+| Component             | Function                        | Data Flow              |
+| --------------------- | ------------------------------- | ---------------------- |
+| **Browser Extension** | Highlight & save text           | → Supabase → Website   |
+| **Mobile App**        | Camera scanning, offline access | → Supabase → Website   |
+| **Smart Pen**         | Handwritten notes with OCR      | → Supabase → Website   |
+| **Website**           | View, manage, analyze           | ← Supabase (real-time) |
 
 All components share the same Supabase database, enabling:
+
 - Real-time sync across all devices
 - Consistent authentication (same account everywhere)
 - Unified research collection
@@ -112,30 +113,32 @@ All components share the same Supabase database, enabling:
 The website uses these Supabase tables (shared with extension):
 
 ### `items` table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| user_id | uuid | Foreign key to auth.users |
-| text | text | Research content |
-| source_url | text | Original source URL |
-| source_title | text | Page/source title |
-| tags | text[] | Array of tags |
-| note | text | User notes |
-| ai_summary | text | AI-generated summary |
-| device_source | text | 'extension', 'mobile', 'smart_pen', 'web' |
-| collection_id | uuid | Optional collection reference |
-| created_at | timestamp | Creation timestamp |
-| updated_at | timestamp | Last update timestamp |
+
+| Column        | Type      | Description                               |
+| ------------- | --------- | ----------------------------------------- |
+| id            | uuid      | Primary key                               |
+| user_id       | uuid      | Foreign key to auth.users                 |
+| text          | text      | Research content                          |
+| source_url    | text      | Original source URL                       |
+| source_title  | text      | Page/source title                         |
+| tags          | text[]    | Array of tags                             |
+| note          | text      | User notes                                |
+| ai_summary    | text      | AI-generated summary                      |
+| device_source | text      | 'extension', 'mobile', 'smart_pen', 'web' |
+| collection_id | uuid      | Optional collection reference             |
+| created_at    | timestamp | Creation timestamp                        |
+| updated_at    | timestamp | Last update timestamp                     |
 
 ### `collections` table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| user_id | uuid | Foreign key to auth.users |
-| name | text | Collection name |
-| description | text | Optional description |
-| color | text | Hex color code |
-| created_at | timestamp | Creation timestamp |
+
+| Column      | Type      | Description               |
+| ----------- | --------- | ------------------------- |
+| id          | uuid      | Primary key               |
+| user_id     | uuid      | Foreign key to auth.users |
+| name        | text      | Collection name           |
+| description | text      | Optional description      |
+| color       | text      | Hex color code            |
+| created_at  | timestamp | Creation timestamp        |
 
 ## 🔐 Security Notes
 
@@ -164,15 +167,18 @@ Output will be in the `dist` folder, ready for any static hosting.
 ## 🐛 Troubleshooting
 
 ### OAuth not working?
+
 - Check redirect URLs in Supabase dashboard
 - Ensure URL matches exactly (including `/#/auth/callback`)
 
 ### Data not syncing?
+
 - Verify Supabase credentials match extension
 - Check browser console for errors
 - Ensure Realtime is enabled in Supabase
 
 ### AI summaries failing?
+
 - Verify Gemini API key is correct
 - Check API quota in Google AI Studio
 - Look for errors in browser console
