@@ -11,12 +11,17 @@
  * Uses Netlify Functions in production, localhost in development
  */
 const getApiBaseUrl = (): string => {
-  // In production (Netlify), use relative path to functions
-  if (import.meta.env.PROD) {
+  // Check if we're on Netlify (production)
+  const isNetlify =
+    window.location.hostname.includes("netlify.app") ||
+    window.location.hostname === "researchmate-web.netlify.app";
+
+  if (isNetlify) {
     return "/api";
   }
-  // In development, use local backend or Netlify dev
-  return import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
+
+  // Local development
+  return "http://localhost:3001/api";
 };
 
 const API_BASE_URL = getApiBaseUrl();
