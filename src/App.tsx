@@ -324,22 +324,44 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true); // Default to staying signed in
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get where the user was trying to go (if redirected from RequireAuth)
+  const from = (location.state as any)?.from?.pathname || "/app/dashboard";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    // Store remember preference
+    localStorage.setItem(
+      "researchmate_remember",
+      rememberMe ? "true" : "false"
+    );
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    if (error) alert(error.message);
-    else navigate("/app/dashboard");
-    setLoading(false);
+    if (error) {
+      alert(error.message);
+      setLoading(false);
+    } else {
+      navigate(from, { replace: true });
+    }
   };
 
   const handleOAuthLogin = async (provider: "google" | "github") => {
     setLoading(true);
+
+    // Store remember preference before OAuth redirect
+    localStorage.setItem(
+      "researchmate_remember",
+      rememberMe ? "true" : "false"
+    );
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -412,6 +434,20 @@ const LoginPage = () => {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+
+          {/* Keep me signed in checkbox */}
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              Keep me signed in
+            </span>
+          </label>
+
           <Button type="submit" className="w-full" isLoading={loading}>
             Sign In
           </Button>
@@ -2188,37 +2224,88 @@ const CollectionsPage = () => {
 const RequireAuth = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
+  const [initialized, setInitialized] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
-    // Check for active session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+    let mounted = true;
 
-    // Listen for changes (like token refresh or sign out)
+    // Initial session check
+    const initSession = async () => {
+      try {
+        // First, try to restore session from storage
+        const {
+          data: { session: currentSession },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error("❌ Session restore error:", error);
+        }
+
+        if (mounted) {
+          setSession(currentSession);
+          setInitialized(true);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("❌ Session init error:", err);
+        if (mounted) {
+          setInitialized(true);
+          setLoading(false);
+        }
+      }
+    };
+
+    initSession();
+
+    // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
+      console.log("🔄 Auth event:", event);
+
+      if (mounted) {
+        setSession(newSession);
+
+        // If user signs out AND they didn't want to be remembered, clear storage
+        if (event === "SIGNED_OUT") {
+          const shouldRemember = localStorage.getItem("researchmate_remember");
+          if (shouldRemember !== "true") {
+            // Clear any cached auth data
+            localStorage.removeItem("researchmate-auth");
+          }
+        }
+
+        // Handle token refresh
+        if (event === "TOKEN_REFRESHED") {
+          console.log("🔄 Token refreshed successfully");
+        }
+
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  if (loading) {
-    // Show spinner while checking local storage
+  // Show loading only during initial load
+  if (loading && !initialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-sm text-gray-500">Loading your session...</p>
+        </div>
       </div>
     );
   }
 
   if (!session) {
-    // Redirect to login if no session found, but remember where they were trying to go
+    // Redirect to login if no session found, preserving the intended destination
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
