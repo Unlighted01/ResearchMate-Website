@@ -121,7 +121,7 @@ const Toast: React.FC<ToastProps> = ({ message, type, onClose }) => {
       className={`fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-slide-up flex items-center gap-2`}
     >
       {type === "success" && <CheckCircle2 className="w-5 h-5" />}
-      {type === "error" && <span>❌</span>}
+      {type === "error" && <span>âŒ</span>}
       {type === "info" && <Bell className="w-5 h-5" />}
       {message}
     </div>
@@ -210,7 +210,7 @@ const LandingPage = () => {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary-200 via-gray-50 to-gray-50 dark:from-primary-900/20 dark:via-gray-950 dark:to-gray-950 -z-10"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <Badge className="mb-6 px-4 py-1 text-sm bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
-            New: Smart Pen Integration Available 🚀
+            New: Smart Pen Integration Available ðŸš€
           </Badge>
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 pb-2">
             Your Research,
@@ -471,10 +471,18 @@ const SignupPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    // Store remember preference for when they confirm and log in
+    localStorage.setItem(
+      "researchmate_remember",
+      rememberMe ? "true" : "false"
+    );
+
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) alert(error.message);
     else alert("Check your email for the confirmation link!");
@@ -505,6 +513,20 @@ const SignupPage = () => {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+
+          {/* Keep me signed in checkbox */}
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              Keep me signed in
+            </span>
+          </label>
+
           <Button type="submit" className="w-full" isLoading={loading}>
             Sign Up
           </Button>
@@ -560,11 +582,11 @@ const Dashboard = () => {
       } = await supabase.auth.getUser();
 
       if (user) {
-        console.log("🔌 Setting up real-time sync for user:", user.id);
+        console.log("ðŸ”Œ Setting up real-time sync for user:", user.id);
 
         // Subscribe to real-time changes
         const unsubscribe = subscribeToItems(user.id, (payload) => {
-          console.log("📡 Real-time event:", payload.eventType);
+          console.log("ðŸ“¡ Real-time event:", payload.eventType);
 
           if (payload.eventType === "INSERT" && payload.new) {
             // New item added (likely from extension!)
@@ -595,7 +617,7 @@ const Dashboard = () => {
 
         // Cleanup on unmount
         return () => {
-          console.log("🔌 Disconnecting real-time sync");
+          console.log("ðŸ”Œ Disconnecting real-time sync");
           unsubscribe();
           setIsRealTimeConnected(false);
         };
@@ -696,7 +718,7 @@ const Dashboard = () => {
             )}
             {lastSyncTime && (
               <span className="text-gray-400">
-                • Last sync: {lastSyncTime.toLocaleTimeString()}
+                â€¢ Last sync: {lastSyncTime.toLocaleTimeString()}
               </span>
             )}
           </div>
@@ -1266,7 +1288,7 @@ const AIAssistant = () => {
             <p className="text-sm text-primary-700 dark:text-primary-300 mt-1">
               This tool generates concise 2-3 sentence summaries of your
               research items using AI. It's designed specifically for
-              summarization — for other AI features, check out the Citation
+              summarization â€” for other AI features, check out the Citation
               Generator's AI extraction tool.
             </p>
           </div>
@@ -2240,7 +2262,7 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
         } = await supabase.auth.getSession();
 
         if (error) {
-          console.error("❌ Session restore error:", error);
+          console.error("âŒ Session restore error:", error);
         }
 
         if (mounted) {
@@ -2249,7 +2271,7 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
           setLoading(false);
         }
       } catch (err) {
-        console.error("❌ Session init error:", err);
+        console.error("âŒ Session init error:", err);
         if (mounted) {
           setInitialized(true);
           setLoading(false);
@@ -2259,11 +2281,22 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
 
     initSession();
 
+    // Handle "Keep me signed in" - clear session on browser close if not checked
+    const handleBeforeUnload = () => {
+      const shouldRemember = localStorage.getItem("researchmate_remember");
+      if (shouldRemember !== "true") {
+        // Clear auth session data so user won't be logged in when they return
+        localStorage.removeItem("researchmate-auth");
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     // Listen for auth state changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
-      console.log("🔄 Auth event:", event);
+      console.log("ðŸ”„ Auth event:", event);
 
       if (mounted) {
         setSession(newSession);
@@ -2279,7 +2312,7 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
 
         // Handle token refresh
         if (event === "TOKEN_REFRESHED") {
-          console.log("🔄 Token refreshed successfully");
+          console.log("ðŸ”„ Token refreshed successfully");
         }
 
         setLoading(false);
@@ -2289,6 +2322,7 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
 
