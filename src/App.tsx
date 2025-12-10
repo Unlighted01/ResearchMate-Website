@@ -2262,7 +2262,32 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
         } = await supabase.auth.getSession();
 
         if (error) {
-          console.error("âŒ Session restore error:", error);
+          console.error("Session restore error:", error);
+        }
+
+        // Handle "Keep me signed in" feature
+        // sessionStorage clears when browser closes, localStorage persists
+        // If user didn't want to stay signed in AND browser was closed (no session flag), sign out
+        if (currentSession) {
+          const shouldRemember = localStorage.getItem("researchmate_remember");
+          const sessionActive = sessionStorage.getItem(
+            "researchmate_session_active"
+          );
+
+          if (shouldRemember !== "true" && !sessionActive) {
+            // Browser was closed and user didn't want to stay signed in
+            console.log("Session expired (keep signed in was disabled)");
+            await supabase.auth.signOut();
+            if (mounted) {
+              setSession(null);
+              setInitialized(true);
+              setLoading(false);
+            }
+            return;
+          }
+
+          // Mark session as active for this browser session
+          sessionStorage.setItem("researchmate_session_active", "true");
         }
 
         if (mounted) {
@@ -2271,7 +2296,7 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
           setLoading(false);
         }
       } catch (err) {
-        console.error("âŒ Session init error:", err);
+        console.error("Session init error:", err);
         if (mounted) {
           setInitialized(true);
           setLoading(false);
@@ -2281,38 +2306,28 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
 
     initSession();
 
-    // Handle "Keep me signed in" - clear session on browser close if not checked
-    const handleBeforeUnload = () => {
-      const shouldRemember = localStorage.getItem("researchmate_remember");
-      if (shouldRemember !== "true") {
-        // Clear auth session data so user won't be logged in when they return
-        localStorage.removeItem("researchmate-auth");
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
     // Listen for auth state changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
-      console.log("ðŸ”„ Auth event:", event);
+      console.log("Auth event:", event);
 
       if (mounted) {
         setSession(newSession);
 
-        // If user signs out AND they didn't want to be remembered, clear storage
+        // When user signs in, mark session as active
+        if (event === "SIGNED_IN" && newSession) {
+          sessionStorage.setItem("researchmate_session_active", "true");
+        }
+
+        // When user signs out, clear session flag
         if (event === "SIGNED_OUT") {
-          const shouldRemember = localStorage.getItem("researchmate_remember");
-          if (shouldRemember !== "true") {
-            // Clear any cached auth data
-            localStorage.removeItem("researchmate-auth");
-          }
+          sessionStorage.removeItem("researchmate_session_active");
         }
 
         // Handle token refresh
         if (event === "TOKEN_REFRESHED") {
-          console.log("ðŸ”„ Token refreshed successfully");
+          console.log("Token refreshed successfully");
         }
 
         setLoading(false);
@@ -2322,7 +2337,6 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
 
