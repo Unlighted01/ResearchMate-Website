@@ -203,6 +203,37 @@ const AuthCallback = () => {
 // ============================================
 
 const LandingPage = () => {
+  const navigate = useNavigate();
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          // User is logged in, redirect to dashboard
+          navigate("/app/dashboard", { replace: true });
+        }
+      } catch (error) {
+        console.error("Auth check error:", error);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
+
+  // Show loading while checking auth
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-20 pb-20">
       {/* Hero */}
@@ -324,12 +355,31 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [rememberMe, setRememberMe] = useState(true); // Default to staying signed in
   const navigate = useNavigate();
   const location = useLocation();
 
   // Get where the user was trying to go (if redirected from RequireAuth)
   const from = (location.state as any)?.from?.pathname || "/app/dashboard";
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          navigate(from, { replace: true });
+        }
+      } catch (error) {
+        console.error("Auth check error:", error);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+  }, [navigate, from]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -373,6 +423,15 @@ const LoginPage = () => {
       setLoading(false);
     }
   };
+
+  // Show loading while checking auth
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
@@ -476,13 +535,13 @@ const SignupPage = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
+    
     // Store remember preference for when they confirm and log in
     localStorage.setItem(
       "researchmate_remember",
       rememberMe ? "true" : "false"
     );
-
+    
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) alert(error.message);
     else alert("Check your email for the confirmation link!");
@@ -513,7 +572,7 @@ const SignupPage = () => {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-
+          
           {/* Keep me signed in checkbox */}
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -526,7 +585,7 @@ const SignupPage = () => {
               Keep me signed in
             </span>
           </label>
-
+          
           <Button type="submit" className="w-full" isLoading={loading}>
             Sign Up
           </Button>
@@ -2270,10 +2329,8 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
         // If user didn't want to stay signed in AND browser was closed (no session flag), sign out
         if (currentSession) {
           const shouldRemember = localStorage.getItem("researchmate_remember");
-          const sessionActive = sessionStorage.getItem(
-            "researchmate_session_active"
-          );
-
+          const sessionActive = sessionStorage.getItem("researchmate_session_active");
+          
           if (shouldRemember !== "true" && !sessionActive) {
             // Browser was closed and user didn't want to stay signed in
             console.log("Session expired (keep signed in was disabled)");
@@ -2285,7 +2342,7 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
             }
             return;
           }
-
+          
           // Mark session as active for this browser session
           sessionStorage.setItem("researchmate_session_active", "true");
         }
