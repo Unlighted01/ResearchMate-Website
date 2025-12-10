@@ -42,6 +42,7 @@ interface Product {
   features: string[];
   downloadUrl?: string;
   learnMoreUrl?: string;
+  isExternal?: boolean;
 }
 
 const products: Product[] = [
@@ -50,7 +51,7 @@ const products: Product[] = [
     name: "Browser Extension",
     tagline: "Capture research from any webpage",
     description:
-      "Highlight any text on the web and save it instantly. Our Chrome extension captures the content, source URL, and metadata — then syncs it to your dashboard in real-time.",
+      "Highlight any text on the web and save it instantly. Our Chrome extension captures the content, source URL, and metadata â€” then syncs it to your dashboard in real-time.",
     icon: Chrome,
     color: "text-blue-600",
     bgColor: "bg-blue-100 dark:bg-blue-900/30",
@@ -63,8 +64,10 @@ const products: Product[] = [
       "Real-time sync to web app",
       "Works on any website",
     ],
-    downloadUrl: "#", // Replace with actual Chrome Web Store link
+    downloadUrl:
+      "https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh",
     learnMoreUrl: "/products#extension",
+    isExternal: true,
   },
   {
     id: "webapp",
@@ -176,7 +179,7 @@ const ProductsPage: React.FC = () => {
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
             A suite of tools designed to capture, organize, and understand your
-            research — no matter where you are or how you work.
+            research â€” no matter where you are or how you work.
           </p>
         </div>
       </section>
@@ -266,23 +269,37 @@ const ProductsPage: React.FC = () => {
 
               {/* Actions */}
               <div className="flex gap-3">
-                {product.status === "available" && product.downloadUrl && (
-                  <Link to={product.downloadUrl} className="flex-1">
-                    <Button className="w-full">
-                      {product.id === "webapp" ? (
-                        <>
-                          <ArrowRight className="w-4 h-4 mr-2" />
-                          Open App
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </>
-                      )}
-                    </Button>
-                  </Link>
-                )}
+                {product.status === "available" &&
+                  product.downloadUrl &&
+                  (product.isExternal ? (
+                    <a
+                      href={product.downloadUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1"
+                    >
+                      <Button className="w-full">
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
+                    </a>
+                  ) : (
+                    <Link to={product.downloadUrl} className="flex-1">
+                      <Button className="w-full">
+                        {product.id === "webapp" ? (
+                          <>
+                            <ArrowRight className="w-4 h-4 mr-2" />
+                            Open App
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4 mr-2" />
+                            Download
+                          </>
+                        )}
+                      </Button>
+                    </Link>
+                  ))}
                 {product.status === "coming_soon" && (
                   <Button variant="outline" className="flex-1" disabled>
                     <Bell className="w-4 h-4 mr-2" />
@@ -308,7 +325,7 @@ const ProductsPage: React.FC = () => {
               </h2>
               <p className="text-gray-600 dark:text-gray-300 mb-6">
                 The fastest way to save research. Just highlight any text on any
-                webpage and click — ResearchMate handles the rest.
+                webpage and click â€” ResearchMate handles the rest.
               </p>
 
               <div className="space-y-4 mb-8">
@@ -358,10 +375,16 @@ const ProductsPage: React.FC = () => {
                 </div>
               </div>
 
-              <Button size="lg">
-                <Chrome className="w-5 h-5 mr-2" />
-                Add to Chrome — It's Free
-              </Button>
+              <a
+                href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button size="lg">
+                  <Chrome className="w-5 h-5 mr-2" />
+                  Add to Chrome â€” It's Free
+                </Button>
+              </a>
             </div>
 
             <div className="relative">
@@ -377,7 +400,7 @@ const ProductsPage: React.FC = () => {
               {/* Floating badges */}
               <div className="absolute -top-4 -right-4 bg-white dark:bg-gray-800 rounded-full px-4 py-2 shadow-lg">
                 <span className="text-sm font-semibold text-green-600">
-                  ✓ Free
+                  âœ“ Free
                 </span>
               </div>
             </div>
@@ -534,14 +557,20 @@ const ProductsPage: React.FC = () => {
                 Create Free Account
               </Button>
             </Link>
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-white text-white hover:bg-white/10"
+            <a
+              href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
+              target="_blank"
+              rel="noopener noreferrer"
             >
-              <Chrome className="w-5 h-5 mr-2" />
-              Download Extension
-            </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-white text-white hover:bg-white/10"
+              >
+                <Chrome className="w-5 h-5 mr-2" />
+                Download Extension
+              </Button>
+            </a>
           </div>
         </Card>
       </section>

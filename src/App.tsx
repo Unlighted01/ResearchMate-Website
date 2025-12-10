@@ -54,6 +54,9 @@ import {
   Quote,
   BookOpen,
   FileText,
+  Mail,
+  Sparkles,
+  FileUp,
 } from "lucide-react";
 import {
   generateSummary,
@@ -210,7 +213,9 @@ const LandingPage = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (session) {
           // User is logged in, redirect to dashboard
           navigate("/app/dashboard", { replace: true });
@@ -357,6 +362,10 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [rememberMe, setRememberMe] = useState(true); // Default to staying signed in
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const { showToast, ToastComponent } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -367,7 +376,9 @@ const LoginPage = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (session) {
           navigate(from, { replace: true });
         }
@@ -396,9 +407,10 @@ const LoginPage = () => {
       password,
     });
     if (error) {
-      alert(error.message);
+      showToast(error.message, "error");
       setLoading(false);
     } else {
+      showToast("Welcome back!", "success");
       navigate(from, { replace: true });
     }
   };
@@ -419,9 +431,31 @@ const LoginPage = () => {
       },
     });
     if (error) {
-      alert(error.message);
+      showToast(error.message, "error");
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      showToast("Please enter your email address", "error");
+      return;
+    }
+
+    setResetLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: `${window.location.origin}/#/auth/reset-password`,
+    });
+
+    if (error) {
+      showToast(error.message, "error");
+    } else {
+      showToast("Password reset link sent! Check your email.", "success");
+      setShowForgotPassword(false);
+      setResetEmail("");
+    }
+    setResetLoading(false);
   };
 
   // Show loading while checking auth
@@ -433,8 +467,52 @@ const LoginPage = () => {
     );
   }
 
+  // Forgot Password Modal
+  if (showForgotPassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
+        <ToastComponent />
+        <Card className="w-full max-w-md p-8">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-8 h-8 text-primary-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Reset Password
+            </h2>
+            <p className="text-gray-500 mt-2">
+              Enter your email and we'll send you a reset link
+            </p>
+          </div>
+
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <Input
+              label="Email Address"
+              type="email"
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+            />
+            <Button type="submit" className="w-full" isLoading={resetLoading}>
+              Send Reset Link
+            </Button>
+          </form>
+
+          <button
+            onClick={() => setShowForgotPassword(false)}
+            className="mt-4 w-full text-center text-sm text-gray-600 hover:text-primary-600"
+          >
+            ← Back to Sign In
+          </button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
+      <ToastComponent />
       <Card className="w-full max-w-md p-8">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -486,13 +564,22 @@ const LoginPage = () => {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <Input
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div>
+            <Input
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowForgotPassword(true)}
+              className="text-sm text-primary-600 hover:text-primary-700 mt-1"
+            >
+              Forgot password?
+            </button>
+          </div>
 
           {/* Keep me signed in checkbox */}
           <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -526,30 +613,67 @@ const LoginPage = () => {
 // PART 6: SIGNUP PAGE
 // ============================================
 
+// Password strength calculator
+const getPasswordStrength = (
+  password: string
+): { score: number; label: string; color: string } => {
+  let score = 0;
+  if (password.length >= 6) score++;
+  if (password.length >= 8) score++;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+  if (/\d/.test(password)) score++;
+  if (/[^a-zA-Z0-9]/.test(password)) score++;
+
+  if (score <= 1) return { score, label: "Weak", color: "bg-red-500" };
+  if (score <= 2) return { score, label: "Fair", color: "bg-orange-500" };
+  if (score <= 3) return { score, label: "Good", color: "bg-yellow-500" };
+  if (score <= 4) return { score, label: "Strong", color: "bg-green-500" };
+  return { score, label: "Very Strong", color: "bg-green-600" };
+};
+
 const SignupPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const { showToast, ToastComponent } = useToast();
+  const navigate = useNavigate();
+
+  const passwordStrength = getPasswordStrength(password);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (password.length < 6) {
+      showToast("Password must be at least 6 characters", "error");
+      return;
+    }
+
     setLoading(true);
-    
+
     // Store remember preference for when they confirm and log in
     localStorage.setItem(
       "researchmate_remember",
       rememberMe ? "true" : "false"
     );
-    
+
     const { error } = await supabase.auth.signUp({ email, password });
-    if (error) alert(error.message);
-    else alert("Check your email for the confirmation link!");
+    if (error) {
+      showToast(error.message, "error");
+    } else {
+      showToast(
+        "Account created! Check your email for the confirmation link.",
+        "success"
+      );
+      // Optionally redirect to a "check your email" page
+      setTimeout(() => navigate("/login"), 2000);
+    }
     setLoading(false);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
+      <ToastComponent />
       <Card className="w-full max-w-md p-8">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -563,16 +687,58 @@ const SignupPage = () => {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
             required
           />
-          <Input
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          
+          <div>
+            <Input
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Min. 6 characters"
+              required
+            />
+            {/* Password Strength Indicator */}
+            {password.length > 0 && (
+              <div className="mt-2">
+                <div className="flex gap-1 mb-1">
+                  {[1, 2, 3, 4, 5].map((level) => (
+                    <div
+                      key={level}
+                      className={`h-1 flex-1 rounded-full transition-colors ${
+                        level <= passwordStrength.score
+                          ? passwordStrength.color
+                          : "bg-gray-200 dark:bg-gray-700"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p
+                  className={`text-xs ${
+                    passwordStrength.score <= 1
+                      ? "text-red-500"
+                      : passwordStrength.score <= 2
+                      ? "text-orange-500"
+                      : passwordStrength.score <= 3
+                      ? "text-yellow-600"
+                      : "text-green-500"
+                  }`}
+                >
+                  {passwordStrength.label} password
+                  {passwordStrength.score < 3 && (
+                    <span className="text-gray-400 ml-1">
+                      — Try adding{" "}
+                      {!/[A-Z]/.test(password) ? "uppercase, " : ""}
+                      {!/\d/.test(password) ? "numbers, " : ""}
+                      {!/[^a-zA-Z0-9]/.test(password) ? "symbols" : ""}
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Keep me signed in checkbox */}
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -585,7 +751,7 @@ const SignupPage = () => {
               Keep me signed in
             </span>
           </label>
-          
+
           <Button type="submit" className="w-full" isLoading={loading}>
             Sign Up
           </Button>
@@ -856,18 +1022,93 @@ const Dashboard = () => {
           ))}
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-            <SearchIcon className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            {searchQuery ? "No matching items" : "No research items yet"}
-          </h3>
-          <p className="text-gray-500 mb-4">
-            {searchQuery
-              ? "Try a different search term"
-              : "Start by highlighting text with your browser extension!"}
-          </p>
+        <div className="text-center py-16">
+          {searchQuery ? (
+            // Search empty state
+            <>
+              <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
+                <SearchIcon className="w-10 h-10 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                No matching items
+              </h3>
+              <p className="text-gray-500 mb-4">
+                Try a different search term or clear your search
+              </p>
+              <Button variant="outline" onClick={() => setSearchQuery("")}>
+                Clear Search
+              </Button>
+            </>
+          ) : (
+            // Empty dashboard state
+            <>
+              <div className="w-24 h-24 bg-gradient-to-br from-primary-100 to-purple-100 dark:from-primary-900/30 dark:to-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Sparkles className="w-12 h-12 text-primary-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+                Welcome to ResearchMate!
+              </h3>
+              <p className="text-gray-500 max-w-md mx-auto mb-8">
+                Start capturing your research by highlighting text on any
+                webpage. Your saved items will appear here, synced in real-time.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <a
+                  href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button size="lg">
+                    <Chrome className="w-5 h-5 mr-2" />
+                    Get Chrome Extension
+                  </Button>
+                </a>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => setIsAddModalOpen && setIsAddModalOpen(true)}
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Add Manually
+                </Button>
+              </div>
+              <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+                <div className="text-center p-4">
+                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Chrome className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-1">
+                    1. Install Extension
+                  </h4>
+                  <p className="text-sm text-gray-500">
+                    Add our Chrome extension to your browser
+                  </p>
+                </div>
+                <div className="text-center p-4">
+                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <FileUp className="w-6 h-6 text-green-600" />
+                  </div>
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-1">
+                    2. Highlight & Save
+                  </h4>
+                  <p className="text-sm text-gray-500">
+                    Select text and click save on any page
+                  </p>
+                </div>
+                <div className="text-center p-4">
+                  <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <RefreshCw className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-1">
+                    3. Sync Everywhere
+                  </h4>
+                  <p className="text-sm text-gray-500">
+                    Access your research from any device
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -2329,8 +2570,10 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
         // If user didn't want to stay signed in AND browser was closed (no session flag), sign out
         if (currentSession) {
           const shouldRemember = localStorage.getItem("researchmate_remember");
-          const sessionActive = sessionStorage.getItem("researchmate_session_active");
-          
+          const sessionActive = sessionStorage.getItem(
+            "researchmate_session_active"
+          );
+
           if (shouldRemember !== "true" && !sessionActive) {
             // Browser was closed and user didn't want to stay signed in
             console.log("Session expired (keep signed in was disabled)");
@@ -2342,7 +2585,7 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
             }
             return;
           }
-          
+
           // Mark session as active for this browser session
           sessionStorage.setItem("researchmate_session_active", "true");
         }
@@ -2410,8 +2653,8 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (!session) {
-    // Redirect to login if no session found, preserving the intended destination
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // Redirect to landing page if no session found, preserving the intended destination
+    return <Navigate to="/" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;
