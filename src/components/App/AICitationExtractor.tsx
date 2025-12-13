@@ -3,7 +3,7 @@
 // ============================================
 
 import React, { useState } from "react";
-import { Button, Card, Input } from "./UIComponents";
+import { Button, Card, Input } from "../shared/UIComponents";
 import {
   Sparkles,
   Link as LinkIcon,

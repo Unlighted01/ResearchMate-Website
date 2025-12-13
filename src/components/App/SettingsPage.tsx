@@ -3,9 +3,9 @@
 // ============================================
 
 import React, { useState, useEffect, useCallback } from "react";
-import { supabase } from "../services/supabaseClient";
-import { useTheme } from "../context/ThemeContext";
-import { Button, Card, Input, Toggle } from "./UIComponents";
+import { supabase } from "../../services/supabaseClient";
+import { useTheme } from "../../context/ThemeContext";
+import { Button, Card, Input, Toggle } from "../shared/UIComponents";
 import {
   User,
   Lock,

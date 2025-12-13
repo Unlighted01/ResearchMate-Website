@@ -3,7 +3,7 @@
 // ============================================
 import AICitationExtractor from "./AICitationExtractor";
 import React, { useState, useEffect } from "react";
-import { Button, Card, Input, Badge } from "./UIComponents";
+import { Button, Card, Input, Badge } from "../shared/UIComponents";
 import {
   Copy,
   Quote,
@@ -18,7 +18,7 @@ import {
   Link as LinkIcon,
   RefreshCw,
 } from "lucide-react";
-import { getAllItems, StorageItem } from "../services/storageService";
+import { getAllItems, StorageItem } from "../../services/storageService";
 
 // ============================================
 // PART 1: TYPES & INTERFACES

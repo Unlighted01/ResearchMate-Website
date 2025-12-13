@@ -4,7 +4,7 @@
 
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Button, Card, Badge } from "./UIComponents";
+import { Button, Card, Badge } from "../shared/UIComponents";
 import {
   Chrome,
   Smartphone,

@@ -3,7 +3,7 @@
 // ============================================
 
 import React from "react";
-import { Card } from "./UIComponents";
+import { Card } from "../shared/UIComponents";
 import {
   Github,
   Linkedin,
