@@ -126,6 +126,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
             <button
               className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
             >
               {isMobileMenuOpen ? (
                 <X className="w-5 h-5" />
@@ -571,6 +572,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
           <div className="p-3 border-t border-gray-200/50 dark:border-gray-800/50">
             <button
               onClick={toggleSidebar}
+              aria-label={
+                sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+              }
               className={`
                 hidden lg:flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
                 text-gray-500 dark:text-gray-400
@@ -608,6 +612,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
               <button
                 className="lg:hidden p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open sidebar"
               >
                 <Menu className="w-5 h-5" />
               </button>
@@ -644,6 +649,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                     setNotificationsOpen(!notificationsOpen);
                     setProfileOpen(false);
                   }}
+                  aria-label="Notifications"
                   className="notifications-trigger p-2.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
                 >
                   <Bell className="w-5 h-5" />
@@ -717,6 +723,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                     setProfileOpen(!profileOpen);
                     setNotificationsOpen(false);
                   }}
+                  aria-label="User profile menu"
                   className="profile-trigger flex items-center gap-2 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center text-white font-medium text-sm">

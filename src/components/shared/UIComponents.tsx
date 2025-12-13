@@ -285,6 +285,7 @@ export const Modal: React.FC<ModalProps> = ({
             </h3>
             <button
               onClick={onClose}
+              aria-label="Close modal"
               className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-gray-200 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -555,6 +556,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
     {value && onClear && (
       <button
         onClick={onClear}
+        aria-label="Clear search"
         className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
       >
         <X className="w-3 h-3" />

@@ -86,6 +86,7 @@ const SmartPenGallery = () => {
           <div className="flex bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl p-1">
             <button
               onClick={() => setViewMode("grid")}
+              aria-label="Grid view"
               className={`p-2 rounded-lg transition-colors ${
                 viewMode === "grid"
                   ? "bg-[#FF9500]/10 text-[#FF9500]"
@@ -96,6 +97,7 @@ const SmartPenGallery = () => {
             </button>
             <button
               onClick={() => setViewMode("list")}
+              aria-label="List view"
               className={`p-2 rounded-lg transition-colors ${
                 viewMode === "list"
                   ? "bg-[#FF9500]/10 text-[#FF9500]"

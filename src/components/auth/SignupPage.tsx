@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Input } from "../shared/UIComponents";
@@ -47,6 +47,25 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
 
   const { showToast } = useToast();
   const navigate = useNavigate();
+
+  // Force light mode for auth pages
+  useEffect(() => {
+    const root = document.documentElement;
+    // Remove dark mode for auth pages
+    root.classList.remove("dark");
+
+    // Restore dark mode when leaving auth pages (if it was set)
+    return () => {
+      const savedTheme = localStorage.getItem("theme");
+      if (
+        savedTheme === "dark" ||
+        (savedTheme === "system" &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
+      ) {
+        root.classList.add("dark");
+      }
+    };
+  }, []);
 
   // Password validation
   const passwordChecks = [

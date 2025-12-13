@@ -211,6 +211,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           <button
             onClick={fetchItems}
             disabled={loading}
+            aria-label="Refresh items"
             className="p-2.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50"
           >
             <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
@@ -244,6 +245,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           <div className="flex bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl p-1">
             <button
               onClick={() => setViewMode("grid")}
+              aria-label="Grid view"
               className={`p-2 rounded-lg transition-colors ${
                 viewMode === "grid"
                   ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
@@ -254,6 +256,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
             </button>
             <button
               onClick={() => setViewMode("list")}
+              aria-label="List view"
               className={`p-2 rounded-lg transition-colors ${
                 viewMode === "list"
                   ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
@@ -418,6 +421,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   e.stopPropagation();
                   handleDeleteItem(item.id);
                 }}
+                aria-label="Delete item"
                 className="absolute top-3 right-3 p-2 bg-white dark:bg-gray-800 text-gray-400 hover:text-[#FF3B30] rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
               >
                 <Trash2 className="w-4 h-4" />
@@ -474,6 +478,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     e.stopPropagation();
                     handleDeleteItem(item.id);
                   }}
+                  aria-label="Delete item"
                   className="p-2 text-gray-400 hover:text-[#FF3B30] rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -506,6 +511,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                       navigator.clipboard.writeText(selectedItem.text || "");
                       showToast("Copied to clipboard!", "success");
                     }}
+                    aria-label="Copy to clipboard"
                     className="p-1.5 text-[#007AFF] hover:bg-[#007AFF]/10 rounded-lg transition-colors"
                   >
                     <Copy className="w-4 h-4" />
