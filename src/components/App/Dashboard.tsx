@@ -1,11 +1,17 @@
 // ============================================
-// PART 1: DASHBOARD PAGE
+// DASHBOARD PAGE - Apple Design
 // ============================================
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
-import { Button, Card, Badge, Modal } from "../shared/UIComponents";
+import {
+  Button,
+  Card,
+  Badge,
+  Modal,
+  SearchInput,
+} from "../shared/UIComponents";
 import {
   Search,
   RefreshCw,
@@ -23,7 +29,13 @@ import {
   Copy,
   Zap,
   Share2,
-  Download,
+  ExternalLink,
+  MoreHorizontal,
+  Filter,
+  Grid3X3,
+  List,
+  Clock,
+  Tag,
 } from "lucide-react";
 import {
   getAllItems,
@@ -34,20 +46,25 @@ import {
 } from "../../services/storageService";
 import { generateSummary } from "../../services/geminiService";
 
-// Helper for icons
+// Helper for source icons
 const getSourceIcon = (source: string) => {
-  switch (source) {
-    case "extension":
-      return <Laptop className="w-4 h-4" />;
-    case "mobile":
-      return <Smartphone className="w-4 h-4" />;
-    case "smart_pen":
-      return <PenTool className="w-4 h-4" />;
-    case "web":
-      return <Globe className="w-4 h-4" />;
-    default:
-      return <Layout className="w-4 h-4" />;
-  }
+  const icons: Record<string, React.ReactNode> = {
+    extension: <Laptop className="w-4 h-4" />,
+    mobile: <Smartphone className="w-4 h-4" />,
+    smart_pen: <PenTool className="w-4 h-4" />,
+    web: <Globe className="w-4 h-4" />,
+  };
+  return icons[source] || <Layout className="w-4 h-4" />;
+};
+
+const getSourceColor = (source: string) => {
+  const colors: Record<string, string> = {
+    extension: "#007AFF",
+    mobile: "#5856D6",
+    smart_pen: "#FF9500",
+    web: "#34C759",
+  };
+  return colors[source] || "#8E8E93";
 };
 
 interface DashboardProps {
@@ -64,6 +81,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const { showToast } = useToast();
 
@@ -162,135 +180,175 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   });
 
   return (
-    <div className="space-y-6">
-      {/* --- HEADER SECTION --- */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+    <div className="space-y-6 animate-fade-in-up">
+      {/* ========== HEADER ========== */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
             Dashboard
           </h1>
-          <div className="flex items-center gap-2 mt-2 text-sm text-gray-500 font-medium">
+          <div className="flex items-center gap-3 mt-1">
             {isRealTimeConnected ? (
-              <span className="flex items-center gap-1.5 text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
-                <Wifi className="w-3 h-3" /> Real-time active
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#34C759]">
+                <span className="w-1.5 h-1.5 bg-[#34C759] rounded-full animate-pulse" />
+                Real-time sync active
               </span>
             ) : (
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <WifiOff className="w-3 h-3" /> Connecting...
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400">
+                <WifiOff className="w-3 h-3" />
+                Connecting...
               </span>
             )}
             {lastSyncTime && (
-              <span className="opacity-60">
-                • Synced {lastSyncTime.toLocaleTimeString()}
+              <span className="text-xs text-gray-400">
+                Last synced {lastSyncTime.toLocaleTimeString()}
               </span>
             )}
           </div>
         </div>
-        <div className="flex gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
+
+        <div className="flex items-center gap-3">
+          <button
             onClick={fetchItems}
             disabled={loading}
+            className="p-2.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50"
           >
-            <RefreshCw
-              className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
-            />{" "}
-            Refresh
-          </Button>
+            <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
+          </button>
           <Link to="/app/settings">
-            <Button size="sm" className="shadow-lg shadow-primary-500/20">
-              <Plus className="w-4 h-4 mr-2" /> Import
-            </Button>
+            <button className="flex items-center gap-2 px-4 py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 active:scale-95">
+              <Plus className="w-4 h-4" />
+              Import
+            </button>
           </Link>
         </div>
       </div>
 
-      {/* --- SEARCH & STATS --- */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      {/* ========== SEARCH & FILTERS ========== */}
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search across all your research..."
+            placeholder="Search research items..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-900 border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-primary-500 text-base outline-none dark:text-white placeholder-gray-400 transition-all hover:shadow-md"
+            className="w-full pl-11 pr-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 transition-all"
           />
         </div>
-
-        {/* Quick Stats Mini-Cards */}
-        <div className="flex gap-4 overflow-x-auto pb-2 lg:pb-0">
-          <div className="bg-white dark:bg-gray-800 px-6 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 min-w-[140px] flex flex-col justify-center">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              Total Items
-            </span>
-            <span className="text-2xl font-bold text-gray-900 dark:text-white">
-              {items.length}
-            </span>
-          </div>
-          <div className="bg-gradient-to-br from-primary-500 to-primary-700 px-6 py-3 rounded-2xl shadow-lg shadow-primary-500/20 min-w-[140px] flex flex-col justify-center text-white">
-            <span className="text-xs font-semibold text-primary-100 uppercase tracking-wider">
-              AI Summaries
-            </span>
-            <span className="text-2xl font-bold">
-              {items.filter((i) => i.aiSummary).length}
-            </span>
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <Filter className="w-4 h-4" />
+            Filter
+          </button>
+          <div className="flex bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl p-1">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === "grid"
+                  ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
+                  : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              <Grid3X3 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === "list"
+                  ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
+                  : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              <List className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* --- CONTENT GRID --- */}
+      {/* ========== STATS BAR ========== */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "Total Items", value: items.length, color: "#007AFF" },
+          {
+            label: "With AI Summary",
+            value: items.filter((i) => i.aiSummary).length,
+            color: "#5856D6",
+          },
+          {
+            label: "From Extension",
+            value: items.filter((i) => i.deviceSource === "extension").length,
+            color: "#34C759",
+          },
+          {
+            label: "This Week",
+            value: items.filter(
+              (i) =>
+                new Date(i.createdAt) >
+                new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+            ).length,
+            color: "#FF9500",
+          },
+        ].map((stat, idx) => (
+          <div
+            key={idx}
+            className="bg-white dark:bg-[#1C1C1E] rounded-xl p-4 border border-gray-200/50 dark:border-gray-800"
+          >
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+              {stat.label}
+            </p>
+            <p className="text-2xl font-bold" style={{ color: stat.color }}>
+              {stat.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* ========== CONTENT ========== */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[...Array(8)].map((_, i) => (
             <div
               key={i}
-              className="h-56 bg-gray-100 dark:bg-gray-800/50 rounded-2xl animate-pulse"
-            />
+              className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-5 border border-gray-200/50 dark:border-gray-800 h-[240px]"
+            >
+              <div className="skeleton h-8 w-8 rounded-lg mb-4" />
+              <div className="skeleton h-5 w-3/4 rounded mb-2" />
+              <div className="skeleton h-4 w-full rounded mb-1" />
+              <div className="skeleton h-4 w-2/3 rounded" />
+            </div>
           ))}
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="bg-white dark:bg-gray-900 rounded-3xl p-12 text-center border-2 border-dashed border-gray-200 dark:border-gray-800">
-          {searchQuery ? (
-            <>
-              <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-medium text-gray-900 dark:text-white">
-                No results found
-              </h3>
-              <p className="text-gray-500 mt-2">
-                We couldn't find anything matching "{searchQuery}"
-              </p>
-              <Button
-                variant="ghost"
-                className="mt-4"
-                onClick={() => setSearchQuery("")}
-              >
-                Clear Search
-              </Button>
-            </>
-          ) : (
-            <div className="max-w-md mx-auto">
-              <div className="w-20 h-20 bg-primary-50 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Sparkles className="w-10 h-10 text-primary-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                Start your research journey
-              </h3>
-              <p className="text-gray-500 mb-8">
-                Install the extension to capture content from any website
-                instantly.
-              </p>
-              <div className="flex gap-4 justify-center">
-                <Button>
-                  <Chrome className="w-4 h-4 mr-2" /> Get Extension
-                </Button>
-              </div>
-            </div>
+        /* Empty State */
+        <div className="flex flex-col items-center justify-center py-20 px-4">
+          <div className="w-20 h-20 bg-gradient-to-br from-[#007AFF]/10 to-[#5856D6]/10 rounded-3xl flex items-center justify-center mb-6">
+            <Sparkles className="w-10 h-10 text-[#007AFF]" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            {searchQuery ? "No results found" : "Start your research journey"}
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 text-center max-w-md mb-8">
+            {searchQuery
+              ? "Try adjusting your search terms"
+              : "Install the browser extension to capture content from any website instantly."}
+          </p>
+          {!searchQuery && (
+            <a
+              href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <button className="flex items-center gap-2 px-6 py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-full transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-95">
+                <Chrome className="w-5 h-5" />
+                Get Extension
+              </button>
+            </a>
           )}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      ) : viewMode === "grid" ? (
+        /* Grid View */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredItems.map((item) => (
             <div
               key={item.id}
@@ -298,69 +356,135 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 setSelectedItem(item);
                 setIsModalOpen(true);
               }}
-              className="group relative bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col h-[280px]"
+              className="group relative bg-white dark:bg-[#1C1C1E] rounded-2xl p-5 border border-gray-200/50 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 cursor-pointer transition-all duration-300 hover:shadow-lg hover:shadow-gray-200/50 dark:hover:shadow-black/20 hover:-translate-y-0.5 flex flex-col h-[240px]"
             >
-              {/* Card Header */}
-              <div className="flex justify-between items-start mb-4">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-3">
                 <div
-                  className={`p-2 rounded-lg ${
-                    item.deviceSource === "smart_pen"
-                      ? "bg-orange-50 text-orange-600 dark:bg-orange-900/20"
-                      : "bg-gray-50 text-gray-600 dark:bg-gray-700/50"
-                  }`}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{
+                    backgroundColor: `${getSourceColor(
+                      item.deviceSource || "web"
+                    )}15`,
+                  }}
                 >
-                  {getSourceIcon(item.deviceSource || "web")}
-                </div>
-                {item.aiSummary && (
-                  <span className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
-                    <Zap className="w-3 h-3" /> AI
+                  <span
+                    style={{
+                      color: getSourceColor(item.deviceSource || "web"),
+                    }}
+                  >
+                    {getSourceIcon(item.deviceSource || "web")}
                   </span>
-                )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {item.aiSummary && (
+                    <span className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white text-[10px] font-semibold rounded-full">
+                      <Zap className="w-3 h-3" />
+                      AI
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Content Preview */}
-              <div className="flex-1 overflow-hidden">
-                <h3 className="font-bold text-gray-900 dark:text-white mb-2 line-clamp-2 leading-snug">
+              {/* Content */}
+              <div className="flex-1 min-h-0">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 leading-snug">
                   {item.sourceTitle || "Untitled Research"}
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-4 leading-relaxed">
+                <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed">
                   {item.aiSummary || item.text || item.ocrText}
                 </p>
               </div>
 
-              {/* Card Footer */}
-              <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-700/50 flex items-center justify-between text-xs text-gray-400">
-                <span>{new Date(item.createdAt).toLocaleDateString()}</span>
-                <div className="flex gap-1">
-                  {item.tags?.slice(0, 2).map((tag) => (
-                    <span
-                      key={tag}
-                      className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
+              {/* Footer */}
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                  <Clock className="w-3.5 h-3.5" />
+                  {new Date(item.createdAt).toLocaleDateString()}
                 </div>
+                {item.tags && item.tags.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <Tag className="w-3.5 h-3.5 text-gray-400" />
+                    <span className="text-xs text-gray-400">
+                      {item.tags.length}
+                    </span>
+                  </div>
+                )}
               </div>
 
-              {/* Hover Actions */}
+              {/* Delete Button (on hover) */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDeleteItem(item.id);
                 }}
-                className="absolute top-4 right-4 p-2 bg-white dark:bg-gray-800 text-red-500 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50"
-                aria-label="Delete item"
-                title="Delete item"
+                className="absolute top-3 right-3 p-2 bg-white dark:bg-gray-800 text-gray-400 hover:text-[#FF3B30] rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
           ))}
         </div>
+      ) : (
+        /* List View */
+        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+          {filteredItems.map((item) => (
+            <div
+              key={item.id}
+              onClick={() => {
+                setSelectedItem(item);
+                setIsModalOpen(true);
+              }}
+              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group"
+            >
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{
+                  backgroundColor: `${getSourceColor(
+                    item.deviceSource || "web"
+                  )}15`,
+                }}
+              >
+                <span
+                  style={{ color: getSourceColor(item.deviceSource || "web") }}
+                >
+                  {getSourceIcon(item.deviceSource || "web")}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-gray-900 dark:text-white truncate">
+                  {item.sourceTitle || "Untitled Research"}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                  {item.aiSummary || item.text || item.ocrText}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                {item.aiSummary && (
+                  <span className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white text-[10px] font-semibold rounded-full">
+                    <Zap className="w-3 h-3" />
+                    AI
+                  </span>
+                )}
+                <span className="text-xs text-gray-400">
+                  {new Date(item.createdAt).toLocaleDateString()}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteItem(item.id);
+                  }}
+                  className="p-2 text-gray-400 hover:text-[#FF3B30] rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
-      {/* --- DETAIL MODAL --- */}
+      {/* ========== DETAIL MODAL ========== */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -368,30 +492,31 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         size="xl"
       >
         {selectedItem && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="space-y-6">
-              <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    Raw Content
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column */}
+            <div className="space-y-4">
+              {/* Content Card */}
+              <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Content
                   </h4>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(selectedItem.text || "");
-                      showToast("Copied!", "success");
+                      showToast("Copied to clipboard!", "success");
                     }}
-                    className="text-primary-600 hover:bg-primary-50 p-1.5 rounded-md transition-colors"
-                    aria-label="Copy content to clipboard"
-                    title="Copy to clipboard"
+                    className="p-1.5 text-[#007AFF] hover:bg-[#007AFF]/10 rounded-lg transition-colors"
                   >
                     <Copy className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed max-h-[300px] overflow-y-auto">
                   {selectedItem.text || selectedItem.ocrText}
                 </div>
               </div>
 
+              {/* Image Preview */}
               {selectedItem.imageUrl && (
                 <img
                   src={selectedItem.imageUrl}
@@ -399,37 +524,61 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   className="rounded-xl w-full object-cover border border-gray-200 dark:border-gray-700"
                 />
               )}
+
+              {/* Tags */}
+              {selectedItem.tags && selectedItem.tags.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Tags
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedItem.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-3 py-1 bg-[#F5F5F7] dark:bg-[#2C2C2E] text-gray-600 dark:text-gray-400 text-sm rounded-full"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="space-y-6">
-              {/* AI Section */}
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-6 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                <div className="flex items-center gap-2 mb-4 text-indigo-700 dark:text-indigo-300 font-semibold">
-                  <Zap className="w-5 h-5" /> AI Analysis
+            {/* Right Column */}
+            <div className="space-y-4">
+              {/* AI Summary Card */}
+              <div className="bg-gradient-to-br from-[#007AFF]/10 via-[#5856D6]/10 to-[#AF52DE]/10 dark:from-[#007AFF]/20 dark:via-[#5856D6]/20 dark:to-[#AF52DE]/20 rounded-xl p-5 border border-[#007AFF]/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-lg flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-white" />
+                  </div>
+                  <h4 className="font-semibold text-gray-900 dark:text-white">
+                    AI Summary
+                  </h4>
                 </div>
                 {selectedItem.aiSummary ? (
-                  <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                     {selectedItem.aiSummary}
                   </p>
                 ) : (
                   <div className="text-center py-4">
-                    <p className="text-sm text-gray-500 mb-3">
-                      No summary generated yet.
+                    <p className="text-sm text-gray-500 mb-4">
+                      No AI summary generated yet.
                     </p>
-                    <Button
-                      size="sm"
+                    <button
                       onClick={() => handleGenerateSummary(selectedItem)}
-                      className="w-full"
+                      className="w-full py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-medium rounded-xl transition-all active:scale-[0.98]"
                     >
                       Generate Summary
-                    </Button>
+                    </button>
                   </div>
                 )}
               </div>
 
-              {/* Actions List */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+              {/* Actions */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                   Actions
                 </h4>
                 {selectedItem.sourceUrl && (
@@ -437,19 +586,19 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     href={selectedItem.sourceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-700 group"
+                    className="flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-colors"
                   >
-                    <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md text-blue-600">
-                      <Globe className="w-4 h-4" />
+                    <div className="w-9 h-9 bg-[#007AFF]/10 rounded-lg flex items-center justify-center">
+                      <ExternalLink className="w-4 h-4 text-[#007AFF]" />
                     </div>
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                       Open Original Source
                     </span>
                   </a>
                 )}
-                <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-700 text-left">
-                  <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-md text-purple-600">
-                    <Share2 className="w-4 h-4" />
+                <button className="w-full flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-colors">
+                  <div className="w-9 h-9 bg-[#5856D6]/10 rounded-lg flex items-center justify-center">
+                    <Share2 className="w-4 h-4 text-[#5856D6]" />
                   </div>
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                     Share Research
@@ -457,15 +606,42 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 </button>
                 <button
                   onClick={() => handleDeleteItem(selectedItem.id)}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors border border-transparent hover:border-red-100 text-left"
+                  className="w-full flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                 >
-                  <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-md text-red-600">
-                    <Trash2 className="w-4 h-4" />
+                  <div className="w-9 h-9 bg-[#FF3B30]/10 rounded-lg flex items-center justify-center">
+                    <Trash2 className="w-4 h-4 text-[#FF3B30]" />
                   </div>
-                  <span className="text-sm font-medium text-red-600">
-                    Delete Permanently
+                  <span className="text-sm font-medium text-[#FF3B30]">
+                    Delete Item
                   </span>
                 </button>
+              </div>
+
+              {/* Metadata */}
+              <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-4">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                  Details
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Source</span>
+                    <span className="text-gray-900 dark:text-white capitalize">
+                      {selectedItem.deviceSource || "Web"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Created</span>
+                    <span className="text-gray-900 dark:text-white">
+                      {new Date(selectedItem.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Updated</span>
+                    <span className="text-gray-900 dark:text-white">
+                      {new Date(selectedItem.updatedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
