@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Button } from "./UIComponents";
+import BubbleBackground from "../shared/BubbleBackground";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -65,10 +66,16 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] text-gray-900 font-sans">
+    <div className="min-h-screen text-gray-900 font-sans relative">
+      {/* Fixed Background Layer - z-index 0 */}
+      <div className="fixed inset-0 bg-[#F5F5F7] z-0" />
+
+      {/* Interactive Bubble Background - z-index 5 */}
+      <BubbleBackground bubbleCount={12} />
+
       {/* Navigation */}
       <nav
-        className={`fixed top-0 w-full z-50 transition-all duration-500 ${
+        className={`fixed top-0 w-full z-50 transition-all duration-500 bubble-clickthrough ${
           isScrolled
             ? "bg-white/80 backdrop-blur-xl backdrop-saturate-150 border-b border-gray-200/50"
             : "bg-transparent"
@@ -180,10 +187,10 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
       </nav>
 
       {/* Main Content */}
-      <main className="pt-12">{children}</main>
+      <main className="pt-12 content-above-bubbles">{children}</main>
 
-      {/* Footer */}
-      <footer className="bg-[#F5F5F7] border-t border-gray-200/50 mt-20">
+      {/* Footer - Semi-transparent */}
+      <footer className="border-t border-white/30 bg-white/40 backdrop-blur-sm content-above-bubbles bubble-clickthrough">
         <div className="max-w-6xl mx-auto px-6 py-12">
           <div className="grid md:grid-cols-4 gap-8">
             {/* Brand */}

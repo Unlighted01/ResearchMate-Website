@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Input } from "../shared/UIComponents";
+import BubbleBackground from "../shared/BubbleBackground";
 import { Mail, Lock, Check, X } from "lucide-react";
 
 // Apple-style icons for OAuth
@@ -120,8 +121,10 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-black px-4 py-12">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 relative">
+      <div className="fixed inset-0 bg-[#F5F5F7] dark:bg-black z-0" />
+      <BubbleBackground bubbleCount={10} />
+      <div className="w-full max-w-sm content-above-bubbles">
         {/* Header */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block mb-6">

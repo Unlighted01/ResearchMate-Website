@@ -1,5 +1,5 @@
 // ============================================
-// TEAM PAGE - Apple Design
+// TEAM PAGE - Apple Design (Clean)
 // ============================================
 
 import React from "react";
@@ -7,7 +7,6 @@ import { Link } from "react-router-dom";
 import {
   Github,
   Linkedin,
-  Twitter,
   Mail,
   Heart,
   Target,
@@ -78,31 +77,25 @@ const milestones = [
 
 const TeamPage = () => {
   return (
-    <div className="overflow-hidden">
+    <div className="min-h-screen bg-[#F5F5F7]">
       {/* ========== HERO ========== */}
       <section className="relative pt-24 pb-16 px-6">
-        <div className="absolute inset-0 bg-[#F5F5F7] dark:bg-black">
-          <div className="absolute inset-0 bg-gradient-to-b from-purple-100/50 via-transparent to-transparent dark:from-purple-900/20" />
-          <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/3 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl" />
-        </div>
-
-        <div className="relative z-10 max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/60 dark:bg-white/10 backdrop-blur-lg rounded-full border border-gray-200/50 dark:border-gray-700/50 mb-8">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm rounded-full border border-gray-200/50 shadow-sm mb-8">
             <Sparkles className="w-4 h-4 text-[#5856D6]" />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <span className="text-sm font-medium text-gray-700">
               We're hiring!
             </span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6">
-            <span className="text-gray-900 dark:text-white">Meet the</span>
+            <span className="text-gray-900">Meet the</span>
             <br />
             <span className="bg-gradient-to-r from-[#5856D6] via-[#AF52DE] to-[#FF2D55] bg-clip-text text-transparent">
               Team
             </span>
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             We're building the future of research management — one feature at a
             time. Our small but passionate team is dedicated to helping
             researchers work smarter.
@@ -111,14 +104,14 @@ const TeamPage = () => {
       </section>
 
       {/* ========== OUR STORY ========== */}
-      <section className="py-20 px-6 bg-white dark:bg-[#0D0D0D]">
+      <section className="py-20 px-6 bg-white">
         <div className="max-w-6xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+              <h2 className="text-3xl font-bold text-gray-900 mb-6">
                 Our Story
               </h2>
-              <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed">
+              <div className="space-y-4 text-gray-600 leading-relaxed">
                 <p>
                   ResearchMate started from a simple frustration: as students
                   and researchers, we found ourselves drowning in bookmarks,
@@ -144,7 +137,7 @@ const TeamPage = () => {
                       className="w-3 h-3 rounded-full flex-shrink-0"
                       style={{ backgroundColor: milestone.color }}
                     />
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                    <span className="text-sm font-semibold text-gray-900">
                       {milestone.year}
                     </span>
                     <span className="text-sm text-gray-500">
@@ -185,7 +178,7 @@ const TeamPage = () => {
               ].map((card, idx) => (
                 <div
                   key={idx}
-                  className="bg-[#F5F5F7] dark:bg-[#1C1C1E] rounded-2xl p-6 text-center hover:shadow-lg transition-all"
+                  className="bg-[#F5F5F7] rounded-2xl p-6 text-center hover:bg-[#EBEBF0] transition-all hover:shadow-lg"
                 >
                   <div
                     className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
@@ -196,9 +189,7 @@ const TeamPage = () => {
                       style={{ color: card.color }}
                     />
                   </div>
-                  <p className="font-bold text-gray-900 dark:text-white">
-                    {card.title}
-                  </p>
+                  <p className="font-bold text-gray-900">{card.title}</p>
                   <p className="text-sm text-gray-500">{card.subtitle}</p>
                 </div>
               ))}
@@ -208,22 +199,20 @@ const TeamPage = () => {
       </section>
 
       {/* ========== TEAM MEMBERS ========== */}
-      <section className="py-20 px-6 bg-[#F5F5F7] dark:bg-black">
+      <section className="py-20 px-6 bg-[#F5F5F7]">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
               The People Behind ResearchMate
             </h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              A small team with big ambitions
-            </p>
+            <p className="text-gray-600">A small team with big ambitions</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
             {teamMembers.map((member, idx) => (
               <div
                 key={idx}
-                className="bg-white dark:bg-[#1C1C1E] rounded-3xl p-8 text-center hover:shadow-xl transition-all"
+                className="bg-white rounded-3xl p-8 text-center shadow-sm hover:shadow-xl transition-all"
               >
                 {/* Avatar */}
                 <div
@@ -233,13 +222,13 @@ const TeamPage = () => {
                 </div>
 
                 {/* Info */}
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                <h3 className="text-xl font-bold text-gray-900 mb-1">
                   {member.name}
                 </h3>
                 <p className="text-sm font-medium text-[#007AFF] mb-4">
                   {member.role}
                 </p>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mb-6 leading-relaxed">
+                <p className="text-gray-600 text-sm mb-6 leading-relaxed">
                   {member.bio}
                 </p>
 
@@ -248,7 +237,7 @@ const TeamPage = () => {
                   {member.skills.map((skill, i) => (
                     <span
                       key={i}
-                      className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs rounded-full"
+                      className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full"
                     >
                       {skill}
                     </span>
@@ -262,7 +251,7 @@ const TeamPage = () => {
                       href={member.social.github}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2.5 rounded-xl text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      className="p-2.5 rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
                     >
                       <Github className="w-5 h-5" />
                     </a>
@@ -272,7 +261,7 @@ const TeamPage = () => {
                       href={member.social.linkedin}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2.5 rounded-xl text-gray-400 hover:text-[#0077B5] hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                      className="p-2.5 rounded-xl text-gray-400 hover:text-[#0077B5] hover:bg-blue-50 transition-colors"
                     >
                       <Linkedin className="w-5 h-5" />
                     </a>
@@ -280,7 +269,7 @@ const TeamPage = () => {
                   {member.social.email && (
                     <a
                       href={member.social.email}
-                      className="p-2.5 rounded-xl text-gray-400 hover:text-[#FF3B30] hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      className="p-2.5 rounded-xl text-gray-400 hover:text-[#FF3B30] hover:bg-red-50 transition-colors"
                     >
                       <Mail className="w-5 h-5" />
                     </a>
@@ -290,14 +279,14 @@ const TeamPage = () => {
             ))}
 
             {/* Join Us Card */}
-            <div className="bg-white dark:bg-[#1C1C1E] rounded-3xl p-8 text-center border-2 border-dashed border-gray-200 dark:border-gray-700 flex flex-col justify-center">
-              <div className="w-24 h-24 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 text-3xl mx-auto mb-6">
+            <div className="bg-white/50 rounded-3xl p-8 text-center border-2 border-dashed border-gray-300 flex flex-col justify-center">
+              <div className="w-24 h-24 rounded-3xl bg-gray-100 flex items-center justify-center text-gray-400 text-3xl mx-auto mb-6">
                 ?
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
                 Join Our Team
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
+              <p className="text-gray-600 text-sm mb-6">
                 We're always looking for passionate people to help build the
                 future of research.
               </p>
@@ -314,13 +303,13 @@ const TeamPage = () => {
       </section>
 
       {/* ========== VALUES ========== */}
-      <section className="py-20 px-6 bg-white dark:bg-[#0D0D0D]">
+      <section className="py-20 px-6 bg-white">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
               Our Values
             </h2>
-            <p className="text-gray-600 dark:text-gray-400">
+            <p className="text-gray-600">
               The principles that guide everything we build
             </p>
           </div>
@@ -329,7 +318,7 @@ const TeamPage = () => {
             {values.map((value, idx) => (
               <div
                 key={idx}
-                className="bg-[#F5F5F7] dark:bg-[#1C1C1E] rounded-2xl p-6 text-center hover:shadow-lg transition-all"
+                className="bg-[#F5F5F7] rounded-2xl p-6 text-center hover:bg-[#EBEBF0] transition-all hover:shadow-lg"
               >
                 <div
                   className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
@@ -340,10 +329,10 @@ const TeamPage = () => {
                     style={{ color: value.color }}
                   />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   {value.title}
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                <p className="text-sm text-gray-600 leading-relaxed">
                   {value.description}
                 </p>
               </div>
@@ -353,7 +342,7 @@ const TeamPage = () => {
       </section>
 
       {/* ========== CTA ========== */}
-      <section className="py-20 px-6 bg-[#F5F5F7] dark:bg-black">
+      <section className="py-20 px-6 bg-[#F5F5F7]">
         <div className="max-w-4xl mx-auto">
           <div className="bg-gradient-to-br from-[#5856D6] to-[#AF52DE] rounded-3xl p-8 md:p-12 text-white text-center relative overflow-hidden">
             {/* Background */}

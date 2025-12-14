@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Button, Card, Input } from "../shared/UIComponents";
+
 import { Mail, Lock, ArrowLeft } from "lucide-react";
 
 // Apple-style icons for OAuth
@@ -146,8 +147,10 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
   // Forgot Password View
   if (showForgotPassword) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-black px-4">
-        <div className="w-full max-w-sm">
+      <div className="min-h-screen flex items-center justify-center px-4 relative">
+        <div className="fixed inset-0 bg-[#F5F5F7] dark:bg-black z-0" />
+        <BubbleBackground bubbleCount={10} />
+        <div className="w-full max-w-sm content-above-bubbles">
           <div className="text-center mb-8">
             <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
               <Mail className="w-8 h-8 text-white" />
@@ -193,8 +196,10 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
 
   // Main Login View
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-black px-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center px-4 relative">
+      <div className="fixed inset-0 bg-[#F5F5F7] dark:bg-black z-0" />
+      <BubbleBackground bubbleCount={10} />
+      <div className="w-full max-w-sm content-above-bubbles">
         {/* Header */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block mb-6">

@@ -563,3 +563,233 @@ h6 {
 .dark ::selection {
   background: rgba(0, 122, 255, 0.3);
 }
+
+/* ============================================
+   PART 16: INTERACTIVE BUBBLE BACKGROUND
+   Smooth, organic floating bubbles
+   ============================================ */
+
+/* Container - full viewport */
+.bubble-container {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Content that should appear ABOVE bubbles */
+.content-above-bubbles {
+  position: relative;
+  z-index: 10;
+}
+
+/* Allow clicking through transparent areas to reach bubbles */
+.bubble-clickthrough {
+  pointer-events: none;
+}
+
+/* Re-enable pointer events for interactive elements inside clickthrough areas */
+.bubble-clickthrough a,
+.bubble-clickthrough button,
+.bubble-clickthrough input,
+.bubble-clickthrough select,
+.bubble-clickthrough textarea,
+.bubble-clickthrough [role="button"] {
+  pointer-events: auto;
+}
+
+/* Individual bubble styling */
+.bubble {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: auto;
+  cursor: pointer;
+  will-change: transform, opacity;
+
+  /* Gradient fill with highlight */
+  background: radial-gradient(
+      circle at 30% 30%,
+      rgba(255, 255, 255, 0.4) 0%,
+      transparent 50%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(0, 122, 255, 0.35) 0%,
+      rgba(88, 86, 214, 0.3) 50%,
+      rgba(175, 82, 222, 0.25) 100%
+    );
+
+  /* Glass effect */
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+
+  /* Border and shadow */
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.15),
+    0 8px 32px rgba(0, 122, 255, 0.15), 0 4px 16px rgba(88, 86, 214, 0.1);
+
+  /* Smooth hover transition */
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.6s ease, opacity 0.6s ease;
+
+  /* Start invisible for fade-in */
+  opacity: 0;
+
+  /* Apply float animation */
+  animation-name: bubble-float, bubble-spawn;
+  animation-duration: 25s, 1s;
+  animation-timing-function: ease-in-out, ease-out;
+  animation-iteration-count: infinite, 1;
+  animation-fill-mode: none, forwards;
+  animation-delay: 0s, 0s;
+}
+
+/* Hover effect - gentle glow */
+.bubble:hover {
+  transform: scale(1.12) !important;
+  box-shadow: inset 0 0 40px rgba(255, 255, 255, 0.25),
+    0 16px 48px rgba(0, 122, 255, 0.25), 0 0 60px rgba(88, 86, 214, 0.15);
+}
+
+/* Pop animation class */
+.bubble-pop {
+  animation: bubble-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+  pointer-events: none;
+}
+
+/* Spawn animation - smooth fade and scale in */
+@keyframes bubble-spawn {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ============================================
+   SMOOTH FLOAT ANIMATION
+   Organic, flowing movement with bezier easing
+   ============================================ */
+
+@keyframes bubble-float {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  10% {
+    transform: translate(8px, -15px) scale(1.01) rotate(1deg);
+  }
+  20% {
+    transform: translate(20px, -35px) scale(1.02) rotate(2deg);
+  }
+  30% {
+    transform: translate(15px, -55px) scale(1.01) rotate(1deg);
+  }
+  40% {
+    transform: translate(-5px, -65px) scale(0.99) rotate(-1deg);
+  }
+  50% {
+    transform: translate(-20px, -55px) scale(0.98) rotate(-2deg);
+  }
+  60% {
+    transform: translate(-25px, -40px) scale(0.99) rotate(-1deg);
+  }
+  70% {
+    transform: translate(-15px, -25px) scale(1.01) rotate(1deg);
+  }
+  80% {
+    transform: translate(-5px, -12px) scale(1.02) rotate(2deg);
+  }
+  90% {
+    transform: translate(3px, -5px) scale(1.01) rotate(1deg);
+  }
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+}
+
+/* Pop animation - smooth expand and fade */
+@keyframes bubble-pop {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(1.3);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* ============================================
+   BUBBLE VARIATIONS - Different colors
+   ============================================ */
+
+/* Purple/pink variant */
+.bubble:nth-child(odd) {
+  background: radial-gradient(
+      circle at 30% 30%,
+      rgba(255, 255, 255, 0.35) 0%,
+      transparent 50%
+    ),
+    linear-gradient(
+      45deg,
+      rgba(88, 86, 214, 0.32) 0%,
+      rgba(175, 82, 222, 0.28) 50%,
+      rgba(255, 45, 85, 0.18) 100%
+    );
+  animation-direction: reverse, normal;
+}
+
+/* Green/blue variant */
+.bubble:nth-child(3n) {
+  background: radial-gradient(
+      circle at 30% 30%,
+      rgba(255, 255, 255, 0.35) 0%,
+      transparent 50%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(52, 199, 89, 0.28) 0%,
+      rgba(0, 122, 255, 0.32) 100%
+    );
+}
+
+/* Orange/yellow variant */
+.bubble:nth-child(5n) {
+  background: radial-gradient(
+      circle at 30% 30%,
+      rgba(255, 255, 255, 0.4) 0%,
+      transparent 50%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(255, 149, 0, 0.3) 0%,
+      rgba(255, 204, 0, 0.25) 100%
+    );
+  animation-direction: normal, normal;
+}
+
+/* Slower bubbles */
+.bubble:nth-child(even) {
+  --duration: 30s;
+}
+
+/* Offset timing */
+.bubble:nth-child(2n + 1) {
+  --delay: -5s;
+}
+
+.bubble:nth-child(3n + 1) {
+  --delay: -10s;
+}
+
+.bubble:nth-child(4n + 1) {
+  --delay: -15s;
+}
