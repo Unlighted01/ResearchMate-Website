@@ -636,20 +636,21 @@ h6 {
   /* Start invisible for fade-in */
   opacity: 0;
 
-  /* Apply float animation */
-  animation-name: bubble-float, bubble-spawn;
-  animation-duration: 25s, 1s;
-  animation-timing-function: ease-in-out, ease-out;
-  animation-iteration-count: infinite, 1;
-  animation-fill-mode: none, forwards;
-  animation-delay: 0s, 0s;
+  /* Single animation - float controls everything */
+  animation: bubble-float var(--bubble-duration, 25s) ease-in-out infinite;
+  animation-delay: var(--bubble-delay, 0s);
+  animation-fill-mode: both;
+
+  /* Fade in on load */
+  opacity: 1;
+  transition: opacity 1s ease-out;
 }
 
-/* Hover effect - gentle glow */
+/* Hover effect - gentle glow (doesn't override animation) */
 .bubble:hover {
-  transform: scale(1.12) !important;
-  box-shadow: inset 0 0 40px rgba(255, 255, 255, 0.25),
-    0 16px 48px rgba(0, 122, 255, 0.25), 0 0 60px rgba(88, 86, 214, 0.15);
+  filter: brightness(1.15) contrast(1.1);
+  box-shadow: inset 0 0 40px rgba(255, 255, 255, 0.35),
+    0 16px 48px rgba(0, 122, 255, 0.35), 0 0 80px rgba(88, 86, 214, 0.25);
 }
 
 /* Pop animation class */
@@ -658,15 +659,13 @@ h6 {
   pointer-events: none;
 }
 
-/* Spawn animation - smooth fade and scale in */
+/* Spawn animation - just opacity, no transform */
 @keyframes bubble-spawn {
   0% {
     opacity: 0;
-    transform: scale(0.6);
   }
   100% {
     opacity: 1;
-    transform: scale(1);
   }
 }
 
@@ -680,31 +679,31 @@ h6 {
     transform: translate(0, 0) scale(1) rotate(0deg);
   }
   10% {
-    transform: translate(8px, -15px) scale(1.01) rotate(1deg);
+    transform: translate(30px, -80px) scale(1.02) rotate(3deg);
   }
   20% {
-    transform: translate(20px, -35px) scale(1.02) rotate(2deg);
+    transform: translate(70px, -180px) scale(1.05) rotate(7deg);
   }
   30% {
-    transform: translate(15px, -55px) scale(1.01) rotate(1deg);
+    transform: translate(50px, -280px) scale(1.03) rotate(4deg);
   }
   40% {
-    transform: translate(-5px, -65px) scale(0.99) rotate(-1deg);
+    transform: translate(-20px, -360px) scale(0.98) rotate(-3deg);
   }
   50% {
-    transform: translate(-20px, -55px) scale(0.98) rotate(-2deg);
+    transform: translate(-80px, -420px) scale(0.95) rotate(-8deg);
   }
   60% {
-    transform: translate(-25px, -40px) scale(0.99) rotate(-1deg);
+    transform: translate(-100px, -360px) scale(0.97) rotate(-5deg);
   }
   70% {
-    transform: translate(-15px, -25px) scale(1.01) rotate(1deg);
+    transform: translate(-60px, -260px) scale(1.01) rotate(2deg);
   }
   80% {
-    transform: translate(-5px, -12px) scale(1.02) rotate(2deg);
+    transform: translate(-20px, -150px) scale(1.03) rotate(5deg);
   }
   90% {
-    transform: translate(3px, -5px) scale(1.01) rotate(1deg);
+    transform: translate(10px, -70px) scale(1.02) rotate(2deg);
   }
   100% {
     transform: translate(0, 0) scale(1) rotate(0deg);
@@ -776,20 +775,20 @@ h6 {
   animation-direction: normal, normal;
 }
 
-/* Slower bubbles */
+/* Slower bubbles - override JS timing */
 .bubble:nth-child(even) {
-  --duration: 30s;
+  --bubble-duration: 30s;
 }
 
-/* Offset timing */
+/* Offset timing - start at different points in animation */
 .bubble:nth-child(2n + 1) {
-  --delay: -5s;
+  --bubble-delay: -5s;
 }
 
 .bubble:nth-child(3n + 1) {
-  --delay: -10s;
+  --bubble-delay: -10s;
 }
 
 .bubble:nth-child(4n + 1) {
-  --delay: -15s;
+  --bubble-delay: -15s;
 }

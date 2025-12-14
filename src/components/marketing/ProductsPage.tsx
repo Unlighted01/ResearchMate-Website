@@ -1,297 +1,352 @@
 // ============================================
-// LANDING PAGE - Apple Design (Clean)
+// PRODUCTS PAGE - Apple Design with Transparent Sections
+// Bubbles visible through semi-transparent content
 // ============================================
 
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "../../services/supabaseClient";
+import React from "react";
+import { Link } from "react-router-dom";
 import {
-  Zap,
+  Chrome,
   Smartphone,
   PenTool,
-  Layers,
+  Globe,
+  Zap,
   Shield,
   RefreshCw,
+  Cloud,
   ArrowRight,
-  Chrome,
-  Sparkles,
-  Globe,
-  CheckCircle2,
+  Check,
+  Download,
+  ExternalLink,
+  Star,
 } from "lucide-react";
 
-const LandingPage = () => {
-  const navigate = useNavigate();
-  const [checkingAuth, setCheckingAuth] = useState(true);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session) navigate("/app/dashboard", { replace: true });
-      } catch (error) {
-        console.error("Auth check error:", error);
-      } finally {
-        setCheckingAuth(false);
-      }
-    };
-    checkAuth();
-  }, [navigate]);
-
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7]">
-        <div className="w-8 h-8 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+const ProductsPage = () => {
+  const products = [
+    {
+      id: "extension",
+      name: "Browser Extension",
+      tagline: "Research while you browse",
+      description:
+        "Capture highlights, save articles, and generate AI summaries directly from any webpage. Works seamlessly with Chrome, Firefox, and Edge.",
+      icon: Chrome,
+      color: "#007AFF",
+      gradient: "from-[#007AFF] to-[#0051D5]",
+      status: "Available",
+      features: [
+        "One-click save from any website",
+        "Highlight and annotate text",
+        "AI-powered summaries",
+        "Auto-sync to cloud",
+        "Keyboard shortcuts",
+        "Context menu integration",
+      ],
+      cta: "Add to Chrome",
+      ctaLink:
+        "https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh",
+    },
+    {
+      id: "mobile",
+      name: "Mobile App",
+      tagline: "Research on the go",
+      description:
+        "Access your entire research library from your pocket. Capture content, take photos, and sync seamlessly with your other devices.",
+      icon: Smartphone,
+      color: "#5856D6",
+      gradient: "from-[#5856D6] to-[#AF52DE]",
+      status: "Coming Soon",
+      features: [
+        "Full research library access",
+        "Offline mode support",
+        "Camera capture with OCR",
+        "Push notifications",
+        "Share extension integration",
+        "Widget for quick access",
+      ],
+      cta: "Join Waitlist",
+      ctaLink: "#",
+    },
+    {
+      id: "smartpen",
+      name: "Smart Pen",
+      tagline: "Handwriting meets digital",
+      description:
+        "Bridge the gap between paper and digital. Your handwritten notes are automatically digitized, transcribed, and synced to your library.",
+      icon: PenTool,
+      color: "#FF9500",
+      gradient: "from-[#FF9500] to-[#FF6B00]",
+      status: "Beta",
+      features: [
+        "Real-time sync while writing",
+        "OCR text recognition",
+        "Sketch and diagram support",
+        "Multiple pen compatibility",
+        "Cloud backup",
+        "Search handwritten notes",
+      ],
+      cta: "Join Beta",
+      ctaLink: "#",
+    },
+    {
+      id: "web",
+      name: "Web Dashboard",
+      tagline: "Your research command center",
+      description:
+        "The central hub for all your research. Organize, search, and analyze your entire library with powerful tools and AI assistance.",
+      icon: Globe,
+      color: "#34C759",
+      gradient: "from-[#34C759] to-[#30D158]",
+      status: "Available",
+      features: [
+        "Unified research library",
+        "Advanced search & filters",
+        "Collections & tags",
+        "AI assistant chat",
+        "Citation generator",
+        "Statistics & insights",
+      ],
+      cta: "Open Dashboard",
+      ctaLink: "/app/dashboard",
+    },
+  ];
 
   const features = [
     {
-      icon: Zap,
-      title: "AI-Powered Summaries",
-      desc: "Instantly distill lengthy research into key insights with advanced AI.",
-      color: "#007AFF",
-    },
-    {
       icon: RefreshCw,
       title: "Real-time Sync",
-      desc: "Your research stays updated across all devices, automatically.",
-      color: "#34C759",
+      description: "Changes sync instantly across all your devices",
     },
     {
-      icon: Smartphone,
-      title: "Multi-Platform",
-      desc: "Access from browser extension, mobile app, or web dashboard.",
-      color: "#5856D6",
-    },
-    {
-      icon: PenTool,
-      title: "Smart Pen Ready",
-      desc: "Digitize handwritten notes with OCR-powered smart pen support.",
-      color: "#FF9500",
-    },
-    {
-      icon: Layers,
-      title: "Smart Collections",
-      desc: "AI-generated tags and intelligent organization for your research.",
-      color: "#AF52DE",
+      icon: Zap,
+      title: "AI Powered",
+      description: "Intelligent summaries and insights from your research",
     },
     {
       icon: Shield,
       title: "Privacy First",
-      desc: "Your data is encrypted and never shared. You own your research.",
-      color: "#FF3B30",
+      description: "Your data is encrypted and never shared",
+    },
+    {
+      icon: Cloud,
+      title: "Cloud Storage",
+      description: "Access your research from anywhere, anytime",
     },
   ];
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7]">
-      {/* ========== HERO SECTION ========== */}
-      <section className="relative min-h-[90vh] flex items-center justify-center px-6 pt-20 pb-16 overflow-hidden">
-        {/* Very subtle gradient background */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: `
-              radial-gradient(ellipse 80% 50% at 20% 30%, rgba(0, 122, 255, 0.08) 0%, transparent 50%),
-              radial-gradient(ellipse 60% 40% at 80% 20%, rgba(88, 86, 214, 0.06) 0%, transparent 50%),
-              radial-gradient(ellipse 50% 50% at 50% 80%, rgba(175, 82, 222, 0.05) 0%, transparent 50%)
-            `,
-          }}
-        />
-
+    <div className="min-h-screen">
+      {/* ========== HERO ========== */}
+      <section className="relative pt-24 pb-16 px-6">
         <div className="relative z-10 max-w-4xl mx-auto text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm rounded-full border border-gray-200/50 shadow-sm mb-8 animate-fade-in-up">
-            <Sparkles className="w-4 h-4 text-[#007AFF]" />
-            <span className="text-sm font-medium text-gray-700">
-              Now with Smart Pen Integration
-            </span>
-          </div>
-
-          {/* Headline */}
-          <h1
-            className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight mb-6 animate-fade-in-up"
-            style={{ animationDelay: "0.1s" }}
-          >
-            <span className="text-gray-900">Your Research.</span>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-gray-900 mb-6">
+            One ecosystem.
             <br />
             <span className="bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE] bg-clip-text text-transparent">
-              Everywhere.
+              Every device.
             </span>
           </h1>
-
-          {/* Subheadline */}
-          <p
-            className="text-xl md:text-2xl text-gray-600 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up"
-            style={{ animationDelay: "0.2s" }}
-          >
-            Capture, organize, and understand your research across all your
-            devices with AI-powered insights.
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
+            ResearchMate works seamlessly across your browser, phone, and desk.
+            Your research flows with you.
           </p>
 
-          {/* CTAs */}
-          <div
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up"
-            style={{ animationDelay: "0.3s" }}
-          >
-            <Link to="/signup">
-              <button className="group flex items-center gap-2 px-8 py-4 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-full transition-all duration-300 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98]">
-                Get Started Free
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            </Link>
-            <Link to="/products">
-              <button className="flex items-center gap-2 px-8 py-4 bg-white text-gray-900 font-medium rounded-full border border-gray-200 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
-                <Chrome className="w-4 h-4" />
-                Download Extension
-              </button>
-            </Link>
-          </div>
-
-          {/* Trust Indicators */}
-          <div
-            className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm text-gray-500 animate-fade-in-up"
-            style={{ animationDelay: "0.4s" }}
-          >
-            {["Free to start", "No credit card required", "Cancel anytime"].map(
-              (text, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#34C759]" />
-                  <span>{text}</span>
-                </div>
-              )
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ========== FEATURES SECTION ========== */}
-      <section className="py-24 px-6 bg-white">
-        <div className="max-w-6xl mx-auto">
-          {/* Section Header */}
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Everything you need for better research
-            </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Powerful features designed to help you capture, organize, and
-              understand your research.
-            </p>
-          </div>
-
-          {/* Features Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, idx) => (
+          {/* Quick Stats */}
+          <div className="flex flex-wrap justify-center gap-8 text-center">
+            {[
+              { value: "4", label: "Products" },
+              { value: "10K+", label: "Users" },
+              { value: "99.9%", label: "Uptime" },
+            ].map((stat, idx) => (
               <div
                 key={idx}
-                className="group p-6 bg-[#F5F5F7] rounded-2xl hover:bg-[#EBEBF0] transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                className="bg-white/50 backdrop-blur-md rounded-2xl px-6 py-4 border border-white/50"
               >
-                <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110"
-                  style={{ backgroundColor: `${feature.color}15` }}
-                >
-                  <feature.icon
-                    className="w-6 h-6"
-                    style={{ color: feature.color }}
-                  />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {feature.title}
-                </h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  {feature.desc}
-                </p>
+                <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+                <p className="text-sm text-gray-500">{stat.label}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ========== ECOSYSTEM SECTION ========== */}
-      <section className="py-24 px-6 bg-[#F5F5F7]">
+      {/* ========== PRODUCTS GRID ========== */}
+      <section className="py-20 px-6 bg-white/40 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            {/* Left: Content */}
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-100 rounded-full text-purple-700 text-sm font-medium mb-6">
-                <Globe className="w-4 h-4" />
-                Ecosystem
-              </div>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                One platform.
-                <br />
-                Every device.
-              </h2>
-              <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-                Research flows seamlessly between your browser, phone, and desk.
-                Save an article on your laptop, annotate it on your phone, and
-                reference it anywhere.
-              </p>
-
-              {/* Device List */}
-              <div className="space-y-4">
-                {[
-                  {
-                    icon: Chrome,
-                    name: "Browser Extension",
-                    desc: "Save and highlight while you browse",
-                    status: "Available",
-                  },
-                  {
-                    icon: Smartphone,
-                    name: "Mobile App",
-                    desc: "Research on the go with iOS & Android",
-                    status: "Coming Soon",
-                  },
-                  {
-                    icon: PenTool,
-                    name: "Smart Pen",
-                    desc: "Digitize handwritten notes instantly",
-                    status: "Beta",
-                  },
-                ].map((device, idx) => (
+          <div className="grid md:grid-cols-2 gap-6">
+            {products.map((product) => (
+              <div
+                key={product.id}
+                className="group bg-white/50 backdrop-blur-md rounded-3xl p-8 hover:bg-white/70 hover:shadow-2xl hover:shadow-gray-200/50 transition-all duration-500 border border-white/50"
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-6">
                   <div
-                    key={idx}
-                    className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300"
+                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${product.gradient} flex items-center justify-center shadow-lg`}
+                    style={{ boxShadow: `0 8px 24px ${product.color}30` }}
                   >
-                    <div className="w-10 h-10 bg-[#007AFF]/10 rounded-xl flex items-center justify-center">
-                      <device.icon className="w-5 h-5 text-[#007AFF]" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">
-                        {device.name}
-                      </h4>
-                      <p className="text-sm text-gray-500">{device.desc}</p>
-                    </div>
-                    <span
-                      className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                        device.status === "Available"
-                          ? "bg-green-100 text-green-700"
-                          : device.status === "Beta"
-                          ? "bg-orange-100 text-orange-700"
-                          : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {device.status}
-                    </span>
+                    <product.icon className="w-7 h-7 text-white" />
                   </div>
-                ))}
+                  <span
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
+                      product.status === "Available"
+                        ? "bg-[#34C759]/10 text-[#34C759]"
+                        : product.status === "Beta"
+                        ? "bg-[#FF9500]/10 text-[#FF9500]"
+                        : "bg-gray-500/10 text-gray-600"
+                    }`}
+                  >
+                    {product.status}
+                  </span>
+                </div>
+
+                {/* Content */}
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  {product.name}
+                </h3>
+                <p
+                  className="text-sm font-medium mb-3"
+                  style={{ color: product.color }}
+                >
+                  {product.tagline}
+                </p>
+                <p className="text-gray-600 mb-6 leading-relaxed">
+                  {product.description}
+                </p>
+
+                {/* Features */}
+                <div className="grid grid-cols-2 gap-2 mb-6">
+                  {product.features.map((feature, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 text-sm text-gray-600"
+                    >
+                      <Check
+                        className="w-4 h-4 flex-shrink-0"
+                        style={{ color: product.color }}
+                      />
+                      <span className="truncate">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* CTA */}
+                {product.status === "Available" ? (
+                  product.id === "web" ? (
+                    <Link to={product.ctaLink}>
+                      <button
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-white transition-all active:scale-[0.98]"
+                        style={{ backgroundColor: product.color }}
+                      >
+                        {product.cta}
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </Link>
+                  ) : (
+                    <a
+                      href={product.ctaLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <button
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-white transition-all active:scale-[0.98]"
+                        style={{ backgroundColor: product.color }}
+                      >
+                        {product.cta}
+                        <ExternalLink className="w-4 h-4" />
+                      </button>
+                    </a>
+                  )
+                ) : (
+                  <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium bg-gray-500/10 text-gray-600 transition-all active:scale-[0.98]">
+                    {product.cta}
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ========== FEATURES BAR ========== */}
+      <section className="py-16 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {features.map((feature, idx) => (
+              <div key={idx} className="text-center">
+                <div className="w-12 h-12 bg-white/50 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-white/50">
+                  <feature.icon className="w-6 h-6 text-[#007AFF]" />
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-1">
+                  {feature.title}
+                </h4>
+                <p className="text-sm text-gray-500">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ========== EXTENSION SPOTLIGHT ========== */}
+      <section className="py-20 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-3xl p-8 md:p-12 text-white relative overflow-hidden">
+            {/* Background Pattern */}
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-white rounded-full blur-3xl" />
+              <div className="absolute bottom-0 left-0 w-64 h-64 bg-white rounded-full blur-3xl" />
             </div>
 
-            {/* Right: Visual */}
-            <div className="relative">
-              <div className="aspect-square bg-gradient-to-br from-[#007AFF]/10 via-[#5856D6]/10 to-[#AF52DE]/10 rounded-3xl flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/30">
-                    <span className="text-4xl font-bold text-white">R</span>
+            <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-4">
+                  <Star className="w-5 h-5 fill-current" />
+                  <span className="text-sm font-medium opacity-90">
+                    Featured Product
+                  </span>
+                </div>
+                <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                  Get the Browser Extension
+                </h2>
+                <p className="text-lg opacity-90 mb-6 max-w-lg">
+                  The fastest way to save and organize research. One click to
+                  capture any content from the web.
+                </p>
+                <a
+                  href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <button className="flex items-center gap-2 px-6 py-3 bg-white text-[#007AFF] font-semibold rounded-full hover:bg-gray-100 transition-all active:scale-95">
+                    <Download className="w-5 h-5" />
+                    Download for Chrome
+                  </button>
+                </a>
+              </div>
+
+              {/* Extension Preview */}
+              <div className="w-full md:w-80 bg-white/10 backdrop-blur rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
+                    <span className="text-[#007AFF] font-bold">R</span>
                   </div>
-                  <p className="text-gray-600 font-medium">
-                    Synced across all devices
-                  </p>
+                  <div>
+                    <p className="font-semibold">ResearchMate</p>
+                    <p className="text-xs opacity-75">Chrome Extension</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {["Save to library", "Generate summary", "Add tags"].map(
+                    (action, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 px-3 py-2 bg-white/10 rounded-lg text-sm"
+                      >
+                        <Check className="w-4 h-4" />
+                        {action}
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
             </div>
@@ -299,26 +354,25 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* ========== CTA SECTION ========== */}
-      <section className="py-24 px-6 bg-white">
+      {/* ========== CTA ========== */}
+      <section className="py-20 px-6 bg-white/40 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl md:text-5xl font-bold text-gray-900 mb-6">
-            Ready to transform your research?
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+            Ready to upgrade your research workflow?
           </h2>
-          <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
-            Join thousands of researchers who've already upgraded their
-            workflow.
+          <p className="text-xl text-gray-600 mb-8">
+            Get started for free. No credit card required.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/signup">
-              <button className="group flex items-center gap-2 px-8 py-4 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-full transition-all duration-300 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98]">
-                Start for Free
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              <button className="flex items-center gap-2 px-8 py-4 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-full transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-95">
+                Get Started Free
+                <ArrowRight className="w-4 h-4" />
               </button>
             </Link>
-            <Link to="/products">
-              <button className="px-8 py-4 text-[#007AFF] font-medium rounded-full hover:bg-blue-50 transition-all duration-300">
-                Learn More
+            <Link to="/team">
+              <button className="px-8 py-4 text-[#007AFF] font-medium rounded-full hover:bg-blue-500/10 transition-all">
+                Meet the Team
               </button>
             </Link>
           </div>
@@ -328,4 +382,4 @@ const LandingPage = () => {
   );
 };
 
-export default LandingPage;
+export default ProductsPage;

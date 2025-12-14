@@ -74,15 +74,17 @@ const BubbleBackground: React.FC<BubbleBackgroundProps> = ({
           key={bubble.id}
           className={`bubble ${bubble.popping ? "bubble-pop" : ""}`}
           onClick={() => !bubble.popping && handleBubblePop(bubble.id)}
-          style={{
-            left: `${bubble.x}%`,
-            top: `${bubble.y}%`,
-            width: `${bubble.size}px`,
-            height: `${bubble.size}px`,
-            // Use style to override animation timing
-            animationDuration: `${bubble.duration}s, 1s`,
-            animationDelay: `${bubble.delay}s, 0s`,
-          }}
+          style={
+            {
+              left: `${bubble.x}%`,
+              top: `${bubble.y}%`,
+              width: `${bubble.size}px`,
+              height: `${bubble.size}px`,
+              // Use CSS custom properties for animation timing
+              "--bubble-duration": `${bubble.duration}s`,
+              "--bubble-delay": `${bubble.delay}s`,
+            } as React.CSSProperties
+          }
         />
       ))}
     </div>

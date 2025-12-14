@@ -1,5 +1,6 @@
 // ============================================
-// TEAM PAGE - Apple Design (Clean)
+// TEAM PAGE - Apple Design with Transparent Sections
+// Bubbles visible through semi-transparent content
 // ============================================
 
 import React from "react";
@@ -7,6 +8,7 @@ import { Link } from "react-router-dom";
 import {
   Github,
   Linkedin,
+  Twitter,
   Mail,
   Heart,
   Target,
@@ -77,11 +79,11 @@ const milestones = [
 
 const TeamPage = () => {
   return (
-    <div className="min-h-screen bg-[#F5F5F7]">
+    <div className="min-h-screen">
       {/* ========== HERO ========== */}
       <section className="relative pt-24 pb-16 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm rounded-full border border-gray-200/50 shadow-sm mb-8">
+        <div className="relative z-10 max-w-4xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/60 backdrop-blur-md rounded-full border border-white/50 shadow-lg mb-8">
             <Sparkles className="w-4 h-4 text-[#5856D6]" />
             <span className="text-sm font-medium text-gray-700">
               We're hiring!
@@ -104,7 +106,7 @@ const TeamPage = () => {
       </section>
 
       {/* ========== OUR STORY ========== */}
-      <section className="py-20 px-6 bg-white">
+      <section className="py-20 px-6 bg-white/40 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
@@ -178,7 +180,7 @@ const TeamPage = () => {
               ].map((card, idx) => (
                 <div
                   key={idx}
-                  className="bg-[#F5F5F7] rounded-2xl p-6 text-center hover:bg-[#EBEBF0] transition-all hover:shadow-lg"
+                  className="bg-white/50 backdrop-blur-md rounded-2xl p-6 text-center hover:bg-white/70 hover:shadow-lg transition-all border border-white/50"
                 >
                   <div
                     className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
@@ -199,7 +201,7 @@ const TeamPage = () => {
       </section>
 
       {/* ========== TEAM MEMBERS ========== */}
-      <section className="py-20 px-6 bg-[#F5F5F7]">
+      <section className="py-20 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">
@@ -212,7 +214,7 @@ const TeamPage = () => {
             {teamMembers.map((member, idx) => (
               <div
                 key={idx}
-                className="bg-white rounded-3xl p-8 text-center shadow-sm hover:shadow-xl transition-all"
+                className="bg-white/50 backdrop-blur-md rounded-3xl p-8 text-center hover:bg-white/70 hover:shadow-xl transition-all border border-white/50"
               >
                 {/* Avatar */}
                 <div
@@ -237,7 +239,7 @@ const TeamPage = () => {
                   {member.skills.map((skill, i) => (
                     <span
                       key={i}
-                      className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full"
+                      className="px-3 py-1 bg-gray-500/10 text-gray-600 text-xs rounded-full"
                     >
                       {skill}
                     </span>
@@ -251,7 +253,7 @@ const TeamPage = () => {
                       href={member.social.github}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2.5 rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                      className="p-2.5 rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-500/10 transition-colors"
                     >
                       <Github className="w-5 h-5" />
                     </a>
@@ -261,7 +263,7 @@ const TeamPage = () => {
                       href={member.social.linkedin}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2.5 rounded-xl text-gray-400 hover:text-[#0077B5] hover:bg-blue-50 transition-colors"
+                      className="p-2.5 rounded-xl text-gray-400 hover:text-[#0077B5] hover:bg-blue-500/10 transition-colors"
                     >
                       <Linkedin className="w-5 h-5" />
                     </a>
@@ -269,7 +271,7 @@ const TeamPage = () => {
                   {member.social.email && (
                     <a
                       href={member.social.email}
-                      className="p-2.5 rounded-xl text-gray-400 hover:text-[#FF3B30] hover:bg-red-50 transition-colors"
+                      className="p-2.5 rounded-xl text-gray-400 hover:text-[#FF3B30] hover:bg-red-500/10 transition-colors"
                     >
                       <Mail className="w-5 h-5" />
                     </a>
@@ -279,8 +281,8 @@ const TeamPage = () => {
             ))}
 
             {/* Join Us Card */}
-            <div className="bg-white/50 rounded-3xl p-8 text-center border-2 border-dashed border-gray-300 flex flex-col justify-center">
-              <div className="w-24 h-24 rounded-3xl bg-gray-100 flex items-center justify-center text-gray-400 text-3xl mx-auto mb-6">
+            <div className="bg-white/30 backdrop-blur-md rounded-3xl p-8 text-center border-2 border-dashed border-gray-300/50 flex flex-col justify-center">
+              <div className="w-24 h-24 rounded-3xl bg-gray-500/10 flex items-center justify-center text-gray-400 text-3xl mx-auto mb-6">
                 ?
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">
@@ -303,7 +305,7 @@ const TeamPage = () => {
       </section>
 
       {/* ========== VALUES ========== */}
-      <section className="py-20 px-6 bg-white">
+      <section className="py-20 px-6 bg-white/40 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">
@@ -318,7 +320,7 @@ const TeamPage = () => {
             {values.map((value, idx) => (
               <div
                 key={idx}
-                className="bg-[#F5F5F7] rounded-2xl p-6 text-center hover:bg-[#EBEBF0] transition-all hover:shadow-lg"
+                className="bg-white/50 backdrop-blur-md rounded-2xl p-6 text-center hover:bg-white/70 hover:shadow-lg transition-all border border-white/50"
               >
                 <div
                   className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
@@ -342,7 +344,7 @@ const TeamPage = () => {
       </section>
 
       {/* ========== CTA ========== */}
-      <section className="py-20 px-6 bg-[#F5F5F7]">
+      <section className="py-20 px-6">
         <div className="max-w-4xl mx-auto">
           <div className="bg-gradient-to-br from-[#5856D6] to-[#AF52DE] rounded-3xl p-8 md:p-12 text-white text-center relative overflow-hidden">
             {/* Background */}
