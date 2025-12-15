@@ -143,15 +143,17 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
 
             {/* Mobile Menu Toggle */}
             <button
-              className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className={`md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                isMobileMenuOpen ? "hamburger-open" : ""
+              }`}
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
             >
-              {isMobileMenuOpen ? (
-                <X className="w-5 h-5" />
-              ) : (
-                <Menu className="w-5 h-5" />
-              )}
+              <div className="flex flex-col gap-1.5">
+                <span className="hamburger-line" />
+                <span className="hamburger-line" />
+                <span className="hamburger-line" />
+              </div>
             </button>
           </div>
         </div>

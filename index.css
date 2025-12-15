@@ -793,3 +793,79 @@ h6 {
 .bubble:nth-child(4n + 1) {
   --bubble-delay: -15s;
 }
+
+/* ============================================
+   PART 17: STAGGERED ANIMATIONS
+   Premium card entrance effects
+   ============================================ */
+
+/* Staggered fade-in-up for card grids */
+.stagger-animate > * {
+  animation: fade-in-up 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+.stagger-animate > *:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.stagger-animate > *:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.stagger-animate > *:nth-child(3) {
+  animation-delay: 0.15s;
+}
+.stagger-animate > *:nth-child(4) {
+  animation-delay: 0.2s;
+}
+.stagger-animate > *:nth-child(5) {
+  animation-delay: 0.25s;
+}
+.stagger-animate > *:nth-child(6) {
+  animation-delay: 0.3s;
+}
+.stagger-animate > *:nth-child(7) {
+  animation-delay: 0.35s;
+}
+.stagger-animate > *:nth-child(8) {
+  animation-delay: 0.4s;
+}
+.stagger-animate > *:nth-child(9) {
+  animation-delay: 0.45s;
+}
+.stagger-animate > *:nth-child(10) {
+  animation-delay: 0.5s;
+}
+.stagger-animate > *:nth-child(11) {
+  animation-delay: 0.55s;
+}
+.stagger-animate > *:nth-child(12) {
+  animation-delay: 0.6s;
+}
+
+/* ============================================
+   PART 18: HAMBURGER MENU ANIMATION
+   Smooth hamburger to X transition
+   ============================================ */
+
+.hamburger-line {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background-color: currentColor;
+  border-radius: 1px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+.hamburger-open .hamburger-line:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.hamburger-open .hamburger-line:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+
+.hamburger-open .hamburger-line:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
