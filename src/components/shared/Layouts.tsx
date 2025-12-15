@@ -95,24 +95,36 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
 
             {/* Desktop Nav */}
             <div className="hidden md:flex items-center gap-8">
-              <Link
-                to="/"
+              <button
+                onClick={() =>
+                  document
+                    .getElementById("home")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
                 className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Home
-              </Link>
-              <Link
-                to="/products"
+              </button>
+              <button
+                onClick={() =>
+                  document
+                    .getElementById("products")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
                 className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Products
-              </Link>
-              <Link
-                to="/team"
+              </button>
+              <button
+                onClick={() =>
+                  document
+                    .getElementById("team")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
                 className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Team
-              </Link>
+              </button>
             </div>
 
             {/* CTA Buttons */}
@@ -148,27 +160,39 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
         {isMobileMenuOpen && (
           <div className="md:hidden bg-white/95 backdrop-blur-xl border-t border-gray-200/50 animate-slide-down">
             <div className="px-6 py-4 space-y-1">
-              <Link
-                to="/"
-                className="block py-3 text-base font-medium text-gray-900"
-                onClick={() => setIsMobileMenuOpen(false)}
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  document
+                    .getElementById("home")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="block py-3 text-base font-medium text-gray-900 w-full text-left"
               >
                 Home
-              </Link>
-              <Link
-                to="/products"
-                className="block py-3 text-base font-medium text-gray-900"
-                onClick={() => setIsMobileMenuOpen(false)}
+              </button>
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  document
+                    .getElementById("products")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="block py-3 text-base font-medium text-gray-900 w-full text-left"
               >
                 Products
-              </Link>
-              <Link
-                to="/team"
-                className="block py-3 text-base font-medium text-gray-900"
-                onClick={() => setIsMobileMenuOpen(false)}
+              </button>
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  document
+                    .getElementById("team")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="block py-3 text-base font-medium text-gray-900 w-full text-left"
               >
                 Team
-              </Link>
+              </button>
               <div className="pt-4 flex gap-3">
                 <Link to="/login" className="flex-1">
                   <button className="w-full py-2.5 text-sm font-medium border border-gray-300 rounded-full">

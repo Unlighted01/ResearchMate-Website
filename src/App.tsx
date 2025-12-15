@@ -20,8 +20,7 @@ import { MarketingLayout, DashboardLayout } from "./components/shared/Layouts";
 import { CheckCircle2, Bell } from "lucide-react";
 
 // App Pages (Authenticated)
-import TeamPage from "./components/marketing/TeamPage";
-import ProductsPage from "./components/marketing/ProductsPage";
+import MarketingHome from "./components/marketing/MarketingHome";
 import SettingsPage from "./components/App/SettingsPage";
 import Dashboard from "./components/App/Dashboard";
 import CollectionsPage from "./components/App/CollectionsPage";
@@ -184,7 +183,6 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
 // to their own files in /src/components/ just like I did for Dashboard.tsx.
 // For now, I assume you have them or will paste the old code back here if you don't move them.
 // For the code to compile, you must either create the files or uncomment your old code here.
-import LandingPage from "./components/marketing/LandingPage";
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import AIAssistant from "./components/App/AIAssistant";
@@ -203,31 +201,21 @@ export default function App() {
       {ToastComponent}
       <HashRouter>
         <Routes>
-          {/* Public Routes */}
+          {/* Public Routes - Single Page Marketing */}
           <Route
             path="/"
             element={
               <MarketingLayout>
-                <LandingPage />
+                <MarketingHome />
               </MarketingLayout>
             }
           />
+          {/* Redirects for old routes */}
           <Route
             path="/products"
-            element={
-              <MarketingLayout>
-                <ProductsPage />
-              </MarketingLayout>
-            }
+            element={<Navigate to="/#products" replace />}
           />
-          <Route
-            path="/team"
-            element={
-              <MarketingLayout>
-                <TeamPage />
-              </MarketingLayout>
-            }
-          />
+          <Route path="/team" element={<Navigate to="/#team" replace />} />
 
           <Route
             path="/login"

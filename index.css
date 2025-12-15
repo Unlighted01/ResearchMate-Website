@@ -59,6 +59,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 3rem; /* Accounts for fixed navbar height */
 }
 
 body {
