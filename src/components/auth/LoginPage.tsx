@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Button, Card, Input } from "../shared/UIComponents";
+import BubbleBackground from "../shared/BubbleBackground";
 
 import { Mail, Lock, ArrowLeft } from "lucide-react";
 
