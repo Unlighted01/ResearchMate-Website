@@ -46,6 +46,7 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
     useState<CollectionType | null>(null);
   const [collectionItems, setCollectionItems] = useState<StorageItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [removingItemId, setRemovingItemId] = useState<string | null>(null);
 
   // Form State
   const [formName, setFormName] = useState("");
@@ -196,12 +197,24 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
               >
                 <button
                   onClick={async () => {
-                    await removeItemFromCollection(item.id);
-                    setCollectionItems((prev) =>
-                      prev.filter((i) => i.id !== item.id)
-                    );
-                    showToast("Removed from collection", "success");
+                    // Prevent multiple rapid clicks
+                    if (removingItemId) return;
+
+                    setRemovingItemId(item.id);
+                    try {
+                      await removeItemFromCollection(item.id);
+                      setCollectionItems((prev) =>
+                        prev.filter((i) => i.id !== item.id)
+                      );
+                      showToast("Removed from collection", "success");
+                    } catch (error) {
+                      showToast("Failed to remove item", "error");
+                    } finally {
+                      // Prevent rapid clicking with a short cooldown
+                      setTimeout(() => setRemovingItemId(null), 500);
+                    }
                   }}
+                  disabled={removingItemId === item.id}
                   className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label="Remove item from collection"
                   title="Remove from collection"

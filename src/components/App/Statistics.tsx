@@ -2,7 +2,7 @@
 // STATISTICS PAGE - Apple Design
 // ============================================
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { getAllItems } from "../../services/storageService";
 import {
   BarChart,
@@ -42,7 +42,9 @@ const Statistics = () => {
   const [timeRange, setTimeRange] = useState<"week" | "month" | "all">("week");
 
   useEffect(() => {
-    getAllItems().then((items) => {
+    // For stats, we might want all items, but let's use a reasonable limit for performance
+    // In production, this should use database aggregation queries
+    getAllItems(1000).then((items) => {
       const sourceCount = { extension: 0, mobile: 0, web: 0, smart_pen: 0 };
       const weekMap: Record<string, number> = {};
       const dayMap: Record<string, number> = {};
@@ -99,36 +101,56 @@ const Statistics = () => {
     });
   }, []);
 
-  const statCards = [
-    {
-      label: "Total Items",
-      value: stats.total,
-      icon: Layers,
-      color: "#007AFF",
-      change: "+12%",
-    },
-    {
-      label: "AI Summaries",
-      value: stats.withSummary,
-      icon: Zap,
-      color: "#5856D6",
-      change: "+8%",
-    },
-    {
-      label: "This Week",
-      value: stats.weekly.reduce((a, b) => a + b.count, 0),
-      icon: Calendar,
-      color: "#34C759",
-      change: "+24%",
-    },
-    {
-      label: "Avg/Day",
-      value: Math.round(stats.total / 7) || 0,
-      icon: Activity,
-      color: "#FF9500",
-      change: "+5%",
-    },
-  ];
+  // Memoize computed values from stats
+  const computedStats = useMemo(() => {
+    const weekTotal = stats.weekly.reduce((a, b) => a + b.count, 0);
+    const avgPerDay = Math.round(stats.total / 7) || 0;
+    const mostActiveDay = stats.weekly.reduce(
+      (a, b) => (a.count > b.count ? a : b),
+      { name: "—", count: 0 }
+    ).name;
+    const aiCoverage =
+      stats.total > 0
+        ? `${Math.round((stats.withSummary / stats.total) * 100)}%`
+        : "0%";
+
+    return { weekTotal, avgPerDay, mostActiveDay, aiCoverage };
+  }, [stats]);
+
+  // Memoize stat cards - only recalculate when stats change
+  const statCards = useMemo(
+    () => [
+      {
+        label: "Total Items",
+        value: stats.total,
+        icon: Layers,
+        color: "#007AFF",
+        change: "+12%",
+      },
+      {
+        label: "AI Summaries",
+        value: stats.withSummary,
+        icon: Zap,
+        color: "#5856D6",
+        change: "+8%",
+      },
+      {
+        label: "This Week",
+        value: computedStats.weekTotal,
+        icon: Calendar,
+        color: "#34C759",
+        change: "+24%",
+      },
+      {
+        label: "Avg/Day",
+        value: computedStats.avgPerDay,
+        icon: Activity,
+        color: "#FF9500",
+        change: "+5%",
+      },
+    ],
+    [stats, computedStats]
+  );
 
   if (loading) {
     return (
@@ -378,25 +400,19 @@ const Statistics = () => {
           {
             icon: Target,
             title: "Most Active Day",
-            value: stats.weekly.reduce((a, b) => (a.count > b.count ? a : b), {
-              name: "—",
-              count: 0,
-            }).name,
+            value: computedStats.mostActiveDay,
             color: "#FF9500",
           },
           {
             icon: Clock,
             title: "Items This Week",
-            value: stats.weekly.reduce((a, b) => a + b.count, 0),
+            value: computedStats.weekTotal,
             color: "#5856D6",
           },
           {
             icon: Zap,
             title: "AI Coverage",
-            value:
-              stats.total > 0
-                ? `${Math.round((stats.withSummary / stats.total) * 100)}%`
-                : "0%",
+            value: computedStats.aiCoverage,
             color: "#34C759",
           },
         ].map((insight, idx) => (

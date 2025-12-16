@@ -136,8 +136,13 @@ function transformToDatabase(
 /**
  * Get all research items for current user
  * Falls back to local storage if not authenticated
+ * @param limit - Maximum number of items to fetch (default: 100)
+ * @param offset - Number of items to skip (default: 0)
  */
-export async function getAllItems(): Promise<StorageItem[]> {
+export async function getAllItems(
+  limit: number = 100,
+  offset: number = 0
+): Promise<StorageItem[]> {
   const authenticated = await isAuthenticated();
 
   // If logged in, get from cloud
@@ -146,7 +151,8 @@ export async function getAllItems(): Promise<StorageItem[]> {
       const { data, error } = await supabase
         .from("items")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
 
       if (error) throw error;
 
@@ -157,8 +163,9 @@ export async function getAllItems(): Promise<StorageItem[]> {
     }
   }
 
-  // Guest mode: use local storage
-  return getLocalItems();
+  // Guest mode: use local storage (apply pagination manually)
+  const localItems = getLocalItems();
+  return localItems.slice(offset, offset + limit);
 }
 
 /**

@@ -350,19 +350,47 @@ export async function testAPIConnection(): Promise<{
 }
 
 // ============================================
-// PART 8: CACHING
+// PART 8: CACHING (LRU with TTL)
 // ============================================
 
-const summaryCache = new Map<string, { summary: string; timestamp: number }>();
+const summaryCache = new Map<
+  string,
+  { summary: string; timestamp: number; lastAccessed: number }
+>();
 const MAX_CACHE_SIZE = 50;
 const CACHE_TTL = 3600000; // 1 hour
+
+// Clean expired entries periodically
+let cleanupInterval: NodeJS.Timeout | null = null;
+if (typeof window !== "undefined") {
+  cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    const keysToDelete: string[] = [];
+
+    summaryCache.forEach((value, key) => {
+      if (now - value.timestamp > CACHE_TTL) {
+        keysToDelete.push(key);
+      }
+    });
+
+    keysToDelete.forEach((key) => summaryCache.delete(key));
+  }, 600000); // Clean every 10 minutes
+}
 
 export function getCachedSummary(text: string): string | null {
   const hash = hashText(text);
   const cached = summaryCache.get(hash);
 
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    // Update last accessed time for LRU
+    cached.lastAccessed = Date.now();
+    summaryCache.set(hash, cached);
     return cached.summary;
+  }
+
+  // Remove expired entry
+  if (cached) {
+    summaryCache.delete(hash);
   }
 
   return null;
@@ -370,26 +398,64 @@ export function getCachedSummary(text: string): string | null {
 
 export function cacheSummary(text: string, summary: string): void {
   const hash = hashText(text);
+  const now = Date.now();
 
+  // First, try to remove expired entries
   if (summaryCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = summaryCache.keys().next().value;
-    if (firstKey) summaryCache.delete(firstKey);
+    const keysToDelete: string[] = [];
+
+    summaryCache.forEach((value, key) => {
+      if (now - value.timestamp > CACHE_TTL) {
+        keysToDelete.push(key);
+      }
+    });
+
+    keysToDelete.forEach((key) => summaryCache.delete(key));
+  }
+
+  // If still at capacity, use LRU eviction (remove least recently accessed)
+  if (summaryCache.size >= MAX_CACHE_SIZE) {
+    let oldestKey: string | null = null;
+    let oldestAccess = Infinity;
+
+    summaryCache.forEach((value, key) => {
+      if (value.lastAccessed < oldestAccess) {
+        oldestAccess = value.lastAccessed;
+        oldestKey = key;
+      }
+    });
+
+    if (oldestKey) {
+      summaryCache.delete(oldestKey);
+    }
   }
 
   summaryCache.set(hash, {
     summary,
-    timestamp: Date.now(),
+    timestamp: now,
+    lastAccessed: now,
   });
 }
 
 function hashText(text: string): string {
+  // Limit text length for hashing to prevent extremely long input
+  const maxLength = 10000;
+  const textToHash = text.length > maxLength ? text.substring(0, maxLength) : text;
+
   let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    const char = text.charCodeAt(i);
+  for (let i = 0; i < textToHash.length; i++) {
+    const char = textToHash.charCodeAt(i);
     hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
   return hash.toString(36);
+}
+
+// Cleanup interval on module unload (for hot reload in dev)
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    if (cleanupInterval) clearInterval(cleanupInterval);
+  });
 }
 
 // ============================================
