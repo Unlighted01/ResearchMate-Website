@@ -2,7 +2,7 @@
 // AI ASSISTANT PAGE - Apple Design
 // ============================================
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Zap,
   RefreshCw,
@@ -34,32 +34,46 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
   const [summarizing, setSummarizing] = useState<string | null>(null);
   const [batchProcessing, setBatchProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<StorageItem | null>(null);
 
   const { showToast } = useToast();
 
+  // Debounce search query (300ms delay)
   useEffect(() => {
-    getAllItems().then((data) => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    getAllItems(100).then((data) => {
       setItems(data);
       setLoading(false);
     });
   }, []);
 
-  const itemsWithoutSummary = items.filter(
-    (i) =>
-      !i.aiSummary &&
-      (searchQuery
-        ? i.sourceTitle?.toLowerCase().includes(searchQuery.toLowerCase())
-        : true)
-  );
+  // Memoize filtered items - only recalculate when items or search changes
+  const itemsWithoutSummary = useMemo(() => {
+    return items.filter(
+      (i) =>
+        !i.aiSummary &&
+        (debouncedSearchQuery
+          ? i.sourceTitle?.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+          : true)
+    );
+  }, [items, debouncedSearchQuery]);
 
-  const itemsWithSummary = items.filter(
-    (i) =>
-      i.aiSummary &&
-      (searchQuery
-        ? i.sourceTitle?.toLowerCase().includes(searchQuery.toLowerCase())
-        : true)
-  );
+  const itemsWithSummary = useMemo(() => {
+    return items.filter(
+      (i) =>
+        i.aiSummary &&
+        (debouncedSearchQuery
+          ? i.sourceTitle?.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+          : true)
+    );
+  }, [items, debouncedSearchQuery]);
 
   const handleSummarize = async (item: StorageItem) => {
     setSummarizing(item.id);

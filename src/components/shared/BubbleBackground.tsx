@@ -24,6 +24,9 @@ const BubbleBackground: React.FC<BubbleBackgroundProps> = ({
 }) => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
 
+  // Track active timeouts for cleanup
+  const timeoutsRef = React.useRef<Set<NodeJS.Timeout>>(new Set());
+
   // Generate a random bubble
   const createBubble = useCallback((id: number): Bubble => {
     return {
@@ -45,6 +48,14 @@ const BubbleBackground: React.FC<BubbleBackgroundProps> = ({
     setBubbles(initialBubbles);
   }, [bubbleCount, createBubble]);
 
+  // Cleanup all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+      timeoutsRef.current.clear();
+    };
+  }, []);
+
   // Handle bubble pop
   const handleBubblePop = (bubbleId: number) => {
     // Set popping state
@@ -53,7 +64,7 @@ const BubbleBackground: React.FC<BubbleBackgroundProps> = ({
     );
 
     // Respawn after pop animation completes
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setBubbles((prev) =>
         prev.map((b) =>
           b.id === bubbleId
@@ -64,7 +75,12 @@ const BubbleBackground: React.FC<BubbleBackgroundProps> = ({
             : b
         )
       );
+      // Remove timeout from tracking set after it executes
+      timeoutsRef.current.delete(timeoutId);
     }, 500);
+
+    // Track timeout for cleanup
+    timeoutsRef.current.add(timeoutId);
   };
 
   return (

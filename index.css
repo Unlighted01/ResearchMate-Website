@@ -869,3 +869,47 @@ h6 {
 .hamburger-open .hamburger-line:nth-child(3) {
   transform: translateY(-6px) rotate(-45deg);
 }
+
+/* ============================================
+   PART 19: FLOATING ORBS ANIMATIONS
+   Gentle drift patterns for organic motion
+   ============================================ */
+
+/* Gentle drift pattern 1 - figure-8 like motion */
+@keyframes orb-float-0 {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  25% {
+    transform: translate(calc(-50% + 50px), calc(-50% - 70px)) scale(1.03);
+  }
+  50% {
+    transform: translate(calc(-50% - 40px), calc(-50% - 30px)) scale(0.97);
+  }
+  75% {
+    transform: translate(calc(-50% + 60px), calc(-50% + 40px)) scale(1.01);
+  }
+}
+
+/* Gentle drift pattern 2 - elliptical motion */
+@keyframes orb-float-1 {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  33% {
+    transform: translate(calc(-50% - 60px), calc(-50% - 50px)) scale(1.05);
+  }
+  66% {
+    transform: translate(calc(-50% + 70px), calc(-50% + 60px)) scale(0.95);
+  }
+}
+
+/* Gentle drift pattern 3 - breathing motion with subtle rotation */
+@keyframes orb-float-2 {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translate(calc(-50% + 80px), calc(-50% - 60px)) scale(1.08) rotate(180deg);
+  }
+}

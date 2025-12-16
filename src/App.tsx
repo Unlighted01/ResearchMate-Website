@@ -1,7 +1,7 @@
 // ============================================
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   HashRouter,
   Routes,
@@ -74,13 +74,16 @@ export const useToast = () => {
     []
   );
 
-  const ToastComponent = toast ? (
-    <Toast
-      message={toast.message}
-      type={toast.type}
-      onClose={() => setToast(null)}
-    />
-  ) : null;
+  // Memoize Toast component - only recalculate when toast changes
+  const ToastComponent = useMemo(() => {
+    return toast ? (
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(null)}
+      />
+    ) : null;
+  }, [toast]);
 
   return { showToast, ToastComponent };
 };

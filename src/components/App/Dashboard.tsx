@@ -2,7 +2,7 @@
 // DASHBOARD PAGE - Apple Design
 // ============================================
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import {
@@ -79,11 +79,20 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const [selectedItem, setSelectedItem] = useState<StorageItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const { showToast } = useToast();
+
+  // Debounce search query (300ms delay)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -101,40 +110,47 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
 
   useEffect(() => {
     fetchItems();
+
+    let unsubscribe: (() => void) | null = null;
+
     const setupRealTime = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        const unsubscribe = subscribeToItems(user.id, (payload) => {
+        unsubscribe = subscribeToItems(user.id, (payload) => {
+          // Batch state updates using React 18 automatic batching
+          const syncTime = new Date();
+
           if (payload.eventType === "INSERT" && payload.new) {
             setItems((prev) => [payload.new!, ...prev]);
+            setLastSyncTime(syncTime);
             showToast("New item synced!", "success");
-            setLastSyncTime(new Date());
           } else if (payload.eventType === "UPDATE" && payload.new) {
             setItems((prev) =>
               prev.map((item) =>
                 item.id === payload.new!.id ? payload.new! : item
               )
             );
-            setLastSyncTime(new Date());
+            setLastSyncTime(syncTime);
           } else if (payload.eventType === "DELETE" && payload.old) {
             setItems((prev) =>
               prev.filter((item) => item.id !== payload.old!.id)
             );
-            setLastSyncTime(new Date());
+            setLastSyncTime(syncTime);
           }
         });
         setIsRealTimeConnected(true);
-        return () => {
-          unsubscribe();
-          setIsRealTimeConnected(false);
-        };
       }
     };
-    const cleanup = setupRealTime();
+
+    setupRealTime();
+
     return () => {
-      cleanup.then((fn) => fn && fn());
+      if (unsubscribe) {
+        unsubscribe();
+        setIsRealTimeConnected(false);
+      }
     };
   }, [fetchItems, showToast]);
 
@@ -169,15 +185,29 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     }
   };
 
-  const filteredItems = items.filter((item) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      item.text?.toLowerCase().includes(query) ||
-      item.sourceTitle?.toLowerCase().includes(query) ||
-      item.tags?.some((tag) => tag.toLowerCase().includes(query))
-    );
-  });
+  // Memoize filtered items - only recalculate when items or search changes
+  const filteredItems = useMemo(() => {
+    if (!debouncedSearchQuery) return items;
+    const query = debouncedSearchQuery.toLowerCase();
+    return items.filter((item) => {
+      return (
+        item.text?.toLowerCase().includes(query) ||
+        item.sourceTitle?.toLowerCase().includes(query) ||
+        item.tags?.some((tag) => tag.toLowerCase().includes(query))
+      );
+    });
+  }, [items, debouncedSearchQuery]);
+
+  // Memoize stats calculations - only recalculate when items change
+  const stats = useMemo(() => {
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return {
+      total: items.length,
+      withAiSummary: items.filter((i) => i.aiSummary).length,
+      fromExtension: items.filter((i) => i.deviceSource === "extension").length,
+      thisWeek: items.filter((i) => new Date(i.createdAt) > oneWeekAgo).length,
+    };
+  }, [items]);
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -209,10 +239,12 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={fetchItems}
+            onClick={() => {
+              if (!loading) fetchItems();
+            }}
             disabled={loading}
             aria-label="Refresh items"
-            className="p-2.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50"
+            className="p-2.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
           </button>
@@ -272,24 +304,20 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
       {/* ========== STATS BAR ========== */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Total Items", value: items.length, color: "#007AFF" },
+          { label: "Total Items", value: stats.total, color: "#007AFF" },
           {
             label: "With AI Summary",
-            value: items.filter((i) => i.aiSummary).length,
+            value: stats.withAiSummary,
             color: "#5856D6",
           },
           {
             label: "From Extension",
-            value: items.filter((i) => i.deviceSource === "extension").length,
+            value: stats.fromExtension,
             color: "#34C759",
           },
           {
             label: "This Week",
-            value: items.filter(
-              (i) =>
-                new Date(i.createdAt) >
-                new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-            ).length,
+            value: stats.thisWeek,
             color: "#FF9500",
           },
         ].map((stat, idx) => (
