@@ -257,17 +257,17 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
+        className="absolute inset-0 bg-black/60 animate-fade-in"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div
         className={`
-          relative w-full ${sizes[size]}
+          relative z-10 w-full ${sizes[size]}
           bg-white dark:bg-[#1C1C1E]
           rounded-2xl
           shadow-[0_24px_80px_rgba(0,0,0,0.2)]

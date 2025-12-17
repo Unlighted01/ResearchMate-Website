@@ -75,7 +75,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
@@ -83,13 +83,13 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60"
         onClick={isLoading ? undefined : onClose}
         aria-hidden="true"
       />
 
       {/* Dialog */}
-      <div className="relative bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative z-10 bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
         {/* Close button */}
         <button
           onClick={onClose}
