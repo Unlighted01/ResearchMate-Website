@@ -1,6 +1,8 @@
 // ============================================
-// PART 1: TYPE DEFINITIONS
+// PART 1: IMPORTS & TYPE DEFINITIONS
 // ============================================
+
+import DOMPurify from 'dompurify';
 
 export interface ValidationResult {
   valid: boolean;
@@ -115,13 +117,15 @@ export function sanitizeText(text: string): string {
 }
 
 /**
- * Sanitize HTML to prevent XSS
- * Simple implementation - for production, use a library like DOMPurify
+ * Sanitize HTML to prevent XSS using DOMPurify
+ * Allows only safe HTML tags and attributes
  */
 export function sanitizeHtml(html: string): string {
-  const div = document.createElement('div');
-  div.textContent = html;
-  return div.innerHTML;
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li', 'code', 'pre'],
+    ALLOWED_ATTR: ['href', 'target', 'rel'],
+    ALLOW_DATA_ATTR: false,
+  });
 }
 
 /**

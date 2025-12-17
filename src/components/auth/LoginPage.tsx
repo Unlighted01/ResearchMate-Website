@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Button, Card, Input } from "../shared/UIComponents";
 import BubbleBackground from "../shared/BubbleBackground";
+import { isValidEmail, validatePassword } from "../../../lib/validation";
 
 import { Mail, Lock, ArrowLeft } from "lucide-react";
 
@@ -90,6 +91,20 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate email
+    if (!isValidEmail(email)) {
+      showToast("Please enter a valid email address", "error");
+      return;
+    }
+
+    // Validate password
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      showToast(passwordValidation.errors[0], "error");
+      return;
+    }
+
     setLoading(true);
     localStorage.setItem(
       "researchmate_remember",
@@ -97,7 +112,7 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
     );
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
     if (error) {
@@ -127,7 +142,14 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+
+    // Validate email
+    if (!isValidEmail(resetEmail)) {
+      showToast("Please enter a valid email address", "error");
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
       redirectTo: `${window.location.origin}/#/auth/reset-password`,
     });
     if (error) showToast(error.message, "error");

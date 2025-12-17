@@ -70,19 +70,26 @@ export interface APIStatusResult {
 }
 
 // ============================================
-// PART 3: API KEY MANAGEMENT (Legacy Support)
+// PART 3: API KEY MANAGEMENT (DEPRECATED - DO NOT USE)
 // ============================================
+// NOTE: These functions are deprecated and should not be used.
+// API keys should NEVER be stored client-side for security reasons.
+// All AI operations now go through secure Netlify Functions.
 
+/**
+ * @deprecated DO NOT USE - API keys should never be stored client-side
+ * This function is kept for backwards compatibility only
+ */
 export function setApiKey(key: string): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("researchmate_ai_key", key || "");
-  }
+  console.warn('⚠️ SECURITY WARNING: setApiKey is deprecated. API keys should never be stored client-side!');
+  // Intentionally do nothing - this prevents accidental API key storage
 }
 
+/**
+ * @deprecated DO NOT USE - API keys should never be stored client-side
+ */
 export function getApiKey(): string {
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("researchmate_ai_key") || "";
-  }
+  console.warn('⚠️ SECURITY WARNING: getApiKey is deprecated. Use secure backend endpoints instead.');
   return "";
 }
 
