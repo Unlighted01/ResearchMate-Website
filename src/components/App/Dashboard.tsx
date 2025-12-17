@@ -47,6 +47,8 @@ import {
 import { generateSummary } from "../../services/geminiService";
 import ConfirmDialog from "../shared/ConfirmDialog";
 import { SkeletonDashboardGrid, SkeletonDashboardList } from "../shared/SkeletonLoader";
+import { useKeyboardShortcuts, COMMON_SHORTCUTS } from "../../hooks/useKeyboardShortcuts";
+import { useRef } from "react";
 
 // Helper for source icons
 const getSourceIcon = (source: string) => {
@@ -92,6 +94,30 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   }>({ isOpen: false, itemId: null, isDeleting: false });
 
   const { showToast } = useToast();
+
+  // Ref for search input (for keyboard shortcuts)
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      ...COMMON_SHORTCUTS.SEARCH,
+      description: 'Focus search',
+      handler: () => searchInputRef.current?.focus(),
+    },
+    {
+      ...COMMON_SHORTCUTS.REFRESH,
+      description: 'Refresh items',
+      handler: () => {
+        if (!loading) fetchItems();
+      },
+    },
+    {
+      key: 'g',
+      description: 'Toggle grid/list view',
+      handler: () => setViewMode((prev) => (prev === 'grid' ? 'list' : 'grid')),
+    },
+  ]);
 
   // Debounce search query (300ms delay)
   useEffect(() => {
@@ -278,12 +304,18 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         <div className="flex-1 relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="Search research items..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-11 pr-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 transition-all"
+            aria-label="Search research items"
+            aria-describedby="search-hint"
           />
+          <span id="search-hint" className="sr-only">
+            Press Ctrl+K or Cmd+K to focus search
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
