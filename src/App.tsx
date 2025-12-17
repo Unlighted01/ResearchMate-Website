@@ -17,6 +17,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 
 // Components & Layouts
 import { MarketingLayout, DashboardLayout } from "./components/shared/Layouts";
+import OfflineDetector from "./components/shared/OfflineDetector";
 import { CheckCircle2, Bell } from "lucide-react";
 
 // App Pages (Authenticated)
@@ -202,6 +203,7 @@ export default function App() {
   return (
     <ThemeProvider>
       {ToastComponent}
+      <OfflineDetector />
       <HashRouter>
         <Routes>
           {/* Public Routes - Single Page Marketing */}
