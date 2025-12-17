@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Input } from "../shared/UIComponents";
 import BubbleBackground from "../shared/BubbleBackground";
+import { isValidEmail, validatePassword } from "../../../lib/validation";
 import { Mail, Lock, Check, X } from "lucide-react";
 
 // Apple-style icons for OAuth
@@ -83,8 +84,16 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (password.length < 8) {
-      showToast("Password must be at least 8 characters", "error");
+    // Validate email
+    if (!isValidEmail(email)) {
+      showToast("Please enter a valid email address", "error");
+      return;
+    }
+
+    // Validate password
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      showToast(passwordValidation.errors[0], "error");
       return;
     }
 
@@ -94,7 +103,10 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
       rememberMe ? "true" : "false"
     );
 
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password
+    });
     if (error) {
       showToast(error.message, "error");
     } else {

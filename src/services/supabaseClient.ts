@@ -77,10 +77,9 @@ export const supabase: SupabaseClient = createClient(
   }
 );
 
-// Log initialization in development
+// Log initialization in development (without exposing URL)
 if (import.meta.env.DEV) {
   console.log("🔧 Supabase client initialized");
-  console.log("📍 URL:", SUPABASE_URL);
 }
 
 // ============================================
@@ -163,7 +162,9 @@ export async function signInWithEmail(
   password: string
 ): Promise<AuthResult> {
   try {
-    console.log("🔑 Signing in with email:", email);
+    if (import.meta.env.DEV) {
+      console.log("🔑 Sign in attempt");
+    }
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
@@ -175,7 +176,9 @@ export async function signInWithEmail(
       return { user: null, error };
     }
 
-    console.log("✅ Signed in successfully:", data.user?.id);
+    if (import.meta.env.DEV) {
+      console.log("✅ Signed in successfully");
+    }
     return { user: data.user, error: null };
   } catch (error) {
     console.error("❌ Sign in exception:", error);
@@ -194,7 +197,9 @@ export async function signUpWithEmail(
   password: string
 ): Promise<AuthResult> {
   try {
-    console.log("📝 Signing up with email:", email);
+    if (import.meta.env.DEV) {
+      console.log("📝 Sign up attempt");
+    }
 
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
@@ -210,7 +215,9 @@ export async function signUpWithEmail(
       return { user: null, error };
     }
 
-    console.log("✅ Sign up successful:", data.user?.id);
+    if (import.meta.env.DEV) {
+      console.log("✅ Sign up successful");
+    }
     return { user: data.user, error: null };
   } catch (error) {
     console.error("❌ Sign up exception:", error);
@@ -228,7 +235,9 @@ export async function signUpWithEmail(
  */
 export async function signInWithGoogle(): Promise<{ error: Error | null }> {
   try {
-    console.log("🔑 Starting Google OAuth...");
+    if (import.meta.env.DEV) {
+      console.log("🔑 Starting Google OAuth");
+    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -259,7 +268,9 @@ export async function signInWithGoogle(): Promise<{ error: Error | null }> {
  */
 export async function signInWithGitHub(): Promise<{ error: Error | null }> {
   try {
-    console.log("🔑 Starting GitHub OAuth...");
+    if (import.meta.env.DEV) {
+      console.log("🔑 Starting GitHub OAuth");
+    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
@@ -290,7 +301,9 @@ export async function signInWithGitHub(): Promise<{ error: Error | null }> {
  */
 export async function signOut(): Promise<{ error: Error | null }> {
   try {
-    console.log("🚪 Signing out...");
+    if (import.meta.env.DEV) {
+      console.log("🚪 Signing out");
+    }
 
     const { error } = await supabase.auth.signOut();
 
@@ -299,7 +312,9 @@ export async function signOut(): Promise<{ error: Error | null }> {
       return { error };
     }
 
-    console.log("✅ Signed out successfully");
+    if (import.meta.env.DEV) {
+      console.log("✅ Signed out successfully");
+    }
     return { error: null };
   } catch (error) {
     console.error("❌ Sign out exception:", error);
@@ -320,12 +335,9 @@ export function onAuthStateChange(callback: AuthEventCallback) {
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((event, session) => {
-    console.log(
-      "🔄 Auth state changed:",
-      event,
-      "User:",
-      session?.user?.id || "none"
-    );
+    if (import.meta.env.DEV) {
+      console.log("🔄 Auth state changed:", event);
+    }
     callback(event, session);
   });
 
@@ -345,7 +357,9 @@ export async function resetPassword(
   email: string
 ): Promise<{ error: Error | null }> {
   try {
-    console.log("📧 Sending password reset email to:", email);
+    if (import.meta.env.DEV) {
+      console.log("📧 Sending password reset email");
+    }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/#/auth/reset-password`,
@@ -356,7 +370,9 @@ export async function resetPassword(
       return { error };
     }
 
-    console.log("✅ Password reset email sent");
+    if (import.meta.env.DEV) {
+      console.log("✅ Password reset email sent");
+    }
     return { error: null };
   } catch (error) {
     console.error("❌ Password reset exception:", error);

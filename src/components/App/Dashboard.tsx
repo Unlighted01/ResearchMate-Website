@@ -45,6 +45,10 @@ import {
   StorageItem,
 } from "../../services/storageService";
 import { generateSummary } from "../../services/geminiService";
+import ConfirmDialog from "../shared/ConfirmDialog";
+import { SkeletonDashboardGrid, SkeletonDashboardList } from "../shared/SkeletonLoader";
+import { useKeyboardShortcuts, COMMON_SHORTCUTS } from "../../hooks/useKeyboardShortcuts";
+import { useRef } from "react";
 
 // Helper for source icons
 const getSourceIcon = (source: string) => {
@@ -83,8 +87,37 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    itemId: string | null;
+    isDeleting: boolean;
+  }>({ isOpen: false, itemId: null, isDeleting: false });
 
   const { showToast } = useToast();
+
+  // Ref for search input (for keyboard shortcuts)
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      ...COMMON_SHORTCUTS.SEARCH,
+      description: 'Focus search',
+      handler: () => searchInputRef.current?.focus(),
+    },
+    {
+      ...COMMON_SHORTCUTS.REFRESH,
+      description: 'Refresh items',
+      handler: () => {
+        if (!loading) fetchItems();
+      },
+    },
+    {
+      key: 'g',
+      description: 'Toggle grid/list view',
+      handler: () => setViewMode((prev) => (prev === 'grid' ? 'list' : 'grid')),
+    },
+  ]);
 
   // Debounce search query (300ms delay)
   useEffect(() => {
@@ -171,17 +204,26 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   };
 
   const handleDeleteItem = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this item?")) return;
+    setConfirmDialog({ isOpen: true, itemId: id, isDeleting: false });
+  };
+
+  const confirmDeleteItem = async () => {
+    if (!confirmDialog.itemId) return;
+
+    setConfirmDialog((prev) => ({ ...prev, isDeleting: true }));
+
     try {
-      await deleteItem(id);
-      setItems((prev) => prev.filter((item) => item.id !== id));
-      showToast("Item deleted", "success");
-      if (selectedItem?.id === id) {
+      await deleteItem(confirmDialog.itemId);
+      setItems((prev) => prev.filter((item) => item.id !== confirmDialog.itemId));
+      showToast("Item deleted successfully", "success");
+      if (selectedItem?.id === confirmDialog.itemId) {
         setIsModalOpen(false);
         setSelectedItem(null);
       }
+      setConfirmDialog({ isOpen: false, itemId: null, isDeleting: false });
     } catch (error) {
       showToast("Failed to delete item", "error");
+      setConfirmDialog((prev) => ({ ...prev, isDeleting: false }));
     }
   };
 
@@ -262,12 +304,18 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         <div className="flex-1 relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="Search research items..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-11 pr-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 transition-all"
+            aria-label="Search research items"
+            aria-describedby="search-hint"
           />
+          <span id="search-hint" className="sr-only">
+            Press Ctrl+K or Cmd+K to focus search
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
@@ -337,19 +385,11 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
 
       {/* ========== CONTENT ========== */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {[...Array(8)].map((_, i) => (
-            <div
-              key={i}
-              className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-5 border border-gray-200/50 dark:border-gray-800 h-[240px]"
-            >
-              <div className="skeleton h-8 w-8 rounded-lg mb-4" />
-              <div className="skeleton h-5 w-3/4 rounded mb-2" />
-              <div className="skeleton h-4 w-full rounded mb-1" />
-              <div className="skeleton h-4 w-2/3 rounded" />
-            </div>
-          ))}
-        </div>
+        viewMode === "grid" ? (
+          <SkeletonDashboardGrid count={8} />
+        ) : (
+          <SkeletonDashboardList count={8} />
+        )
       ) : filteredItems.length === 0 ? (
         /* Empty State */
         <div className="flex flex-col items-center justify-center py-20 px-4">
@@ -681,6 +721,21 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           </div>
         )}
       </Modal>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() =>
+          setConfirmDialog({ isOpen: false, itemId: null, isDeleting: false })
+        }
+        onConfirm={confirmDeleteItem}
+        title="Delete Item"
+        message="Are you sure you want to delete this research item? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={confirmDialog.isDeleting}
+      />
     </div>
   );
 };

@@ -17,6 +17,8 @@ import { ThemeProvider } from "./context/ThemeContext";
 
 // Components & Layouts
 import { MarketingLayout, DashboardLayout } from "./components/shared/Layouts";
+import OfflineDetector from "./components/shared/OfflineDetector";
+import ErrorBoundary from "./components/shared/ErrorBoundary";
 import { CheckCircle2, Bell } from "lucide-react";
 
 // App Pages (Authenticated)
@@ -200,9 +202,11 @@ export default function App() {
   const { showToast, ToastComponent } = useToast();
 
   return (
-    <ThemeProvider>
-      {ToastComponent}
-      <HashRouter>
+    <ErrorBoundary>
+      <ThemeProvider>
+        {ToastComponent}
+        <OfflineDetector />
+        <HashRouter>
         <Routes>
           {/* Public Routes - Single Page Marketing */}
           <Route
@@ -279,6 +283,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>
-    </ThemeProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

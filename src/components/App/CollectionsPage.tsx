@@ -15,6 +15,8 @@ import {
 } from "../../services/collectionsService";
 import { StorageItem } from "../../services/storageService";
 import { Button, Card, Input, Badge, Modal } from "../shared/UIComponents";
+import ConfirmDialog from "../shared/ConfirmDialog";
+import { SkeletonCollection, SkeletonDashboardGrid } from "../shared/SkeletonLoader";
 import {
   FolderPlus,
   FolderOpen,
@@ -47,6 +49,11 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
   const [collectionItems, setCollectionItems] = useState<StorageItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    collection: CollectionType | null;
+    isDeleting: boolean;
+  }>({ isOpen: false, collection: null, isDeleting: false });
 
   // Form State
   const [formName, setFormName] = useState("");
@@ -110,13 +117,22 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
   };
 
   const handleDelete = async (col: CollectionType) => {
-    if (!confirm(`Delete "${col.name}"?`)) return;
+    setConfirmDialog({ isOpen: true, collection: col, isDeleting: false });
+  };
+
+  const confirmDeleteCollection = async () => {
+    if (!confirmDialog.collection) return;
+
+    setConfirmDialog((prev) => ({ ...prev, isDeleting: true }));
+
     try {
-      await deleteCollection(col.id);
-      setCollections((prev) => prev.filter((c) => c.id !== col.id));
-      showToast("Deleted", "success");
+      await deleteCollection(confirmDialog.collection.id);
+      setCollections((prev) => prev.filter((c) => c.id !== confirmDialog.collection?.id));
+      showToast("Collection deleted successfully", "success");
+      setConfirmDialog({ isOpen: false, collection: null, isDeleting: false });
     } catch (e) {
-      showToast("Delete failed", "error");
+      showToast("Failed to delete collection", "error");
+      setConfirmDialog((prev) => ({ ...prev, isDeleting: false }));
     }
   };
 
@@ -175,14 +191,7 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
         </div>
 
         {loadingItems ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-32 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-xl"
-              />
-            ))}
-          </div>
+          <SkeletonDashboardGrid count={6} />
         ) : collectionItems.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <FolderOpen className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -257,8 +266,11 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {collections.map((col) => (
+      {loading ? (
+        <SkeletonCollection count={6} />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {collections.map((col) => (
           <div
             key={col.id}
             onClick={() => handleViewCollection(col)}
@@ -325,7 +337,8 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* Create/Edit Modals would go here (using the UIComponents Modal) - Omitted for brevity but use same logic as original */}
       <Modal
@@ -418,6 +431,21 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
           </div>
         </div>
       </Modal>
+
+      {/* Confirm Delete Collection Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() =>
+          setConfirmDialog({ isOpen: false, collection: null, isDeleting: false })
+        }
+        onConfirm={confirmDeleteCollection}
+        title="Delete Collection"
+        message={`Are you sure you want to delete "${confirmDialog.collection?.name}"? This will not delete the items inside, but they will no longer be organized in this collection.`}
+        confirmText="Delete Collection"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={confirmDialog.isDeleting}
+      />
     </div>
   );
 };
