@@ -36,6 +36,8 @@ import {
   List,
   Clock,
   Tag,
+  Download,
+  HelpCircle,
 } from "lucide-react";
 import {
   getAllItems,
@@ -48,6 +50,10 @@ import { generateSummary } from "../../services/geminiService";
 import ConfirmDialog from "../shared/ConfirmDialog";
 import { SkeletonDashboardGrid, SkeletonDashboardList } from "../shared/SkeletonLoader";
 import { useKeyboardShortcuts, COMMON_SHORTCUTS } from "../../hooks/useKeyboardShortcuts";
+import KeyboardShortcutsModal from "../shared/KeyboardShortcutsModal";
+import BulkActions from "../shared/BulkActions";
+import AdvancedSearchFilter, { SearchFilters } from "../shared/AdvancedSearchFilter";
+import { exportItems } from "../../utils/export";
 import { useRef } from "react";
 
 // Helper for source icons
@@ -93,6 +99,18 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     isDeleting: boolean;
   }>({ isOpen: false, itemId: null, isDeleting: false });
 
+  // Bulk operations
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  // Modals
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Filters
+  const [advancedFilters, setAdvancedFilters] = useState<SearchFilters>({});
+
   const { showToast } = useToast();
 
   // Ref for search input (for keyboard shortcuts)
@@ -116,6 +134,12 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
       key: 'g',
       description: 'Toggle grid/list view',
       handler: () => setViewMode((prev) => (prev === 'grid' ? 'list' : 'grid')),
+    },
+    {
+      key: '?',
+      shiftKey: true,
+      description: 'Show keyboard shortcuts',
+      handler: () => setShowKeyboardShortcuts(true),
     },
   ]);
 
@@ -227,18 +251,131 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     }
   };
 
-  // Memoize filtered items - only recalculate when items or search changes
-  const filteredItems = useMemo(() => {
-    if (!debouncedSearchQuery) return items;
-    const query = debouncedSearchQuery.toLowerCase();
-    return items.filter((item) => {
-      return (
-        item.text?.toLowerCase().includes(query) ||
-        item.sourceTitle?.toLowerCase().includes(query) ||
-        item.tags?.some((tag) => tag.toLowerCase().includes(query))
-      );
+  // Bulk operations handlers
+  const toggleItemSelection = (itemId: string) => {
+    setSelectedItems((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
     });
-  }, [items, debouncedSearchQuery]);
+  };
+
+  const selectAllItems = () => {
+    setSelectedItems(new Set(items.map((item) => item.id)));
+  };
+
+  const deselectAllItems = () => {
+    setSelectedItems(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedItems.size === 0) return;
+
+    if (!confirm(`Delete ${selectedItems.size} items? This cannot be undone.`)) {
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    try {
+      const deletePromises = Array.from(selectedItems).map((id) => deleteItem(id));
+      await Promise.all(deletePromises);
+      setItems((prev) => prev.filter((item) => !selectedItems.has(item.id)));
+      showToast(`${selectedItems.size} items deleted successfully`, "success");
+      setSelectedItems(new Set());
+    } catch (error) {
+      showToast("Failed to delete some items", "error");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleBulkExport = () => {
+    if (selectedItems.size === 0) {
+      showToast("No items selected for export", "error");
+      return;
+    }
+
+    const itemsToExport = items.filter((item) => selectedItems.has(item.id));
+
+    // Show export format menu (for now, default to JSON)
+    try {
+      exportItems(itemsToExport, 'json');
+      showToast(`Exported ${itemsToExport.length} items`, "success");
+    } catch (error) {
+      showToast("Export failed", "error");
+    }
+  };
+
+  const handleApplyFilters = (filters: SearchFilters) => {
+    setAdvancedFilters(filters);
+  };
+
+  // Memoize filtered items - apply search query and advanced filters
+  const filteredItems = useMemo(() => {
+    let filtered = items;
+
+    // Apply text search
+    if (debouncedSearchQuery) {
+      const query = debouncedSearchQuery.toLowerCase();
+      filtered = filtered.filter((item) => {
+        return (
+          item.text?.toLowerCase().includes(query) ||
+          item.sourceTitle?.toLowerCase().includes(query) ||
+          item.tags?.some((tag) => tag.toLowerCase().includes(query))
+        );
+      });
+    }
+
+    // Apply advanced filters
+    if (advancedFilters.dateRange?.start || advancedFilters.dateRange?.end) {
+      filtered = filtered.filter((item) => {
+        const itemDate = new Date(item.createdAt);
+        const start = advancedFilters.dateRange?.start
+          ? new Date(advancedFilters.dateRange.start)
+          : null;
+        const end = advancedFilters.dateRange?.end
+          ? new Date(advancedFilters.dateRange.end)
+          : null;
+
+        if (start && itemDate < start) return false;
+        if (end && itemDate > end) return false;
+        return true;
+      });
+    }
+
+    if (advancedFilters.deviceSource && advancedFilters.deviceSource.length > 0) {
+      filtered = filtered.filter((item) =>
+        advancedFilters.deviceSource?.includes(item.deviceSource || '')
+      );
+    }
+
+    if (advancedFilters.hasAiSummary !== undefined) {
+      filtered = filtered.filter((item) =>
+        advancedFilters.hasAiSummary ? !!item.aiSummary : !item.aiSummary
+      );
+    }
+
+    if (advancedFilters.tags && advancedFilters.tags.length > 0) {
+      filtered = filtered.filter((item) =>
+        advancedFilters.tags?.some((tag) => item.tags?.includes(tag))
+      );
+    }
+
+    return filtered;
+  }, [items, debouncedSearchQuery, advancedFilters]);
+
+  // Get all unique tags for filter dropdown
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    items.forEach((item) => {
+      item.tags?.forEach((tag) => tagSet.add(tag));
+    });
+    return Array.from(tagSet);
+  }, [items]);
 
   // Memoize stats calculations - only recalculate when items change
   const stats = useMemo(() => {
@@ -281,6 +418,14 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setShowKeyboardShortcuts(true)}
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts (?)"
+            className="p-2.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all active:scale-95"
+          >
+            <HelpCircle className="w-5 h-5" />
+          </button>
+          <button
             onClick={() => {
               if (!loading) fetchItems();
             }}
@@ -318,9 +463,16 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+          <button
+            onClick={() => setShowAdvancedFilters(true)}
+            className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            aria-label="Advanced filters"
+          >
             <Filter className="w-4 h-4" />
             Filter
+            {(advancedFilters.dateRange || advancedFilters.deviceSource?.length || advancedFilters.hasAiSummary !== undefined || advancedFilters.tags?.length) && (
+              <span className="ml-1 w-2 h-2 bg-purple-500 rounded-full" />
+            )}
           </button>
           <div className="flex bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl p-1">
             <button
@@ -735,6 +887,31 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         cancelText="Cancel"
         variant="danger"
         isLoading={confirmDialog.isDeleting}
+      />
+
+      {/* Bulk Actions Bar */}
+      <BulkActions
+        selectedCount={selectedItems.size}
+        totalCount={filteredItems.length}
+        onSelectAll={selectAllItems}
+        onDeselectAll={deselectAllItems}
+        onBulkDelete={handleBulkDelete}
+        onBulkExport={handleBulkExport}
+        isDeleting={isBulkDeleting}
+      />
+
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal
+        isOpen={showKeyboardShortcuts}
+        onClose={() => setShowKeyboardShortcuts(false)}
+      />
+
+      {/* Advanced Search Filters Modal */}
+      <AdvancedSearchFilter
+        isOpen={showAdvancedFilters}
+        onClose={() => setShowAdvancedFilters(false)}
+        onApply={handleApplyFilters}
+        availableTags={allTags}
       />
     </div>
   );
