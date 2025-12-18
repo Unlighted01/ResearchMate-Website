@@ -824,7 +824,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
       {/* Mobile Sidebar Overlay */}
       {mobileSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-20 lg:hidden animate-fade-in"
+          className="fixed inset-0 bg-black/50 z-20 lg:hidden animate-fade-in"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}
