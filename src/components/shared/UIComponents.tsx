@@ -273,8 +273,8 @@ export const Modal: React.FC<ModalProps> = ({
           shadow-[0_24px_80px_rgba(0,0,0,0.2)]
           dark:shadow-[0_24px_80px_rgba(0,0,0,0.6)]
           animate-scale-in
-          flex flex-col max-h-[85vh]
-          overflow-hidden
+          flex flex-col
+          max-h-[90vh]
         `}
       >
         {/* Header */}
