@@ -1,4 +1,9 @@
-import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+// ============================================
+// SUMMARIZE - AI-powered Text Summarization
+// Vercel Serverless Function
+// ============================================
+
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // ============================================
 // MULTI-PROVIDER AI CONFIGURATION
@@ -68,7 +73,7 @@ const getProviders = (): AIProvider[] => {
       getHeaders: () => ({
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://researchmate-web.netlify.app",
+        "HTTP-Referer": "https://researchmate.vercel.app",
         "X-Title": "ResearchMate",
       }),
       formatRequest: (text: string) => ({
@@ -147,9 +152,7 @@ async function tryProvider(
   }
 }
 
-async function summarizeWithFallback(
-  text: string
-): Promise<{
+async function summarizeWithFallback(text: string): Promise<{
   success: boolean;
   summary: string;
   provider?: string;
@@ -181,76 +184,43 @@ async function summarizeWithFallback(
 // MAIN HANDLER
 // ============================================
 
-const handler: Handler = async (
-  event: HandlerEvent,
-  context: HandlerContext
-) => {
-  // Handle CORS preflight
-  if (event.httpMethod === "OPTIONS") {
-    return {
-      statusCode: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-      },
-      body: "",
-    };
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
   }
 
-  // Only allow POST
-  if (event.httpMethod !== "POST") {
-    return {
-      statusCode: 405,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: "Method not allowed" }),
-    };
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { text } = JSON.parse(event.body || "{}");
+    const { text } = req.body;
 
     if (!text || !text.trim()) {
-      return {
-        statusCode: 400,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({ error: "Text is required" }),
-      };
+      return res.status(400).json({ error: "Text is required" });
     }
 
     // Try all providers with fallback
     const result = await summarizeWithFallback(text.trim());
 
     if (result.success) {
-      return {
-        statusCode: 200,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          summary: result.summary,
-          provider: result.provider,
-        }),
-      };
+      return res.status(200).json({
+        summary: result.summary,
+        provider: result.provider,
+      });
     } else {
-      return {
-        statusCode: 503,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({
-          error: "All AI providers failed. Please try again later.",
-          details: result.errors,
-        }),
-      };
+      return res.status(503).json({
+        error: "All AI providers failed. Please try again later.",
+        details: result.errors,
+      });
     }
   } catch (error) {
     console.error("Summarize error:", error);
-    return {
-      statusCode: 500,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: (error as Error).message }),
-    };
+    return res.status(500).json({ error: (error as Error).message });
   }
-};
-
-export { handler };
+}

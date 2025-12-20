@@ -1,5 +1,5 @@
 // ============================================
-// geminiService.ts - AI Service (Netlify Functions Version)
+// geminiService.ts - AI Service (Vercel Functions Version)
 // ============================================
 
 // ============================================
@@ -8,15 +8,15 @@
 
 /**
  * API Configuration
- * Uses Netlify Functions in production, localhost in development
+ * Uses Vercel Functions in production, localhost in development
  */
 const getApiBaseUrl = (): string => {
-  // Check if we're on Netlify (production)
-  const isNetlify =
-    window.location.hostname.includes("netlify.app") ||
-    window.location.hostname === "researchmate-web.netlify.app";
+  // Check if we're on Vercel (production)
+  const isVercel =
+    window.location.hostname.includes("vercel.app") ||
+    window.location.hostname.includes("researchmate");
 
-  if (isNetlify) {
+  if (isVercel) {
     return "/api";
   }
 
@@ -74,14 +74,16 @@ export interface APIStatusResult {
 // ============================================
 // NOTE: These functions are deprecated and should not be used.
 // API keys should NEVER be stored client-side for security reasons.
-// All AI operations now go through secure Netlify Functions.
+// All AI operations now go through secure Vercel Functions.
 
 /**
  * @deprecated DO NOT USE - API keys should never be stored client-side
  * This function is kept for backwards compatibility only
  */
 export function setApiKey(key: string): void {
-  console.warn('⚠️ SECURITY WARNING: setApiKey is deprecated. API keys should never be stored client-side!');
+  console.warn(
+    "⚠️ SECURITY WARNING: setApiKey is deprecated. API keys should never be stored client-side!"
+  );
   // Intentionally do nothing - this prevents accidental API key storage
 }
 
@@ -89,7 +91,9 @@ export function setApiKey(key: string): void {
  * @deprecated DO NOT USE - API keys should never be stored client-side
  */
 export function getApiKey(): string {
-  console.warn('⚠️ SECURITY WARNING: getApiKey is deprecated. Use secure backend endpoints instead.');
+  console.warn(
+    "⚠️ SECURITY WARNING: getApiKey is deprecated. Use secure backend endpoints instead."
+  );
   return "";
 }
 
@@ -447,7 +451,8 @@ export function cacheSummary(text: string, summary: string): void {
 function hashText(text: string): string {
   // Limit text length for hashing to prevent extremely long input
   const maxLength = 10000;
-  const textToHash = text.length > maxLength ? text.substring(0, maxLength) : text;
+  const textToHash =
+    text.length > maxLength ? text.substring(0, maxLength) : text;
 
   let hash = 0;
   for (let i = 0; i < textToHash.length; i++) {

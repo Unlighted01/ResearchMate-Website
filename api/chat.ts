@@ -1,4 +1,9 @@
-import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+// ============================================
+// CHAT - Multi-Provider AI Chat
+// Vercel Serverless Function
+// ============================================
+
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // ============================================
 // MULTI-PROVIDER AI CONFIGURATION
@@ -81,7 +86,7 @@ const getProviders = (): AIProvider[] => {
       getHeaders: () => ({
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://researchmate-web.netlify.app",
+        "HTTP-Referer": "https://researchmate.vercel.app",
         "X-Title": "ResearchMate",
       }),
       formatRequest: (message: string, context: string) => ({
@@ -184,41 +189,29 @@ async function chatWithFallback(
   return { success: false, response: "", errors };
 }
 
-const handler: Handler = async (
-  event: HandlerEvent,
-  context: HandlerContext
-) => {
-  if (event.httpMethod === "OPTIONS") {
-    return {
-      statusCode: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-      },
-      body: "",
-    };
+// ============================================
+// MAIN HANDLER
+// ============================================
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
   }
 
-  if (event.httpMethod !== "POST") {
-    return {
-      statusCode: 405,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: "Method not allowed" }),
-    };
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { message, context: researchContext } = JSON.parse(
-      event.body || "{}"
-    );
+    const { message, context: researchContext } = req.body;
 
     if (!message?.trim()) {
-      return {
-        statusCode: 400,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({ error: "Message is required" }),
-      };
+      return res.status(400).json({ error: "Message is required" });
     }
 
     const result = await chatWithFallback(
@@ -227,34 +220,17 @@ const handler: Handler = async (
     );
 
     if (result.success) {
-      return {
-        statusCode: 200,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          response: result.response,
-          provider: result.provider,
-        }),
-      };
+      return res.status(200).json({
+        response: result.response,
+        provider: result.provider,
+      });
     } else {
-      return {
-        statusCode: 503,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({
-          error: "All AI providers failed",
-          details: result.errors,
-        }),
-      };
+      return res.status(503).json({
+        error: "All AI providers failed",
+        details: result.errors,
+      });
     }
   } catch (error) {
-    return {
-      statusCode: 500,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: (error as Error).message }),
-    };
+    return res.status(500).json({ error: (error as Error).message });
   }
-};
-
-export { handler };
+}
