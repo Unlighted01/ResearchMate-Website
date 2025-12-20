@@ -89,13 +89,13 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     >
       {/* Backdrop - Clean dark overlay */}
       <div
-        className="absolute inset-0 bg-black/60 animate-fade-in"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={isLoading ? undefined : onClose}
         aria-hidden="true"
       />
 
       {/* Dialog */}
-      <div className="relative bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.25)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.7)] max-w-sm w-full animate-scale-in overflow-hidden z-10">
+      <div className="relative bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
         {/* Close button */}
         <button
           onClick={onClose}
