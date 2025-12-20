@@ -1,5 +1,11 @@
-import React, { useState } from 'react';
-import { X, Filter, Calendar, Tag, Laptop, Sparkles } from 'lucide-react';
+// ============================================
+// ADVANCED SEARCH FILTER - Apple-style
+// Fixed: Uses Portal to escape parent containers
+// ============================================
+
+import React, { useState } from "react";
+import { createPortal } from "react-dom";
+import { X, Filter, Calendar, Tag, Laptop, Sparkles } from "lucide-react";
 
 export interface SearchFilters {
   dateRange?: {
@@ -68,28 +74,29 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
   if (!isOpen) return null;
 
   const deviceSources = [
-    { id: 'extension', label: 'Browser Extension', icon: Laptop },
-    { id: 'mobile', label: 'Mobile', icon: Laptop },
-    { id: 'smart_pen', label: 'Smart Pen', icon: Laptop },
-    { id: 'web', label: 'Web', icon: Laptop },
+    { id: "extension", label: "Browser Extension", icon: Laptop },
+    { id: "mobile", label: "Mobile", icon: Laptop },
+    { id: "smart_pen", label: "Smart Pen", icon: Laptop },
+    { id: "web", label: "Web", icon: Laptop },
   ];
 
-  return (
+  // Use Portal to render at document.body level
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="filter-modal-title"
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 animate-fade-in"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-auto">
+      <div className="relative bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-auto z-10">
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-[#1C1C1E] border-b border-gray-200 dark:border-gray-800 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -127,13 +134,13 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
                 </label>
                 <input
                   type="date"
-                  value={filters.dateRange?.start || ''}
+                  value={filters.dateRange?.start || ""}
                   onChange={(e) =>
                     setFilters({
                       ...filters,
                       dateRange: {
                         start: e.target.value,
-                        end: filters.dateRange?.end || '',
+                        end: filters.dateRange?.end || "",
                       },
                     })
                   }
@@ -146,12 +153,12 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
                 </label>
                 <input
                   type="date"
-                  value={filters.dateRange?.end || ''}
+                  value={filters.dateRange?.end || ""}
                   onChange={(e) =>
                     setFilters({
                       ...filters,
                       dateRange: {
-                        start: filters.dateRange?.start || '',
+                        start: filters.dateRange?.start || "",
                         end: e.target.value,
                       },
                     })
@@ -175,8 +182,8 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
                   onClick={() => toggleDeviceSource(source.id)}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
                     filters.deviceSource?.includes(source.id)
-                      ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      ? "bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300"
+                      : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                   }`}
                   aria-pressed={filters.deviceSource?.includes(source.id)}
                 >
@@ -198,13 +205,15 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
                 setFilters({
                   ...filters,
                   hasAiSummary:
-                    filters.hasAiSummary === undefined ? true : !filters.hasAiSummary,
+                    filters.hasAiSummary === undefined
+                      ? true
+                      : !filters.hasAiSummary,
                 })
               }
               className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
                 filters.hasAiSummary
-                  ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300'
-                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  ? "bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300"
+                  : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               }`}
               aria-pressed={filters.hasAiSummary}
             >
@@ -227,8 +236,8 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
                     onClick={() => toggleTag(tag)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                       filters.tags?.includes(tag)
-                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                     }`}
                     aria-pressed={filters.tags?.includes(tag)}
                   >
@@ -264,7 +273,8 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

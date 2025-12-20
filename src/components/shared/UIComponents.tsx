@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { Loader2, X } from "lucide-react";
 
 // ============================================
@@ -229,6 +230,7 @@ export const Badge: React.FC<BadgeProps> = ({
 
 // ============================================
 // PART 5: MODAL COMPONENT (Apple-style)
+// Fixed: Uses Portal to escape parent containers
 // ============================================
 
 interface ModalProps {
@@ -256,30 +258,32 @@ export const Modal: React.FC<ModalProps> = ({
     full: "max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)]",
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+  // Use Portal to render at document.body level
+  // This fixes the issue where parent transforms/filters break fixed positioning
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      {/* Backdrop - Clean dark overlay */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
+        className="absolute inset-0 bg-black/60 animate-fade-in"
         onClick={onClose}
       />
 
-      {/* Modal */}
+      {/* Modal Container */}
       <div
         className={`
           relative w-full ${sizes[size]}
           bg-white dark:bg-[#1C1C1E]
           rounded-2xl
-          shadow-[0_24px_80px_rgba(0,0,0,0.2)]
-          dark:shadow-[0_24px_80px_rgba(0,0,0,0.6)]
+          shadow-[0_24px_80px_rgba(0,0,0,0.3)]
+          dark:shadow-[0_24px_80px_rgba(0,0,0,0.7)]
           animate-scale-in
           flex flex-col max-h-[85vh]
-          overflow-hidden
+          z-10
         `}
       >
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200/60 dark:border-gray-800">
+          <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-200/60 dark:border-gray-800">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               {title}
             </h3>
@@ -293,15 +297,94 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto flex-1">{children}</div>
+        {/* Content - with proper padding */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-6">
+          {children}
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
 // ============================================
-// PART 6: TEXTAREA COMPONENT (Apple-style)
+// PART 6: SELECT DROPDOWN (Apple-style)
+// ============================================
+
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+interface SelectProps {
+  options: SelectOption[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  label?: string;
+  className?: string;
+}
+
+export const Select: React.FC<SelectProps> = ({
+  options,
+  value,
+  onChange,
+  placeholder = "Select...",
+  label,
+  className = "",
+}) => (
+  <div className={`w-full ${className}`}>
+    {label && (
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        {label}
+      </label>
+    )}
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`
+          w-full px-4 py-3 pr-10
+          bg-gray-100 dark:bg-[#2C2C2E]
+          border-0
+          rounded-xl
+          text-gray-900 dark:text-white
+          transition-all duration-200
+          focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 focus:bg-white dark:focus:bg-[#3A3A3C]
+          appearance-none
+          cursor-pointer
+        `}
+      >
+        <option value="" disabled>
+          {placeholder}
+        </option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </div>
+    </div>
+  </div>
+);
+
+// ============================================
+// PART 7: TEXTAREA (Apple-style)
 // ============================================
 
 interface TextareaProps
@@ -348,77 +431,7 @@ export const Textarea: React.FC<TextareaProps> = ({
 );
 
 // ============================================
-// PART 7: SELECT COMPONENT (Apple-style)
-// ============================================
-
-interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  label?: string;
-  error?: string;
-  options: { value: string; label: string }[];
-}
-
-export const Select: React.FC<SelectProps> = ({
-  label,
-  error,
-  options,
-  className = "",
-  ...props
-}) => (
-  <div className="w-full">
-    {label && (
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-        {label}
-      </label>
-    )}
-    <div className="relative">
-      <select
-        className={`
-          w-full px-4 py-3 pr-10
-          bg-gray-100 dark:bg-[#2C2C2E]
-          border-0
-          rounded-xl
-          text-gray-900 dark:text-white
-          transition-all duration-200
-          focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 focus:bg-white dark:focus:bg-[#3A3A3C]
-          appearance-none cursor-pointer
-          ${error ? "ring-2 ring-red-500/50" : ""}
-          ${className}
-        `}
-        {...props}
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
-      </div>
-    </div>
-    {error && (
-      <p className="mt-2 text-sm text-red-500 flex items-center gap-1">
-        <span className="w-1 h-1 bg-red-500 rounded-full" />
-        {error}
-      </p>
-    )}
-  </div>
-);
-
-// ============================================
-// PART 8: SKELETON LOADER (Apple-style)
+// PART 8: SKELETON LOADER
 // ============================================
 
 interface SkeletonProps {
