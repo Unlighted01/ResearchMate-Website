@@ -145,8 +145,16 @@ const SettingsPage: React.FC = () => {
   // Check backend status
   useEffect(() => {
     const checkBackend = async () => {
+      // Use /api for production (Vercel), localhost for development
+      const isProduction =
+        window.location.hostname.includes("vercel.app") ||
+        window.location.hostname.includes("researchmate") ||
+        !window.location.hostname.includes("localhost");
+      const apiUrl = isProduction
+        ? "/api/health"
+        : "http://localhost:3001/api/health";
       try {
-        const response = await fetch("http://localhost:3001/api/health");
+        const response = await fetch(apiUrl);
         setBackendStatus(response.ok ? "online" : "offline");
       } catch {
         setBackendStatus("offline");
@@ -705,7 +713,7 @@ const SettingsPage: React.FC = () => {
                     ? "AI features are fully functional"
                     : backendStatus === "offline"
                     ? "Start backend with: npm run dev in researchmate-backend"
-                    : "Connecting to localhost:3001..."}
+                    : "Connecting to API..."}
                 </p>
               </div>
             </div>

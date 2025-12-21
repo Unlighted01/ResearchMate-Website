@@ -52,7 +52,12 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const BACKEND_URL = "http://localhost:3001";
+  // Use /api for production (Vercel), localhost for development
+  const isProduction =
+    window.location.hostname.includes("vercel.app") ||
+    window.location.hostname.includes("researchmate") ||
+    !window.location.hostname.includes("localhost");
+  const BACKEND_URL = isProduction ? "" : "http://localhost:3001";
 
   // ============================================
   // PART 4: HANDLERS
