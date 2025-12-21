@@ -1,9 +1,9 @@
 // ============================================
 // AICitationExtractor.tsx - Smart Unified Citation Extractor
-// Auto-detects: URL, DOI, ISBN, YouTube
+// Client-side detection - no cite-detect API needed!
 // ============================================
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button, Card } from "../shared/UIComponents";
 import {
   Sparkles,
@@ -29,7 +29,7 @@ import {
 // PART 1: TYPES
 // ============================================
 
-type DetectedType = "url" | "doi" | "isbn" | "youtube" | "pmid" | "unknown";
+type DetectedType = "url" | "doi" | "isbn" | "youtube" | "unknown";
 
 interface ExtractedMetadata {
   title: string;
@@ -43,17 +43,14 @@ interface ExtractedMetadata {
   siteName: string;
   description: string;
   url: string;
-  // Book-specific
   publisher?: string;
   isbn?: string;
   pages?: number;
   coverUrl?: string;
-  // Academic paper specific
   journal?: string;
   volume?: string;
   issue?: string;
   doi?: string;
-  // Video specific
   channelTitle?: string;
   duration?: string;
 }
@@ -63,21 +60,89 @@ interface AICitationExtractorProps {
 }
 
 // ============================================
-// PART 2: HELPER FUNCTIONS
+// PART 2: API URL CONFIGURATION
 // ============================================
 
 const getApiBaseUrl = (): string => {
   if (typeof window === "undefined") return "/api";
-  if (
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1"
-  ) {
+
+  const hostname = window.location.hostname;
+
+  // Local development - use localhost backend
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    // Check if we're on a Vite dev server (usually 3000 or 5173)
+    // In this case, we need to use the production API or a local backend
+    const port = window.location.port;
+    if (port === "3000" || port === "5173") {
+      // Use production API for local testing (or set up local backend)
+      // For now, use relative path and hope it works, or use production
+      return "/api"; // This will fail locally but work on Vercel
+    }
     return "http://localhost:3001/api";
   }
+
+  // Production - use relative path
   return "/api";
 };
 
 const API_BASE_URL = getApiBaseUrl();
+
+// ============================================
+// PART 3: CLIENT-SIDE TYPE DETECTION
+// ============================================
+
+function detectInputType(input: string): { type: DetectedType; value: string } {
+  const trimmed = input.trim();
+
+  // Check ISBN (10 or 13 digits, with optional dashes)
+  const cleanedForISBN = trimmed.replace(/[-\s]/g, "");
+  if (
+    /^\d{10}$/.test(cleanedForISBN) ||
+    /^97[89]\d{10}$/.test(cleanedForISBN)
+  ) {
+    return { type: "isbn", value: cleanedForISBN };
+  }
+
+  // Check DOI (starts with 10.)
+  const doiCleaned = trimmed
+    .replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")
+    .replace(/^doi:\s*/i, "")
+    .trim();
+  if (/^10\.\d{4,}\/\S+$/.test(doiCleaned)) {
+    return { type: "doi", value: doiCleaned };
+  }
+
+  // Check YouTube
+  const ytPatterns = [
+    /(?:youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
+    /(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const pattern of ytPatterns) {
+    const match = trimmed.match(pattern);
+    if (match) {
+      return { type: "youtube", value: match[1] };
+    }
+  }
+
+  // Check if it's a URL
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.includes(".")
+  ) {
+    const url = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+    return { type: "url", value: url };
+  }
+
+  // Check if it might be a partial number (could be ISBN)
+  if (/^\d{10,13}$/.test(cleanedForISBN)) {
+    return { type: "isbn", value: cleanedForISBN };
+  }
+
+  return { type: "unknown", value: trimmed };
+}
 
 // Type badge styling
 const getTypeBadge = (type: DetectedType) => {
@@ -107,12 +172,6 @@ const getTypeBadge = (type: DetectedType) => {
       label: "YouTube Video",
       color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
     },
-    pmid: {
-      icon: <FileText className="w-3 h-3" />,
-      label: "PubMed Article",
-      color:
-        "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    },
     unknown: {
       icon: <HelpCircle className="w-3 h-3" />,
       label: "Unknown",
@@ -134,7 +193,7 @@ const formatAuthors = (authors: ExtractedMetadata["authors"]): string => {
 };
 
 // ============================================
-// PART 3: COMPONENT
+// PART 4: COMPONENT
 // ============================================
 
 const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
@@ -142,18 +201,28 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
 }) => {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [detecting, setDetecting] = useState(false);
   const [useAI, setUseAI] = useState(true);
   const [metadata, setMetadata] = useState<ExtractedMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [detectedType, setDetectedType] = useState<DetectedType | null>(null);
+  const [liveDetection, setLiveDetection] = useState<DetectedType | null>(null);
+
+  // Live detection as user types
+  useEffect(() => {
+    if (input.trim().length > 3) {
+      const { type } = detectInputType(input);
+      setLiveDetection(type);
+    } else {
+      setLiveDetection(null);
+    }
+  }, [input]);
 
   // ============================================
-  // PART 4: DETECTION & EXTRACTION
+  // PART 5: EXTRACTION HANDLERS
   // ============================================
 
-  const detectAndExtract = async () => {
+  const handleExtract = async () => {
     const trimmedInput = input.trim();
     if (!trimmedInput) {
       setError("Please enter a URL, DOI, ISBN, or YouTube link");
@@ -161,30 +230,14 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
     }
 
     setLoading(true);
-    setDetecting(true);
     setError(null);
     setMetadata(null);
-    setDetectedType(null);
 
     try {
-      // Step 1: Detect the input type
-      const detectResponse = await fetch(`${API_BASE_URL}/cite-detect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: trimmedInput }),
-      });
-
-      const detectData = await detectResponse.json();
-
-      if (!detectResponse.ok) {
-        throw new Error(detectData.error || "Failed to detect input type");
-      }
-
-      const { type, value, confidence } = detectData.detection;
+      // Client-side detection
+      const { type, value } = detectInputType(trimmedInput);
       setDetectedType(type);
-      setDetecting(false);
 
-      // Step 2: Call the appropriate API based on type
       let extractedData: ExtractedMetadata | null = null;
 
       switch (type) {
@@ -202,8 +255,12 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
           break;
         default:
           // Try URL extraction as fallback
-          if (trimmedInput.includes("http") || trimmedInput.includes(".")) {
-            extractedData = await extractURL(trimmedInput);
+          if (trimmedInput.includes(".")) {
+            const url = trimmedInput.startsWith("http")
+              ? trimmedInput
+              : `https://${trimmedInput}`;
+            extractedData = await extractURL(url);
+            setDetectedType("url");
           } else {
             throw new Error(
               "Could not determine input type. Please enter a valid URL, DOI (10.xxxx/xxxx), ISBN, or YouTube link."
@@ -218,6 +275,7 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
         }
       }
     } catch (err) {
+      console.error("Extraction error:", err);
       setError(
         err instanceof Error
           ? err.message
@@ -225,12 +283,11 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
       );
     } finally {
       setLoading(false);
-      setDetecting(false);
     }
   };
 
   // ============================================
-  // PART 5: INDIVIDUAL EXTRACTORS
+  // PART 6: API CALLS
   // ============================================
 
   const extractISBN = async (isbn: string): Promise<ExtractedMetadata> => {
@@ -297,12 +354,12 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
   };
 
   const extractYouTube = async (
-    videoIdOrUrl: string
+    videoId: string
   ): Promise<ExtractedMetadata> => {
     const response = await fetch(`${API_BASE_URL}/cite-youtube`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: videoIdOrUrl }),
+      body: JSON.stringify({ url: `https://youtube.com/watch?v=${videoId}` }),
     });
 
     const data = await response.json();
@@ -341,11 +398,12 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
       siteName: data.metadata.siteName || "",
       description: data.metadata.description || "",
       url: data.metadata.url || url,
+      doi: data.doi,
     };
   };
 
   // ============================================
-  // PART 6: CITATION GENERATION
+  // PART 7: CITATION FORMATTING
   // ============================================
 
   const generateAPACitation = (): string => {
@@ -359,39 +417,28 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
         : "n.d.");
     const title = metadata.title || "Untitled";
 
-    // Different formats based on type
     if (detectedType === "isbn") {
-      // Book format
       const publisher = metadata.publisher || "Unknown Publisher";
       return `${author}. (${year}). ${title}. ${publisher}.`;
     }
 
     if (detectedType === "doi") {
-      // Journal article format
       const journal = metadata.journal || "";
       const volume = metadata.volume ? `, ${metadata.volume}` : "";
       const issue = metadata.issue ? `(${metadata.issue})` : "";
-      const pages = metadata.pages ? `, ${metadata.pages}` : "";
       const doi = metadata.doi ? ` https://doi.org/${metadata.doi}` : "";
 
       if (journal) {
-        return `${author}. (${year}). ${title}. ${journal}${volume}${issue}${pages}.${doi}`;
+        return `${author}. (${year}). ${title}. ${journal}${volume}${issue}.${doi}`;
       }
       return `${author}. (${year}). ${title}.${doi}`;
     }
 
     if (detectedType === "youtube") {
-      // Video format
       const channel = metadata.channelTitle || author;
-      const accessDate = new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
       return `${channel}. (${year}). ${title} [Video]. YouTube. ${metadata.url}`;
     }
 
-    // Default website format
     const site = metadata.siteName || "Website";
     const accessDate = new Date(metadata.accessDate).toLocaleDateString(
       "en-US",
@@ -416,13 +463,17 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
     setMetadata(null);
     setError(null);
     setDetectedType(null);
+    setLiveDetection(null);
   };
 
   // ============================================
-  // PART 7: RENDER
+  // PART 8: RENDER
   // ============================================
 
-  const badge = detectedType ? getTypeBadge(detectedType) : null;
+  const badge =
+    detectedType || liveDetection
+      ? getTypeBadge(detectedType || liveDetection!)
+      : null;
 
   return (
     <Card className="p-6">
@@ -449,13 +500,10 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
               onChange={(e) => setInput(e.target.value)}
               placeholder="https://... or 10.1000/xyz or 978-0-123456-78-9"
               className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-              onKeyDown={(e) => e.key === "Enter" && detectAndExtract()}
+              onKeyDown={(e) => e.key === "Enter" && handleExtract()}
             />
           </div>
-          <Button
-            onClick={detectAndExtract}
-            disabled={loading || !input.trim()}
-          >
+          <Button onClick={handleExtract} disabled={loading || !input.trim()}>
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
@@ -467,15 +515,8 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
           </Button>
         </div>
 
-        {/* Detected Type Badge */}
-        {detecting && (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Detecting input type...
-          </div>
-        )}
-
-        {badge && !detecting && (
+        {/* Live Detection Badge */}
+        {badge && !metadata && (
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500">Detected:</span>
             <span
@@ -488,19 +529,22 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
         )}
 
         {/* AI Toggle - only show for URL type */}
-        {(!detectedType || detectedType === "url") && (
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={useAI}
-              onChange={(e) => setUseAI(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-            />
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              Use AI to enhance extraction (better author/date detection)
-            </span>
-          </label>
-        )}
+        {(!liveDetection ||
+          liveDetection === "url" ||
+          liveDetection === "unknown") &&
+          !metadata && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useAI}
+                onChange={(e) => setUseAI(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Use AI to enhance extraction (better author/date detection)
+              </span>
+            </label>
+          )}
 
         {/* Error Message */}
         {error && (
@@ -524,6 +568,14 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
               <span className="font-medium">
                 Citation extracted successfully!
               </span>
+              {badge && (
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${badge.color}`}
+                >
+                  {badge.icon}
+                  {badge.label}
+                </span>
+              )}
             </div>
 
             {/* Metadata Display */}

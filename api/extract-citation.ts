@@ -1,6 +1,6 @@
 // ============================================
 // EXTRACT-CITATION - Smart URL Citation Extractor
-// Now tries DOI lookup for academic sites!
+// Uses URL pattern recognition for academic sites!
 // Vercel Serverless Function
 // ============================================
 
@@ -11,123 +11,371 @@ const GEMINI_API_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
 // ============================================
-// PART 1: ACADEMIC SITE DETECTION
+// PART 1: URL PATTERN DOI EXTRACTION
+// No fetch required - just parse the URL!
 // ============================================
 
-const ACADEMIC_DOMAINS = [
-  "ieee.org",
-  "ieeexplore.ieee.org",
-  "acm.org",
-  "dl.acm.org",
-  "springer.com",
-  "link.springer.com",
-  "sciencedirect.com",
-  "nature.com",
-  "science.org",
-  "wiley.com",
-  "onlinelibrary.wiley.com",
-  "tandfonline.com",
-  "sagepub.com",
-  "arxiv.org",
-  "researchgate.net",
-  "ncbi.nlm.nih.gov",
-  "pubmed.ncbi.nlm.nih.gov",
-  "jstor.org",
-  "mdpi.com",
-  "frontiersin.org",
-  "plos.org",
-  "biomedcentral.com",
-  "elsevier.com",
-];
+interface DOIExtractionResult {
+  doi: string | null;
+  source: string;
+  needsLookup?: boolean;
+  lookupId?: string;
+  lookupType?: "ieee" | "pii" | "pmid";
+}
 
-function isAcademicSite(url: string): boolean {
+function extractDOIFromURLPatterns(url: string): DOIExtractionResult {
+  const patterns: {
+    name: string;
+    regex: RegExp;
+    handler: (match: RegExpMatchArray) => DOIExtractionResult;
+  }[] = [
+    // IEEE: /document/{id} - needs lookup
+    {
+      name: "IEEE",
+      regex: /ieeexplore\.ieee\.org\/(?:abstract\/)?document\/(\d+)/i,
+      handler: (match) => ({
+        doi: null,
+        source: "IEEE",
+        needsLookup: true,
+        lookupId: match[1],
+        lookupType: "ieee",
+      }),
+    },
+    // Springer: /article/10.xxxx/xxx or /chapter/10.xxxx/xxx
+    {
+      name: "Springer",
+      regex: /link\.springer\.com\/(?:article|chapter)\/(10\.\d+\/[^?#]+)/i,
+      handler: (match) => ({
+        doi: decodeURIComponent(match[1]),
+        source: "Springer URL",
+      }),
+    },
+    // Nature: /articles/xxx
+    {
+      name: "Nature",
+      regex: /nature\.com\/articles\/([a-z0-9-]+)/i,
+      handler: (match) => ({
+        doi: `10.1038/${match[1]}`,
+        source: "Nature URL",
+      }),
+    },
+    // ACM Digital Library: /doi/10.xxxx/xxx
+    {
+      name: "ACM",
+      regex: /dl\.acm\.org\/doi\/(10\.\d+\/[^?#]+)/i,
+      handler: (match) => ({
+        doi: decodeURIComponent(match[1]),
+        source: "ACM URL",
+      }),
+    },
+    // Wiley Online Library
+    {
+      name: "Wiley",
+      regex: /onlinelibrary\.wiley\.com\/doi\/(10\.\d+\/[^?#]+)/i,
+      handler: (match) => ({
+        doi: decodeURIComponent(match[1]),
+        source: "Wiley URL",
+      }),
+    },
+    // Taylor & Francis
+    {
+      name: "Taylor & Francis",
+      regex: /tandfonline\.com\/doi\/(?:abs|full)\/(10\.\d+\/[^?#]+)/i,
+      handler: (match) => ({
+        doi: decodeURIComponent(match[1]),
+        source: "T&F URL",
+      }),
+    },
+    // SAGE Journals
+    {
+      name: "SAGE",
+      regex: /journals\.sagepub\.com\/doi\/(10\.\d+\/[^?#]+)/i,
+      handler: (match) => ({
+        doi: decodeURIComponent(match[1]),
+        source: "SAGE URL",
+      }),
+    },
+    // ScienceDirect (Elsevier) - pii needs lookup
+    {
+      name: "ScienceDirect",
+      regex: /sciencedirect\.com\/science\/article\/pii\/([A-Z0-9]+)/i,
+      handler: (match) => ({
+        doi: null,
+        source: "ScienceDirect",
+        needsLookup: true,
+        lookupId: match[1],
+        lookupType: "pii",
+      }),
+    },
+    // arXiv - has DOI equivalent
+    {
+      name: "arXiv",
+      regex: /arxiv\.org\/abs\/(\d+\.\d+)/i,
+      handler: (match) => ({
+        doi: `10.48550/arXiv.${match[1]}`,
+        source: "arXiv URL",
+      }),
+    },
+    // PubMed
+    {
+      name: "PubMed",
+      regex: /pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/i,
+      handler: (match) => ({
+        doi: null,
+        source: "PubMed",
+        needsLookup: true,
+        lookupId: match[1],
+        lookupType: "pmid",
+      }),
+    },
+    // PLOS
+    {
+      name: "PLOS",
+      regex: /journals\.plos\.org\/\w+\/article\?id=(10\.\d+\/[^&]+)/i,
+      handler: (match) => ({
+        doi: decodeURIComponent(match[1]),
+        source: "PLOS URL",
+      }),
+    },
+    // Frontiers
+    {
+      name: "Frontiers",
+      regex:
+        /frontiersin\.org\/(?:articles|journals\/[^/]+\/articles)\/(10\.\d+\/[^?#]+)/i,
+      handler: (match) => ({
+        doi: decodeURIComponent(match[1]),
+        source: "Frontiers URL",
+      }),
+    },
+    // MDPI
+    {
+      name: "MDPI",
+      regex: /mdpi\.com\/(\d+-\d+)\/(\d+)\/(\d+)\/(\d+)/i,
+      handler: (match) => ({
+        doi: `10.3390/${match[1].toLowerCase()}${match[2]}${match[3].padStart(
+          2,
+          "0"
+        )}${match[4].padStart(4, "0")}`,
+        source: "MDPI URL",
+      }),
+    },
+    // Generic DOI in URL
+    {
+      name: "Generic DOI",
+      regex: /doi\.org\/(10\.\d+\/[^?#\s]+)/i,
+      handler: (match) => ({
+        doi: decodeURIComponent(match[1]),
+        source: "DOI URL",
+      }),
+    },
+    // Generic DOI pattern in any URL
+    {
+      name: "Embedded DOI",
+      regex: /[?&/](10\.\d{4,}\/[^\s?&#]+)/i,
+      handler: (match) => ({
+        doi: decodeURIComponent(match[1]),
+        source: "URL embedded",
+      }),
+    },
+  ];
+
+  for (const { regex, handler } of patterns) {
+    const match = url.match(regex);
+    if (match) {
+      return handler(match);
+    }
+  }
+
+  return { doi: null, source: "none" };
+}
+
+// ============================================
+// PART 2: IEEE DOCUMENT ID LOOKUP
+// Search academic databases for IEEE papers
+// ============================================
+
+async function lookupIEEEDocument(documentId: string): Promise<{
+  doi: string | null;
+  metadata: any | null;
+}> {
+  console.log(`Looking up IEEE document: ${documentId}`);
+
+  // Method 1: Search OpenAlex for IEEE document
   try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    return ACADEMIC_DOMAINS.some((domain) => hostname.includes(domain));
+    // OpenAlex indexes IEEE papers - search by external ID patterns
+    const searchQueries = [
+      // Try direct IEEE document ID search
+      `https://api.openalex.org/works?filter=ids.mag:${documentId}&select=doi,title,authorships,publication_year,primary_location`,
+      // Try searching with IEEE prefix
+      `https://api.openalex.org/works?search=${documentId}&filter=primary_location.source.publisher:IEEE&per_page=1&select=doi,title,authorships,publication_year,primary_location`,
+    ];
+
+    for (const searchUrl of searchQueries) {
+      const response = await fetch(searchUrl, {
+        headers: {
+          "User-Agent": "ResearchMate/1.0 (mailto:support@researchmate.app)",
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const work = data.results?.[0];
+
+        if (work && work.doi) {
+          const doi = work.doi.replace("https://doi.org/", "");
+          console.log(`✅ Found DOI via OpenAlex: ${doi}`);
+
+          return {
+            doi,
+            metadata: {
+              title: work.title,
+              authors: work.authorships
+                ?.map((a: any) => a.author?.display_name)
+                .filter(Boolean),
+              year: work.publication_year,
+              venue: work.primary_location?.source?.display_name,
+            },
+          };
+        }
+      }
+    }
+  } catch (e) {
+    console.log("OpenAlex IEEE lookup failed:", e);
+  }
+
+  // Method 2: Try Semantic Scholar with IEEE filter
+  try {
+    const ssUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=IEEE+${documentId}&fields=externalIds,title,authors,year,venue&limit=1`;
+    const response = await fetch(ssUrl, {
+      headers: { "User-Agent": "ResearchMate/1.0" },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const paper = data.data?.[0];
+
+      if (paper && paper.externalIds?.DOI) {
+        console.log(
+          `✅ Found DOI via Semantic Scholar: ${paper.externalIds.DOI}`
+        );
+        return {
+          doi: paper.externalIds.DOI,
+          metadata: {
+            title: paper.title,
+            authors: paper.authors?.map((a: any) => a.name),
+            year: paper.year,
+            venue: paper.venue,
+          },
+        };
+      }
+    }
+  } catch (e) {
+    console.log("Semantic Scholar IEEE lookup failed:", e);
+  }
+
+  // Method 3: Try common IEEE DOI patterns
+  // IEEE DOIs often follow: 10.1109/{conference}.{year}.{documentId}
+  const commonPrefixes = [
+    "10.1109/ACCESS",
+    "10.1109/TPAMI",
+    "10.1109/TIP",
+    "10.1109/CVPR",
+    "10.1109/ICCV",
+    "10.1109/ICRA",
+    "10.1109/IROS",
+  ];
+
+  for (const prefix of commonPrefixes) {
+    const testDoi = `${prefix}.${documentId}`;
+    const valid = await verifyDOI(testDoi);
+    if (valid) {
+      console.log(`✅ Found DOI via pattern matching: ${testDoi}`);
+      return { doi: testDoi, metadata: null };
+    }
+  }
+
+  console.log(`❌ Could not find DOI for IEEE document ${documentId}`);
+  return { doi: null, metadata: null };
+}
+
+// ============================================
+// PART 3: PUBMED ID LOOKUP
+// ============================================
+
+async function lookupPMID(pmid: string): Promise<{
+  doi: string | null;
+  metadata: any | null;
+}> {
+  try {
+    // PubMed E-utilities API
+    const response = await fetch(
+      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      const article = data.result?.[pmid];
+
+      if (article) {
+        // Extract DOI from article IDs
+        const doiId = article.articleids?.find(
+          (id: any) => id.idtype === "doi"
+        );
+
+        return {
+          doi: doiId?.value || null,
+          metadata: {
+            title: article.title,
+            authors: article.authors?.map((a: any) => a.name),
+            year: article.pubdate?.split(" ")?.[0],
+            venue: article.fulljournalname || article.source,
+          },
+        };
+      }
+    }
+  } catch (e) {
+    console.log("PubMed lookup failed:", e);
+  }
+
+  return { doi: null, metadata: null };
+}
+
+// ============================================
+// PART 4: DOI VERIFICATION & LOOKUP
+// ============================================
+
+async function verifyDOI(doi: string): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `https://api.crossref.org/works/${encodeURIComponent(doi)}`,
+      {
+        method: "HEAD",
+        headers: { "User-Agent": "ResearchMate/1.0" },
+      }
+    );
+    return response.ok;
   } catch {
     return false;
   }
 }
 
-// ============================================
-// PART 2: DOI EXTRACTION FROM URL/PAGE
-// ============================================
-
-function extractDOIFromURL(url: string): string | null {
-  // Pattern 1: DOI in URL path (e.g., /doi/10.1000/xyz)
-  const doiPathMatch = url.match(/\/doi\/(10\.\d{4,}\/[^\s?#]+)/i);
-  if (doiPathMatch) return doiPathMatch[1];
-
-  // Pattern 2: DOI as query parameter
-  const doiParamMatch = url.match(/[?&]doi=(10\.\d{4,}\/[^\s&#]+)/i);
-  if (doiParamMatch) return doiParamMatch[1];
-
-  // Pattern 3: doi.org URL
-  const doiOrgMatch = url.match(/doi\.org\/(10\.\d{4,}\/[^\s?#]+)/i);
-  if (doiOrgMatch) return doiOrgMatch[1];
-
-  return null;
-}
-
-function extractDOIFromHTML(html: string): string | null {
-  // Pattern 1: meta tag with DOI
-  const metaDOIMatch = html.match(
-    /<meta[^>]*name=["'](?:citation_doi|DC\.identifier|doi)["'][^>]*content=["']([^"']+)["']/i
-  );
-  if (metaDOIMatch) {
-    const doi = metaDOIMatch[1].replace(/^https?:\/\/doi\.org\//i, "");
-    if (doi.startsWith("10.")) return doi;
-  }
-
-  // Pattern 2: Reverse order meta tag
-  const metaDOIMatch2 = html.match(
-    /<meta[^>]*content=["']([^"']*10\.\d{4,}\/[^"']+)["'][^>]*name=["'](?:citation_doi|DC\.identifier|doi)["']/i
-  );
-  if (metaDOIMatch2) {
-    const doi = metaDOIMatch2[1].replace(/^https?:\/\/doi\.org\//i, "");
-    return doi;
-  }
-
-  // Pattern 3: data-doi attribute
-  const dataDOIMatch = html.match(/data-doi=["']([^"']+)["']/i);
-  if (dataDOIMatch && dataDOIMatch[1].startsWith("10.")) {
-    return dataDOIMatch[1];
-  }
-
-  // Pattern 4: DOI link in page
-  const doiLinkMatch = html.match(
-    /href=["']https?:\/\/doi\.org\/(10\.\d{4,}\/[^"']+)["']/i
-  );
-  if (doiLinkMatch) return doiLinkMatch[1];
-
-  // Pattern 5: Plain text DOI
-  const plainDOIMatch = html.match(/\bDOI:\s*(10\.\d{4,}\/[^\s<"']+)/i);
-  if (plainDOIMatch) return plainDOIMatch[1];
-
-  return null;
-}
-
-// ============================================
-// PART 3: ACADEMIC PAPER LOOKUP
-// ============================================
-
 async function lookupDOI(doi: string): Promise<any | null> {
-  // Try Semantic Scholar first (better for IEEE/CS papers)
+  // Try Semantic Scholar first (better for CS/IEEE papers)
   try {
-    const ssResponse = await fetch(
+    const response = await fetch(
       `https://api.semanticscholar.org/graph/v1/paper/DOI:${encodeURIComponent(
         doi
       )}?fields=title,authors,year,venue,publicationDate,abstract`,
       { headers: { "User-Agent": "ResearchMate/1.0" } }
     );
 
-    if (ssResponse.ok) {
-      const paper = await ssResponse.json();
-      if (paper && paper.title) {
+    if (response.ok) {
+      const paper = await response.json();
+      if (paper && paper.title && paper.authors?.length > 0) {
         console.log("✅ Found in Semantic Scholar");
         return {
           title: paper.title,
-          author: (paper.authors || []).map((a: any) => a.name).join(", "),
+          author: paper.authors.map((a: any) => a.name).join(", "),
           publishDate:
             paper.publicationDate || (paper.year ? `${paper.year}-01-01` : ""),
           siteName: paper.venue || "Academic Publication",
@@ -142,19 +390,19 @@ async function lookupDOI(doi: string): Promise<any | null> {
 
   // Try OpenAlex
   try {
-    const oaResponse = await fetch(
+    const response = await fetch(
       `https://api.openalex.org/works/doi:${encodeURIComponent(doi)}`,
       { headers: { "User-Agent": "ResearchMate/1.0" } }
     );
 
-    if (oaResponse.ok) {
-      const work = await oaResponse.json();
+    if (response.ok) {
+      const work = await response.json();
       if (work && work.title) {
         console.log("✅ Found in OpenAlex");
         return {
           title: work.title,
-          author: (work.authorships || [])
-            .map((a: any) => a.author?.display_name)
+          author: work.authorships
+            ?.map((a: any) => a.author?.display_name)
             .filter(Boolean)
             .join(", "),
           publishDate: work.publication_date || "",
@@ -172,21 +420,21 @@ async function lookupDOI(doi: string): Promise<any | null> {
 
   // Try CrossRef
   try {
-    const crResponse = await fetch(
+    const response = await fetch(
       `https://api.crossref.org/works/${encodeURIComponent(doi)}`,
       { headers: { "User-Agent": "ResearchMate/1.0" } }
     );
 
-    if (crResponse.ok) {
-      const data = await crResponse.json();
+    if (response.ok) {
+      const data = await response.json();
       const work = data.message;
       if (work && work.title) {
         console.log("✅ Found in CrossRef");
         const year = work.published?.["date-parts"]?.[0]?.[0];
         return {
           title: Array.isArray(work.title) ? work.title[0] : work.title,
-          author: (work.author || [])
-            .map((a: any) => `${a.given || ""} ${a.family || ""}`.trim())
+          author: work.author
+            ?.map((a: any) => `${a.given || ""} ${a.family || ""}`.trim())
             .join(", "),
           publishDate: year ? `${year}-01-01` : "",
           siteName:
@@ -206,10 +454,10 @@ async function lookupDOI(doi: string): Promise<any | null> {
 }
 
 // ============================================
-// PART 4: METADATA EXTRACTION FROM HTML
+// PART 5: HTML METADATA EXTRACTION (Fallback)
 // ============================================
 
-function extractMetadata(html: string, url: string) {
+function extractMetadataFromHTML(html: string, url: string) {
   const metadata = {
     title: "",
     author: "",
@@ -219,40 +467,27 @@ function extractMetadata(html: string, url: string) {
     url: url,
   };
 
-  // Title extraction (in order of preference)
-  const ogTitleMatch =
-    html.match(
-      /<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i
-    ) ||
-    html.match(
-      /<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i
-    );
-  if (ogTitleMatch) metadata.title = ogTitleMatch[1].trim();
+  // Title extraction
+  const titlePatterns = [
+    /<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i,
+    /<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i,
+    /<meta[^>]*name=["']citation_title["'][^>]*content=["']([^"']+)["']/i,
+    /<title[^>]*>([^<]+)<\/title>/i,
+  ];
 
-  if (!metadata.title) {
-    const citationTitleMatch = html.match(
-      /<meta[^>]*name=["']citation_title["'][^>]*content=["']([^"']+)["']/i
-    );
-    if (citationTitleMatch) metadata.title = citationTitleMatch[1].trim();
+  for (const pattern of titlePatterns) {
+    const match = html.match(pattern);
+    if (match && match[1].trim()) {
+      metadata.title = match[1].trim();
+      break;
+    }
   }
 
-  if (!metadata.title) {
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    if (titleMatch) metadata.title = titleMatch[1].trim();
-  }
-
-  // Site name
-  const ogSiteNameMatch = html.match(
-    /<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i
-  );
-  if (ogSiteNameMatch) metadata.siteName = ogSiteNameMatch[1].trim();
-
-  // Author extraction (multiple patterns)
+  // Author extraction
   const authorPatterns = [
     /<meta[^>]*name=["']author["'][^>]*content=["']([^"']+)["']/i,
     /<meta[^>]*name=["']citation_author["'][^>]*content=["']([^"']+)["']/i,
     /<meta[^>]*property=["']article:author["'][^>]*content=["']([^"']+)["']/i,
-    /<meta[^>]*name=["']DC\.creator["'][^>]*content=["']([^"']+)["']/i,
   ];
 
   for (const pattern of authorPatterns) {
@@ -263,7 +498,7 @@ function extractMetadata(html: string, url: string) {
     }
   }
 
-  // Multiple authors (citation_author can appear multiple times)
+  // Multiple citation_author tags
   if (!metadata.author) {
     const multiAuthorMatches = html.matchAll(
       /<meta[^>]*name=["']citation_author["'][^>]*content=["']([^"']+)["']/gi
@@ -274,12 +509,17 @@ function extractMetadata(html: string, url: string) {
     }
   }
 
+  // Site name
+  const siteMatch = html.match(
+    /<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i
+  );
+  if (siteMatch) metadata.siteName = siteMatch[1].trim();
+
   // Publish date
   const datePatterns = [
     /<meta[^>]*property=["']article:published_time["'][^>]*content=["']([^"']+)["']/i,
     /<meta[^>]*name=["']citation_publication_date["'][^>]*content=["']([^"']+)["']/i,
     /<meta[^>]*name=["']date["'][^>]*content=["']([^"']+)["']/i,
-    /<meta[^>]*name=["']DC\.date["'][^>]*content=["']([^"']+)["']/i,
   ];
 
   for (const pattern of datePatterns) {
@@ -299,8 +539,7 @@ function extractMetadata(html: string, url: string) {
   // Extract site name from URL if not found
   if (!metadata.siteName) {
     try {
-      const urlObj = new URL(url);
-      metadata.siteName = urlObj.hostname.replace("www.", "");
+      metadata.siteName = new URL(url).hostname.replace("www.", "");
     } catch {}
   }
 
@@ -308,12 +547,18 @@ function extractMetadata(html: string, url: string) {
 }
 
 // ============================================
-// PART 5: AI ENHANCEMENT
+// PART 6: AI ENHANCEMENT
 // ============================================
 
 async function enhanceWithAI(metadata: any, url: string): Promise<any> {
   if (!GEMINI_API_KEY) return metadata;
-  if (metadata.author && metadata.publishDate) return metadata;
+  if (
+    metadata.author &&
+    metadata.author !== "Unknown Author" &&
+    metadata.publishDate
+  ) {
+    return metadata;
+  }
 
   const prompt = `Analyze this webpage metadata and provide your best guess for missing citation info.
 
@@ -321,59 +566,51 @@ URL: ${url}
 Current Title: ${metadata.title}
 Current Author: ${metadata.author || "Unknown"}
 Current Site: ${metadata.siteName}
-Description: ${metadata.description}
 
-Based on common patterns for this website, provide:
-1. Author name (if it's a news site, organization, or can be inferred)
-2. Likely publish date (if not found, estimate based on content or say "n.d.")
+Provide:
+1. Author name (if organization, use that)
+2. Likely publish date (YYYY-MM-DD or "n.d.")
 
-Respond in this exact JSON format only, no other text:
-{"author": "Author Name or Organization", "publishDate": "YYYY-MM-DD or n.d.", "improvedTitle": "Cleaned up title if needed"}`;
+Respond ONLY with JSON, no other text:
+{"author": "Name", "publishDate": "YYYY-MM-DD"}`;
 
   try {
-    const aiResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 200 },
+        generationConfig: { temperature: 0.3, maxOutputTokens: 100 },
       }),
     });
 
-    if (aiResponse.ok) {
-      const aiData = await aiResponse.json();
-      const aiText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+    if (response.ok) {
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const aiResult = JSON.parse(jsonMatch[0]);
-        if (
-          aiResult.author &&
-          aiResult.author !== "Unknown" &&
-          !metadata.author
-        ) {
-          metadata.author = aiResult.author;
+        const result = JSON.parse(jsonMatch[0]);
+        if (result.author && result.author !== "Unknown" && !metadata.author) {
+          metadata.author = result.author;
         }
         if (
-          aiResult.publishDate &&
-          aiResult.publishDate !== "n.d." &&
+          result.publishDate &&
+          result.publishDate !== "n.d." &&
           !metadata.publishDate
         ) {
-          metadata.publishDate = aiResult.publishDate;
-        }
-        if (aiResult.improvedTitle && !metadata.title) {
-          metadata.title = aiResult.improvedTitle;
+          metadata.publishDate = result.publishDate;
         }
       }
     }
-  } catch (aiError) {
-    console.error("AI enhancement failed:", aiError);
+  } catch (e) {
+    console.log("AI enhancement failed:", e);
   }
 
   return metadata;
 }
 
 // ============================================
-// PART 6: MAIN HANDLER
+// PART 7: MAIN HANDLER
 // ============================================
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -406,16 +643,80 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const urlString = validUrl.toString();
+    console.log(`\n========================================`);
     console.log(`Processing URL: ${urlString}`);
 
-    // Check if it's an academic site
-    const isAcademic = isAcademicSite(urlString);
-    console.log(`Is academic site: ${isAcademic}`);
+    // STEP 1: Try to extract DOI from URL pattern
+    const extraction = extractDOIFromURLPatterns(urlString);
+    console.log(`URL pattern extraction: ${JSON.stringify(extraction)}`);
 
-    // First, try to extract DOI from URL directly
-    let doi = extractDOIFromURL(urlString);
+    let doi: string | null = extraction.doi;
+    let preloadedMetadata: any = null;
 
-    // Fetch the webpage
+    // STEP 2: Handle special lookups (IEEE, PubMed, etc.)
+    if (extraction.needsLookup) {
+      console.log(
+        `Performing ${extraction.lookupType} lookup for: ${extraction.lookupId}`
+      );
+
+      if (extraction.lookupType === "ieee") {
+        const result = await lookupIEEEDocument(extraction.lookupId!);
+        doi = result.doi;
+        preloadedMetadata = result.metadata;
+      } else if (extraction.lookupType === "pmid") {
+        const result = await lookupPMID(extraction.lookupId!);
+        doi = result.doi;
+        preloadedMetadata = result.metadata;
+      }
+    }
+
+    // STEP 3: If we have a DOI, look up full metadata from academic APIs
+    if (doi) {
+      console.log(`Looking up DOI: ${doi}`);
+      const academicData = await lookupDOI(doi);
+
+      if (academicData && academicData.author) {
+        console.log(`✅ SUCCESS: Found full citation data`);
+        return res.status(200).json({
+          success: true,
+          metadata: {
+            ...academicData,
+            url: urlString,
+            accessDate: new Date().toISOString(),
+          },
+          source: "academic_database",
+          doi: doi,
+          message: `Found via ${extraction.source} + academic database lookup`,
+        });
+      }
+    }
+
+    // STEP 4: If we have preloaded metadata from lookup, use that
+    if (preloadedMetadata && preloadedMetadata.authors?.length > 0) {
+      console.log(
+        `Using preloaded metadata from ${extraction.lookupType} lookup`
+      );
+      return res.status(200).json({
+        success: true,
+        metadata: {
+          title: preloadedMetadata.title,
+          author: preloadedMetadata.authors.join(", "),
+          publishDate: preloadedMetadata.year
+            ? `${preloadedMetadata.year}-01-01`
+            : "",
+          siteName: preloadedMetadata.venue || extraction.source,
+          description: "",
+          url: urlString,
+          accessDate: new Date().toISOString(),
+        },
+        source: extraction.lookupType,
+        doi: doi,
+        message: `Found via ${extraction.lookupType} database search`,
+      });
+    }
+
+    // STEP 5: Fallback to HTML scraping (for non-academic or unblocked sites)
+    console.log("Falling back to HTML metadata extraction...");
     let html = "";
     try {
       const response = await fetch(urlString, {
@@ -429,73 +730,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (response.ok) {
         html = await response.text();
-
-        // Try to extract DOI from HTML if not found in URL
-        if (!doi) {
-          doi = extractDOIFromHTML(html);
-        }
+      } else {
+        console.log(`Fetch failed with status: ${response.status}`);
       }
-    } catch (fetchError) {
-      console.log("Failed to fetch page:", fetchError);
+    } catch (e) {
+      console.log("Failed to fetch page:", e);
     }
 
-    // If we found a DOI (from URL or page), try academic database lookup
-    if (doi) {
-      console.log(`Found DOI: ${doi}`);
-      const academicData = await lookupDOI(doi);
-
-      if (academicData && academicData.author) {
-        console.log("✅ Using academic database data");
+    if (!html) {
+      // Can't fetch the page - return partial data if we have any
+      if (preloadedMetadata) {
         return res.status(200).json({
           success: true,
           metadata: {
-            ...academicData,
+            title: preloadedMetadata.title || "Unknown Title",
+            author: preloadedMetadata.authors?.join(", ") || "Unknown Author",
+            publishDate: preloadedMetadata.year
+              ? `${preloadedMetadata.year}-01-01`
+              : "",
+            siteName: preloadedMetadata.venue || extraction.source,
             url: urlString,
             accessDate: new Date().toISOString(),
           },
-          source: "academic_database",
-          doi: doi,
-          message: "Extracted from academic database using DOI",
+          source: "partial_lookup",
+          warning: "Could not fetch full page data",
         });
       }
-    }
 
-    // Fallback to HTML metadata extraction
-    if (!html) {
       return res.status(400).json({
-        error: `Failed to fetch URL. The site may be blocking automated requests.`,
-        suggestion: isAcademic
-          ? "Try entering the DOI directly (e.g., 10.1109/xxx.2021.xxx)"
-          : undefined,
+        error:
+          "Could not fetch URL. The site may be blocking automated requests.",
+        suggestion:
+          "Try entering the DOI directly (e.g., 10.1109/xxx.2021.xxx)",
       });
     }
 
-    let metadata = extractMetadata(html, urlString);
+    // STEP 6: Extract metadata from HTML
+    let metadata = extractMetadataFromHTML(html, urlString);
 
-    // AI enhancement if requested
-    if (
-      useAI &&
-      GEMINI_API_KEY &&
-      (!metadata.author || !metadata.publishDate)
-    ) {
+    // STEP 7: AI enhancement if requested
+    if (useAI && (!metadata.author || !metadata.publishDate)) {
       metadata = await enhanceWithAI(metadata, urlString);
     }
 
     // Clean up title
     metadata.title = metadata.title.replace(/\s*[-|–—]\s*[^-|–—]+$/, "").trim();
-    const accessDate = new Date().toISOString();
 
     return res.status(200).json({
       success: true,
-      metadata: { ...metadata, accessDate },
+      metadata: {
+        ...metadata,
+        accessDate: new Date().toISOString(),
+      },
       source: "html_metadata",
       message: useAI
         ? "Extracted with AI enhancement"
         : "Extracted from page metadata",
-      suggestion:
-        isAcademic && !metadata.author
-          ? "For better results with academic papers, try entering the DOI directly"
-          : undefined,
     });
   } catch (error) {
     console.error("Extract citation error:", error);
