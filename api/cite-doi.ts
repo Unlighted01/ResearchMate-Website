@@ -1,5 +1,6 @@
 // ============================================
-// CITE-DOI - Academic Paper Citation via CrossRef API
+// CITE-DOI - Academic Paper Citation
+// With Semantic Scholar + OpenAlex Fallbacks
 // Vercel Serverless Function
 // ============================================
 
@@ -30,6 +31,7 @@ interface PaperData {
   url: string;
   abstract: string;
   type: string;
+  venue: string;
 }
 
 // ============================================
@@ -80,10 +82,10 @@ function getDateParts(published: any): {
 }
 
 // ============================================
-// PART 3: CROSSREF API
+// PART 3: CROSSREF API (Primary)
 // ============================================
 
-async function lookupDOI(doi: string): Promise<PaperData | null> {
+async function lookupCrossRef(doi: string): Promise<PaperData | null> {
   try {
     const response = await fetch(
       `https://api.crossref.org/works/${encodeURIComponent(doi)}`,
@@ -95,7 +97,7 @@ async function lookupDOI(doi: string): Promise<PaperData | null> {
     );
 
     if (!response.ok) {
-      console.error(`CrossRef API error: ${response.status}`);
+      console.log(`CrossRef: ${response.status} for ${doi}`);
       return null;
     }
 
@@ -127,6 +129,7 @@ async function lookupDOI(doi: string): Promise<PaperData | null> {
       url: work.URL || `https://doi.org/${doi}`,
       abstract: work.abstract || "",
       type: work.type || "article",
+      venue: work["container-title"]?.[0] || "",
     };
   } catch (error) {
     console.error("CrossRef lookup failed:", error);
@@ -135,10 +138,153 @@ async function lookupDOI(doi: string): Promise<PaperData | null> {
 }
 
 // ============================================
-// PART 4: DATACITE FALLBACK
+// PART 4: SEMANTIC SCHOLAR API (Fallback 1)
+// Best for CS, AI, ML papers
 // ============================================
 
-async function dataCiteLookup(doi: string): Promise<PaperData | null> {
+async function lookupSemanticScholar(doi: string): Promise<PaperData | null> {
+  try {
+    const response = await fetch(
+      `https://api.semanticscholar.org/graph/v1/paper/DOI:${encodeURIComponent(
+        doi
+      )}?fields=title,authors,year,venue,publicationDate,abstract,externalIds,publicationVenue`,
+      {
+        headers: {
+          "User-Agent": "ResearchMate/1.0",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.log(`Semantic Scholar: ${response.status} for ${doi}`);
+      return null;
+    }
+
+    const paper = await response.json();
+
+    if (!paper || !paper.title) return null;
+
+    // Parse authors from Semantic Scholar format
+    const authors: Author[] = (paper.authors || []).map((a: any) => {
+      const nameParts = (a.name || "").split(" ");
+      const lastName = nameParts.pop() || "";
+      const firstName = nameParts.join(" ");
+      return {
+        firstName,
+        lastName,
+        fullName: a.name || "Unknown Author",
+      };
+    });
+
+    // Parse publication date
+    let publishYear = paper.year?.toString() || "n.d.";
+    let publishMonth = "";
+    let publishDay = "";
+
+    if (paper.publicationDate) {
+      const dateParts = paper.publicationDate.split("-");
+      publishYear = dateParts[0] || publishYear;
+      publishMonth = dateParts[1] || "";
+      publishDay = dateParts[2] || "";
+    }
+
+    return {
+      title: paper.title,
+      authors,
+      journal: paper.venue || paper.publicationVenue?.name || "",
+      publisher: paper.publicationVenue?.publisher || "",
+      publishYear,
+      publishMonth,
+      publishDay,
+      volume: "",
+      issue: "",
+      pages: "",
+      doi: paper.externalIds?.DOI || doi,
+      url: `https://doi.org/${doi}`,
+      abstract: paper.abstract || "",
+      type: "article",
+      venue: paper.venue || "",
+    };
+  } catch (error) {
+    console.error("Semantic Scholar lookup failed:", error);
+    return null;
+  }
+}
+
+// ============================================
+// PART 5: OPENALEX API (Fallback 2)
+// Comprehensive coverage
+// ============================================
+
+async function lookupOpenAlex(doi: string): Promise<PaperData | null> {
+  try {
+    const response = await fetch(
+      `https://api.openalex.org/works/doi:${encodeURIComponent(doi)}`,
+      {
+        headers: {
+          "User-Agent": "ResearchMate/1.0 (mailto:support@researchmate.app)",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.log(`OpenAlex: ${response.status} for ${doi}`);
+      return null;
+    }
+
+    const work = await response.json();
+
+    if (!work || !work.title) return null;
+
+    // Parse authors from OpenAlex format
+    const authors: Author[] = (work.authorships || []).map((a: any) => {
+      const displayName = a.author?.display_name || "";
+      const nameParts = displayName.split(" ");
+      const lastName = nameParts.pop() || "";
+      const firstName = nameParts.join(" ");
+      return {
+        firstName,
+        lastName,
+        fullName: displayName || "Unknown Author",
+      };
+    });
+
+    // Parse publication date
+    const pubDate = work.publication_date || "";
+    const dateParts = pubDate.split("-");
+
+    return {
+      title: work.title,
+      authors,
+      journal: work.primary_location?.source?.display_name || "",
+      publisher: work.primary_location?.source?.host_organization_name || "",
+      publishYear: dateParts[0] || work.publication_year?.toString() || "n.d.",
+      publishMonth: dateParts[1] || "",
+      publishDay: dateParts[2] || "",
+      volume: work.biblio?.volume || "",
+      issue: work.biblio?.issue || "",
+      pages:
+        work.biblio?.first_page && work.biblio?.last_page
+          ? `${work.biblio.first_page}-${work.biblio.last_page}`
+          : work.biblio?.first_page || "",
+      doi: work.doi?.replace("https://doi.org/", "") || doi,
+      url: work.doi || `https://doi.org/${doi}`,
+      abstract: "",
+      type: work.type || "article",
+      venue: work.primary_location?.source?.display_name || "",
+    };
+  } catch (error) {
+    console.error("OpenAlex lookup failed:", error);
+    return null;
+  }
+}
+
+// ============================================
+// PART 6: DATACITE API (Fallback 3)
+// For datasets and some papers
+// ============================================
+
+async function lookupDataCite(doi: string): Promise<PaperData | null> {
   try {
     const response = await fetch(
       `https://api.datacite.org/dois/${encodeURIComponent(doi)}`
@@ -175,6 +321,7 @@ async function dataCiteLookup(doi: string): Promise<PaperData | null> {
       url: `https://doi.org/${doi}`,
       abstract: attributes.descriptions?.[0]?.description || "",
       type: attributes.types?.resourceTypeGeneral || "dataset",
+      venue: "",
     };
   } catch (error) {
     console.error("DataCite lookup failed:", error);
@@ -183,7 +330,7 @@ async function dataCiteLookup(doi: string): Promise<PaperData | null> {
 }
 
 // ============================================
-// PART 5: MAIN HANDLER
+// PART 7: MAIN HANDLER WITH FALLBACK CHAIN
 // ============================================
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -216,19 +363,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Try CrossRef first
-    let paperData = await lookupDOI(cleanedDOI);
+    console.log(`Looking up DOI: ${cleanedDOI}`);
 
-    // Fallback to DataCite
-    if (!paperData) {
-      console.log("CrossRef failed, trying DataCite...");
-      paperData = await dataCiteLookup(cleanedDOI);
+    // Try each API in order until one succeeds
+    let paperData: PaperData | null = null;
+    let source = "";
+
+    // 1. Try CrossRef first (most comprehensive metadata)
+    paperData = await lookupCrossRef(cleanedDOI);
+    if (paperData && paperData.authors.length > 0) {
+      source = "CrossRef";
+      console.log("✅ Found in CrossRef");
+    }
+
+    // 2. Try Semantic Scholar (great for CS/AI papers)
+    if (!paperData || paperData.authors.length === 0) {
+      console.log("Trying Semantic Scholar...");
+      const ssData = await lookupSemanticScholar(cleanedDOI);
+      if (ssData && ssData.authors.length > 0) {
+        paperData = ssData;
+        source = "Semantic Scholar";
+        console.log("✅ Found in Semantic Scholar");
+      }
+    }
+
+    // 3. Try OpenAlex (very comprehensive)
+    if (!paperData || paperData.authors.length === 0) {
+      console.log("Trying OpenAlex...");
+      const oaData = await lookupOpenAlex(cleanedDOI);
+      if (oaData && oaData.authors.length > 0) {
+        paperData = oaData;
+        source = "OpenAlex";
+        console.log("✅ Found in OpenAlex");
+      }
+    }
+
+    // 4. Try DataCite (for datasets and some papers)
+    if (!paperData || paperData.authors.length === 0) {
+      console.log("Trying DataCite...");
+      const dcData = await lookupDataCite(cleanedDOI);
+      if (dcData && dcData.authors.length > 0) {
+        paperData = dcData;
+        source = "DataCite";
+        console.log("✅ Found in DataCite");
+      }
     }
 
     if (!paperData) {
       return res.status(404).json({
-        error: "DOI not found. Please check the DOI and try again.",
+        error:
+          "DOI not found in any academic database. The paper may be too new or not indexed.",
         doi: cleanedDOI,
+        triedSources: ["CrossRef", "Semantic Scholar", "OpenAlex", "DataCite"],
       });
     }
 
@@ -236,6 +422,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       type: "academic",
       data: paperData,
+      source,
     });
   } catch (error) {
     console.error("DOI citation error:", error);
