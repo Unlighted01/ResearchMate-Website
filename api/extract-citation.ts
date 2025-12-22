@@ -10,6 +10,21 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
+// Safe JSON parsing helper
+async function safeJsonParse(response: Response): Promise<any | null> {
+  try {
+    const text = await response.text();
+    if (!text || text.trim() === "") {
+      console.log("Empty response body");
+      return null;
+    }
+    return JSON.parse(text);
+  } catch (e) {
+    console.log("JSON parse error:", e);
+    return null;
+  }
+}
+
 // ============================================
 // PART 1: URL PATTERN DOI EXTRACTION
 // No fetch required - just parse the URL!
@@ -200,31 +215,65 @@ async function lookupIEEEDocument(documentId: string): Promise<{
 }> {
   console.log(`Looking up IEEE document: ${documentId}`);
 
-  // Method 1: Search OpenAlex for IEEE document
+  // Method 1: Search CrossRef for IEEE papers with this document ID in DOI
+  // IEEE DOIs contain the document ID, e.g., 10.1109/SLAAI-ICAI54477.2021.9664714
   try {
-    // OpenAlex indexes IEEE papers - search by external ID patterns
-    const searchQueries = [
-      // Try direct IEEE document ID search
-      `https://api.openalex.org/works?filter=ids.mag:${documentId}&select=doi,title,authorships,publication_year,primary_location`,
-      // Try searching with IEEE prefix
-      `https://api.openalex.org/works?search=${documentId}&filter=primary_location.source.publisher:IEEE&per_page=1&select=doi,title,authorships,publication_year,primary_location`,
-    ];
+    const crUrl = `https://api.crossref.org/works?query=${documentId}&filter=member:263&rows=5`;
+    const response = await fetch(crUrl, {
+      headers: {
+        "User-Agent": "ResearchMate/1.0 (mailto:support@researchmate.app)",
+      },
+    });
 
-    for (const searchUrl of searchQueries) {
-      const response = await fetch(searchUrl, {
-        headers: {
-          "User-Agent": "ResearchMate/1.0 (mailto:support@researchmate.app)",
-        },
-      });
+    if (response.ok) {
+      const data = await safeJsonParse(response);
+      const works = data?.message?.items || [];
 
-      if (response.ok) {
-        const data = await response.json();
-        const work = data.results?.[0];
+      // Find the work whose DOI contains this document ID
+      for (const work of works) {
+        if (work.DOI && work.DOI.includes(documentId)) {
+          console.log(`✅ Found DOI via CrossRef: ${work.DOI}`);
+          const dateParts = work.published?.["date-parts"]?.[0];
+          return {
+            doi: work.DOI,
+            metadata: {
+              title: Array.isArray(work.title) ? work.title[0] : work.title,
+              authors: work.author?.map((a: any) =>
+                `${a.given || ""} ${a.family || ""}`.trim()
+              ),
+              year: dateParts?.[0]?.toString(),
+              venue: work["container-title"]?.[0] || "IEEE",
+            },
+          };
+        }
+      }
+    }
+  } catch (e) {
+    console.log("CrossRef IEEE lookup failed:", e);
+  }
 
-        if (work && work.doi) {
+  // Method 2: Search OpenAlex with document ID
+  try {
+    const oaUrl = `https://api.openalex.org/works?search=${documentId}&filter=authorships.institutions.country_code:US|authorships.institutions.country_code:CN|authorships.institutions.country_code:GB,primary_location.source.type:journal|primary_location.source.type:conference&per_page=5`;
+    const response = await fetch(oaUrl, {
+      headers: {
+        "User-Agent": "ResearchMate/1.0 (mailto:support@researchmate.app)",
+      },
+    });
+
+    if (response.ok) {
+      const data = await safeJsonParse(response);
+      const works = data?.results || [];
+
+      for (const work of works) {
+        // Check if DOI contains IEEE prefix and document ID
+        if (
+          work.doi &&
+          work.doi.includes("10.1109") &&
+          work.doi.includes(documentId)
+        ) {
           const doi = work.doi.replace("https://doi.org/", "");
           console.log(`✅ Found DOI via OpenAlex: ${doi}`);
-
           return {
             doi,
             metadata: {
@@ -243,55 +292,43 @@ async function lookupIEEEDocument(documentId: string): Promise<{
     console.log("OpenAlex IEEE lookup failed:", e);
   }
 
-  // Method 2: Try Semantic Scholar with IEEE filter
+  // Method 3: Direct DOI construction - IEEE DOIs always end with the document ID
+  // Try to find any DOI ending with this document ID from CrossRef
   try {
-    const ssUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=IEEE+${documentId}&fields=externalIds,title,authors,year,venue&limit=1`;
-    const response = await fetch(ssUrl, {
-      headers: { "User-Agent": "ResearchMate/1.0" },
+    const searchUrl = `https://api.crossref.org/works?query.bibliographic=${documentId}&filter=prefix:10.1109&rows=3`;
+    const response = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": "ResearchMate/1.0 (mailto:support@researchmate.app)",
+      },
     });
 
     if (response.ok) {
-      const data = await response.json();
-      const paper = data.data?.[0];
+      const data = await safeJsonParse(response);
+      const works = data?.message?.items || [];
 
-      if (paper && paper.externalIds?.DOI) {
-        console.log(
-          `✅ Found DOI via Semantic Scholar: ${paper.externalIds.DOI}`
-        );
-        return {
-          doi: paper.externalIds.DOI,
-          metadata: {
-            title: paper.title,
-            authors: paper.authors?.map((a: any) => a.name),
-            year: paper.year,
-            venue: paper.venue,
-          },
-        };
+      for (const work of works) {
+        // IEEE DOIs end with the document ID
+        if (work.DOI && work.DOI.endsWith(documentId)) {
+          console.log(
+            `✅ Found DOI via CrossRef bibliographic search: ${work.DOI}`
+          );
+          const dateParts = work.published?.["date-parts"]?.[0];
+          return {
+            doi: work.DOI,
+            metadata: {
+              title: Array.isArray(work.title) ? work.title[0] : work.title,
+              authors: work.author?.map((a: any) =>
+                `${a.given || ""} ${a.family || ""}`.trim()
+              ),
+              year: dateParts?.[0]?.toString(),
+              venue: work["container-title"]?.[0] || "IEEE",
+            },
+          };
+        }
       }
     }
   } catch (e) {
-    console.log("Semantic Scholar IEEE lookup failed:", e);
-  }
-
-  // Method 3: Try common IEEE DOI patterns
-  // IEEE DOIs often follow: 10.1109/{conference}.{year}.{documentId}
-  const commonPrefixes = [
-    "10.1109/ACCESS",
-    "10.1109/TPAMI",
-    "10.1109/TIP",
-    "10.1109/CVPR",
-    "10.1109/ICCV",
-    "10.1109/ICRA",
-    "10.1109/IROS",
-  ];
-
-  for (const prefix of commonPrefixes) {
-    const testDoi = `${prefix}.${documentId}`;
-    const valid = await verifyDOI(testDoi);
-    if (valid) {
-      console.log(`✅ Found DOI via pattern matching: ${testDoi}`);
-      return { doi: testDoi, metadata: null };
-    }
+    console.log("CrossRef bibliographic search failed:", e);
   }
 
   console.log(`❌ Could not find DOI for IEEE document ${documentId}`);
@@ -313,8 +350,8 @@ async function lookupPMID(pmid: string): Promise<{
     );
 
     if (response.ok) {
-      const data = await response.json();
-      const article = data.result?.[pmid];
+      const data = await safeJsonParse(response);
+      const article = data?.result?.[pmid];
 
       if (article) {
         // Extract DOI from article IDs
@@ -370,7 +407,7 @@ async function lookupDOI(doi: string): Promise<any | null> {
     );
 
     if (response.ok) {
-      const paper = await response.json();
+      const paper = await safeJsonParse(response);
       if (paper && paper.title && paper.authors?.length > 0) {
         console.log("✅ Found in Semantic Scholar");
         return {
@@ -396,7 +433,7 @@ async function lookupDOI(doi: string): Promise<any | null> {
     );
 
     if (response.ok) {
-      const work = await response.json();
+      const work = await safeJsonParse(response);
       if (work && work.title) {
         console.log("✅ Found in OpenAlex");
         return {
@@ -426,8 +463,8 @@ async function lookupDOI(doi: string): Promise<any | null> {
     );
 
     if (response.ok) {
-      const data = await response.json();
-      const work = data.message;
+      const data = await safeJsonParse(response);
+      const work = data?.message;
       if (work && work.title) {
         console.log("✅ Found in CrossRef");
         const year = work.published?.["date-parts"]?.[0]?.[0];
@@ -585,8 +622,8 @@ Respond ONLY with JSON, no other text:
     });
 
     if (response.ok) {
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const data = await safeJsonParse(response);
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const result = JSON.parse(jsonMatch[0]);
