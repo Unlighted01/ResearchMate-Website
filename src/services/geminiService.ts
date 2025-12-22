@@ -8,23 +8,9 @@
 
 /**
  * API Configuration
- * Uses Vercel Functions in production, localhost in development
+ * Uses Vercel Functions exclusively - no backend server needed
  */
-const getApiBaseUrl = (): string => {
-  // Check if we're on Vercel (production)
-  const isVercel =
-    window.location.hostname.includes("vercel.app") ||
-    window.location.hostname.includes("researchmate");
-
-  if (isVercel) {
-    return "/api";
-  }
-
-  // Local development
-  return "http://localhost:3001/api";
-};
-
-const API_BASE_URL = getApiBaseUrl();
+const API_BASE_URL = "/api";
 
 export const CONFIG = {
   USE_REAL_API: true,

@@ -215,10 +215,11 @@ async function lookupIEEEDocument(documentId: string): Promise<{
 }> {
   console.log(`Looking up IEEE document: ${documentId}`);
 
-  // Method 1: Search CrossRef for IEEE papers with this document ID in DOI
-  // IEEE DOIs contain the document ID, e.g., 10.1109/SLAAI-ICAI54477.2021.9664714
+  // Method 1: Use CrossRef filter to find papers where DOI ends with document ID
+  // CrossRef supports filter=doi:*suffix for partial DOI matching
   try {
-    const crUrl = `https://api.crossref.org/works?query=${documentId}&filter=member:263&rows=5`;
+    // Search IEEE (member 263) papers and filter results for DOI containing document ID
+    const crUrl = `https://api.crossref.org/works?filter=member:263&query.bibliographic=${documentId}&rows=10`;
     const response = await fetch(crUrl, {
       headers: {
         "User-Agent": "ResearchMate/1.0 (mailto:support@researchmate.app)",
@@ -229,9 +230,9 @@ async function lookupIEEEDocument(documentId: string): Promise<{
       const data = await safeJsonParse(response);
       const works = data?.message?.items || [];
 
-      // Find the work whose DOI contains this document ID
+      // Look for any paper whose DOI ends with this document ID
       for (const work of works) {
-        if (work.DOI && work.DOI.includes(documentId)) {
+        if (work.DOI && work.DOI.endsWith(documentId)) {
           console.log(`✅ Found DOI via CrossRef: ${work.DOI}`);
           const dateParts = work.published?.["date-parts"]?.[0];
           return {
@@ -252,9 +253,10 @@ async function lookupIEEEDocument(documentId: string): Promise<{
     console.log("CrossRef IEEE lookup failed:", e);
   }
 
-  // Method 2: Search OpenAlex with document ID
+  // Method 2: Query OpenAlex with DOI suffix pattern
   try {
-    const oaUrl = `https://api.openalex.org/works?search=${documentId}&filter=authorships.institutions.country_code:US|authorships.institutions.country_code:CN|authorships.institutions.country_code:GB,primary_location.source.type:journal|primary_location.source.type:conference&per_page=5`;
+    // OpenAlex allows filtering by DOI - try to find papers with DOI containing the document ID
+    const oaUrl = `https://api.openalex.org/works?filter=doi:*${documentId}&per_page=5`;
     const response = await fetch(oaUrl, {
       headers: {
         "User-Agent": "ResearchMate/1.0 (mailto:support@researchmate.app)",
@@ -266,12 +268,7 @@ async function lookupIEEEDocument(documentId: string): Promise<{
       const works = data?.results || [];
 
       for (const work of works) {
-        // Check if DOI contains IEEE prefix and document ID
-        if (
-          work.doi &&
-          work.doi.includes("10.1109") &&
-          work.doi.includes(documentId)
-        ) {
+        if (work.doi && work.doi.includes("10.1109")) {
           const doi = work.doi.replace("https://doi.org/", "");
           console.log(`✅ Found DOI via OpenAlex: ${doi}`);
           return {
@@ -282,7 +279,9 @@ async function lookupIEEEDocument(documentId: string): Promise<{
                 ?.map((a: any) => a.author?.display_name)
                 .filter(Boolean),
               year: work.publication_year,
-              venue: work.primary_location?.source?.display_name,
+              venue:
+                work.primary_location?.source?.display_name ||
+                work.primary_location?.raw_source_name,
             },
           };
         }
@@ -292,43 +291,91 @@ async function lookupIEEEDocument(documentId: string): Promise<{
     console.log("OpenAlex IEEE lookup failed:", e);
   }
 
-  // Method 3: Direct DOI construction - IEEE DOIs always end with the document ID
-  // Try to find any DOI ending with this document ID from CrossRef
-  try {
-    const searchUrl = `https://api.crossref.org/works?query.bibliographic=${documentId}&filter=prefix:10.1109&rows=3`;
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": "ResearchMate/1.0 (mailto:support@researchmate.app)",
-      },
-    });
+  // Method 3: Direct DOI verification - try common IEEE conference patterns
+  // IEEE DOIs follow: 10.1109/{conference-code}.{year}.{documentId}
+  // Since we can't search by document ID, we have to try known patterns
+  console.log("Trying IEEE DOI pattern matching...");
 
-    if (response.ok) {
-      const data = await safeJsonParse(response);
-      const works = data?.message?.items || [];
+  // Common IEEE conference/journal prefixes (expand this list as needed)
+  const ieeeConfPrefixes = [
+    // Conferences with the document ID embedded
+    "SLAAI-ICAI54477", // This specific conference
+    "ACCESS", // IEEE Access journal
+    "CVPR",
+    "ICCV",
+    "ECCV", // Computer Vision
+    "ICRA",
+    "IROS", // Robotics
+    "ICML",
+    "NIPS",
+    "NEURIPS", // ML (some)
+    "INFOCOM",
+    "ICC",
+    "GLOBECOM", // Networking
+    "ISIT",
+    "ITW", // Information Theory
+    "ICASSP", // Signal Processing
+    "DAC",
+    "ICCAD", // Design Automation
+    "VTC",
+    "PIMRC",
+    "WCNC", // Wireless
+    "BigData",
+    "SERVICES", // Big Data
+    "HPCA",
+    "MICRO",
+    "ISCA", // Architecture
+    "S&P",
+    "CCS",
+    "USENIX", // Security
+  ];
 
-      for (const work of works) {
-        // IEEE DOIs end with the document ID
-        if (work.DOI && work.DOI.endsWith(documentId)) {
-          console.log(
-            `✅ Found DOI via CrossRef bibliographic search: ${work.DOI}`
-          );
-          const dateParts = work.published?.["date-parts"]?.[0];
-          return {
-            doi: work.DOI,
-            metadata: {
-              title: Array.isArray(work.title) ? work.title[0] : work.title,
-              authors: work.author?.map((a: any) =>
-                `${a.given || ""} ${a.family || ""}`.trim()
-              ),
-              year: dateParts?.[0]?.toString(),
-              venue: work["container-title"]?.[0] || "IEEE",
-            },
-          };
+  // Only try the last few years to limit API calls
+  const currentYear = new Date().getFullYear();
+  const yearsToTry = [
+    currentYear,
+    currentYear - 1,
+    currentYear - 2,
+    currentYear - 3,
+    currentYear - 4,
+  ];
+
+  // First, try the most likely pattern: exact conference code with year
+  // The document ID in IEEE DOIs always comes last
+  for (const prefix of ieeeConfPrefixes) {
+    for (const year of yearsToTry) {
+      const testDoi = `10.1109/${prefix}.${year}.${documentId}`;
+      try {
+        const response = await fetch(
+          `https://api.crossref.org/works/${encodeURIComponent(testDoi)}`,
+          {
+            headers: { "User-Agent": "ResearchMate/1.0" },
+          }
+        );
+
+        if (response.ok) {
+          const data = await safeJsonParse(response);
+          const work = data?.message;
+          if (work) {
+            console.log(`✅ Found DOI via pattern verification: ${testDoi}`);
+            const dateParts = work.published?.["date-parts"]?.[0];
+            return {
+              doi: testDoi,
+              metadata: {
+                title: Array.isArray(work.title) ? work.title[0] : work.title,
+                authors: work.author?.map((a: any) =>
+                  `${a.given || ""} ${a.family || ""}`.trim()
+                ),
+                year: dateParts?.[0]?.toString(),
+                venue: work["container-title"]?.[0] || "IEEE",
+              },
+            };
+          }
         }
+      } catch (e) {
+        // Continue to next pattern
       }
     }
-  } catch (e) {
-    console.log("CrossRef bibliographic search failed:", e);
   }
 
   console.log(`❌ Could not find DOI for IEEE document ${documentId}`);

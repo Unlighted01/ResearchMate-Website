@@ -63,29 +63,8 @@ interface AICitationExtractorProps {
 // PART 2: API URL CONFIGURATION
 // ============================================
 
-const getApiBaseUrl = (): string => {
-  if (typeof window === "undefined") return "/api";
-
-  const hostname = window.location.hostname;
-
-  // Local development - use localhost backend
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    // Check if we're on a Vite dev server (usually 3000 or 5173)
-    // In this case, we need to use the production API or a local backend
-    const port = window.location.port;
-    if (port === "3000" || port === "5173") {
-      // Use production API for local testing (or set up local backend)
-      // For now, use relative path and hope it works, or use production
-      return "/api"; // This will fail locally but work on Vercel
-    }
-    return "http://localhost:3001/api";
-  }
-
-  // Production - use relative path
-  return "/api";
-};
-
-const API_BASE_URL = getApiBaseUrl();
+// API Base URL - Always use /api since we use Vercel serverless functions
+const API_BASE_URL = "/api";
 
 // ============================================
 // PART 3: CLIENT-SIDE TYPE DETECTION
