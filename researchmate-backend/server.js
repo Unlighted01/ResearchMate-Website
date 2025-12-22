@@ -249,26 +249,90 @@ function extractMetadata(html, url) {
     url: url,
   };
 
+  // ============================================
+  // IEEE XPLORE SPECIFIC EXTRACTION
+  // ============================================
+  if (url.includes('ieeexplore.ieee.org')) {
+    // Extract from JSON-LD structured data (IEEE uses this)
+    const jsonLdMatch = html.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
+    if (jsonLdMatch) {
+      try {
+        const jsonData = JSON.parse(jsonLdMatch[1]);
+        if (jsonData.author) {
+          // Handle single author or array of authors
+          if (Array.isArray(jsonData.author)) {
+            metadata.author = jsonData.author
+              .map(a => (typeof a === 'object' ? a.name : a))
+              .join(', ');
+          } else if (typeof jsonData.author === 'object') {
+            metadata.author = jsonData.author.name;
+          } else {
+            metadata.author = jsonData.author;
+          }
+        }
+        if (jsonData.datePublished) metadata.publishDate = jsonData.datePublished;
+        if (jsonData.headline) metadata.title = jsonData.headline;
+        if (jsonData.publisher && jsonData.publisher.name) {
+          metadata.siteName = jsonData.publisher.name;
+        }
+      } catch (e) {
+        console.log('Failed to parse IEEE JSON-LD:', e.message);
+      }
+    }
+
+    // IEEE specific meta tags
+    const ieeeAuthorMatch = html.match(/<meta name="citation_author"[^>]*content=["']([^"']+)["']/gi);
+    if (ieeeAuthorMatch && !metadata.author) {
+      // Extract all authors from citation_author tags
+      const authors = ieeeAuthorMatch.map(match => {
+        const contentMatch = match.match(/content=["']([^"']+)["']/i);
+        return contentMatch ? contentMatch[1] : '';
+      }).filter(Boolean);
+      metadata.author = authors.join('; ');
+    }
+
+    // IEEE citation_title
+    const ieeeTitleMatch = html.match(/<meta name="citation_title"[^>]*content=["']([^"']+)["']/i);
+    if (ieeeTitleMatch && !metadata.title) {
+      metadata.title = ieeeTitleMatch[1].trim();
+    }
+
+    // IEEE publication date
+    const ieeeDateMatch = html.match(/<meta name="citation_publication_date"[^>]*content=["']([^"']+)["']/i);
+    if (ieeeDateMatch && !metadata.publishDate) {
+      metadata.publishDate = ieeeDateMatch[1].trim();
+    }
+
+    // Set site name for IEEE
+    if (!metadata.siteName) {
+      metadata.siteName = 'IEEE Xplore';
+    }
+  }
+
+  // ============================================
+  // STANDARD METADATA EXTRACTION
+  // ============================================
+
   // Extract title
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  if (titleMatch) metadata.title = titleMatch[1].trim();
+  if (titleMatch && !metadata.title) metadata.title = titleMatch[1].trim();
 
   // Extract Open Graph tags
   const ogTitleMatch = html.match(
     /<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i
   );
-  if (ogTitleMatch) metadata.title = ogTitleMatch[1].trim();
+  if (ogTitleMatch && !metadata.title) metadata.title = ogTitleMatch[1].trim();
 
   const ogSiteNameMatch = html.match(
     /<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i
   );
-  if (ogSiteNameMatch) metadata.siteName = ogSiteNameMatch[1].trim();
+  if (ogSiteNameMatch && !metadata.siteName) metadata.siteName = ogSiteNameMatch[1].trim();
 
   // Extract author
   const authorMatch = html.match(
     /<meta[^>]*name=["']author["'][^>]*content=["']([^"']+)["']/i
   );
-  if (authorMatch) metadata.author = authorMatch[1].trim();
+  if (authorMatch && !metadata.author) metadata.author = authorMatch[1].trim();
 
   // Try article:author
   const articleAuthorMatch = html.match(
@@ -281,7 +345,7 @@ function extractMetadata(html, url) {
   const dateMatch = html.match(
     /<meta[^>]*property=["']article:published_time["'][^>]*content=["']([^"']+)["']/i
   );
-  if (dateMatch) metadata.publishDate = dateMatch[1].trim();
+  if (dateMatch && !metadata.publishDate) metadata.publishDate = dateMatch[1].trim();
 
   // Try other date formats
   const datePubMatch = html.match(
