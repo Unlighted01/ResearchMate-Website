@@ -253,11 +253,15 @@ function extractMetadata(html, url) {
   // IEEE XPLORE SPECIFIC EXTRACTION
   // ============================================
   if (url.includes('ieeexplore.ieee.org')) {
+    console.log('🔍 IEEE URL detected, applying IEEE-specific extraction...');
+
     // Extract from JSON-LD structured data (IEEE uses this)
     const jsonLdMatch = html.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
     if (jsonLdMatch) {
       try {
         const jsonData = JSON.parse(jsonLdMatch[1]);
+        console.log('📄 IEEE JSON-LD data found:', JSON.stringify(jsonData, null, 2));
+
         if (jsonData.author) {
           // Handle single author or array of authors
           if (Array.isArray(jsonData.author)) {
@@ -269,44 +273,62 @@ function extractMetadata(html, url) {
           } else {
             metadata.author = jsonData.author;
           }
+          console.log('✅ Author from JSON-LD:', metadata.author);
         }
-        if (jsonData.datePublished) metadata.publishDate = jsonData.datePublished;
+        if (jsonData.datePublished) {
+          metadata.publishDate = jsonData.datePublished;
+          console.log('✅ Publish date from JSON-LD:', metadata.publishDate);
+        }
         if (jsonData.headline) metadata.title = jsonData.headline;
         if (jsonData.publisher && jsonData.publisher.name) {
           metadata.siteName = jsonData.publisher.name;
         }
       } catch (e) {
-        console.log('Failed to parse IEEE JSON-LD:', e.message);
+        console.log('❌ Failed to parse IEEE JSON-LD:', e.message);
       }
+    } else {
+      console.log('⚠️ No JSON-LD found in IEEE page');
     }
 
     // IEEE specific meta tags
     const ieeeAuthorMatch = html.match(/<meta name="citation_author"[^>]*content=["']([^"']+)["']/gi);
-    if (ieeeAuthorMatch && !metadata.author) {
-      // Extract all authors from citation_author tags
-      const authors = ieeeAuthorMatch.map(match => {
-        const contentMatch = match.match(/content=["']([^"']+)["']/i);
-        return contentMatch ? contentMatch[1] : '';
-      }).filter(Boolean);
-      metadata.author = authors.join('; ');
+    if (ieeeAuthorMatch) {
+      console.log(`📝 Found ${ieeeAuthorMatch.length} citation_author tags`);
+      if (!metadata.author) {
+        // Extract all authors from citation_author tags
+        const authors = ieeeAuthorMatch.map(match => {
+          const contentMatch = match.match(/content=["']([^"']+)["']/i);
+          return contentMatch ? contentMatch[1] : '';
+        }).filter(Boolean);
+        metadata.author = authors.join('; ');
+        console.log('✅ Authors from meta tags:', metadata.author);
+      }
+    } else {
+      console.log('⚠️ No citation_author meta tags found');
     }
 
     // IEEE citation_title
     const ieeeTitleMatch = html.match(/<meta name="citation_title"[^>]*content=["']([^"']+)["']/i);
     if (ieeeTitleMatch && !metadata.title) {
       metadata.title = ieeeTitleMatch[1].trim();
+      console.log('✅ Title from citation_title:', metadata.title);
     }
 
     // IEEE publication date
     const ieeeDateMatch = html.match(/<meta name="citation_publication_date"[^>]*content=["']([^"']+)["']/i);
     if (ieeeDateMatch && !metadata.publishDate) {
       metadata.publishDate = ieeeDateMatch[1].trim();
+      console.log('✅ Publish date from citation_publication_date:', metadata.publishDate);
+    } else {
+      console.log('⚠️ No citation_publication_date meta tag found');
     }
 
     // Set site name for IEEE
     if (!metadata.siteName) {
       metadata.siteName = 'IEEE Xplore';
     }
+
+    console.log('📊 Final IEEE metadata:', metadata);
   }
 
   // ============================================
@@ -394,13 +416,25 @@ app.post("/api/extract-citation", async (req, res) => {
       return res.status(400).json({ error: "Invalid URL format" });
     }
 
-    // Fetch the webpage
+    // Fetch the webpage with comprehensive headers to avoid blocking
     const response = await fetch(validUrl.toString(), {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "max-age=0",
+        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        Referer: "https://www.google.com/",
       },
       timeout: 10000,
     });
