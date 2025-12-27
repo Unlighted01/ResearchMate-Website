@@ -193,6 +193,7 @@ import SignupPage from "./components/auth/SignupPage";
 import AIAssistant from "./components/App/AIAssistant";
 import Statistics from "./components/App/Statistics";
 import SmartPenGallery from "./components/App/SmartPenGallery";
+import SupportPage from "./components/marketing/SupportPage";
 
 // ============================================
 // PART 5: MAIN APP COMPONENT
@@ -207,82 +208,83 @@ export default function App() {
         {ToastComponent}
         <OfflineDetector />
         <HashRouter>
-        <Routes>
-          {/* Public Routes - Single Page Marketing */}
-          <Route
-            path="/"
-            element={
-              <MarketingLayout>
-                <MarketingHome />
-              </MarketingLayout>
-            }
-          />
-          {/* Redirects for old routes */}
-          <Route
-            path="/products"
-            element={<Navigate to="/#products" replace />}
-          />
-          <Route path="/team" element={<Navigate to="/#team" replace />} />
+          <Routes>
+            {/* Public Routes - Single Page Marketing */}
+            <Route
+              path="/"
+              element={
+                <MarketingLayout>
+                  <MarketingHome />
+                </MarketingLayout>
+              }
+            />
+            {/* Redirects for old routes */}
+            <Route
+              path="/products"
+              element={<Navigate to="/#products" replace />}
+            />
+            <Route path="/team" element={<Navigate to="/#team" replace />} />
+            <Route path="/support" element={<SupportPage />} />
 
-          <Route
-            path="/login"
-            element={
-              <LoginPage useToast={() => ({ showToast, ToastComponent })} />
-            }
-          />
-          <Route
-            path="/signup"
-            element={
-              <SignupPage useToast={() => ({ showToast, ToastComponent })} />
-            }
-          />
-          <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route
+              path="/login"
+              element={
+                <LoginPage useToast={() => ({ showToast, ToastComponent })} />
+              }
+            />
+            <Route
+              path="/signup"
+              element={
+                <SignupPage useToast={() => ({ showToast, ToastComponent })} />
+              }
+            />
+            <Route path="/auth/callback" element={<AuthCallback />} />
 
-          {/* Private Routes */}
-          <Route
-            path="/app/*"
-            element={
-              <RequireAuth>
-                <DashboardLayout>
-                  <Routes>
-                    <Route
-                      path="dashboard"
-                      element={
-                        <Dashboard
-                          useToast={() => ({ showToast, ToastComponent })}
-                        />
-                      }
-                    />
-                    <Route
-                      path="collections"
-                      element={
-                        <CollectionsPage
-                          useToast={() => ({ showToast, ToastComponent })}
-                        />
-                      }
-                    />
-                    <Route
-                      path="ai-assistant"
-                      element={
-                        <AIAssistant
-                          useToast={() => ({ showToast, ToastComponent })}
-                        />
-                      }
-                    />
-                    <Route path="citations" element={<CitationGenerator />} />
-                    <Route path="smart-pen" element={<SmartPenGallery />} />
-                    <Route path="statistics" element={<Statistics />} />
-                    <Route path="settings" element={<SettingsPage />} />
-                  </Routes>
-                </DashboardLayout>
-              </RequireAuth>
-            }
-          />
+            {/* Private Routes */}
+            <Route
+              path="/app/*"
+              element={
+                <RequireAuth>
+                  <DashboardLayout>
+                    <Routes>
+                      <Route
+                        path="dashboard"
+                        element={
+                          <Dashboard
+                            useToast={() => ({ showToast, ToastComponent })}
+                          />
+                        }
+                      />
+                      <Route
+                        path="collections"
+                        element={
+                          <CollectionsPage
+                            useToast={() => ({ showToast, ToastComponent })}
+                          />
+                        }
+                      />
+                      <Route
+                        path="ai-assistant"
+                        element={
+                          <AIAssistant
+                            useToast={() => ({ showToast, ToastComponent })}
+                          />
+                        }
+                      />
+                      <Route path="citations" element={<CitationGenerator />} />
+                      <Route path="smart-pen" element={<SmartPenGallery />} />
+                      <Route path="statistics" element={<Statistics />} />
+                      <Route path="settings" element={<SettingsPage />} />
+                    </Routes>
+                  </DashboardLayout>
+                </RequireAuth>
+              }
+            />
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </HashRouter>
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </HashRouter>
       </ThemeProvider>
     </ErrorBoundary>
   );
