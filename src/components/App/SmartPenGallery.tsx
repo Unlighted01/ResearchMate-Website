@@ -1,5 +1,6 @@
 // ============================================
 // SMART PEN GALLERY PAGE - Apple Design
+// With Pairing Integration
 // ============================================
 
 import React, { useState, useEffect } from "react";
@@ -9,14 +10,16 @@ import {
   Filter,
   Grid3X3,
   List,
-  Image,
   FileText,
   Zap,
   Calendar,
-  ExternalLink,
+  Plus,
+  RefreshCw,
 } from "lucide-react";
 import { getAllItems, StorageItem } from "../../services/storageService";
 import { Modal } from "../shared/UIComponents";
+import SmartPenPairing from "../shared/SmartPenPairing";
+import { getCurrentUser } from "../../services/supabaseClient";
 
 const SmartPenGallery = () => {
   const [scans, setScans] = useState<StorageItem[]>([]);
@@ -24,13 +27,27 @@ const SmartPenGallery = () => {
   const [selectedScan, setSelectedScan] = useState<StorageItem | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showPairing, setShowPairing] = useState(false);
+  const [userId, setUserId] = useState<string>("");
 
   useEffect(() => {
-    getAllItems().then((items) => {
-      setScans(items.filter((i) => i.deviceSource === "smart_pen"));
-      setLoading(false);
+    // Get current user
+    getCurrentUser().then((user) => {
+      if (user) {
+        setUserId(user.id);
+      }
     });
+
+    // Load scans
+    loadScans();
   }, []);
+
+  const loadScans = async () => {
+    setLoading(true);
+    const items = await getAllItems();
+    setScans(items.filter((i) => i.deviceSource === "smart_pen"));
+    setLoading(false);
+  };
 
   const filteredScans = scans.filter((scan) => {
     if (!searchQuery) return true;
@@ -56,8 +73,22 @@ const SmartPenGallery = () => {
           </p>
         </div>
 
-        {/* Stats */}
-        <div className="flex items-center gap-4">
+        {/* Actions & Stats */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowPairing(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#FF9500] to-[#FF6B00] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-orange-500/25 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Pair New Pen
+          </button>
+          <button
+            onClick={loadScans}
+            className="p-2 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
           <div className="px-4 py-2 bg-[#FF9500]/10 rounded-xl">
             <span className="text-sm font-semibold text-[#FF9500]">
               {scans.length} {scans.length === 1 ? "scan" : "scans"}
@@ -133,35 +164,46 @@ const SmartPenGallery = () => {
           </p>
 
           {!searchQuery && (
-            <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800 max-w-md w-full">
-              <h4 className="font-semibold text-gray-900 dark:text-white mb-4">
-                How to get started
-              </h4>
-              <div className="space-y-3">
-                {[
-                  "Connect your smart pen via Bluetooth",
-                  "Write on smart paper or tablet",
-                  "Notes sync automatically with OCR",
-                  "Access from any device instantly",
-                ].map((step, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <div className="w-6 h-6 bg-[#FF9500]/10 rounded-full flex items-center justify-center text-xs font-bold text-[#FF9500]">
-                      {idx + 1}
-                    </div>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      {step}
-                    </span>
-                  </div>
-                ))}
-              </div>
+            <>
+              {/* Pair Button for Empty State */}
+              <button
+                onClick={() => setShowPairing(true)}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#FF9500] to-[#FF6B00] text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-orange-500/25 transition-all mb-8"
+              >
+                <Plus className="w-5 h-5" />
+                Pair Your Smart Pen
+              </button>
 
-              <div className="mt-6 p-4 bg-[#FF9500]/5 rounded-xl border border-[#FF9500]/20">
-                <p className="text-xs text-[#FF9500] font-medium">
-                  Smart Pen integration is currently in Beta. Compatible with
-                  Neo Smartpen and Moleskine Pen+.
-                </p>
+              <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800 max-w-md w-full">
+                <h4 className="font-semibold text-gray-900 dark:text-white mb-4">
+                  How to get started
+                </h4>
+                <div className="space-y-3">
+                  {[
+                    "Power on your ResearchMate Smart Pen",
+                    "Connect to the pen's WiFi and open its web interface",
+                    "Click 'Pair New Pen' and enter the 6-digit code",
+                    "Start scanning - notes sync automatically!",
+                  ].map((step, idx) => (
+                    <div key={idx} className="flex items-center gap-3">
+                      <div className="w-6 h-6 bg-[#FF9500]/10 rounded-full flex items-center justify-center text-xs font-bold text-[#FF9500]">
+                        {idx + 1}
+                      </div>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {step}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 p-4 bg-[#FF9500]/5 rounded-xl border border-[#FF9500]/20">
+                  <p className="text-xs text-[#FF9500] font-medium">
+                    Smart Pen integration is currently in Beta. Built with
+                    ESP32-CAM.
+                  </p>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       ) : viewMode === "grid" ? (
@@ -330,6 +372,13 @@ const SmartPenGallery = () => {
           </div>
         )}
       </Modal>
+
+      {/* ========== PAIRING MODAL ========== */}
+      <SmartPenPairing
+        isOpen={showPairing}
+        onClose={() => setShowPairing(false)}
+        userId={userId}
+      />
     </div>
   );
 };
