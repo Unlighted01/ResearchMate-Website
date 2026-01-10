@@ -193,6 +193,7 @@ import SignupPage from "./components/auth/SignupPage";
 import AIAssistant from "./components/App/AIAssistant";
 import Statistics from "./components/App/Statistics";
 import SmartPenGallery from "./components/App/SmartPenGallery";
+import PairSmartPen from "./components/App/PairSmartPen";
 import SupportPage from "./components/marketing/SupportPage";
 
 // ============================================
@@ -273,6 +274,7 @@ export default function App() {
                       />
                       <Route path="citations" element={<CitationGenerator />} />
                       <Route path="smart-pen" element={<SmartPenGallery />} />
+                      <Route path="pair-pen" element={<PairSmartPen />} />
                       <Route path="statistics" element={<Statistics />} />
                       <Route path="settings" element={<SettingsPage />} />
                     </Routes>
