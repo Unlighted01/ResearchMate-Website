@@ -1,6 +1,6 @@
 // ============================================
 // SMART PEN GALLERY PAGE - Apple Design
-// With Pairing Integration
+// With Pairing, Toasts, and Device Status
 // ============================================
 
 import React, { useState, useEffect } from "react";
@@ -15,11 +15,61 @@ import {
   Calendar,
   Plus,
   RefreshCw,
+  Check,
+  X,
+  Wifi,
+  WifiOff,
+  Trash2,
 } from "lucide-react";
 import { getAllItems, StorageItem } from "../../services/storageService";
 import { Modal } from "../shared/UIComponents";
 import SmartPenPairing from "../shared/SmartPenPairing";
 import { getCurrentUser } from "../../services/supabaseClient";
+
+// Supabase config
+const SUPABASE_URL = "https://jxevjkzojfbywxvtcwtl.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4ZXZqa3pvamZieXd4dnRjd3RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MDc4MzEsImV4cCI6MjA3NTQ4MzgzMX0.hZL-wGTcmD9H0bsmj_jqzZ2iw1GZyJM5X14meIRKgNQ";
+
+// Toast component
+interface ToastProps {
+  message: string;
+  type: "success" | "error" | "info";
+  onClose: () => void;
+}
+
+const Toast: React.FC<ToastProps> = ({ message, type, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 4000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = {
+    success: "bg-gradient-to-r from-green-500 to-green-600",
+    error: "bg-gradient-to-r from-red-500 to-red-600",
+    info: "bg-gradient-to-r from-blue-500 to-blue-600",
+  }[type];
+
+  const Icon = type === "success" ? Check : type === "error" ? X : Zap;
+
+  return (
+    <div
+      className={`fixed bottom-6 right-6 z-50 ${bgColor} text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-slide-up`}
+    >
+      <Icon className="w-5 h-5" />
+      <span className="font-medium">{message}</span>
+      <button onClick={onClose} className="ml-2 hover:opacity-70">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
+
+// Paired device type
+interface PairedPen {
+  pen_id: string;
+  paired_at: string;
+}
 
 const SmartPenGallery = () => {
   const [scans, setScans] = useState<StorageItem[]>([]);
@@ -29,12 +79,18 @@ const SmartPenGallery = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showPairing, setShowPairing] = useState(false);
   const [userId, setUserId] = useState<string>("");
+  const [pairedPens, setPairedPens] = useState<PairedPen[]>([]);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
 
   useEffect(() => {
     // Get current user
     getCurrentUser().then((user) => {
       if (user) {
         setUserId(user.id);
+        loadPairedPens(user.id);
       }
     });
 
@@ -49,6 +105,61 @@ const SmartPenGallery = () => {
     setLoading(false);
   };
 
+  const loadPairedPens = async (uid: string) => {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/smart-pen`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ action: "list", user_id: uid }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setPairedPens(data.pens || []);
+      }
+    } catch (err) {
+      console.error("Failed to load paired pens:", err);
+    }
+  };
+
+  const unpairPen = async (penId: string) => {
+    if (!confirm(`Disconnect pen ${penId.substring(0, 15)}...?`)) return;
+
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/smart-pen`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ action: "unpair", pen_id: penId }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setPairedPens(pairedPens.filter((p) => p.pen_id !== penId));
+        showToast("Device disconnected", "info");
+      } else {
+        showToast("Failed to disconnect", "error");
+      }
+    } catch (err) {
+      showToast("Connection error", "error");
+    }
+  };
+
+  const showToast = (message: string, type: "success" | "error" | "info") => {
+    setToast({ message, type });
+  };
+
+  const handlePairingSuccess = () => {
+    setShowPairing(false);
+    showToast("Smart Pen connected successfully!", "success");
+    if (userId) loadPairedPens(userId);
+  };
+
   const filteredScans = scans.filter((scan) => {
     if (!searchQuery) return true;
     return (
@@ -59,6 +170,15 @@ const SmartPenGallery = () => {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
+      {/* Toast */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       {/* ========== HEADER ========== */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
@@ -83,7 +203,10 @@ const SmartPenGallery = () => {
             Pair New Pen
           </button>
           <button
-            onClick={loadScans}
+            onClick={() => {
+              loadScans();
+              showToast("Refreshed!", "info");
+            }}
             className="p-2 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             title="Refresh"
           >
@@ -96,6 +219,39 @@ const SmartPenGallery = () => {
           </div>
         </div>
       </div>
+
+      {/* ========== PAIRED DEVICES ========== */}
+      {pairedPens.length > 0 && (
+        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 p-4">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+            <Wifi className="w-4 h-4 text-green-500" />
+            Connected Devices
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {pairedPens.map((pen) => (
+              <div
+                key={pen.pen_id}
+                className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl"
+              >
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-sm text-green-700 dark:text-green-400 font-medium">
+                  {pen.pen_id.substring(0, 12)}...
+                </span>
+                <span className="text-xs text-green-600 dark:text-green-500">
+                  {new Date(pen.paired_at).toLocaleDateString()}
+                </span>
+                <button
+                  onClick={() => unpairPen(pen.pen_id)}
+                  className="p-1 hover:bg-green-200 dark:hover:bg-green-800 rounded-lg transition-colors"
+                  title="Disconnect"
+                >
+                  <X className="w-3 h-3 text-green-600" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ========== SEARCH & FILTERS ========== */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -232,7 +388,7 @@ const SmartPenGallery = () => {
                 {/* Hover Overlay */}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                   <button className="px-4 py-2 bg-white text-gray-900 text-sm font-medium rounded-full hover:bg-gray-100 transition-colors">
-                    View OCR
+                    View Details
                   </button>
                 </div>
 
@@ -377,6 +533,7 @@ const SmartPenGallery = () => {
       <SmartPenPairing
         isOpen={showPairing}
         onClose={() => setShowPairing(false)}
+        onSuccess={handlePairingSuccess}
         userId={userId}
       />
     </div>
