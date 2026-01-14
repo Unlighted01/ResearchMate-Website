@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { getAllItems, StorageItem } from "../../services/storageService";
 import { Modal } from "../shared/UIComponents";
-import SmartPenPairing from "../shared/SmartPenPairing";
+import SmartPenPairing from "./SmartPenPairing";
 import { getCurrentUser } from "../../services/supabaseClient";
 
 // Supabase config
