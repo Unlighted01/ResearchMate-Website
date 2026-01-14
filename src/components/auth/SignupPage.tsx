@@ -46,6 +46,9 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(
+    null
+  );
 
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -105,7 +108,7 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
 
     const { error } = await supabase.auth.signUp({
       email: email.trim(),
-      password
+      password,
     });
     if (error) {
       showToast(error.message, "error");
@@ -117,27 +120,88 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   };
 
   const handleOAuthSignup = async (provider: "google" | "github") => {
-    setLoading(true);
+    setOauthLoading(provider);
     localStorage.setItem(
       "researchmate_remember",
       rememberMe ? "true" : "false"
     );
-    const { error } = await supabase.auth.signInWithOAuth({
+
+    // Get OAuth URL from Supabase
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/#/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/#/auth/callback`,
+        skipBrowserRedirect: true,
+      },
     });
+
     if (error) {
       showToast(error.message, "error");
-      setLoading(false);
+      setOauthLoading(null);
+      return;
+    }
+
+    if (data?.url) {
+      // Open popup window
+      const width = 500;
+      const height = 600;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+
+      const popup = window.open(
+        data.url,
+        "oauth_popup",
+        `width=${width},height=${height},left=${left},top=${top},popup=true`
+      );
+
+      if (!popup) {
+        showToast(
+          "Popup was blocked. Please allow popups for this site.",
+          "error"
+        );
+        setOauthLoading(null);
+        return;
+      }
+
+      // Check if popup is closed periodically
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          setOauthLoading(null);
+        }
+      }, 500);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 relative">
+      {/* OAuth Loading Overlay */}
+      {oauthLoading && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-8 shadow-2xl text-center max-w-sm mx-4">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+              {oauthLoading === "google" ? <GoogleIcon /> : <GitHubIcon />}
+            </div>
+            <div className="w-8 h-8 border-3 border-[#007AFF] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Signing up with {oauthLoading === "google" ? "Google" : "GitHub"}
+              ...
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Complete sign-up in the popup window
+            </p>
+            <button
+              onClick={() => setOauthLoading(null)}
+              className="text-sm text-[#007AFF] hover:text-[#0066DD] font-medium"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       <div className="fixed inset-0 bg-[#F5F5F7] dark:bg-black z-0" />
       <BubbleBackground bubbleCount={10} />
       <div className="w-full max-w-sm content-above-bubbles">
-        {/* Header */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block mb-6">
             <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
