@@ -25,20 +25,17 @@ import {
   PenTool,
   Globe,
   Layout,
-  Trash2,
-  Copy,
   Zap,
   Share2,
-  ExternalLink,
   MoreHorizontal,
   Filter,
   Grid3X3,
   List,
   Clock,
   Tag,
-  Download,
   HelpCircle,
 } from "lucide-react";
+import { TrashIcon, CopyIcon, ExternalLinkIcon, DownloadIcon } from "../icons";
 import {
   getAllItems,
   deleteItem,
@@ -48,11 +45,19 @@ import {
 } from "../../services/storageService";
 import { generateSummary } from "../../services/geminiService";
 import ConfirmDialog from "../shared/ConfirmDialog";
-import { SkeletonDashboardGrid, SkeletonDashboardList } from "../shared/SkeletonLoader";
-import { useKeyboardShortcuts, COMMON_SHORTCUTS } from "../../hooks/useKeyboardShortcuts";
+import {
+  SkeletonDashboardGrid,
+  SkeletonDashboardList,
+} from "../shared/SkeletonLoader";
+import {
+  useKeyboardShortcuts,
+  COMMON_SHORTCUTS,
+} from "../../hooks/useKeyboardShortcuts";
 import KeyboardShortcutsModal from "../shared/KeyboardShortcutsModal";
 import BulkActions from "../shared/BulkActions";
-import AdvancedSearchFilter, { SearchFilters } from "../shared/AdvancedSearchFilter";
+import AdvancedSearchFilter, {
+  SearchFilters,
+} from "../shared/AdvancedSearchFilter";
 import { exportItems } from "../../utils/export";
 import { useRef } from "react";
 
@@ -120,25 +125,25 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   useKeyboardShortcuts([
     {
       ...COMMON_SHORTCUTS.SEARCH,
-      description: 'Focus search',
+      description: "Focus search",
       handler: () => searchInputRef.current?.focus(),
     },
     {
       ...COMMON_SHORTCUTS.REFRESH,
-      description: 'Refresh items',
+      description: "Refresh items",
       handler: () => {
         if (!loading) fetchItems();
       },
     },
     {
-      key: 'g',
-      description: 'Toggle grid/list view',
-      handler: () => setViewMode((prev) => (prev === 'grid' ? 'list' : 'grid')),
+      key: "g",
+      description: "Toggle grid/list view",
+      handler: () => setViewMode((prev) => (prev === "grid" ? "list" : "grid")),
     },
     {
-      key: '?',
+      key: "?",
       shiftKey: true,
-      description: 'Show keyboard shortcuts',
+      description: "Show keyboard shortcuts",
       handler: () => setShowKeyboardShortcuts(true),
     },
   ]);
@@ -238,7 +243,9 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
 
     try {
       await deleteItem(confirmDialog.itemId);
-      setItems((prev) => prev.filter((item) => item.id !== confirmDialog.itemId));
+      setItems((prev) =>
+        prev.filter((item) => item.id !== confirmDialog.itemId)
+      );
       showToast("Item deleted successfully", "success");
       if (selectedItem?.id === confirmDialog.itemId) {
         setIsModalOpen(false);
@@ -275,13 +282,17 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const handleBulkDelete = async () => {
     if (selectedItems.size === 0) return;
 
-    if (!confirm(`Delete ${selectedItems.size} items? This cannot be undone.`)) {
+    if (
+      !confirm(`Delete ${selectedItems.size} items? This cannot be undone.`)
+    ) {
       return;
     }
 
     setIsBulkDeleting(true);
     try {
-      const deletePromises = Array.from(selectedItems).map((id) => deleteItem(id));
+      const deletePromises = Array.from(selectedItems).map((id) =>
+        deleteItem(id)
+      );
       await Promise.all(deletePromises);
       setItems((prev) => prev.filter((item) => !selectedItems.has(item.id)));
       showToast(`${selectedItems.size} items deleted successfully`, "success");
@@ -303,7 +314,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
 
     // Show export format menu (for now, default to JSON)
     try {
-      exportItems(itemsToExport, 'json');
+      exportItems(itemsToExport, "json");
       showToast(`Exported ${itemsToExport.length} items`, "success");
     } catch (error) {
       showToast("Export failed", "error");
@@ -347,9 +358,12 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
       });
     }
 
-    if (advancedFilters.deviceSource && advancedFilters.deviceSource.length > 0) {
+    if (
+      advancedFilters.deviceSource &&
+      advancedFilters.deviceSource.length > 0
+    ) {
       filtered = filtered.filter((item) =>
-        advancedFilters.deviceSource?.includes(item.deviceSource || '')
+        advancedFilters.deviceSource?.includes(item.deviceSource || "")
       );
     }
 
@@ -470,7 +484,10 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           >
             <Filter className="w-4 h-4" />
             Filter
-            {(advancedFilters.dateRange || advancedFilters.deviceSource?.length || advancedFilters.hasAiSummary !== undefined || advancedFilters.tags?.length) && (
+            {(advancedFilters.dateRange ||
+              advancedFilters.deviceSource?.length ||
+              advancedFilters.hasAiSummary !== undefined ||
+              advancedFilters.tags?.length) && (
               <span className="ml-1 w-2 h-2 bg-purple-500 rounded-full" />
             )}
           </button>
@@ -644,7 +661,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 aria-label="Delete item"
                 className="absolute top-3 right-3 p-2 bg-white dark:bg-gray-800 text-gray-400 hover:text-[#FF3B30] rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
               >
-                <Trash2 className="w-4 h-4" />
+                <TrashIcon size={16} dangerHover />
               </button>
             </div>
           ))}
@@ -701,7 +718,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   aria-label="Delete item"
                   className="p-2 text-gray-400 hover:text-[#FF3B30] rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <TrashIcon size={16} dangerHover />
                 </button>
               </div>
             </div>
@@ -734,7 +751,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     aria-label="Copy to clipboard"
                     className="p-1.5 text-[#007AFF] hover:bg-[#007AFF]/10 rounded-lg transition-colors"
                   >
-                    <Copy className="w-4 h-4" />
+                    <CopyIcon size={16} />
                   </button>
                 </div>
                 <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed max-h-[300px] overflow-y-auto">
@@ -815,7 +832,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     className="flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-colors"
                   >
                     <div className="w-9 h-9 bg-[#007AFF]/10 rounded-lg flex items-center justify-center">
-                      <ExternalLink className="w-4 h-4 text-[#007AFF]" />
+                      <ExternalLinkIcon size={16} color="#007AFF" />
                     </div>
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                       Open Original Source
@@ -835,7 +852,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   className="w-full flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                 >
                   <div className="w-9 h-9 bg-[#FF3B30]/10 rounded-lg flex items-center justify-center">
-                    <Trash2 className="w-4 h-4 text-[#FF3B30]" />
+                    <TrashIcon size={16} color="#FF3B30" dangerHover />
                   </div>
                   <span className="text-sm font-medium text-[#FF3B30]">
                     Delete Item

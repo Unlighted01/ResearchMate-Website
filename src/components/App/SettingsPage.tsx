@@ -17,7 +17,6 @@ import {
   Database,
   Download,
   Upload,
-  Trash2,
   AlertTriangle,
   CheckCircle2,
   Wifi,
@@ -30,6 +29,7 @@ import {
   FileText,
   FileSpreadsheet,
 } from "lucide-react";
+import { TrashIcon } from "../icons";
 
 // ============================================
 // PART 2: TOAST COMPONENT
@@ -513,7 +513,8 @@ const SettingsPage: React.FC = () => {
               research items, collections, and data will be permanently deleted.
             </p>
             <Button variant="destructive" onClick={handleDeleteAccount}>
-              <Trash2 className="w-4 h-4 mr-2" /> Delete Account
+              <TrashIcon size={16} color="white" dangerHover className="mr-2" />
+              Delete Account
             </Button>
           </Card>
         </div>

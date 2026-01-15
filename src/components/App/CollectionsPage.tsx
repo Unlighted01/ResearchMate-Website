@@ -16,12 +16,14 @@ import {
 import { StorageItem } from "../../services/storageService";
 import { Button, Card, Input, Badge, Modal } from "../shared/UIComponents";
 import ConfirmDialog from "../shared/ConfirmDialog";
-import { SkeletonCollection, SkeletonDashboardGrid } from "../shared/SkeletonLoader";
+import {
+  SkeletonCollection,
+  SkeletonDashboardGrid,
+} from "../shared/SkeletonLoader";
 import {
   FolderPlus,
   FolderOpen,
   Edit2,
-  Trash2,
   ChevronLeft,
   Laptop,
   Smartphone,
@@ -30,6 +32,7 @@ import {
   Layout,
   X,
 } from "lucide-react";
+import { TrashIcon } from "../icons";
 
 interface CollectionsPageProps {
   useToast: () => {
@@ -127,7 +130,9 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
 
     try {
       await deleteCollection(confirmDialog.collection.id);
-      setCollections((prev) => prev.filter((c) => c.id !== confirmDialog.collection?.id));
+      setCollections((prev) =>
+        prev.filter((c) => c.id !== confirmDialog.collection?.id)
+      );
       showToast("Collection deleted successfully", "success");
       setConfirmDialog({ isOpen: false, collection: null, isDeleting: false });
     } catch (e) {
@@ -271,72 +276,75 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {collections.map((col) => (
-          <div
-            key={col.id}
-            onClick={() => handleViewCollection(col)}
-            className="group relative bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden"
-          >
-            {/* Color accent bar */}
             <div
-              className="absolute top-0 left-0 w-full h-1"
-              style={{ backgroundColor: col.color }}
-            />
-
-            <div className="flex justify-between items-start mb-4">
+              key={col.id}
+              onClick={() => handleViewCollection(col)}
+              className="group relative bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden"
+            >
+              {/* Color accent bar */}
               <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: `${col.color}20`, color: col.color }}
-              >
-                <FolderOpen className="w-6 h-6" />
+                className="absolute top-0 left-0 w-full h-1"
+                style={{ backgroundColor: col.color }}
+              />
+
+              <div className="flex justify-between items-start mb-4">
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center"
+                  style={{
+                    backgroundColor: `${col.color}20`,
+                    color: col.color,
+                  }}
+                >
+                  <FolderOpen className="w-6 h-6" />
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCollection(col);
+                      setFormName(col.name);
+                      setFormDescription(col.description);
+                      setFormColor(col.color);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                    aria-label="Edit collection"
+                    title="Edit collection"
+                  >
+                    <Edit2 className="w-4 h-4 text-gray-500" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(col);
+                    }}
+                    className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                    aria-label="Delete collection"
+                    title="Delete collection"
+                  >
+                    <TrashIcon size={16} color="#EF4444" dangerHover />
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedCollection(col);
-                    setFormName(col.name);
-                    setFormDescription(col.description);
-                    setFormColor(col.color);
-                    setIsEditModalOpen(true);
-                  }}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                  aria-label="Edit collection"
-                  title="Edit collection"
-                >
-                  <Edit2 className="w-4 h-4 text-gray-500" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(col);
-                  }}
-                  className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                  aria-label="Delete collection"
-                  title="Delete collection"
-                >
-                  <Trash2 className="w-4 h-4 text-red-500" />
-                </button>
+
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                {col.name}
+              </h3>
+              <p className="text-sm text-gray-500 line-clamp-2 mb-4 h-10">
+                {col.description}
+              </p>
+
+              <div className="flex items-center text-xs text-gray-400 font-medium">
+                <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
+                  {col.itemCount || 0} items
+                </span>
+                <span className="mx-2">•</span>
+                <span>
+                  Created {new Date(col.createdAt).toLocaleDateString()}
+                </span>
               </div>
             </div>
-
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-              {col.name}
-            </h3>
-            <p className="text-sm text-gray-500 line-clamp-2 mb-4 h-10">
-              {col.description}
-            </p>
-
-            <div className="flex items-center text-xs text-gray-400 font-medium">
-              <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md">
-                {col.itemCount || 0} items
-              </span>
-              <span className="mx-2">•</span>
-              <span>
-                Created {new Date(col.createdAt).toLocaleDateString()}
-              </span>
-            </div>
-          </div>
-        ))}
+          ))}
         </div>
       )}
 
@@ -436,7 +444,11 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
         onClose={() =>
-          setConfirmDialog({ isOpen: false, collection: null, isDeleting: false })
+          setConfirmDialog({
+            isOpen: false,
+            collection: null,
+            isDeleting: false,
+          })
         }
         onConfirm={confirmDeleteCollection}
         title="Delete Collection"

@@ -1,5 +1,6 @@
-import React from 'react';
-import { Trash2, Download, X, CheckSquare } from 'lucide-react';
+import React from "react";
+import { X, CheckSquare } from "lucide-react";
+import { TrashIcon, DownloadIcon } from "../icons";
 
 interface BulkActionsProps {
   selectedCount: number;
@@ -45,7 +46,9 @@ const BulkActions: React.FC<BulkActionsProps> = ({
               {selectedCount} selected
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {allSelected ? 'All items selected' : `${totalCount - selectedCount} remaining`}
+              {allSelected
+                ? "All items selected"
+                : `${totalCount - selectedCount} remaining`}
             </p>
           </div>
         </div>
@@ -56,9 +59,9 @@ const BulkActions: React.FC<BulkActionsProps> = ({
           <button
             onClick={allSelected ? onDeselectAll : onSelectAll}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-            aria-label={allSelected ? 'Deselect all' : 'Select all'}
+            aria-label={allSelected ? "Deselect all" : "Select all"}
           >
-            {allSelected ? 'Deselect All' : 'Select All'}
+            {allSelected ? "Deselect All" : "Select All"}
           </button>
 
           {/* Export */}
@@ -67,7 +70,7 @@ const BulkActions: React.FC<BulkActionsProps> = ({
             className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-lg transition-colors"
             aria-label="Export selected items"
           >
-            <Download className="w-4 h-4" />
+            <DownloadIcon size={16} />
             Export
           </button>
 
@@ -85,7 +88,7 @@ const BulkActions: React.FC<BulkActionsProps> = ({
               </>
             ) : (
               <>
-                <Trash2 className="w-4 h-4" />
+                <TrashIcon size={16} dangerHover />
                 Delete
               </>
             )}
