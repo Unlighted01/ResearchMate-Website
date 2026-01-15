@@ -62,39 +62,62 @@ serve(async (req) => {
       let summary = "";
 
       if (geminiApiKey) {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      inline_data: {
-                        mime_type: "image/bmp",
-                        data: imageBase64,
-                      },
-                    },
-                    {
-                      text: 'Extract ALL text from this image. Return JSON: {"text": "extracted text", "summary": "brief 1-sentence summary"}',
-                    },
-                  ],
-                },
-              ],
-            }),
-          }
-        );
-        const data = await res.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        console.log("Calling Gemini API...");
+        console.log("Image size:", imageBytes.length, "bytes");
+
         try {
-          const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || "{}");
-          ocrText = parsed.text || text;
-          summary = parsed.summary || "";
-        } catch {
-          ocrText = text;
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    parts: [
+                      {
+                        inline_data: {
+                          mime_type: "image/bmp",
+                          data: imageBase64,
+                        },
+                      },
+                      {
+                        text: 'Extract ALL text from this image. Return JSON: {"text": "extracted text", "summary": "brief 1-sentence summary"}',
+                      },
+                    ],
+                  },
+                ],
+              }),
+            }
+          );
+
+          const data = await res.json();
+          console.log("Gemini response status:", res.status);
+          console.log(
+            "Gemini response:",
+            JSON.stringify(data).substring(0, 500)
+          );
+
+          if (data.error) {
+            console.error("Gemini API error:", data.error);
+          }
+
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          console.log("Extracted text:", text.substring(0, 200));
+
+          try {
+            const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || "{}");
+            ocrText = parsed.text || text;
+            summary = parsed.summary || "";
+          } catch (parseErr) {
+            console.log("JSON parse failed, using raw text");
+            ocrText = text;
+          }
+        } catch (fetchErr) {
+          console.error("Gemini fetch error:", fetchErr);
         }
+      } else {
+        console.log("No GEMINI_API_KEY found!");
       }
 
       // Save to items table

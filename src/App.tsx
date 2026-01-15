@@ -101,20 +101,52 @@ const AuthCallback = () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (session) navigate("/app/dashboard");
+
+      // Check if this is a popup window
+      const isPopup = window.opener && window.opener !== window;
+
+      if (session) {
+        if (isPopup) {
+          // Send message to parent window and close popup
+          window.opener.postMessage(
+            { type: "AUTH_SUCCESS", session },
+            window.location.origin
+          );
+          window.close();
+        } else {
+          navigate("/app/dashboard");
+        }
+      }
     };
     checkSession();
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" || session) navigate("/app/dashboard");
+      const isPopup = window.opener && window.opener !== window;
+
+      if (event === "SIGNED_IN" || session) {
+        if (isPopup) {
+          window.opener.postMessage(
+            { type: "AUTH_SUCCESS", session },
+            window.location.origin
+          );
+          window.close();
+        } else {
+          navigate("/app/dashboard");
+        }
+      }
     });
     return () => subscription.unsubscribe();
   }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+        <p className="text-gray-600 dark:text-gray-400">
+          Completing sign in...
+        </p>
+      </div>
     </div>
   );
 };

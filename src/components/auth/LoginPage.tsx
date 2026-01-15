@@ -171,10 +171,23 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
         return;
       }
 
-      // Check if popup is closed periodically
+      // Listen for message from popup
+      const handleMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type === "AUTH_SUCCESS") {
+          window.removeEventListener("message", handleMessage);
+          setOauthLoading(null);
+          showToast("Welcome back!", "success");
+          navigate(from, { replace: true });
+        }
+      };
+      window.addEventListener("message", handleMessage);
+
+      // Check if popup is closed periodically (user cancelled)
       const checkClosed = setInterval(() => {
         if (popup.closed) {
           clearInterval(checkClosed);
+          window.removeEventListener("message", handleMessage);
           setOauthLoading(null);
         }
       }, 500);
