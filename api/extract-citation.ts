@@ -8,7 +8,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 // Safe JSON parsing helper
 async function safeJsonParse(response: Response): Promise<any | null> {
@@ -1044,9 +1044,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // STEP 6: Extract metadata from HTML
     let metadata = extractMetadataFromHTML(html, urlString);
 
+    // Detect "Soft Block" (CAPTCHA pages or generic error pages that return 200 OK)
+    const suspiciousTitles = [
+      "just a moment",
+      "attention required",
+      "access denied",
+      "security check",
+      "web page",
+      "unknown title",
+      "403 forbidden",
+      "404 not found",
+      "human verification",
+    ];
+
+    const isSoftBlock =
+      !metadata.title ||
+      suspiciousTitles.some((t) => metadata.title.toLowerCase().includes(t));
+
+    if (isSoftBlock && useAI) {
+      console.log(
+        "⚠️ Soft block detected (generic title). Forcing AI Blind Guess..."
+      );
+      const blindGuess = await blindGuessFromURL(urlString);
+      if (blindGuess && blindGuess.title) {
+        return res.status(200).json({
+          success: true,
+          metadata: {
+            ...blindGuess,
+            accessDate: new Date().toISOString(),
+          },
+          source: "ai_blind_guess_softblock",
+          message: "Extracted via AI analysis of URL (site blocked)",
+        });
+      }
+    }
+
     // STEP 6.5: If authors missing, try "Search by Title" fallback
     // This handles IEEE and other dynamic sites where we scrape the title but miss the rest
-    if (!metadata.author && metadata.title && metadata.title.length > 10) {
+    if (
+      !metadata.author &&
+      metadata.title &&
+      metadata.title.length > 10 &&
+      !isSoftBlock
+    ) {
       console.log(
         "Scraped title found but no author. Attempting Title Search fallback..."
       );
@@ -1086,7 +1126,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Clean up title
-    metadata.title = metadata.title.replace(/\s*[-|–—]\s*[^-|–—]+$/, "").trim();
+    if (metadata.title) {
+      metadata.title = metadata.title
+        .replace(/\s*[-|–—]\s*[^-|–—]+$/, "")
+        .trim();
+    }
 
     return res.status(200).json({
       success: true,
