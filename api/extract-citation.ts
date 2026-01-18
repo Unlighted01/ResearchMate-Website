@@ -15,12 +15,10 @@ async function safeJsonParse(response: Response): Promise<any | null> {
   try {
     const text = await response.text();
     if (!text || text.trim() === "") {
-      console.log("Empty response body");
       return null;
     }
     return JSON.parse(text);
   } catch (e) {
-    console.log("JSON parse error:", e);
     return null;
   }
 }

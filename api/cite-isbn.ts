@@ -37,6 +37,7 @@ interface BookData {
   isbn: string;
   isbn13: string;
   coverUrl: string | null;
+  url?: string;
 }
 
 // ============================================
@@ -183,6 +184,56 @@ async function googleBooksLookup(isbn: string): Promise<BookData | null> {
 }
 
 // ============================================
+// PART 4: OPENALEX LOOKUP (Authoritative Academic DB)
+// ============================================
+
+async function openAlexLookup(isbn: string): Promise<BookData | null> {
+  try {
+    const response = await fetch(
+      `https://api.openalex.org/works?filter=isbn:${isbn}`,
+      {
+        headers: { "User-Agent": "ResearchMate/1.0" },
+      }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await safeJsonParse(response);
+    const work = data?.results?.[0];
+
+    if (!work) return null;
+
+    const authors =
+      work.authorships
+        ?.map((a: any) => a.author?.display_name)
+        .filter(Boolean) || [];
+
+    const publishYear =
+      work.publication_year?.toString() ||
+      work.publication_date?.split("-")[0] ||
+      "n.d.";
+
+    return {
+      title: work.title,
+      authors: authors.length > 0 ? authors : ["Unknown Author"],
+      publisher:
+        work.primary_location?.source?.host_organization_name ||
+        "Unknown Publisher",
+      publishYear: publishYear,
+      isbn: isbn,
+      coverUrl: "",
+      pages: undefined,
+      url: work.doi || `https://openalex.org/${work.id}`,
+      publishPlace: "",
+      isbn13: isbn.length === 13 ? isbn : "",
+    };
+  } catch (error) {
+    console.error("OpenAlex ISBN lookup failed:", error);
+    return null;
+  }
+}
+
+// ============================================
 // PART 4.5: AI FALLBACK (Final Attempt)
 // ============================================
 
@@ -299,9 +350,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Fallback to Google Books
     if (!bookData) {
-      log("Open Library failed, trying Google Books...");
+      log("OpenLibrary failed, trying Google Books...");
       bookData = await googleBooksLookup(cleanedISBN);
       if (bookData) log("Found in Google Books");
+    }
+
+    // Fallback to OpenAlex (New!)
+    if (!bookData) {
+      log("Google Books failed, trying OpenAlex...");
+      bookData = await openAlexLookup(cleanedISBN);
+      if (bookData) log("Found in OpenAlex");
     }
 
     // PARTIAL DATA CHECK

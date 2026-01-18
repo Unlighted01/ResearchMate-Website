@@ -53,6 +53,7 @@ interface ExtractedMetadata {
   doi?: string;
   channelTitle?: string;
   duration?: string;
+  debugLogs?: string[];
 }
 
 interface AICitationExtractorProps {
@@ -294,6 +295,7 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
       isbn: book.isbn13 || book.isbn,
       pages: book.pages,
       coverUrl: book.coverUrl,
+      debugLogs: data.debugLogs, // Pass logs to frontend
     };
   };
 
@@ -585,8 +587,8 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
                   {detectedType === "isbn"
                     ? "Publisher"
                     : detectedType === "doi"
-                    ? "Journal"
-                    : "Website"}
+                      ? "Journal"
+                      : "Website"}
                 </div>
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
                   {metadata.journal ||
@@ -617,6 +619,20 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
                     alt={metadata.title}
                     className="h-32 rounded shadow-md"
                   />
+                </div>
+              )}
+
+              {/* Debug Logs (Hidden by default, useful for diagnosis) */}
+              {metadata.debugLogs && metadata.debugLogs.length > 0 && (
+                <div className="md:col-span-2 mt-4">
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-gray-500 hover:text-gray-700 font-medium select-none">
+                      🛠️ View Debug Logs
+                    </summary>
+                    <div className="mt-2 p-3 bg-gray-900 text-green-400 font-mono rounded max-h-40 overflow-y-auto whitespace-pre-wrap">
+                      {metadata.debugLogs.join("\n")}
+                    </div>
+                  </details>
                 </div>
               )}
             </div>
