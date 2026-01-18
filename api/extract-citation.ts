@@ -611,6 +611,40 @@ async function lookupByTitle(title: string): Promise<any | null> {
     console.log("Semantic Scholar title lookup failed:", e);
   }
 
+  // Try OpenAlex (Title Search - Final Fallback)
+  try {
+    const response = await fetch(
+      `https://api.openalex.org/works?search=${encodeURIComponent(title)}`,
+      { headers: { "User-Agent": "ResearchMate/1.0" } }
+    );
+
+    if (response.ok) {
+      const data = await safeJsonParse(response);
+      const work = data?.results?.[0];
+
+      if (work && work.title) {
+        console.log(`✅ Found by title in OpenAlex: ${work.title}`);
+        return {
+          title: work.title,
+          author: work.authorships
+            ?.map((a: any) => a.author?.display_name)
+            .filter(Boolean)
+            .join(", "),
+          publishDate: work.publication_date || "",
+          publishYear: work.publication_year?.toString(),
+          siteName:
+            work.primary_location?.source?.display_name ||
+            work.primary_location?.source?.host_organization_name ||
+            "Academic Publication",
+          doi: work.doi?.replace("https://doi.org/", ""),
+          description: "",
+        };
+      }
+    }
+  } catch (e) {
+    console.log("OpenAlex title lookup failed:", e);
+  }
+
   return null;
 }
 
