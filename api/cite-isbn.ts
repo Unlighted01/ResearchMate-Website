@@ -284,9 +284,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       bookData = await googleBooksLookup(cleanedISBN);
     }
 
-    // Final Fallback: AI
-    if (!bookData) {
-      bookData = await lookupISBNWithAI(cleanedISBN);
+    // Final Fallback: AI (if no data OR if authors are unknown)
+    if (
+      !bookData ||
+      (bookData.authors && bookData.authors.includes("Unknown Author"))
+    ) {
+      console.log("Partial or missing data, asking AI to complete...");
+      const aiData = await lookupISBNWithAI(cleanedISBN);
+      if (aiData) {
+        // If we had partial data, merge it (preferring AI for authors, but API for specific details if better)
+        if (bookData) {
+          bookData = {
+            ...bookData,
+            authors:
+              aiData.authors.length > 0 &&
+              !aiData.authors.includes("Unknown Author")
+                ? aiData.authors
+                : bookData.authors,
+            publishYear:
+              bookData.publishYear === "n.d."
+                ? aiData.publishYear
+                : bookData.publishYear,
+            publisher:
+              bookData.publisher === "Unknown Publisher"
+                ? aiData.publisher
+                : bookData.publisher,
+          };
+        } else {
+          bookData = aiData;
+        }
+      }
     }
 
     if (!bookData) {

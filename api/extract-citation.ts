@@ -901,8 +901,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log("Failed to fetch page:", e);
     }
 
+    // If fetch failed/blocked, try to proceed with AI "blind guess" from URL
     if (!html) {
-      // Can't fetch the page - return partial data if we have any
+      console.log(
+        "Fetch failed or blocked. Attempting AI Blind Guess from URL..."
+      );
+
+      // Initialize with minimal data
+      let metadata = {
+        title: "",
+        author: "",
+        publishDate: "",
+        siteName: new URL(urlString).hostname,
+        description: "",
+        url: urlString,
+      };
+
+      // Only proceed if AI is enabled, otherwise fail
+      if (useAI) {
+        metadata = await enhanceWithAI(metadata, urlString);
+        if (metadata.title) {
+          return res.status(200).json({
+            success: true,
+            metadata: {
+              ...metadata,
+              accessDate: new Date().toISOString(),
+            },
+            source: "ai_blind_guess",
+            message: "Extracted via AI analysis of URL (site blocked)",
+          });
+        }
+      }
+
+      // If AI disabled or failed to guess
       if (preloadedMetadata) {
         return res.status(200).json({
           success: true,
