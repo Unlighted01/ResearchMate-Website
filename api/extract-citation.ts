@@ -850,6 +850,60 @@ Respond ONLY with valid JSON (no markdown):
 }
 
 // ============================================
+// PART 4.8: OPENALEX URL LOOKUP (Silver Bullet)
+// ============================================
+
+async function lookupOpenAlexByURL(targetUrl: string): Promise<any | null> {
+  const MAX_RETRIES = 3;
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    try {
+      // OpenAlex allows filtering by the location URL
+      const response = await fetch(
+        `https://api.openalex.org/works?filter=locations.source.url:${targetUrl}`,
+        { headers: { "User-Agent": "ResearchMate/1.0" } }
+      );
+
+      if (response.ok) {
+        const data = await safeJsonParse(response);
+        const work = data?.results?.[0];
+
+        if (work && work.title) {
+          console.log(`✅ OpenAlex URL Match: ${work.id}`);
+
+          return {
+            title: work.title,
+            author: work.authorships
+              ?.map((a: any) => a.author?.display_name)
+              .filter(Boolean)
+              .join(", "),
+            publishDate: work.publication_date || "",
+            publishYear: work.publication_year?.toString(),
+            siteName:
+              work.primary_location?.source?.display_name ||
+              work.primary_location?.source?.host_organization_name ||
+              "Academic Publication",
+            description: "",
+            doi: work.doi?.replace("https://doi.org/", ""),
+            url: work.doi || targetUrl,
+          };
+        }
+      }
+      // If response ok but no work found, return null immediately (don't retry empty search)
+      if (response.ok) return null;
+
+      // If error (5xx or timeout-like), wait and retry
+      if (i < MAX_RETRIES - 1)
+        await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+    } catch (e) {
+      console.log(`OpenAlex URL lookup attempt ${i + 1} failed:`, e);
+      if (i === MAX_RETRIES - 1) return null;
+      await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+  return null;
+}
+
+// ============================================
 // PART 7: MAIN HANDLER
 // ============================================
 
@@ -885,6 +939,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const urlString = validUrl.toString();
     console.log(`\n========================================`);
     console.log(`Processing URL: ${urlString}`);
+
+    // STEP 0: OpenAlex Silver Bullet (Check if URL is a known academic paper)
+    // This works amazing for IEEE, Nature, etc. matching the exact URL
+    const openAlexData = await lookupOpenAlexByURL(urlString);
+    if (openAlexData && openAlexData.author) {
+      console.log("✅ Found via OpenAlex URL Lookup!");
+      return res.status(200).json({
+        success: true,
+        metadata: {
+          ...openAlexData,
+          accessDate: new Date().toISOString(),
+        },
+        source: "openalex_url_match",
+        doi: openAlexData.doi,
+        message: "Verified Academic Source (OpenAlex)",
+      });
+    }
 
     // STEP 1: Try to extract DOI from URL pattern
     const extraction = extractDOIFromURLPatterns(urlString);
@@ -1077,6 +1148,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Clean up title BEFORE lookup (Crucial for IEEE/JSTOR/etc where title has suffixes)
+    if (metadata.title) {
+      metadata.title = metadata.title
+        .replace(/\s*[-|–—]\s*[^-|–—]+$/, "") // Remove site suffix " - IEEE Xplore"
+        .trim();
+    }
+
     // STEP 6.5: If authors missing, try "Search by Title" fallback
     // This handles IEEE and other dynamic sites where we scrape the title but miss the rest
     if (
@@ -1086,7 +1164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       !isSoftBlock
     ) {
       console.log(
-        "Scraped title found but no author. Attempting Title Search fallback..."
+        `Scraped title found but no author. Attempting Title Search fallback with clean title: "${metadata.title}"`
       );
       const titleData = await lookupByTitle(metadata.title);
       if (titleData) {
@@ -1121,13 +1199,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // STEP 7: AI enhancement if requested
     if (useAI && (!metadata.author || !metadata.publishDate)) {
       metadata = await enhanceWithAI(metadata, urlString);
-    }
-
-    // Clean up title
-    if (metadata.title) {
-      metadata.title = metadata.title
-        .replace(/\s*[-|–—]\s*[^-|–—]+$/, "")
-        .trim();
     }
 
     return res.status(200).json({
