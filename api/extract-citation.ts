@@ -538,6 +538,85 @@ async function lookupDOI(doi: string): Promise<any | null> {
 }
 
 // ============================================
+// PART 4.5: TITLE LOOKUP (Fallback)
+// ============================================
+
+async function lookupByTitle(title: string): Promise<any | null> {
+  console.log(`Looking up by title: "${title}"`);
+
+  // Try CrossRef first
+  try {
+    const response = await fetch(
+      `https://api.crossref.org/works?query.bibliographic=${encodeURIComponent(
+        title
+      )}&rows=1`,
+      { headers: { "User-Agent": "ResearchMate/1.0" } }
+    );
+
+    if (response.ok) {
+      const data = await safeJsonParse(response);
+      const work = data?.message?.items?.[0];
+
+      // Check if title matches reasonably well (simple check)
+      if (work && work.title) {
+        const foundTitle = Array.isArray(work.title)
+          ? work.title[0]
+          : work.title;
+        console.log(`✅ Found by title in CrossRef: ${foundTitle}`);
+
+        const dateParts = work.published?.["date-parts"]?.[0];
+        return {
+          title: foundTitle,
+          author: work.author
+            ?.map((a: any) => `${a.given || ""} ${a.family || ""}`.trim())
+            .join(", "),
+          publishDate: dateParts?.[0]?.toString()
+            ? `${dateParts[0]}-01-01`
+            : "",
+          siteName: work["container-title"]?.[0] || "Academic Publication",
+          doi: work.DOI,
+          description: work.abstract || "",
+        };
+      }
+    }
+  } catch (e) {
+    console.log("CrossRef title lookup failed:", e);
+  }
+
+  // Try Semantic Scholar
+  try {
+    const response = await fetch(
+      `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(
+        title
+      )}&limit=1&fields=title,authors,year,venue,publicationDate,abstract,externalIds`,
+      { headers: { "User-Agent": "ResearchMate/1.0" } }
+    );
+
+    if (response.ok) {
+      const data = await safeJsonParse(response);
+      const paper = data?.data?.[0];
+
+      if (paper) {
+        console.log(`✅ Found by title in Semantic Scholar: ${paper.title}`);
+        return {
+          title: paper.title,
+          author: paper.authors?.map((a: any) => a.name).join(", "),
+          publishDate:
+            paper.publicationDate || (paper.year ? `${paper.year}-01-01` : ""),
+          siteName: paper.venue || "Academic Publication",
+          doi: paper.externalIds?.DOI,
+          description: paper.abstract || "",
+        };
+      }
+    }
+  } catch (e) {
+    console.log("Semantic Scholar title lookup failed:", e);
+  }
+
+  return null;
+}
+
+// ============================================
 // PART 5: HTML METADATA EXTRACTION (Fallback)
 // ============================================
 
@@ -647,15 +726,16 @@ async function enhanceWithAI(metadata: any, url: string): Promise<any> {
   const prompt = `Analyze this webpage metadata and provide your best guess for missing citation info.
 
 URL: ${url}
-Current Title: ${metadata.title}
+Current Title (Use this to infer author/context): ${metadata.title}
+Current Description: ${metadata.description}
 Current Author: ${metadata.author || "Unknown"}
 Current Site: ${metadata.siteName}
 
-Provide:
-1. Author name (if organization, use that)
-2. Likely publish date (YYYY-MM-DD or "n.d.")
+Task:
+1. Identify the Author (or Organization/Channel). LOOK AT THE TITLE - often it's "Title | Author" or "Title - Site".
+2. Estimate Publish Date (YYYY-MM-DD).
 
-Respond ONLY with JSON, no other text:
+Respond ONLY with JSON:
 {"author": "Name", "publishDate": "YYYY-MM-DD"}`;
 
   try {
@@ -851,6 +931,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // STEP 6: Extract metadata from HTML
     let metadata = extractMetadataFromHTML(html, urlString);
+
+    // STEP 6.5: If authors missing, try "Search by Title" fallback
+    // This handles IEEE and other dynamic sites where we scrape the title but miss the rest
+    if (!metadata.author && metadata.title && metadata.title.length > 10) {
+      console.log(
+        "Scraped title found but no author. Attempting Title Search fallback..."
+      );
+      const titleData = await lookupByTitle(metadata.title);
+      if (titleData) {
+        console.log("✅ Title search successful!");
+        // Merge - prefer title lookup data but keep scraped URL info
+        metadata = {
+          ...metadata,
+          title: titleData.title || metadata.title, // prefer authoritative title
+          author: titleData.author,
+          publishDate: titleData.publishDate,
+          siteName: titleData.siteName || metadata.siteName,
+          description: titleData.description || metadata.description,
+        };
+        // If we found a DOI via title search, we can treat this as an authoritative academic match
+        if (titleData.doi) {
+          doi = titleData.doi; // Set DOI so we can link it
+          return res.status(200).json({
+            success: true,
+            metadata: {
+              ...metadata,
+              doi: titleData.doi,
+              accessDate: new Date().toISOString(),
+            },
+            source: "academic_database_title_match",
+            doi: titleData.doi,
+            message: "Found via Metadata Title Search",
+          });
+        }
+      }
+    }
 
     // STEP 7: AI enhancement if requested
     if (useAI && (!metadata.author || !metadata.publishDate)) {

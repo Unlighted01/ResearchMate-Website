@@ -6,6 +6,24 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // ============================================
+// PART 0.5: AI CONFIG
+// ============================================
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+async function safeJsonParse(response: Response): Promise<any | null> {
+  try {
+    const text = await response.text();
+    if (!text || text.trim() === "") return null;
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+// ============================================
 // PART 1: TYPE DEFINITIONS
 // ============================================
 
@@ -182,6 +200,69 @@ async function oembedFallback(videoId: string): Promise<VideoData | null> {
 }
 
 // ============================================
+// PART 4.5: AI ENHANCEMENT (Fill missing data)
+// ============================================
+
+async function enhanceVideoDataWithAI(data: VideoData): Promise<VideoData> {
+  if (!GEMINI_API_KEY) return data;
+
+  // Only run if we are missing the date (typical oEmbed case)
+  if (data.publishDate && data.publishYear !== "n.d.") return data;
+
+  console.log("Enhancing YouTube data with AI...");
+
+  const prompt = `I have a YouTube video that I need citation info for.
+  
+Title: ${data.title}
+Channel: ${data.channelTitle}
+URL: ${data.url}
+
+Task:
+1. Estimate the likely publication year/date based on the context of this video (is it a famous talk, a new release, etc?).
+2. If you can't guess, use "n.d.".
+3. If the description is empty, write a brief 1-sentence summary based on the title.
+
+Respond ONLY with JSON:
+{"publishDate": "YYYY-MM-DD", "publishYear": "YYYY", "description": "Summary"}`;
+
+  try {
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 150 },
+      }),
+    });
+
+    if (response.ok) {
+      const respData = await safeJsonParse(response);
+      const text = respData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        if (result.publishYear && result.publishYear !== "n.d.") {
+          data.publishYear = result.publishYear;
+          data.publishDate =
+            result.publishDate || `${result.publishYear}-01-01`;
+          // simplistic month/day
+          data.publishMonth = data.publishDate.split("-")[1] || "";
+          data.publishDay = data.publishDate.split("-")[2] || "";
+        }
+        if (!data.description && result.description) {
+          data.description = result.description;
+        }
+      }
+    }
+  } catch (e) {
+    console.log("AI video enhancement failed:", e);
+  }
+
+  return data;
+}
+
+// ============================================
 // PART 5: MAIN HANDLER
 // ============================================
 
@@ -227,6 +308,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!videoData) {
       console.log("YouTube API unavailable, using oEmbed fallback...");
       videoData = await oembedFallback(videoId);
+
+      // Upgrade oEmbed data with AI (to get date/description)
+      if (videoData) {
+        videoData = await enhanceVideoDataWithAI(videoData);
+      }
     }
 
     if (!videoData) {

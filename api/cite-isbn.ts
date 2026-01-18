@@ -6,6 +6,24 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // ============================================
+// PART 0.5: AI CONFIG
+// ============================================
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+async function safeJsonParse(response: Response): Promise<any | null> {
+  try {
+    const text = await response.text();
+    if (!text || text.trim() === "") return null;
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+// ============================================
 // PART 1: TYPE DEFINITIONS
 // ============================================
 
@@ -165,6 +183,66 @@ async function googleBooksLookup(isbn: string): Promise<BookData | null> {
 }
 
 // ============================================
+// PART 4.5: AI FALLBACK (Final Attempt)
+// ============================================
+
+async function lookupISBNWithAI(isbn: string): Promise<BookData | null> {
+  if (!GEMINI_API_KEY) return null;
+
+  console.log("APIs failed, trying AI lookup for ISBN...");
+
+  const prompt = `Identify this book by ISBN: ${isbn}.
+  
+Respond ONLY with JSON:
+{
+  "title": "Title",
+  "authors": ["Author Name"],
+  "publisher": "Publisher",
+  "publishYear": "YYYY",
+  "pages": 123
+}
+If unknown, return null.`;
+
+  try {
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 150 },
+      }),
+    });
+
+    if (response.ok) {
+      const respData = await safeJsonParse(response);
+      const text = respData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        if (result && result.title && result.title !== "Unknown") {
+          return {
+            title: result.title,
+            authors: result.authors || ["Unknown Author"],
+            publisher: result.publisher || "Unknown Publisher",
+            publishYear: result.publishYear || "n.d.",
+            publishPlace: "",
+            pages: result.pages || null,
+            isbn: isbn,
+            isbn13: isbn.length === 13 ? isbn : "",
+            coverUrl: null,
+          };
+        }
+      }
+    }
+  } catch (e) {
+    console.log("AI ISBN lookup failed:", e);
+  }
+
+  return null;
+}
+
+// ============================================
 // PART 5: MAIN HANDLER
 // ============================================
 
@@ -204,6 +282,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!bookData) {
       console.log("Open Library failed, trying Google Books...");
       bookData = await googleBooksLookup(cleanedISBN);
+    }
+
+    // Final Fallback: AI
+    if (!bookData) {
+      bookData = await lookupISBNWithAI(cleanedISBN);
     }
 
     if (!bookData) {
