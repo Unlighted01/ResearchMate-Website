@@ -237,13 +237,22 @@ async function openAlexLookup(isbn: string): Promise<BookData | null> {
 // PART 4.5: AI FALLBACK (Final Attempt)
 // ============================================
 
-async function lookupISBNWithAI(isbn: string): Promise<BookData | null> {
-  if (!GEMINI_API_KEY) return null;
+// ============================================
+// PART 4.5: AI FALLBACK (Final Attempt)
+// ============================================
 
-  console.log("🤖 APIs failed, trying AI lookup for ISBN...");
+async function lookupISBNWithAI(
+  isbn: string,
+  log: (msg: string) => void
+): Promise<BookData | null> {
+  if (!GEMINI_API_KEY) {
+    log("❌ AI Skipped: GEMINI_API_KEY missing");
+    return null;
+  }
+
+  log("🤖 APIs failed/incomplete, calling Gemini AI...");
 
   const prompt = `You are a bibliographic assistant. Look up this book by ISBN: ${isbn}
-
 This is a real ISBN for a published book. Use your knowledge to identify:
 - The exact title
 - All author names (full names, e.g., "Robert C. Martin" not just "Martin")
@@ -253,16 +262,14 @@ This is a real ISBN for a published book. Use your knowledge to identify:
 
 Example: ISBN 9780132350884 is "Clean Code: A Handbook of Agile Software Craftsmanship" by Robert C. Martin.
 
-Respond ONLY with valid JSON (no markdown, no extra text):
+Respond ONLY with valid JSON (no markdown):
 {
   "title": "Full Book Title",
   "authors": ["Full Author Name"],
   "publisher": "Publisher Name",
   "publishYear": "YYYY",
   "pages": 123
-}
-
-If you cannot identify this ISBN, respond with null.`;
+}`;
 
   try {
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
@@ -270,34 +277,43 @@ If you cannot identify this ISBN, respond with null.`;
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 150 },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
       }),
     });
 
-    if (response.ok) {
-      const respData = await safeJsonParse(response);
-      const text = respData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!response.ok) {
+      log(`❌ AI Request Failed: ${response.status} ${response.statusText}`);
+      const errText = await response.text();
+      log(`❌ AI Error Details: ${errText.substring(0, 100)}...`);
+      return null;
+    }
 
-      if (jsonMatch) {
-        const result = JSON.parse(jsonMatch[0]);
-        if (result && result.title && result.title !== "Unknown") {
-          return {
-            title: result.title,
-            authors: result.authors || ["Unknown Author"],
-            publisher: result.publisher || "Unknown Publisher",
-            publishYear: result.publishYear || "n.d.",
-            publishPlace: "",
-            pages: result.pages || null,
-            isbn: isbn,
-            isbn13: isbn.length === 13 ? isbn : "",
-            coverUrl: null,
-          };
-        }
+    const respData = await safeJsonParse(response);
+    const text = respData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+    if (jsonMatch) {
+      const result = JSON.parse(jsonMatch[0]);
+      if (result && result.title && result.title !== "Unknown") {
+        return {
+          title: result.title,
+          authors: result.authors || ["Unknown Author"],
+          publisher: result.publisher || "Unknown Publisher",
+          publishYear: result.publishYear || "n.d.",
+          publishPlace: "",
+          pages: result.pages || null,
+          isbn: isbn,
+          isbn13: isbn.length === 13 ? isbn : "",
+          coverUrl: null,
+        };
+      } else {
+        log("❌ AI returned generic/empty data");
       }
+    } else {
+      log("❌ AI response was not valid JSON");
     }
   } catch (e) {
-    console.log("AI ISBN lookup failed:", e);
+    log(`❌ AI Exception: ${(e as Error).message}`);
   }
 
   return null;
@@ -344,73 +360,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     log(`Processing ISBN: ${cleanedISBN}`);
 
-    // Try Open Library first
+    // Helper to check if data is "good enough" (has authors)
+    const hasAuthors = (data: BookData | null) =>
+      data &&
+      data.authors &&
+      data.authors.length > 0 &&
+      !data.authors.some((a) => a.toLowerCase().includes("unknown"));
+
+    // 1. Try Open Library
     let bookData = await lookupISBN(cleanedISBN);
-    if (bookData) log("Found in Open Library");
-
-    // Fallback to Google Books
-    if (!bookData) {
-      log("OpenLibrary failed, trying Google Books...");
-      bookData = await googleBooksLookup(cleanedISBN);
-      if (bookData) log("Found in Google Books");
-    }
-
-    // Fallback to OpenAlex (New!)
-    if (!bookData) {
-      log("Google Books failed, trying OpenAlex...");
-      bookData = await openAlexLookup(cleanedISBN);
-      if (bookData) log("Found in OpenAlex");
-    }
-
-    // PARTIAL DATA CHECK
-    // Check if authors is invalid or contains "Unknown"
-    const hasUnknownAuthor =
-      !bookData?.authors ||
-      bookData.authors.length === 0 ||
-      bookData.authors.some((a) => a.toLowerCase().includes("unknown"));
-
-    if (bookData && hasUnknownAuthor) {
-      log("⚠️ Detected 'Unknown' in author list.");
-    }
-
-    // Final Fallback: AI (if no data OR if authors are unknown)
-    if (!bookData || hasUnknownAuthor) {
-      log("Attempting AI Fallback...");
-
-      if (!process.env.GEMINI_API_KEY) {
-        log("❌ FAIL: GEMINI_API_KEY is missing in process.env");
+    if (bookData) {
+      if (hasAuthors(bookData)) {
+        log("✅ Found complete data in Open Library");
       } else {
-        const aiData = await lookupISBNWithAI(cleanedISBN);
-        if (aiData) {
-          log("✅ AI returned data!");
-          if (bookData) {
-            // Merge logic
-            log("Merging AI data into existing bookData...");
-            if (
-              aiData.authors.length > 0 &&
-              !aiData.authors[0].toLowerCase().includes("unknown")
-            ) {
-              bookData.authors = aiData.authors;
-              log(`Updated authors to: ${aiData.authors.join(", ")}`);
-            }
-            if (
-              bookData.publishYear === "n.d." &&
-              aiData.publishYear !== "n.d."
-            ) {
-              bookData.publishYear = aiData.publishYear;
-            }
-            if (
-              bookData.publisher === "Unknown Publisher" &&
-              aiData.publisher
-            ) {
-              bookData.publisher = aiData.publisher;
-            }
-          } else {
-            bookData = aiData;
-            log("Using AI data as primary source");
+        log("⚠️ Open Library found book but missing authors. Trying others...");
+      }
+    }
+
+    // 2. Fallback to Google Books (if OL failed or has unknown author)
+    if (!bookData || !hasAuthors(bookData)) {
+      const googleData = await googleBooksLookup(cleanedISBN);
+      if (googleData && hasAuthors(googleData)) {
+        log("✅ Found better data in Google Books");
+        bookData = googleData; // Upgrade to Google data
+      } else if (googleData && !bookData) {
+        bookData = googleData; // Take what we can get
+      }
+    }
+
+    // 3. Fallback to OpenAlex (if OL/Google failed or still unknown)
+    if (!bookData || !hasAuthors(bookData)) {
+      const openAlexData = await openAlexLookup(cleanedISBN);
+      if (openAlexData && hasAuthors(openAlexData)) {
+        log("✅ Found better data in OpenAlex");
+        bookData = openAlexData; // Upgrade to OpenAlex data
+      } else if (openAlexData && !bookData) {
+        bookData = openAlexData;
+      }
+    }
+
+    // 4. Final AI Fallback
+    if (!bookData || !hasAuthors(bookData)) {
+      log("Attempting AI Fallback...");
+      const aiData = await lookupISBNWithAI(cleanedISBN, log);
+
+      if (aiData) {
+        log("✅ AI returned data!");
+        if (bookData) {
+          // Merge AI data into existing partial data
+          if (
+            aiData.authors.length > 0 &&
+            !aiData.authors[0].toLowerCase().includes("unknown")
+          ) {
+            bookData.authors = aiData.authors;
+          }
+          if (
+            bookData.publishYear === "n.d." &&
+            aiData.publishYear !== "n.d."
+          ) {
+            bookData.publishYear = aiData.publishYear;
+          }
+          if (!bookData.publisher || bookData.publisher.includes("Unknown")) {
+            bookData.publisher = aiData.publisher;
           }
         } else {
-          log("❌ AI returned null or failed to identify book.");
+          bookData = aiData;
         }
       }
     }
