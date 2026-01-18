@@ -774,6 +774,84 @@ Respond ONLY with JSON:
 }
 
 // ============================================
+// PART 6.5: AI BLIND GUESS (For Blocked Sites)
+// ============================================
+
+async function blindGuessFromURL(url: string): Promise<any | null> {
+  if (!GEMINI_API_KEY) {
+    console.log("❌ No Gemini API key - cannot blind guess");
+    return null;
+  }
+
+  console.log("🤖 Site blocked! Attempting AI blind guess from URL only...");
+
+  const hostname = new URL(url).hostname;
+  const pathname = new URL(url).pathname;
+
+  const prompt = `A user is trying to cite a webpage, but the site is blocking automated access (403/400 error).
+
+URL: ${url}
+Domain: ${hostname}
+Path: ${pathname}
+
+Based ONLY on the URL structure and domain, provide your BEST GUESS for citation metadata:
+- Title: Infer from the URL path/slug. For example, "https://techcrunch.com/2024/01/15/ai-startup-raises-millions" → "AI Startup Raises Millions" or similar.
+- Author: If it's a known news site (TechCrunch, Medium, etc.), use the site name as author. For blogs, try to infer from subdomain.
+- Publish Date: Extract from URL if present (many sites use /YYYY/MM/DD/ structure), otherwise estimate or use "n.d."
+- Description: Brief 1-sentence summary based on title/URL topic, or leave empty if impossible to infer.
+
+Be creative but reasonable. Users need SOMETHING rather than nothing.
+
+Respond ONLY with valid JSON (no markdown):
+{
+  "title": "Inferred Title",
+  "author": "Author or Site Name",
+  "publishDate": "YYYY-MM-DD or n.d.",
+  "description": "Brief summary or empty string"
+}`;
+
+  try {
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 200 },
+      }),
+    });
+
+    if (response.ok) {
+      const data = await safeJsonParse(response);
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+
+        if (result.title) {
+          console.log("✅ AI generated blind guess citation");
+          console.log(`   - Title: ${result.title}`);
+          console.log(`   - Author: ${result.author}`);
+
+          return {
+            title: result.title || "Web Page",
+            author: result.author || hostname,
+            publishDate: result.publishDate || "n.d.",
+            siteName: hostname,
+            description: result.description || "",
+            url: url,
+          };
+        }
+      }
+    }
+  } catch (e) {
+    console.log("AI blind guess failed:", e);
+  }
+
+  return null;
+}
+
+// ============================================
 // PART 7: MAIN HANDLER
 // ============================================
 
@@ -903,38 +981,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // If fetch failed/blocked, try to proceed with AI "blind guess" from URL
     if (!html) {
-      console.log(
-        "Fetch failed or blocked. Attempting AI Blind Guess from URL..."
-      );
+      console.log("⚠️  Fetch failed or blocked (403/400/network error)");
+      console.log("🔄 FAILING OPEN with AI Blind Guess...");
 
-      // Initialize with minimal data
-      let metadata = {
-        title: "",
-        author: "",
-        publishDate: "",
-        siteName: new URL(urlString).hostname,
-        description: "",
-        url: urlString,
-      };
-
-      // Only proceed if AI is enabled, otherwise fail
-      if (useAI) {
-        metadata = await enhanceWithAI(metadata, urlString);
-        if (metadata.title) {
-          return res.status(200).json({
-            success: true,
-            metadata: {
-              ...metadata,
-              accessDate: new Date().toISOString(),
-            },
-            source: "ai_blind_guess",
-            message: "Extracted via AI analysis of URL (site blocked)",
-          });
-        }
-      }
-
-      // If AI disabled or failed to guess
-      if (preloadedMetadata) {
+      // If we have preloaded metadata from earlier lookups, use that first
+      if (preloadedMetadata && preloadedMetadata.title) {
+        console.log("Using preloaded metadata from earlier lookup");
         return res.status(200).json({
           success: true,
           metadata: {
@@ -944,19 +996,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               ? `${preloadedMetadata.year}-01-01`
               : "",
             siteName: preloadedMetadata.venue || extraction.source,
+            description: "",
             url: urlString,
             accessDate: new Date().toISOString(),
           },
           source: "partial_lookup",
-          warning: "Could not fetch full page data",
+          warning: "Could not fetch full page data (site blocked)",
         });
       }
 
-      return res.status(400).json({
-        error:
-          "Could not fetch URL. The site may be blocking automated requests.",
-        suggestion:
-          "Try entering the DOI directly (e.g., 10.1109/xxx.2021.xxx)",
+      // Try AI blind guess (always, regardless of useAI flag - fail open!)
+      const blindGuess = await blindGuessFromURL(urlString);
+      if (blindGuess) {
+        return res.status(200).json({
+          success: true,
+          metadata: {
+            ...blindGuess,
+            accessDate: new Date().toISOString(),
+          },
+          source: "ai_blind_guess",
+          warning:
+            "Site blocked automated access. Citation generated from URL analysis.",
+        });
+      }
+
+      // Last resort: return minimal fallback
+      console.log(
+        "❌ All attempts failed. Returning minimal fallback citation."
+      );
+      return res.status(200).json({
+        success: true,
+        metadata: {
+          title: new URL(urlString).pathname.split("/").pop() || "Web Page",
+          author: new URL(urlString).hostname,
+          publishDate: "n.d.",
+          siteName: new URL(urlString).hostname,
+          description: "",
+          url: urlString,
+          accessDate: new Date().toISOString(),
+        },
+        source: "minimal_fallback",
+        warning:
+          "Site blocked and AI unavailable. Generated minimal citation from URL.",
       });
     }
 

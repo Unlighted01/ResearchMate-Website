@@ -212,7 +212,7 @@ async function enhanceVideoDataWithAI(data: VideoData): Promise<VideoData> {
   console.log("Enhancing YouTube data with AI...");
 
   const prompt = `I have a YouTube video that I need citation info for.
-  
+
 Title: ${data.title}
 Channel: ${data.channelTitle}
 URL: ${data.url}
@@ -260,6 +260,102 @@ Respond ONLY with JSON:
   }
 
   return data;
+}
+
+// ============================================
+// PART 4.6: AI BLIND GUESS (oEmbed 404 Fallback)
+// ============================================
+
+async function blindGuessVideoDataWithAI(
+  videoId: string,
+  url: string
+): Promise<VideoData | null> {
+  if (!GEMINI_API_KEY) {
+    console.log("❌ No Gemini API key - cannot blind guess");
+    return null;
+  }
+
+  console.log("🤖 oEmbed failed! Attempting AI blind guess from URL...");
+
+  const prompt = `A user is trying to cite a YouTube video, but the video metadata is unavailable (possibly deleted, private, or region-blocked).
+
+Video URL: ${url}
+Video ID: ${videoId}
+
+Based on the URL/ID, provide your BEST GUESS for citation metadata. If you recognize this video ID or can make reasonable inferences:
+- Title (if you know this video, provide the actual title; otherwise say "YouTube Video")
+- Channel name (if you know it, otherwise say "Unknown Channel")
+- Upload date (YYYY-MM-DD format, or "n.d." if unknown)
+- Brief description (1 sentence if you know the video, otherwise leave empty)
+
+Respond ONLY with valid JSON (no markdown):
+{
+  "title": "Video Title or 'YouTube Video'",
+  "channelTitle": "Channel Name or 'Unknown Channel'",
+  "publishDate": "YYYY-MM-DD or n.d.",
+  "description": "Brief description or empty string"
+}`;
+
+  try {
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 200 },
+      }),
+    });
+
+    if (response.ok) {
+      const respData = await safeJsonParse(response);
+      const text = respData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+
+        if (result.title) {
+          console.log("✅ AI generated fallback data");
+
+          // Parse date
+          let publishYear = "n.d.";
+          let publishMonth = "";
+          let publishDay = "";
+
+          if (
+            result.publishDate &&
+            result.publishDate !== "n.d." &&
+            result.publishDate.match(/^\d{4}/)
+          ) {
+            const parts = result.publishDate.split("-");
+            publishYear = parts[0];
+            publishMonth = parts[1] || "";
+            publishDay = parts[2] || "";
+          }
+
+          return {
+            title: result.title || "YouTube Video",
+            channelTitle: result.channelTitle || "Unknown Channel",
+            channelUrl: "",
+            publishDate: result.publishDate || "",
+            publishYear: publishYear,
+            publishMonth: publishMonth,
+            publishDay: publishDay,
+            description: result.description || "",
+            duration: "",
+            durationFormatted: "",
+            thumbnailUrl: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+            url: url,
+            videoId: videoId,
+          };
+        }
+      }
+    }
+  } catch (e) {
+    console.log("AI blind guess failed:", e);
+  }
+
+  return null;
 }
 
 // ============================================
@@ -315,9 +411,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // FINAL FALLBACK: AI Blind Guess (if oEmbed 404'd or failed)
+    if (!videoData) {
+      console.log("⚠️  oEmbed failed (404 or unavailable)");
+      const url = `https://www.youtube.com/watch?v=${videoId}`;
+      videoData = await blindGuessVideoDataWithAI(videoId, url);
+    }
+
     if (!videoData) {
       return res.status(404).json({
-        error: "Video not found. Please check the URL and try again.",
+        error:
+          "Video not found. The video may be private, deleted, or region-blocked. AI could not generate fallback data.",
         videoId: videoId,
       });
     }

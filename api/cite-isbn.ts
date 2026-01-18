@@ -189,19 +189,29 @@ async function googleBooksLookup(isbn: string): Promise<BookData | null> {
 async function lookupISBNWithAI(isbn: string): Promise<BookData | null> {
   if (!GEMINI_API_KEY) return null;
 
-  console.log("APIs failed, trying AI lookup for ISBN...");
+  console.log("🤖 APIs failed, trying AI lookup for ISBN...");
 
-  const prompt = `Identify this book by ISBN: ${isbn}.
-  
-Respond ONLY with JSON:
+  const prompt = `You are a bibliographic assistant. Look up this book by ISBN: ${isbn}
+
+This is a real ISBN for a published book. Use your knowledge to identify:
+- The exact title
+- All author names (full names, e.g., "Robert C. Martin" not just "Martin")
+- Publisher
+- Publication year
+- Number of pages (if known)
+
+Example: ISBN 9780132350884 is "Clean Code: A Handbook of Agile Software Craftsmanship" by Robert C. Martin.
+
+Respond ONLY with valid JSON (no markdown, no extra text):
 {
-  "title": "Title",
-  "authors": ["Author Name"],
-  "publisher": "Publisher",
+  "title": "Full Book Title",
+  "authors": ["Full Author Name"],
+  "publisher": "Publisher Name",
   "publishYear": "YYYY",
   "pages": 123
 }
-If unknown, return null.`;
+
+If you cannot identify this ISBN, respond with null.`;
 
   try {
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
@@ -289,16 +299,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       !bookData ||
       (bookData.authors && bookData.authors.includes("Unknown Author"))
     ) {
-      console.log("Partial or missing data, asking AI to complete...");
+      console.log("⚠️  Partial or missing data detected:");
+      console.log(`   - Title: ${bookData?.title || "Missing"}`);
+      console.log(`   - Authors: ${bookData?.authors?.join(", ") || "Missing"}`);
+      console.log(`   - Publisher: ${bookData?.publisher || "Missing"}`);
+      console.log("🤖 Asking AI to complete...");
+
       const aiData = await lookupISBNWithAI(cleanedISBN);
       if (aiData) {
-        // If we had partial data, merge it (preferring AI for authors, but API for specific details if better)
+        console.log("✅ AI found data!");
+        console.log(`   - Title: ${aiData.title}`);
+        console.log(`   - Authors: ${aiData.authors.join(", ")}`);
+
+        // If we had partial data, merge it (prefer AI for authors if better)
         if (bookData) {
           bookData = {
             ...bookData,
+            // Use AI authors if they're better than "Unknown Author"
             authors:
               aiData.authors.length > 0 &&
-              !aiData.authors.includes("Unknown Author")
+              aiData.authors[0] !== "Unknown Author" &&
+              aiData.authors[0] !== "Unknown"
                 ? aiData.authors
                 : bookData.authors,
             publishYear:
@@ -313,6 +334,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else {
           bookData = aiData;
         }
+      } else {
+        console.log("❌ AI could not identify this ISBN");
       }
     }
 
