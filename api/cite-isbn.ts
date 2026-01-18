@@ -257,6 +257,12 @@ If you cannot identify this ISBN, respond with null.`;
 // ============================================
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const logs: string[] = []; // Debug logs
+  function log(msg: string) {
+    console.log(msg);
+    logs.push(msg);
+  }
+
   // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -285,64 +291,77 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    log(`Processing ISBN: ${cleanedISBN}`);
+
     // Try Open Library first
     let bookData = await lookupISBN(cleanedISBN);
+    if (bookData) log("Found in Open Library");
 
     // Fallback to Google Books
     if (!bookData) {
-      console.log("Open Library failed, trying Google Books...");
+      log("Open Library failed, trying Google Books...");
       bookData = await googleBooksLookup(cleanedISBN);
+      if (bookData) log("Found in Google Books");
+    }
+
+    // PARTIAL DATA CHECK
+    // Check if authors is invalid or contains "Unknown"
+    const hasUnknownAuthor =
+      !bookData?.authors ||
+      bookData.authors.length === 0 ||
+      bookData.authors.some((a) => a.toLowerCase().includes("unknown"));
+
+    if (bookData && hasUnknownAuthor) {
+      log("⚠️ Detected 'Unknown' in author list.");
     }
 
     // Final Fallback: AI (if no data OR if authors are unknown)
-    if (
-      !bookData ||
-      (bookData.authors && bookData.authors.includes("Unknown Author"))
-    ) {
-      console.log("⚠️  Partial or missing data detected:");
-      console.log(`   - Title: ${bookData?.title || "Missing"}`);
-      console.log(`   - Authors: ${bookData?.authors?.join(", ") || "Missing"}`);
-      console.log(`   - Publisher: ${bookData?.publisher || "Missing"}`);
-      console.log("🤖 Asking AI to complete...");
+    if (!bookData || hasUnknownAuthor) {
+      log("Attempting AI Fallback...");
 
-      const aiData = await lookupISBNWithAI(cleanedISBN);
-      if (aiData) {
-        console.log("✅ AI found data!");
-        console.log(`   - Title: ${aiData.title}`);
-        console.log(`   - Authors: ${aiData.authors.join(", ")}`);
-
-        // If we had partial data, merge it (prefer AI for authors if better)
-        if (bookData) {
-          bookData = {
-            ...bookData,
-            // Use AI authors if they're better than "Unknown Author"
-            authors:
-              aiData.authors.length > 0 &&
-              aiData.authors[0] !== "Unknown Author" &&
-              aiData.authors[0] !== "Unknown"
-                ? aiData.authors
-                : bookData.authors,
-            publishYear:
-              bookData.publishYear === "n.d."
-                ? aiData.publishYear
-                : bookData.publishYear,
-            publisher:
-              bookData.publisher === "Unknown Publisher"
-                ? aiData.publisher
-                : bookData.publisher,
-          };
-        } else {
-          bookData = aiData;
-        }
+      if (!process.env.GEMINI_API_KEY) {
+        log("❌ FAIL: GEMINI_API_KEY is missing in process.env");
       } else {
-        console.log("❌ AI could not identify this ISBN");
+        const aiData = await lookupISBNWithAI(cleanedISBN);
+        if (aiData) {
+          log("✅ AI returned data!");
+          if (bookData) {
+            // Merge logic
+            log("Merging AI data into existing bookData...");
+            if (
+              aiData.authors.length > 0 &&
+              !aiData.authors[0].toLowerCase().includes("unknown")
+            ) {
+              bookData.authors = aiData.authors;
+              log(`Updated authors to: ${aiData.authors.join(", ")}`);
+            }
+            if (
+              bookData.publishYear === "n.d." &&
+              aiData.publishYear !== "n.d."
+            ) {
+              bookData.publishYear = aiData.publishYear;
+            }
+            if (
+              bookData.publisher === "Unknown Publisher" &&
+              aiData.publisher
+            ) {
+              bookData.publisher = aiData.publisher;
+            }
+          } else {
+            bookData = aiData;
+            log("Using AI data as primary source");
+          }
+        } else {
+          log("❌ AI returned null or failed to identify book.");
+        }
       }
     }
 
     if (!bookData) {
       return res.status(404).json({
-        error: "Book not found. Please check the ISBN and try again.",
+        error: "Book not found. AI fallback failed.",
         isbn: cleanedISBN,
+        debugLogs: logs,
       });
     }
 
@@ -350,9 +369,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       type: "book",
       data: bookData,
+      debugLogs: logs,
     });
   } catch (error) {
     console.error("ISBN citation error:", error);
-    return res.status(500).json({ error: (error as Error).message });
+    return res.status(500).json({
+      error: (error as Error).message,
+      debugLogs: logs,
+    });
   }
 }
