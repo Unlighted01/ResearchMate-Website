@@ -43,28 +43,58 @@ const Statistics = () => {
 
   useEffect(() => {
     // For stats, we might want all items, but let's use a reasonable limit for performance
-    // In production, this should use database aggregation queries
     getAllItems(1000).then((items) => {
       const sourceCount = { extension: 0, mobile: 0, web: 0, smart_pen: 0 };
-      const weekMap: Record<string, number> = {};
-      const dayMap: Record<string, number> = {};
+      const now = new Date();
+      const oneDay = 24 * 60 * 60 * 1000;
+
+      // Initialize maps with 0 for the required ranges
+      const last7DaysMap: Record<string, number> = {};
+      const last14DaysMap: Record<string, number> = {};
+
+      // Initialize keys for chart continuity
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * oneDay);
+        last7DaysMap[d.toLocaleDateString("en-US", { weekday: "short" })] = 0;
+      }
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * oneDay);
+        last14DaysMap[
+          d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        ] = 0;
+      }
+
       let withSummary = 0;
 
       items.forEach((item) => {
+        // Source Stats
         const src = (item.deviceSource || "web") as keyof typeof sourceCount;
         if (sourceCount[src] !== undefined) sourceCount[src]++;
+
+        // Summary Stats
         if (item.aiSummary) withSummary++;
 
-        const day = new Date(item.createdAt).toLocaleDateString("en-US", {
-          weekday: "short",
-        });
-        weekMap[day] = (weekMap[day] || 0) + 1;
+        // Date Stats
+        const itemDate = new Date(item.createdAt);
+        const timeDiff = now.getTime() - itemDate.getTime();
+        const daysAgo = Math.floor(timeDiff / oneDay);
 
-        const date = new Date(item.createdAt).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        });
-        dayMap[date] = (dayMap[date] || 0) + 1;
+        // Weekly (Last 7 Days)
+        if (daysAgo <= 6 && daysAgo >= 0) {
+          const dayName = itemDate.toLocaleDateString("en-US", {
+            weekday: "short",
+          });
+          last7DaysMap[dayName] = (last7DaysMap[dayName] || 0) + 1;
+        }
+
+        // Daily Trend (Last 14 Days)
+        if (daysAgo <= 13 && daysAgo >= 0) {
+          const dateStr = itemDate.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          });
+          last14DaysMap[dateStr] = (last14DaysMap[dateStr] || 0) + 1;
+        }
       });
 
       const pieColors = {
@@ -82,13 +112,26 @@ const Statistics = () => {
         }))
         .filter((d) => d.value > 0);
 
-      const weeklyData = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
-        (day) => ({ name: day, count: weekMap[day] || 0 })
-      );
+      // Convert maps to arrays, preserving order
+      // Weekly: Order by day of week is tricky if we want "Last 7 Days" rolling.
+      // Current implementation in chart uses "name" (Mon, Tue).
+      // To show "last 7 days" in order, we regenerate keys based on the loop order.
+      const weeklyData = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * oneDay);
+        const name = d.toLocaleDateString("en-US", { weekday: "short" });
+        weeklyData.push({ name, count: last7DaysMap[name] || 0 });
+      }
 
-      const dailyData = Object.entries(dayMap)
-        .slice(-14)
-        .map(([date, count]) => ({ date, count }));
+      const dailyData = [];
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * oneDay);
+        const date = d.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+        dailyData.push({ date, count: last14DaysMap[date] || 0 });
+      }
 
       setStats({
         total: items.length,
@@ -104,11 +147,21 @@ const Statistics = () => {
   // Memoize computed values from stats
   const computedStats = useMemo(() => {
     const weekTotal = stats.weekly.reduce((a, b) => a + b.count, 0);
-    const avgPerDay = Math.round(stats.total / 7) || 0;
-    const mostActiveDay = stats.weekly.reduce(
-      (a, b) => (a.count > b.count ? a : b),
-      { name: "—", count: 0 }
-    ).name;
+    // Average over the last 7 days (or total days if < 7)
+    // Here we strictly show last 7 days so avg is total / 7
+    const avgPerDay = Math.round(weekTotal / 7) || 0;
+
+    // Find most active day in the weekly set
+    let maxCount = -1;
+    let mostActiveDay = "—";
+    stats.weekly.forEach((d) => {
+      if (d.count > maxCount) {
+        maxCount = d.count;
+        mostActiveDay = d.name;
+      }
+    });
+    if (maxCount === 0) mostActiveDay = "—";
+
     const aiCoverage =
       stats.total > 0
         ? `${Math.round((stats.withSummary / stats.total) * 100)}%`
@@ -142,7 +195,7 @@ const Statistics = () => {
         change: "+24%",
       },
       {
-        label: "Avg/Day",
+        label: "Avg/Day (Last 7d)",
         value: computedStats.avgPerDay,
         icon: Activity,
         color: "#FF9500",
@@ -211,7 +264,7 @@ const Statistics = () => {
         {statCards.map((stat, idx) => (
           <div
             key={idx}
-            className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-5 border border-gray-200/50 dark:border-gray-800 hover:shadow-lg hover:shadow-gray-200/50 dark:hover:shadow-black/20 transition-all"
+            className="glass-card rounded-2xl p-5 hover-lift transition-all"
           >
             <div className="flex items-start justify-between mb-3">
               <div
@@ -237,7 +290,8 @@ const Statistics = () => {
       {/* ========== CHARTS ========== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Weekly Activity */}
-        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800">
+        {/* Weekly Activity */}
+        <div className="glass-card rounded-2xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-semibold text-gray-900 dark:text-white">
               Weekly Activity
@@ -269,6 +323,7 @@ const Statistics = () => {
                   }}
                   labelStyle={{ color: "#fff" }}
                   itemStyle={{ color: "#007AFF" }}
+                  cursor={{ fill: "rgba(142, 142, 147, 0.1)" }}
                 />
                 <Bar dataKey="count" fill="#007AFF" radius={[8, 8, 0, 0]} />
               </BarChart>
@@ -277,7 +332,8 @@ const Statistics = () => {
         </div>
 
         {/* Source Breakdown */}
-        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800">
+        {/* Source Breakdown */}
+        <div className="glass-card rounded-2xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-semibold text-gray-900 dark:text-white">
               Source Breakdown
@@ -338,7 +394,8 @@ const Statistics = () => {
       </div>
 
       {/* ========== ACTIVITY TREND ========== */}
-      <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800">
+      {/* ========== ACTIVITY TREND ========== */}
+      <div className="glass-card rounded-2xl p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#007AFF]/10 rounded-xl flex items-center justify-center">
@@ -381,6 +438,11 @@ const Statistics = () => {
                 }}
                 labelStyle={{ color: "#fff" }}
                 itemStyle={{ color: "#007AFF" }}
+                cursor={{
+                  stroke: "#8E8E93",
+                  strokeWidth: 1,
+                  strokeDasharray: "4 4",
+                }}
               />
               <Area
                 type="monotone"
@@ -418,7 +480,7 @@ const Statistics = () => {
         ].map((insight, idx) => (
           <div
             key={idx}
-            className="bg-white dark:bg-[#1C1C1E] rounded-xl p-4 border border-gray-200/50 dark:border-gray-800 flex items-center gap-4"
+            className="glass-card rounded-xl p-4 hover-lift flex items-center gap-4"
           >
             <div
               className="w-12 h-12 rounded-xl flex items-center justify-center"

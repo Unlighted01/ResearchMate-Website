@@ -14,12 +14,14 @@ import { supabase } from "./services/supabaseClient";
 
 // Context
 import { ThemeProvider } from "./context/ThemeContext";
+import { NotificationProvider } from "./context/NotificationContext";
 
 // Components & Layouts
 import { MarketingLayout, DashboardLayout } from "./components/shared/Layouts";
 import OfflineDetector from "./components/shared/OfflineDetector";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
-import { CheckCircle2, Bell } from "lucide-react";
+import { motion } from "motion/react";
+import { CheckCircle2, Bell, X } from "lucide-react";
 
 // App Pages (Authenticated)
 import MarketingHome from "./components/marketing/MarketingHome";
@@ -40,26 +42,81 @@ interface ToastProps {
 }
 
 const Toast: React.FC<ToastProps> = ({ message, type, onClose }) => {
+  const [progress, setProgress] = useState(100);
+
   useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
-    return () => clearTimeout(timer);
+    const duration = 3000;
+    const interval = 30;
+    const decrement = 100 / (duration / interval);
+
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        if (prev <= 0) {
+          clearInterval(timer);
+          onClose();
+          return 0;
+        }
+        return prev - decrement;
+      });
+    }, interval);
+
+    return () => clearInterval(timer);
   }, [onClose]);
 
-  const bgColor = {
-    success: "bg-green-500",
-    error: "bg-red-500",
-    info: "bg-blue-500",
+  const config = {
+    success: {
+      bg: "bg-gradient-to-r from-green-500 to-emerald-600",
+      icon: <CheckCircle2 className="w-5 h-5" />,
+      progressColor: "bg-white/30",
+    },
+    error: {
+      bg: "bg-gradient-to-r from-red-500 to-rose-600",
+      icon: <span className="text-lg">⚠️</span>,
+      progressColor: "bg-white/30",
+    },
+    info: {
+      bg: "bg-gradient-to-r from-blue-500 to-indigo-600",
+      icon: <Bell className="w-5 h-5" />,
+      progressColor: "bg-white/30",
+    },
   }[type];
 
   return (
-    <div
-      className={`fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-slide-up flex items-center gap-2`}
+    <motion.div
+      initial={{ opacity: 0, y: 50, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 20, scale: 0.9 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className={`fixed bottom-4 right-4 ${config.bg} text-white px-5 py-3 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[280px]`}
     >
-      {type === "success" && <CheckCircle2 className="w-5 h-5" />}
-      {type === "error" && <span>⚠️</span>}
-      {type === "info" && <Bell className="w-5 h-5" />}
-      {message}
-    </div>
+      <div className="flex items-center gap-3">
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.1, type: "spring", stiffness: 400 }}
+        >
+          {config.icon}
+        </motion.div>
+        <span className="font-medium text-sm">{message}</span>
+        <button
+          onClick={onClose}
+          className="ml-auto p-1 hover:bg-white/20 rounded-full transition-colors"
+          aria-label="Close toast"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      {/* Progress bar */}
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
+        <motion.div
+          className={config.progressColor}
+          initial={{ width: "100%" }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.03, ease: "linear" }}
+          style={{ height: "100%" }}
+        />
+      </div>
+    </motion.div>
   );
 };
 
@@ -240,85 +297,92 @@ export default function App() {
       <ThemeProvider>
         {ToastComponent}
         <OfflineDetector />
-        <HashRouter>
-          <Routes>
-            {/* Public Routes - Single Page Marketing */}
-            <Route
-              path="/"
-              element={
-                <MarketingLayout>
-                  <MarketingHome />
-                </MarketingLayout>
-              }
-            />
-            {/* Redirects for old routes */}
-            <Route
-              path="/products"
-              element={<Navigate to="/#products" replace />}
-            />
-            <Route path="/team" element={<Navigate to="/#team" replace />} />
-            <Route path="/support" element={<SupportPage />} />
+        <NotificationProvider>
+          <HashRouter>
+            <Routes>
+              {/* Public Routes - Single Page Marketing */}
+              <Route
+                path="/"
+                element={
+                  <MarketingLayout>
+                    <MarketingHome />
+                  </MarketingLayout>
+                }
+              />
+              {/* Redirects for old routes */}
+              <Route
+                path="/products"
+                element={<Navigate to="/#products" replace />}
+              />
+              <Route path="/team" element={<Navigate to="/#team" replace />} />
+              <Route path="/support" element={<SupportPage />} />
 
-            <Route
-              path="/login"
-              element={
-                <LoginPage useToast={() => ({ showToast, ToastComponent })} />
-              }
-            />
-            <Route
-              path="/signup"
-              element={
-                <SignupPage useToast={() => ({ showToast, ToastComponent })} />
-              }
-            />
-            <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route
+                path="/login"
+                element={
+                  <LoginPage useToast={() => ({ showToast, ToastComponent })} />
+                }
+              />
+              <Route
+                path="/signup"
+                element={
+                  <SignupPage
+                    useToast={() => ({ showToast, ToastComponent })}
+                  />
+                }
+              />
+              <Route path="/auth/callback" element={<AuthCallback />} />
 
-            {/* Private Routes */}
-            <Route
-              path="/app/*"
-              element={
-                <RequireAuth>
-                  <DashboardLayout>
-                    <Routes>
-                      <Route
-                        path="dashboard"
-                        element={
-                          <Dashboard
-                            useToast={() => ({ showToast, ToastComponent })}
-                          />
-                        }
-                      />
-                      <Route
-                        path="collections"
-                        element={
-                          <CollectionsPage
-                            useToast={() => ({ showToast, ToastComponent })}
-                          />
-                        }
-                      />
-                      <Route
-                        path="ai-assistant"
-                        element={
-                          <AIAssistant
-                            useToast={() => ({ showToast, ToastComponent })}
-                          />
-                        }
-                      />
-                      <Route path="citations" element={<CitationGenerator />} />
-                      <Route path="smart-pen" element={<SmartPenGallery />} />
-                      <Route path="pair-pen" element={<PairSmartPen />} />
-                      <Route path="statistics" element={<Statistics />} />
-                      <Route path="settings" element={<SettingsPage />} />
-                    </Routes>
-                  </DashboardLayout>
-                </RequireAuth>
-              }
-            />
+              {/* Private Routes */}
+              <Route
+                path="/app/*"
+                element={
+                  <RequireAuth>
+                    <DashboardLayout>
+                      <Routes>
+                        <Route
+                          path="dashboard"
+                          element={
+                            <Dashboard
+                              useToast={() => ({ showToast, ToastComponent })}
+                            />
+                          }
+                        />
+                        <Route
+                          path="collections"
+                          element={
+                            <CollectionsPage
+                              useToast={() => ({ showToast, ToastComponent })}
+                            />
+                          }
+                        />
+                        <Route
+                          path="ai-assistant"
+                          element={
+                            <AIAssistant
+                              useToast={() => ({ showToast, ToastComponent })}
+                            />
+                          }
+                        />
+                        <Route
+                          path="citations"
+                          element={<CitationGenerator />}
+                        />
+                        <Route path="smart-pen" element={<SmartPenGallery />} />
+                        <Route path="pair-pen" element={<PairSmartPen />} />
+                        <Route path="statistics" element={<Statistics />} />
+                        <Route path="settings" element={<SettingsPage />} />
+                      </Routes>
+                    </DashboardLayout>
+                  </RequireAuth>
+                }
+              />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </HashRouter>
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </HashRouter>
+        </NotificationProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

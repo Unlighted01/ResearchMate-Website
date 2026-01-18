@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { AnimateOnScroll } from "../shared/AnimateOnScroll";
 import { supabase } from "../../services/supabaseClient";
 import {
   Zap,
@@ -165,26 +166,25 @@ const HomeSection = () => {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, idx) => (
-              <div
-                key={idx}
-                className="group p-6 bg-white/50 backdrop-blur-md rounded-2xl border border-white/50 hover:bg-white/70 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-              >
-                <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110"
-                  style={{ backgroundColor: `${feature.color}15` }}
-                >
-                  <feature.icon
-                    className="w-6 h-6"
-                    style={{ color: feature.color }}
-                  />
+              <AnimateOnScroll key={idx} delay={idx * 100} className="h-full">
+                <div className="group h-full p-6 bg-white/50 backdrop-blur-md rounded-2xl border border-white/50 hover:bg-white/70 transition-all duration-300 hover-lift hover:shadow-xl">
+                  <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110"
+                    style={{ backgroundColor: `${feature.color}15` }}
+                  >
+                    <feature.icon
+                      className="w-6 h-6"
+                      style={{ color: feature.color }}
+                    />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    {feature.title}
+                  </h3>
+                  <p className="text-gray-600 text-sm leading-relaxed">
+                    {feature.desc}
+                  </p>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {feature.title}
-                </h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  {feature.desc}
-                </p>
-              </div>
+              </AnimateOnScroll>
             ))}
           </div>
         </div>
@@ -231,31 +231,34 @@ const HomeSection = () => {
                     status: "Beta",
                   },
                 ].map((device, idx) => (
-                  <div
+                  <AnimateOnScroll
                     key={idx}
-                    className="flex items-center gap-4 p-4 bg-white/50 backdrop-blur-md rounded-xl border border-white/50 shadow-sm hover:bg-white/70 hover:shadow-md transition-all duration-300"
+                    delay={idx * 150}
+                    animation="fade-in"
                   >
-                    <div className="w-10 h-10 bg-[#007AFF]/10 rounded-xl flex items-center justify-center">
-                      <device.icon className="w-5 h-5 text-[#007AFF]" />
+                    <div className="flex items-center gap-4 p-4 bg-white/50 backdrop-blur-md rounded-xl border border-white/50 shadow-sm hover:bg-white/70 hover:shadow-md transition-all duration-300 hover-lift">
+                      <div className="w-10 h-10 bg-[#007AFF]/10 rounded-xl flex items-center justify-center">
+                        <device.icon className="w-5 h-5 text-[#007AFF]" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900">
+                          {device.name}
+                        </h4>
+                        <p className="text-sm text-gray-500">{device.desc}</p>
+                      </div>
+                      <span
+                        className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                          device.status === "Available"
+                            ? "bg-green-500/10 text-green-700"
+                            : device.status === "Beta"
+                              ? "bg-orange-500/10 text-orange-700"
+                              : "bg-gray-500/10 text-gray-600"
+                        }`}
+                      >
+                        {device.status}
+                      </span>
                     </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">
-                        {device.name}
-                      </h4>
-                      <p className="text-sm text-gray-500">{device.desc}</p>
-                    </div>
-                    <span
-                      className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                        device.status === "Available"
-                          ? "bg-green-500/10 text-green-700"
-                          : device.status === "Beta"
-                          ? "bg-orange-500/10 text-orange-700"
-                          : "bg-gray-500/10 text-gray-600"
-                      }`}
-                    >
-                      {device.status}
-                    </span>
-                  </div>
+                  </AnimateOnScroll>
                 ))}
               </div>
             </div>
@@ -434,92 +437,91 @@ const ProductsSection = () => {
       <div className="py-20 px-6 bg-white/40 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-2 gap-6">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className="group bg-white/50 backdrop-blur-md rounded-3xl p-8 hover:bg-white/70 hover:shadow-2xl hover:shadow-gray-200/50 transition-all duration-500 border border-white/50"
-              >
-                <div className="flex items-start justify-between mb-6">
-                  <div
-                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${product.gradient} flex items-center justify-center shadow-lg`}
-                    style={{ boxShadow: `0 8px 24px ${product.color}30` }}
-                  >
-                    <product.icon className="w-7 h-7 text-white" />
-                  </div>
-                  <span
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
-                      product.status === "Available"
-                        ? "bg-[#34C759]/10 text-[#34C759]"
-                        : product.status === "Beta"
-                        ? "bg-[#FF9500]/10 text-[#FF9500]"
-                        : "bg-gray-500/10 text-gray-600"
-                    }`}
-                  >
-                    {product.status}
-                  </span>
-                </div>
-
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                  {product.name}
-                </h3>
-                <p
-                  className="text-sm font-medium mb-3"
-                  style={{ color: product.color }}
-                >
-                  {product.tagline}
-                </p>
-                <p className="text-gray-600 mb-6 leading-relaxed">
-                  {product.description}
-                </p>
-
-                <div className="grid grid-cols-2 gap-2 mb-6">
-                  {product.features.map((feature, idx) => (
+            {products.map((product, idx) => (
+              <AnimateOnScroll key={product.id} delay={idx * 150}>
+                <div className="group bg-white/50 backdrop-blur-md rounded-3xl p-8 hover:bg-white/70 hover:shadow-2xl hover:shadow-gray-200/50 transition-all duration-500 border border-white/50 hover-lift">
+                  <div className="flex items-start justify-between mb-6">
                     <div
-                      key={idx}
-                      className="flex items-center gap-2 text-sm text-gray-600"
+                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${product.gradient} flex items-center justify-center shadow-lg`}
+                      style={{ boxShadow: `0 8px 24px ${product.color}30` }}
                     >
-                      <Check
-                        className="w-4 h-4 flex-shrink-0"
-                        style={{ color: product.color }}
-                      />
-                      <span className="truncate">{feature}</span>
+                      <product.icon className="w-7 h-7 text-white" />
                     </div>
-                  ))}
-                </div>
-
-                {product.status === "Available" ? (
-                  product.id === "web" ? (
-                    <Link to={product.ctaLink}>
-                      <button
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-white transition-all active:scale-[0.98]"
-                        style={{ backgroundColor: product.color }}
-                      >
-                        {product.cta}
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </Link>
-                  ) : (
-                    <a
-                      href={product.ctaLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <span
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
+                        product.status === "Available"
+                          ? "bg-[#34C759]/10 text-[#34C759]"
+                          : product.status === "Beta"
+                            ? "bg-[#FF9500]/10 text-[#FF9500]"
+                            : "bg-gray-500/10 text-gray-600"
+                      }`}
                     >
-                      <button
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-white transition-all active:scale-[0.98]"
-                        style={{ backgroundColor: product.color }}
+                      {product.status}
+                    </span>
+                  </div>
+
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                    {product.name}
+                  </h3>
+                  <p
+                    className="text-sm font-medium mb-3"
+                    style={{ color: product.color }}
+                  >
+                    {product.tagline}
+                  </p>
+                  <p className="text-gray-600 mb-6 leading-relaxed">
+                    {product.description}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 mb-6">
+                    {product.features.map((feature, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 text-sm text-gray-600"
                       >
-                        {product.cta}
-                        <ExternalLink className="w-4 h-4" />
-                      </button>
-                    </a>
-                  )
-                ) : (
-                  <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium bg-gray-500/10 text-gray-600 transition-all active:scale-[0.98]">
-                    {product.cta}
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+                        <Check
+                          className="w-4 h-4 flex-shrink-0"
+                          style={{ color: product.color }}
+                        />
+                        <span className="truncate">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {product.status === "Available" ? (
+                    product.id === "web" ? (
+                      <Link to={product.ctaLink}>
+                        <button
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-white transition-all active:scale-[0.98]"
+                          style={{ backgroundColor: product.color }}
+                        >
+                          {product.cta}
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </Link>
+                    ) : (
+                      <a
+                        href={product.ctaLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <button
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-white transition-all active:scale-[0.98]"
+                          style={{ backgroundColor: product.color }}
+                        >
+                          {product.cta}
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                      </a>
+                    )
+                  ) : (
+                    <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium bg-gray-500/10 text-gray-600 transition-all active:scale-[0.98]">
+                      {product.cta}
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </AnimateOnScroll>
             ))}
           </div>
         </div>
@@ -769,22 +771,21 @@ const TeamSection = () => {
                   color: "#FF9500",
                 },
               ].map((card, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white/50 backdrop-blur-md rounded-2xl p-6 text-center hover:bg-white/70 hover:shadow-lg transition-all border border-white/50"
-                >
-                  <div
-                    className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                    style={{ backgroundColor: `${card.color}15` }}
-                  >
-                    <card.icon
-                      className="w-6 h-6"
-                      style={{ color: card.color }}
-                    />
+                <AnimateOnScroll key={idx} delay={idx * 100}>
+                  <div className="bg-white/50 backdrop-blur-md rounded-2xl p-6 text-center hover:bg-white/70 hover:shadow-lg transition-all border border-white/50 hover-lift h-full">
+                    <div
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                      style={{ backgroundColor: `${card.color}15` }}
+                    >
+                      <card.icon
+                        className="w-6 h-6"
+                        style={{ color: card.color }}
+                      />
+                    </div>
+                    <p className="font-bold text-gray-900">{card.title}</p>
+                    <p className="text-sm text-gray-500">{card.subtitle}</p>
                   </div>
-                  <p className="font-bold text-gray-900">{card.title}</p>
-                  <p className="text-sm text-gray-500">{card.subtitle}</p>
-                </div>
+                </AnimateOnScroll>
               ))}
             </div>
           </div>
@@ -840,6 +841,7 @@ const TeamSection = () => {
                       href={member.social.github}
                       target="_blank"
                       rel="noopener noreferrer"
+                      aria-label={`${member.name}'s GitHub profile`}
                       className="p-2.5 rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-500/10 transition-colors"
                     >
                       <Github className="w-5 h-5" />
@@ -850,6 +852,7 @@ const TeamSection = () => {
                       href={member.social.linkedin}
                       target="_blank"
                       rel="noopener noreferrer"
+                      aria-label={`${member.name}'s LinkedIn profile`}
                       className="p-2.5 rounded-xl text-gray-400 hover:text-[#0077B5] hover:bg-blue-500/10 transition-colors"
                     >
                       <Linkedin className="w-5 h-5" />

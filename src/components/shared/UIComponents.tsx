@@ -1,5 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "motion/react";
 import { Loader2, X } from "lucide-react";
 
 // ============================================
@@ -25,7 +26,7 @@ export const Button: React.FC<ButtonProps> = ({
     transition-all duration-200 ease-out
     focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
     disabled:opacity-50 disabled:cursor-not-allowed
-    active:scale-[0.98]
+    active:scale-[0.97] active:shadow-none
   `;
 
   const variants = {
@@ -248,8 +249,6 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   size = "md",
 }) => {
-  if (!isOpen) return null;
-
   const sizes = {
     sm: "max-w-sm",
     md: "max-w-md",
@@ -261,48 +260,59 @@ export const Modal: React.FC<ModalProps> = ({
   // Use Portal to render at document.body level
   // This fixes the issue where parent transforms/filters break fixed positioning
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      {/* Backdrop - Clean dark overlay */}
-      <div
-        className="absolute inset-0 bg-black/60 animate-fade-in"
-        onClick={onClose}
-      />
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop - Animated dark overlay */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="absolute inset-0 bg-black/60"
+            onClick={onClose}
+          />
 
-      {/* Modal Container */}
-      <div
-        className={`
-          relative w-full ${sizes[size]}
-          bg-white dark:bg-[#1C1C1E]
-          rounded-2xl
-          shadow-[0_24px_80px_rgba(0,0,0,0.3)]
-          dark:shadow-[0_24px_80px_rgba(0,0,0,0.7)]
-          animate-scale-in
-          flex flex-col max-h-[85vh]
-          z-10
-        `}
-      >
-        {/* Header */}
-        {title && (
-          <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-200/60 dark:border-gray-800">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {title}
-            </h3>
-            <button
-              onClick={onClose}
-              aria-label="Close modal"
-              className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-gray-200 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        )}
+          {/* Modal Container - Animated scale + fade */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className={`
+              relative w-full ${sizes[size]}
+              bg-white dark:bg-[#1C1C1E]
+              rounded-2xl
+              shadow-[0_24px_80px_rgba(0,0,0,0.3)]
+              dark:shadow-[0_24px_80px_rgba(0,0,0,0.7)]
+              flex flex-col max-h-[85vh]
+              z-10
+            `}
+          >
+            {/* Header */}
+            {title && (
+              <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-200/60 dark:border-gray-800">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {title}
+                </h3>
+                <button
+                  onClick={onClose}
+                  aria-label="Close modal"
+                  className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-gray-200 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            )}
 
-        {/* Content - with proper padding */}
-        <div className="flex-1 overflow-y-auto overscroll-contain p-6">
-          {children}
+            {/* Content - with proper padding */}
+            <div className="flex-1 overflow-y-auto overscroll-contain p-6">
+              {children}
+            </div>
+          </motion.div>
         </div>
-      </div>
-    </div>,
+      )}
+    </AnimatePresence>,
     document.body
   );
 };
@@ -387,8 +397,7 @@ export const Select: React.FC<SelectProps> = ({
 // PART 7: TEXTAREA (Apple-style)
 // ============================================
 
-interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   error?: string;
 }

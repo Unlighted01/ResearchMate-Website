@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { motion } from "motion/react";
 import { supabase } from "../../services/supabaseClient";
 import {
   Button,
@@ -60,6 +61,7 @@ import AdvancedSearchFilter, {
 } from "../shared/AdvancedSearchFilter";
 import { exportItems } from "../../utils/export";
 import { useRef } from "react";
+import { useNotifications } from "../../context/NotificationContext";
 
 // Helper for source icons
 const getSourceIcon = (source: string) => {
@@ -117,6 +119,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const [advancedFilters, setAdvancedFilters] = useState<SearchFilters>({});
 
   const { showToast } = useToast();
+  const { addNotification } = useNotifications();
 
   // Ref for search input (for keyboard shortcuts)
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -188,6 +191,10 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
             setItems((prev) => [payload.new!, ...prev]);
             setLastSyncTime(syncTime);
             showToast("New item synced!", "success");
+            addNotification(
+              "sync",
+              `New item "${payload.new!.sourceTitle || "Untitled"}" synced from ${payload.new!.deviceSource || "web"}`
+            );
           } else if (payload.eventType === "UPDATE" && payload.new) {
             setItems((prev) =>
               prev.map((item) =>
@@ -226,6 +233,10 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
         setSelectedItem(updated);
         showToast("Summary generated!", "success");
+        addNotification(
+          "summary",
+          `AI summary generated for "${item.sourceTitle || "Untitled"}"`
+        );
       }
     } catch (error) {
       showToast("Failed to generate summary", "error");
@@ -519,7 +530,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
       </div>
 
       {/* ========== STATS BAR ========== */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-stagger">
         {[
           { label: "Total Items", value: stats.total, color: "#007AFF" },
           {
@@ -540,7 +551,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         ].map((stat, idx) => (
           <div
             key={idx}
-            className="bg-white dark:bg-[#1C1C1E] rounded-xl p-4 border border-gray-200/50 dark:border-gray-800"
+            className="glass-card hover-lift rounded-xl p-4 animate-fade-up"
+            style={{ animationDelay: `${idx * 100}ms` }}
           >
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
               {stat.label}
@@ -561,7 +573,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         )
       ) : filteredItems.length === 0 ? (
         /* Empty State */
-        <div className="flex flex-col items-center justify-center py-20 px-4">
+        <div className="flex flex-col items-center justify-center py-20 px-4 animate-fade-up">
           <div className="w-20 h-20 bg-gradient-to-br from-[#007AFF]/10 to-[#5856D6]/10 rounded-3xl flex items-center justify-center mb-6">
             <Sparkles className="w-10 h-10 text-[#007AFF]" />
           </div>
@@ -579,7 +591,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
               target="_blank"
               rel="noopener noreferrer"
             >
-              <button className="flex items-center gap-2 px-6 py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-full transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-95">
+              <button className="flex items-center gap-2 px-6 py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-full transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-95 hover-lift">
                 <Chrome className="w-5 h-5" />
                 Get Extension
               </button>
@@ -588,15 +600,26 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         </div>
       ) : viewMode === "grid" ? (
         /* Grid View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 stagger-animate">
-          {filteredItems.map((item) => (
-            <div
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-stagger">
+          {filteredItems.map((item, idx) => (
+            <motion.div
               key={item.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.4,
+                delay: Math.min(idx * 0.05, 0.3),
+                ease: [0.25, 0.1, 0.25, 1],
+              }}
+              whileHover={{
+                y: -6,
+                boxShadow: "0 16px 40px -8px rgba(0, 122, 255, 0.15)",
+              }}
               onClick={() => {
                 setSelectedItem(item);
                 setIsModalOpen(true);
               }}
-              className="group relative bg-white dark:bg-[#1C1C1E] rounded-2xl p-5 border border-gray-200/50 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 cursor-pointer transition-all duration-300 hover:shadow-lg hover:shadow-gray-200/50 dark:hover:shadow-black/20 hover:-translate-y-0.5 flex flex-col h-[240px]"
+              className="group relative glass-card rounded-2xl p-5 cursor-pointer flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30"
             >
               {/* Header */}
               <div className="flex items-start justify-between mb-3">
@@ -663,7 +686,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
               >
                 <TrashIcon size={16} dangerHover />
               </button>
-            </div>
+            </motion.div>
           ))}
         </div>
       ) : (

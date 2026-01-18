@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 // ============================================
 // SKELETON COMPONENTS
@@ -11,10 +11,10 @@ export const Skeleton: React.FC<{
   className?: string;
   width?: string;
   height?: string;
-}> = ({ className = '', width, height }) => {
+}> = ({ className = "", width, height }) => {
   return (
     <div
-      className={`animate-pulse bg-gray-200 dark:bg-gray-800 rounded ${className}`}
+      className={`skeleton-shimmer bg-gray-200 dark:bg-gray-800 rounded ${className}`}
       style={{ width, height }}
       aria-hidden="true"
     />
@@ -27,14 +27,14 @@ export const Skeleton: React.FC<{
 export const SkeletonText: React.FC<{
   lines?: number;
   className?: string;
-}> = ({ lines = 3, className = '' }) => {
+}> = ({ lines = 3, className = "" }) => {
   return (
     <div className={`space-y-2 ${className}`} aria-hidden="true">
       {Array.from({ length: lines }).map((_, i) => (
         <Skeleton
           key={i}
           className="h-4"
-          width={i === lines - 1 ? '60%' : '100%'}
+          width={i === lines - 1 ? "60%" : "100%"}
         />
       ))}
     </div>
@@ -46,7 +46,7 @@ export const SkeletonText: React.FC<{
  */
 export const SkeletonCard: React.FC<{
   className?: string;
-}> = ({ className = '' }) => {
+}> = ({ className = "" }) => {
   return (
     <div
       className={`bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800 ${className}`}
@@ -75,7 +75,11 @@ export const SkeletonDashboardGrid: React.FC<{
   count?: number;
 }> = ({ count = 6 }) => {
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-live="polite">
+    <div
+      className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+      aria-busy="true"
+      aria-live="polite"
+    >
       {Array.from({ length: count }).map((_, i) => (
         <SkeletonCard key={i} />
       ))}
@@ -121,7 +125,11 @@ export const SkeletonCollection: React.FC<{
   count?: number;
 }> = ({ count = 4 }) => {
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-live="polite">
+    <div
+      className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+      aria-busy="true"
+      aria-live="polite"
+    >
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
@@ -165,13 +173,19 @@ export const SkeletonStatistics: React.FC = () => {
       </div>
 
       {/* Chart placeholder */}
-      <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800" aria-hidden="true">
+      <div
+        className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800"
+        aria-hidden="true"
+      >
         <Skeleton className="h-6 w-1/4 mb-6" />
         <Skeleton className="h-64 w-full rounded-xl" />
       </div>
 
       {/* Table placeholder */}
-      <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800" aria-hidden="true">
+      <div
+        className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800"
+        aria-hidden="true"
+      >
         <Skeleton className="h-6 w-1/4 mb-4" />
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -196,10 +210,12 @@ export const SkeletonChat: React.FC = () => {
       {Array.from({ length: 3 }).map((_, i) => (
         <div
           key={i}
-          className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}
+          className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}
           aria-hidden="true"
         >
-          <div className={`max-w-[80%] ${i % 2 === 0 ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-gray-100 dark:bg-gray-800'} rounded-2xl p-4`}>
+          <div
+            className={`max-w-[80%] ${i % 2 === 0 ? "bg-blue-50 dark:bg-blue-900/20" : "bg-gray-100 dark:bg-gray-800"} rounded-2xl p-4`}
+          >
             <SkeletonText lines={2} />
           </div>
         </div>
@@ -213,7 +229,11 @@ export const SkeletonChat: React.FC = () => {
  */
 export const SkeletonPage: React.FC = () => {
   return (
-    <div className="space-y-6 animate-fade-in-up" aria-busy="true" aria-live="polite">
+    <div
+      className="space-y-6 animate-fade-in-up"
+      aria-busy="true"
+      aria-live="polite"
+    >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <Skeleton className="h-8 w-48 mb-2" />

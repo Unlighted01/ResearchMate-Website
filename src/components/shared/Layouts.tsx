@@ -3,6 +3,8 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Button } from "./UIComponents";
 import BubbleBackground from "../shared/BubbleBackground";
+import { useNotifications } from "../../context/NotificationContext";
+import CommandPalette from "./CommandPalette";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -301,16 +303,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [activities, setActivities] = useState<
-    {
-      id: string;
-      type: "sync" | "summary" | "collection" | "citation" | "login";
-      message: string;
-      time: Date;
-      read: boolean;
-    }[]
-  >([]);
+  // Use global notifications context
+  const {
+    notifications: activities,
+    unreadCount,
+    markAllAsRead,
+    addNotification,
+  } = useNotifications();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -322,36 +323,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         navigate("/"); // Redirect to landing page, not login
       } else {
         setUser(data.user);
-        setActivities([
-          {
-            id: "1",
-            type: "sync",
-            message: "Extension synced 2 new items",
-            time: new Date(Date.now() - 1000 * 60 * 5),
-            read: false,
-          },
-          {
-            id: "2",
-            type: "summary",
-            message: 'AI summary generated for "Research Methods"',
-            time: new Date(Date.now() - 1000 * 60 * 30),
-            read: false,
-          },
-          {
-            id: "3",
-            type: "collection",
-            message: 'Added item to "Thesis Research"',
-            time: new Date(Date.now() - 1000 * 60 * 60 * 2),
-            read: true,
-          },
-          {
-            id: "4",
-            type: "login",
-            message: "Signed in from new device",
-            time: new Date(Date.now() - 1000 * 60 * 60 * 24),
-            read: true,
-          },
-        ]);
+        // Only show welcome notification once per session
+        const hasShownWelcome = sessionStorage.getItem("rm_welcome_shown");
+        if (!hasShownWelcome) {
+          addNotification(
+            "login",
+            `Welcome back, ${data.user.email?.split("@")[0] || "researcher"}!`
+          );
+          sessionStorage.setItem("rm_welcome_shown", "true");
+        }
       }
     });
 
@@ -394,12 +374,6 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
     localStorage.setItem("researchmate_sidebar_collapsed", String(newState));
   };
 
-  const markAllAsRead = () => {
-    setActivities((prev) => prev.map((a) => ({ ...a, read: true })));
-  };
-
-  const unreadCount = activities.filter((a) => !a.read).length;
-
   const getActivityIcon = (type: string) => {
     const icons = {
       sync: <Wifi className="w-4 h-4 text-[#34C759]" />,
@@ -422,6 +396,18 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
     return `${days}d ago`;
   };
 
+  // Cmd+K keyboard shortcut for Command Palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setCommandPaletteOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
     { icon: FolderOpen, label: "Collections", path: "/app/collections" },
@@ -432,7 +418,18 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-[#000000] flex font-sans">
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-[#000000] flex font-sans relative overflow-hidden">
+      {/* Ambient Background */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <BubbleBackground bubbleCount={3} />
+      </div>
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
+
       {/* ========== SIDEBAR ========== */}
       <aside
         className={`
@@ -483,7 +480,8 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                       onClick={() => setMobileSidebarOpen(false)}
                       className={`
                         flex items-center gap-3 px-3 py-2.5 rounded-xl
-                        transition-all duration-200 group relative
+                        transition-all duration-300 group relative
+                        hover:scale-[1.02] active:scale-[0.98]
                         ${
                           isActive
                             ? "bg-[#007AFF] text-white shadow-lg shadow-blue-500/25"
@@ -650,27 +648,29 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                 <Menu className="w-5 h-5" />
               </button>
 
-              {/* Search */}
-              <div
-                className={`
+              {/* Search - Hide on Dashboard to avoid duplication */}
+              {location.pathname !== "/app/dashboard" && (
+                <div
+                  className={`
                   relative flex-1 max-w-md transition-all duration-300
                   ${searchFocused ? "max-w-lg" : ""}
                 `}
-              >
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  className="w-full pl-11 pr-4 py-2 bg-gray-100 dark:bg-[#2C2C2E] border-0 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 transition-all"
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs text-gray-400">
-                  <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[10px]">
-                    ⌘K
-                  </kbd>
+                >
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    className="w-full pl-11 pr-4 py-2 bg-gray-100 dark:bg-[#2C2C2E] border-0 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 transition-all"
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => setSearchFocused(false)}
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs text-gray-400">
+                    <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[10px]">
+                      ⌘K
+                    </kbd>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Right: Actions */}
