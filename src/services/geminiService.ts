@@ -110,7 +110,14 @@ export async function summarizeText(input: string): Promise<SummaryResult> {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Request failed: ${response.status}`);
+      const details = Array.isArray(errorData.details)
+        ? `\nDetails:\n${errorData.details.join("\n")}`
+        : errorData.details
+        ? ` (${JSON.stringify(errorData.details)})`
+        : "";
+      throw new Error(
+        (errorData.error || `Request failed: ${response.status}`) + details
+      );
     }
 
     const data = await response.json();
@@ -161,7 +168,14 @@ export async function generateTags(text: string): Promise<TagsResult> {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Request failed: ${response.status}`);
+      const details = Array.isArray(errorData.details)
+        ? `\nDetails:\n${errorData.details.join("\n")}`
+        : errorData.details
+        ? ` (${JSON.stringify(errorData.details)})`
+        : "";
+      throw new Error(
+        (errorData.error || `Request failed: ${response.status}`) + details
+      );
     }
 
     const data = await response.json();
@@ -196,7 +210,14 @@ export async function extractInsights(text: string): Promise<InsightsResult> {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Request failed: ${response.status}`);
+      const details = Array.isArray(errorData.details)
+        ? `\nDetails:\n${errorData.details.join("\n")}`
+        : errorData.details
+        ? ` (${JSON.stringify(errorData.details)})`
+        : "";
+      throw new Error(
+        (errorData.error || `Request failed: ${response.status}`) + details
+      );
     }
 
     const data = await response.json();
@@ -238,7 +259,14 @@ export async function generateChatResponse(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Request failed: ${response.status}`);
+      const details = Array.isArray(errorData.details)
+        ? `\nDetails:\n${errorData.details.join("\n")}`
+        : errorData.details
+        ? ` (${JSON.stringify(errorData.details)})`
+        : "";
+      throw new Error(
+        (errorData.error || `Request failed: ${response.status}`) + details
+      );
     }
 
     const data = await response.json();
