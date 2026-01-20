@@ -7,13 +7,37 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // ============================================
+// API KEY ROTATION HELPER
+// ============================================
+
+function getRandomGeminiKey(): string | undefined {
+  // Try multiple keys first (comma-separated)
+  const multipleKeys = process.env.GEMINI_API_KEYS;
+  if (multipleKeys) {
+    const keys = multipleKeys
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    if (keys.length > 0) {
+      const randomKey = keys[Math.floor(Math.random() * keys.length)];
+      console.log(
+        `🔑 Using Gemini key ${keys.indexOf(randomKey) + 1} of ${keys.length}`,
+      );
+      return randomKey;
+    }
+  }
+  // Fallback to single key
+  return process.env.GEMINI_API_KEY;
+}
+
+// ============================================
 // GEMINI VISION OCR
 // ============================================
 
 async function extractTextFromImage(
   imageBase64: string,
 ): Promise<{ success: boolean; text: string; error?: string }> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = getRandomGeminiKey();
 
   if (!apiKey) {
     return {
@@ -107,7 +131,7 @@ Output only the extracted text, nothing else.`,
 // ============================================
 
 async function generateSummary(text: string): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = getRandomGeminiKey();
   if (!apiKey || !text || text.length < 50) return null;
 
   try {

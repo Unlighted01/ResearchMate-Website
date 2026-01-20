@@ -6,6 +6,28 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // ============================================
+// API KEY ROTATION HELPER
+// ============================================
+
+function getRandomGeminiKey(): string | undefined {
+  const multipleKeys = process.env.GEMINI_API_KEYS;
+  if (multipleKeys) {
+    const keys = multipleKeys
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    if (keys.length > 0) {
+      const randomKey = keys[Math.floor(Math.random() * keys.length)];
+      console.log(
+        `🔑 Using Gemini key ${keys.indexOf(randomKey) + 1} of ${keys.length}`,
+      );
+      return randomKey;
+    }
+  }
+  return process.env.GEMINI_API_KEY;
+}
+
+// ============================================
 // MULTI-PROVIDER AI CONFIGURATION
 // ============================================
 
@@ -29,12 +51,13 @@ IMPORTANT: You should ONLY help with:
 If the user asks about anything unrelated to research summarization or analysis, politely redirect them.`;
 
 const getProviders = (): AIProvider[] => {
+  const geminiKey = getRandomGeminiKey();
   return [
-    // Provider 1: Google Gemini
+    // Provider 1: Google Gemini (with key rotation)
     {
       name: "Gemini",
-      apiKey: process.env.GEMINI_API_KEY,
-      endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      apiKey: geminiKey,
+      endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
       getHeaders: () => ({ "Content-Type": "application/json" }),
       formatRequest: (message: string, context: string) => ({
         contents: [
@@ -110,7 +133,7 @@ const getProviders = (): AIProvider[] => {
 async function tryProvider(
   provider: AIProvider,
   message: string,
-  context: string
+  context: string,
 ): Promise<{ success: boolean; response: string; error?: string }> {
   if (!provider.apiKey) {
     return {
@@ -164,7 +187,7 @@ async function tryProvider(
 
 async function chatWithFallback(
   message: string,
-  context: string
+  context: string,
 ): Promise<{
   success: boolean;
   response: string;
@@ -216,7 +239,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const result = await chatWithFallback(
       message.trim(),
-      researchContext || ""
+      researchContext || "",
     );
 
     if (result.success) {

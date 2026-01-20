@@ -6,6 +6,28 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // ============================================
+// API KEY ROTATION HELPER
+// ============================================
+
+function getRandomGeminiKey(): string | undefined {
+  const multipleKeys = process.env.GEMINI_API_KEYS;
+  if (multipleKeys) {
+    const keys = multipleKeys
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    if (keys.length > 0) {
+      const randomKey = keys[Math.floor(Math.random() * keys.length)];
+      console.log(
+        `🔑 Using Gemini key ${keys.indexOf(randomKey) + 1} of ${keys.length}`,
+      );
+      return randomKey;
+    }
+  }
+  return process.env.GEMINI_API_KEY;
+}
+
+// ============================================
 // MULTI-PROVIDER AI CONFIGURATION
 // ============================================
 
@@ -19,12 +41,13 @@ interface AIProvider {
 }
 
 const getProviders = (): AIProvider[] => {
+  const geminiKey = getRandomGeminiKey();
   return [
-    // Provider 1: Google Gemini
+    // Provider 1: Google Gemini (with key rotation)
     {
       name: "Gemini",
-      apiKey: process.env.GEMINI_API_KEY,
-      endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      apiKey: geminiKey,
+      endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
       getHeaders: () => ({ "Content-Type": "application/json" }),
       formatRequest: (text: string) => ({
         contents: [
@@ -99,7 +122,7 @@ const getProviders = (): AIProvider[] => {
 
 async function tryProvider(
   provider: AIProvider,
-  text: string
+  text: string,
 ): Promise<{ success: boolean; summary: string; error?: string }> {
   if (!provider.apiKey) {
     return {
