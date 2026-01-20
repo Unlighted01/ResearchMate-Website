@@ -20,10 +20,16 @@ import {
   Wifi,
   WifiOff,
   Trash2,
+  Camera, // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
 } from "lucide-react";
-import { getAllItems, StorageItem } from "../../services/storageService";
+import {
+  getAllItems,
+  addItem,
+  StorageItem,
+} from "../../services/storageService";
 import { Modal } from "../shared/UIComponents";
 import SmartPenPairing from "./SmartPenPairing";
+import CameraCapture from "./CameraCapture"; // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
 import { getCurrentUser } from "../../services/supabaseClient";
 
 // Supabase config
@@ -84,6 +90,8 @@ const SmartPenGallery = () => {
     message: string;
     type: "success" | "error" | "info";
   } | null>(null);
+  // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
+  const [showCamera, setShowCamera] = useState(false);
 
   useEffect(() => {
     // Get current user
@@ -160,6 +168,47 @@ const SmartPenGallery = () => {
     if (userId) loadPairedPens(userId);
   };
 
+  // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
+  // Handle camera capture and OCR processing
+  const handleCameraCapture = async (imageData: string) => {
+    try {
+      // Call OCR API
+      const response = await fetch("/api/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: imageData, includeSummary: true }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "OCR failed");
+      }
+
+      const result = await response.json();
+
+      // Save to storage
+      await addItem({
+        text: result.ocrText,
+        sourceTitle: `Phone Capture - ${new Date().toLocaleDateString()}`,
+        sourceUrl: "",
+        tags: ["phone-capture", "ocr"],
+        note: "",
+        aiSummary: result.aiSummary || undefined,
+        deviceSource: "smart_pen", // Show in this gallery
+      });
+
+      showToast("Photo captured and text extracted!", "success");
+      setShowCamera(false);
+      loadScans(); // Refresh gallery
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to process image",
+        "error",
+      );
+      throw err; // Re-throw so CameraCapture shows error state
+    }
+  };
+
   const filteredScans = scans.filter((scan) => {
     if (!searchQuery) return true;
     return (
@@ -195,6 +244,14 @@ const SmartPenGallery = () => {
 
         {/* Actions & Stats */}
         <div className="flex items-center gap-3">
+          {/* TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING */}
+          <button
+            onClick={() => setShowCamera(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all"
+          >
+            <Camera className="w-4 h-4" />
+            Capture Photo
+          </button>
           <button
             onClick={() => setShowPairing(true)}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#FF9500] to-[#FF6B00] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-orange-500/25 transition-all"
@@ -535,6 +592,14 @@ const SmartPenGallery = () => {
         onClose={() => setShowPairing(false)}
         onSuccess={handlePairingSuccess}
         userId={userId}
+      />
+
+      {/* TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING */}
+      {/* ========== CAMERA CAPTURE MODAL ========== */}
+      <CameraCapture
+        isOpen={showCamera}
+        onClose={() => setShowCamera(false)}
+        onCapture={handleCameraCapture}
       />
     </div>
   );
