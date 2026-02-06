@@ -80,7 +80,7 @@ const ClockWidget: React.FC<ClockWidgetProps> = ({
       style={{ animationDuration: "0.3s" }}
     >
       {/* Glassmorphism Container */}
-      <div className="relative backdrop-blur-xl bg-white/10 dark:bg-black/20 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl overflow-hidden p-5 min-w-[280px]">
+      <div className="relative backdrop-blur-xl bg-gray-900/80 dark:bg-black/80 rounded-2xl border border-gray-700/50 dark:border-white/10 shadow-2xl overflow-hidden p-5 min-w-[280px]">
         {/* Gradient Glow Effect */}
         <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-[#007AFF]/30 via-[#5856D6]/20 to-transparent rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-gradient-to-tr from-[#FF9500]/20 to-transparent rounded-full blur-2xl pointer-events-none" />
