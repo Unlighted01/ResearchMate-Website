@@ -77,7 +77,7 @@ serve(async (req) => {
                     parts: [
                       {
                         inline_data: {
-                          mime_type: "image/bmp",
+                          mime_type: "image/jpeg",
                           data: imageBase64,
                         },
                       },
@@ -88,14 +88,14 @@ serve(async (req) => {
                   },
                 ],
               }),
-            }
+            },
           );
 
           const data = await res.json();
           console.log("Gemini response status:", res.status);
           console.log(
             "Gemini response:",
-            JSON.stringify(data).substring(0, 500)
+            JSON.stringify(data).substring(0, 500),
           );
 
           if (data.error) {
@@ -154,7 +154,7 @@ serve(async (req) => {
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -180,7 +180,7 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, code, pen_id: penId, expires_in: 300 }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -194,7 +194,7 @@ serve(async (req) => {
           {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
 
@@ -215,7 +215,7 @@ serve(async (req) => {
           {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
 
@@ -242,7 +242,7 @@ serve(async (req) => {
           pen_id: codeData.pen_id,
           auth_token: authToken,
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -270,7 +270,7 @@ serve(async (req) => {
               paired: true,
               auth_token: pairData.auth_token,
             }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
       }

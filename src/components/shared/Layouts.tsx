@@ -5,6 +5,7 @@ import { Button } from "./UIComponents";
 import BubbleBackground from "../shared/BubbleBackground";
 import { useNotifications } from "../../context/NotificationContext";
 import CommandPalette from "./CommandPalette";
+import ClockWidget from "./ClockWidget";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -304,6 +305,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [showClockWidget, setShowClockWidget] = useState(
+    () => localStorage.getItem("showClockWidget") === "true",
+  );
   const [user, setUser] = useState<SupabaseUser | null>(null);
   // Use global notifications context
   const {
@@ -323,15 +327,11 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         navigate("/"); // Redirect to landing page, not login
       } else {
         setUser(data.user);
-        // Only show welcome notification once per session
-        const hasShownWelcome = sessionStorage.getItem("rm_welcome_shown");
-        if (!hasShownWelcome) {
-          addNotification(
-            "login",
-            `Welcome back, ${data.user.email?.split("@")[0] || "researcher"}!`
-          );
-          sessionStorage.setItem("rm_welcome_shown", "true");
-        }
+        // Send a welcome notification on load
+        addNotification(
+          "login",
+          `Welcome back, ${data.user.email?.split("@")[0] || "researcher"}!`,
+        );
       }
     });
 
@@ -406,6 +406,16 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Listen for clock widget toggle from settings
+  useEffect(() => {
+    const handleClockToggle = () => {
+      setShowClockWidget(localStorage.getItem("showClockWidget") === "true");
+    };
+    window.addEventListener("clockWidgetToggle", handleClockToggle);
+    return () =>
+      window.removeEventListener("clockWidgetToggle", handleClockToggle);
   }, []);
 
   const navItems = [
@@ -820,6 +830,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         {/* Main Content */}
         <main className="flex-1 p-4 lg:p-8 overflow-y-auto">{children}</main>
       </div>
+
+      {/* Clock Widget */}
+      <ClockWidget
+        isVisible={showClockWidget}
+        onClose={() => {
+          setShowClockWidget(false);
+          localStorage.setItem("showClockWidget", "false");
+        }}
+      />
 
       {/* Mobile Sidebar Overlay */}
       {mobileSidebarOpen && (

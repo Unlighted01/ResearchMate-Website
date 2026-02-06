@@ -25,12 +25,13 @@ import {
 import {
   getAllItems,
   addItem,
+  deleteItem,
   StorageItem,
 } from "../../services/storageService";
 import { Modal } from "../shared/UIComponents";
 import SmartPenPairing from "./SmartPenPairing";
 import CameraCapture from "./CameraCapture"; // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
-import { getCurrentUser } from "../../services/supabaseClient";
+import { getCurrentUser, supabase } from "../../services/supabaseClient";
 
 // Supabase config
 const SUPABASE_URL = "https://jxevjkzojfbywxvtcwtl.supabase.co";
@@ -105,6 +106,57 @@ const SmartPenGallery = () => {
     // Load scans
     loadScans();
   }, []);
+
+  // Realtime subscription for device status
+  useEffect(() => {
+    if (!userId) return;
+
+    console.log("🔄 Subscribing to paired_pens realtime updates...");
+
+    const channel = supabase
+      .channel("paired_pens_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "paired_pens",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log("📡 Realtime update:", payload.eventType, payload);
+          // Reload paired pens on any change
+          loadPairedPens(userId);
+
+          // Show toast for important events
+          if (payload.eventType === "INSERT") {
+            showToast("New device connected!", "success");
+          } else if (payload.eventType === "DELETE") {
+            showToast("Device disconnected", "info");
+          }
+        },
+      )
+      .subscribe((status) => {
+        console.log("📡 Subscription status:", status);
+      });
+
+    return () => {
+      console.log("🔄 Unsubscribing from paired_pens...");
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
+  // Format date with user's local timezone
+  const formatDate = (date: string | Date, includeTime: boolean = false) => {
+    const d = new Date(date);
+    const options: Intl.DateTimeFormatOptions = {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      ...(includeTime && { hour: "2-digit", minute: "2-digit" }),
+    };
+    return d.toLocaleString(undefined, options);
+  };
 
   const loadScans = async () => {
     setLoading(true);
@@ -209,6 +261,25 @@ const SmartPenGallery = () => {
     }
   };
 
+  // Delete a scan item
+  const deleteScan = async (scan: StorageItem) => {
+    if (
+      !confirm(
+        `Delete "${scan.sourceTitle || "this scan"}"? This cannot be undone.`,
+      )
+    )
+      return;
+
+    try {
+      await deleteItem(scan.id);
+      setScans(scans.filter((s) => s.id !== scan.id));
+      setSelectedScan(null);
+      showToast("Scan deleted", "success");
+    } catch (err) {
+      showToast("Failed to delete scan", "error");
+    }
+  };
+
   const filteredScans = scans.filter((scan) => {
     if (!searchQuery) return true;
     return (
@@ -295,7 +366,7 @@ const SmartPenGallery = () => {
                   {pen.pen_id.substring(0, 12)}...
                 </span>
                 <span className="text-xs text-green-600 dark:text-green-500">
-                  {new Date(pen.paired_at).toLocaleDateString()}
+                  {formatDate(pen.paired_at)}
                 </span>
                 <button
                   onClick={() => unpairPen(pen.pen_id)}
@@ -467,7 +538,7 @@ const SmartPenGallery = () => {
                 </h4>
                 <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
                   <Calendar className="w-3.5 h-3.5" />
-                  {new Date(scan.createdAt).toLocaleDateString()}
+                  {formatDate(scan.createdAt)}
                 </div>
               </div>
             </div>
@@ -516,7 +587,7 @@ const SmartPenGallery = () => {
                   </span>
                 )}
                 <span className="text-xs text-gray-400">
-                  {new Date(scan.createdAt).toLocaleDateString()}
+                  {formatDate(scan.createdAt)}
                 </span>
               </div>
             </div>
@@ -572,15 +643,22 @@ const SmartPenGallery = () => {
               </div>
             )}
 
-            {/* Metadata */}
+            {/* Metadata & Actions */}
             <div className="flex items-center justify-between text-sm text-gray-500 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <span>
-                Created {new Date(selectedScan.createdAt).toLocaleString()}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <PenTool className="w-4 h-4 text-[#FF9500]" />
-                Smart Pen
-              </span>
+              <span>Created {formatDate(selectedScan.createdAt, true)}</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => deleteScan(selectedScan)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors text-sm font-medium"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </button>
+                <span className="flex items-center gap-1.5">
+                  <PenTool className="w-4 h-4 text-[#FF9500]" />
+                  Smart Pen
+                </span>
+              </div>
             </div>
           </div>
         )}
