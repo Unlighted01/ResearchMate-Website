@@ -631,6 +631,48 @@ const SettingsPage: React.FC = () => {
                 }}
               />
             </div>
+
+            {/* Time Format Selection */}
+            <div className="mt-4">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Time Format
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { id: "24", label: "24 Hour", example: "16:20" },
+                  { id: "12", label: "12 Hour", example: "4:20 PM" },
+                ].map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => {
+                      localStorage.setItem("clockFormat", option.id);
+                      window.dispatchEvent(new Event("clockFormatChange"));
+                      showToast(`Clock format set to ${option.label}`, "info");
+                    }}
+                    className={`p-4 rounded-xl border-2 transition-all text-left ${
+                      (localStorage.getItem("clockFormat") || "24") ===
+                      option.id
+                        ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20"
+                        : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                    }`}
+                  >
+                    <p
+                      className={`font-semibold ${
+                        (localStorage.getItem("clockFormat") || "24") ===
+                        option.id
+                          ? "text-primary-600"
+                          : "text-gray-900 dark:text-white"
+                      }`}
+                    >
+                      {option.label}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1 font-mono">
+                      {option.example}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
           </Card>
         </div>
       )}
