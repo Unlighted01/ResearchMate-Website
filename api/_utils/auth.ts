@@ -72,11 +72,32 @@ export async function authenticateUser(
     }
 
     // 4. Check Credits in Database
-    const { data: profile, error: profileError } = await supabase
+    // Use maybeSingle() to avoid PGRST116 error if row missing
+    let { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("ai_credits")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
+
+    // If profile doesn't exist (Old user?), create it now
+    if (!profile && !profileError) {
+      console.log(`⚠️ User ${user.id} has no profile. Creating one...`);
+      const { error: insertError } = await supabase
+        .from("profiles")
+        .insert({ id: user.id, ai_credits: 50 });
+
+      if (insertError) {
+        console.error("Failed to auto-create profile:", insertError);
+        return {
+          error: "Failed to create user profile",
+          statusCode: 500,
+          user: null,
+          isFreeTier: true,
+        };
+      }
+      // Set default
+      profile = { ai_credits: 50 };
+    }
 
     if (profileError) {
       console.error("Profile fetch error:", profileError);
