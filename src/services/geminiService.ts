@@ -1,15 +1,20 @@
 // ============================================
-// geminiService.ts - AI Service (Vercel Functions Version)
+// geminiService.ts - Secure AI Service
 // ============================================
+
+import { createClient } from "@supabase/supabase-js";
+
+// Initialize Supabase Client for Auth (Session Retrieval)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ============================================
 // PART 1: CONFIGURATION
 // ============================================
 
-/**
- * API Configuration
- * Uses Vercel Functions exclusively - no backend server needed
- */
+// Monorepo Setup: Function runs on same domain (Vercel)
+// Locally, use 'vercel dev' to proxy /api
 const API_BASE_URL = "/api";
 
 export const CONFIG = {
@@ -27,6 +32,7 @@ export interface SummaryResult {
   summary: string;
   reason?: string;
   error?: string;
+  credits_remaining?: number | string;
 }
 
 export interface TagsResult {
@@ -34,6 +40,7 @@ export interface TagsResult {
   tags: string[];
   reason?: string;
   error?: string;
+  credits_remaining?: number | string;
 }
 
 export interface InsightsResult {
@@ -41,6 +48,7 @@ export interface InsightsResult {
   insights: string;
   reason?: string;
   error?: string;
+  credits_remaining?: number | string;
 }
 
 export interface ChatResult {
@@ -48,39 +56,34 @@ export interface ChatResult {
   response: string;
   reason?: string;
   error?: string;
-}
-
-export interface APIStatusResult {
-  configured: boolean;
-  message: string;
+  credits_remaining?: number | string;
 }
 
 // ============================================
-// PART 3: API KEY MANAGEMENT (DEPRECATED - DO NOT USE)
+// PART 3: AUTH HELPER
 // ============================================
-// NOTE: These functions are deprecated and should not be used.
-// API keys should NEVER be stored client-side for security reasons.
-// All AI operations now go through secure Vercel Functions.
 
-/**
- * @deprecated DO NOT USE - API keys should never be stored client-side
- * This function is kept for backwards compatibility only
- */
-export function setApiKey(key: string): void {
-  console.warn(
-    "⚠️ SECURITY WARNING: setApiKey is deprecated. API keys should never be stored client-side!"
-  );
-  // Intentionally do nothing - this prevents accidental API key storage
-}
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
 
-/**
- * @deprecated DO NOT USE - API keys should never be stored client-side
- */
-export function getApiKey(): string {
-  console.warn(
-    "⚠️ SECURITY WARNING: getApiKey is deprecated. Use secure backend endpoints instead."
-  );
-  return "";
+  // 1. Check for Custom User Key (BYOK)
+  const customKey = localStorage.getItem("custom_gemini_key");
+  if (customKey) {
+    headers["x-custom-api-key"] = customKey;
+    // We still send the token if available, just in case backend wants identity
+  }
+
+  // 2. Get Supabase Session Token
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  return headers;
 }
 
 // ============================================
@@ -92,144 +95,118 @@ export function getApiKey(): string {
  */
 export async function summarizeText(input: string): Promise<SummaryResult> {
   const text = (input || "").trim();
-
-  if (!text) {
-    return { ok: false, summary: "", reason: "empty" };
-  }
-
-  if (!CONFIG.USE_REAL_API) {
-    return generateDemoSummary(text);
-  }
+  if (!text) return { ok: false, summary: "", reason: "empty" };
 
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/summarize`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ text }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const details = Array.isArray(errorData.details)
-        ? `\nDetails:\n${errorData.details.join("\n")}`
-        : errorData.details
-        ? ` (${JSON.stringify(errorData.details)})`
-        : "";
-      throw new Error(
-        (errorData.error || `Request failed: ${response.status}`) + details
-      );
-    }
-
     const data = await response.json();
-    return { ok: true, summary: data.summary || "" };
-  } catch (error) {
-    console.error("❌ AI summarization failed:", error);
 
-    if (error instanceof TypeError && error.message.includes("fetch")) {
-      return {
-        ok: false,
-        summary: "",
-        reason: "network_error",
-        error: "Cannot connect to AI service. Please try again later.",
-      };
+    if (!response.ok) {
+      if (response.status === 403 && data.code === "NO_CREDITS") {
+        return {
+          ok: false,
+          summary: "",
+          reason: "no_credits",
+          error: "You have used all your free AI credits.",
+        };
+      }
+      throw new Error(data.error || "Request failed");
     }
 
     return {
-      ok: false,
-      summary: "",
-      reason: "network_error",
-      error: (error as Error).message,
+      ok: true,
+      summary: data.summary || "",
+      credits_remaining: data.credits_remaining,
     };
+  } catch (error) {
+    console.error("❌ AI summarization failed:", error);
+    return { ok: false, summary: "", error: (error as Error).message };
   }
 }
 
 /**
- * Generate tags for research content
+ * Generate tags
  */
 export async function generateTags(text: string): Promise<TagsResult> {
   const input = (text || "").trim();
-
-  if (!input) {
-    return { ok: false, tags: [], reason: "empty" };
-  }
-
-  if (!CONFIG.USE_REAL_API) {
-    const words = input.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
-    const uniqueWords = [...new Set(words)].slice(0, 5);
-    return { ok: true, tags: uniqueWords };
-  }
+  if (!input) return { ok: false, tags: [], reason: "empty" };
 
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/generate-tags`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ text: input }),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const details = Array.isArray(errorData.details)
-        ? `\nDetails:\n${errorData.details.join("\n")}`
-        : errorData.details
-        ? ` (${JSON.stringify(errorData.details)})`
-        : "";
-      throw new Error(
-        (errorData.error || `Request failed: ${response.status}`) + details
-      );
+      if (response.status === 403 && data.code === "NO_CREDITS") {
+        return {
+          ok: false,
+          tags: [],
+          reason: "no_credits",
+          error: "Out of credits",
+        };
+      }
+      throw new Error(data.error || "Request failed");
     }
 
-    const data = await response.json();
-    return { ok: true, tags: data.tags || [] };
+    return {
+      ok: true,
+      tags: data.tags || [],
+      credits_remaining: data.credits_remaining,
+    };
   } catch (error) {
     console.error("❌ Tag generation failed:", error);
-    return {
-      ok: false,
-      tags: [],
-      reason: "network_error",
-      error: (error as Error).message,
-    };
+    return { ok: false, tags: [], error: (error as Error).message };
   }
 }
 
 /**
- * Extract insights from research text
+ * Extract insights
  */
 export async function extractInsights(text: string): Promise<InsightsResult> {
   const input = (text || "").trim();
-
-  if (!input) {
-    return { ok: false, insights: "", reason: "empty" };
-  }
+  if (!input) return { ok: false, insights: "", reason: "empty" };
 
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/insights`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ text: input }),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const details = Array.isArray(errorData.details)
-        ? `\nDetails:\n${errorData.details.join("\n")}`
-        : errorData.details
-        ? ` (${JSON.stringify(errorData.details)})`
-        : "";
-      throw new Error(
-        (errorData.error || `Request failed: ${response.status}`) + details
-      );
+      if (response.status === 403 && data.code === "NO_CREDITS") {
+        return {
+          ok: false,
+          insights: "",
+          reason: "no_credits",
+          error: "Out of credits",
+        };
+      }
+      throw new Error(data.error || "Request failed");
     }
 
-    const data = await response.json();
-    return { ok: true, insights: data.insights || "" };
+    return {
+      ok: true,
+      insights: data.insights || "",
+      credits_remaining: data.credits_remaining,
+    };
   } catch (error) {
     console.error("❌ Insight extraction failed:", error);
-    return {
-      ok: false,
-      insights: "",
-      reason: "network_error",
-      error: (error as Error).message,
-    };
+    return { ok: false, insights: "", error: (error as Error).message };
   }
 }
 
@@ -237,85 +214,50 @@ export async function extractInsights(text: string): Promise<InsightsResult> {
 // PART 5: CHAT FUNCTIONALITY
 // ============================================
 
-/**
- * Generate chat response for AI Assistant
- */
 export async function generateChatResponse(
   userMessage: string,
-  context: string
+  context: string,
 ): Promise<ChatResult> {
   const message = (userMessage || "").trim();
-
-  if (!message) {
-    return { ok: false, response: "", reason: "empty" };
-  }
+  if (!message) return { ok: false, response: "", reason: "empty" };
 
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ message, context }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const details = Array.isArray(errorData.details)
-        ? `\nDetails:\n${errorData.details.join("\n")}`
-        : errorData.details
-        ? ` (${JSON.stringify(errorData.details)})`
-        : "";
-      throw new Error(
-        (errorData.error || `Request failed: ${response.status}`) + details
-      );
-    }
-
     const data = await response.json();
-    return { ok: true, response: data.response || "" };
-  } catch (error) {
-    console.error("❌ Chat response failed:", error);
 
-    if (error instanceof TypeError && error.message.includes("fetch")) {
-      return {
-        ok: false,
-        response: "Cannot connect to AI service. Please try again later.",
-        reason: "network_error",
-      };
+    if (!response.ok) {
+      if (response.status === 403 && data.code === "NO_CREDITS") {
+        return {
+          ok: false,
+          response: "",
+          reason: "no_credits",
+          error: "Out of credits",
+        };
+      }
+      throw new Error(data.error || "Request failed");
     }
 
     return {
-      ok: false,
-      response: "",
-      reason: "network_error",
-      error: (error as Error).message,
+      ok: true,
+      response: data.response || "",
+      credits_remaining: data.credits_remaining,
     };
+  } catch (error) {
+    console.error("❌ Chat response failed:", error);
+    return { ok: false, response: "", error: (error as Error).message };
   }
 }
 
 // ============================================
-// PART 6: DEMO MODE (FALLBACK)
+// PART 6: EXPORTS & UTILS
 // ============================================
 
-function generateDemoSummary(text: string): SummaryResult {
-  const sentences = text
-    .split(/(?<=[.!?])\s+/)
-    .slice(0, 3)
-    .join(" ");
-  const words = text.split(/\s+/).filter(Boolean).length;
-  const summary = sentences || text.slice(0, 280);
-
-  return {
-    ok: true,
-    summary: `${summary}\n\n— ${CONFIG.DEMO_MODE_MESSAGE} · ${words} words in original`,
-  };
-}
-
-// ============================================
-// PART 7: UTILITY FUNCTIONS
-// ============================================
-
-/**
- * Check if backend/functions are available
- */
 export async function checkBackendHealth(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/health`);
@@ -325,173 +267,10 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
 }
 
-/**
- * Check API status
- */
-export function checkAPIStatus(): APIStatusResult {
-  if (!CONFIG.USE_REAL_API) {
-    return {
-      configured: false,
-      message: "AI features are in demo mode.",
-    };
-  }
-
-  return {
-    configured: true,
-    message: "AI features are active.",
-  };
-}
-
-/**
- * Test API connection
- */
-export async function testAPIConnection(): Promise<{
-  success: boolean;
-  message: string;
-}> {
-  try {
-    const backendHealthy = await checkBackendHealth();
-    if (!backendHealthy) {
-      return {
-        success: false,
-        message: "AI service is not available. Please try again later.",
-      };
-    }
-
-    const testText = "This is a test message to verify API connectivity.";
-    const result = await summarizeText(testText);
-
-    if (result.ok) {
-      return { success: true, message: "API connection successful! ✅" };
-    } else {
-      return {
-        success: false,
-        message: result.error || result.reason || "Unknown error",
-      };
-    }
-  } catch (error) {
-    return { success: false, message: (error as Error).message };
-  }
-}
-
-// ============================================
-// PART 8: CACHING (LRU with TTL)
-// ============================================
-
-const summaryCache = new Map<
-  string,
-  { summary: string; timestamp: number; lastAccessed: number }
->();
-const MAX_CACHE_SIZE = 50;
-const CACHE_TTL = 3600000; // 1 hour
-
-// Clean expired entries periodically
-let cleanupInterval: NodeJS.Timeout | null = null;
-if (typeof window !== "undefined") {
-  cleanupInterval = setInterval(() => {
-    const now = Date.now();
-    const keysToDelete: string[] = [];
-
-    summaryCache.forEach((value, key) => {
-      if (now - value.timestamp > CACHE_TTL) {
-        keysToDelete.push(key);
-      }
-    });
-
-    keysToDelete.forEach((key) => summaryCache.delete(key));
-  }, 600000); // Clean every 10 minutes
-}
-
-export function getCachedSummary(text: string): string | null {
-  const hash = hashText(text);
-  const cached = summaryCache.get(hash);
-
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    // Update last accessed time for LRU
-    cached.lastAccessed = Date.now();
-    summaryCache.set(hash, cached);
-    return cached.summary;
-  }
-
-  // Remove expired entry
-  if (cached) {
-    summaryCache.delete(hash);
-  }
-
-  return null;
-}
-
-export function cacheSummary(text: string, summary: string): void {
-  const hash = hashText(text);
-  const now = Date.now();
-
-  // First, try to remove expired entries
-  if (summaryCache.size >= MAX_CACHE_SIZE) {
-    const keysToDelete: string[] = [];
-
-    summaryCache.forEach((value, key) => {
-      if (now - value.timestamp > CACHE_TTL) {
-        keysToDelete.push(key);
-      }
-    });
-
-    keysToDelete.forEach((key) => summaryCache.delete(key));
-  }
-
-  // If still at capacity, use LRU eviction (remove least recently accessed)
-  if (summaryCache.size >= MAX_CACHE_SIZE) {
-    let oldestKey: string | null = null;
-    let oldestAccess = Infinity;
-
-    summaryCache.forEach((value, key) => {
-      if (value.lastAccessed < oldestAccess) {
-        oldestAccess = value.lastAccessed;
-        oldestKey = key;
-      }
-    });
-
-    if (oldestKey) {
-      summaryCache.delete(oldestKey);
-    }
-  }
-
-  summaryCache.set(hash, {
-    summary,
-    timestamp: now,
-    lastAccessed: now,
-  });
-}
-
-function hashText(text: string): string {
-  // Limit text length for hashing to prevent extremely long input
-  const maxLength = 10000;
-  const textToHash =
-    text.length > maxLength ? text.substring(0, maxLength) : text;
-
-  let hash = 0;
-  for (let i = 0; i < textToHash.length; i++) {
-    const char = textToHash.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
-  }
-  return hash.toString(36);
-}
-
-// Cleanup interval on module unload (for hot reload in dev)
-if (typeof window !== "undefined") {
-  window.addEventListener("beforeunload", () => {
-    if (cleanupInterval) clearInterval(cleanupInterval);
-  });
-}
-
-// ============================================
-// PART 9: EXPORTS
-// ============================================
-
-// Compatibility with existing imports
+// For backwards compatibility
 export async function generateSummary(text: string): Promise<string> {
-  const result = await summarizeText(text);
-  return result.ok ? result.summary : "";
+  const res = await summarizeText(text);
+  return res.ok ? res.summary : "";
 }
 
 export default {
@@ -499,12 +278,6 @@ export default {
   generateTags,
   extractInsights,
   generateChatResponse,
-  generateSummary,
-  setApiKey,
-  getApiKey,
-  checkAPIStatus,
-  testAPIConnection,
   checkBackendHealth,
-  getCachedSummary,
-  cacheSummary,
+  generateSummary, // exported for compatibility
 };

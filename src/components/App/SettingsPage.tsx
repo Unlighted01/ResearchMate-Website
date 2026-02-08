@@ -29,6 +29,9 @@ import {
   FileText,
   FileSpreadsheet,
   Clock,
+  Key,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { TrashIcon } from "../icons";
 
@@ -127,6 +130,10 @@ const SettingsPage: React.FC = () => {
     summaries: 0,
   });
 
+  // API Key State
+  const [customApiKey, setCustomApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+
   // ============================================
   // PART 4: EFFECTS
   // ============================================
@@ -155,6 +162,12 @@ const SettingsPage: React.FC = () => {
       }
     };
     checkBackend();
+  }, []);
+
+  // Load API Key
+  useEffect(() => {
+    const storedKey = localStorage.getItem("custom_gemini_key");
+    if (storedKey) setCustomApiKey(storedKey);
   }, []);
 
   // Fetch stats
@@ -213,6 +226,18 @@ const SettingsPage: React.FC = () => {
       setConfirmPassword("");
     }
     setPasswordLoading(false);
+  };
+
+  // Save API Key
+  const handleSaveApiKey = () => {
+    localStorage.setItem("custom_gemini_key", customApiKey);
+    showToast("Personal API Key saved!", "success");
+  };
+
+  const handleRemoveApiKey = () => {
+    localStorage.removeItem("custom_gemini_key");
+    setCustomApiKey("");
+    showToast("Personal API Key removed.", "info");
   };
 
   // Handle data export
@@ -787,6 +812,64 @@ const SettingsPage: React.FC = () => {
             </div>
           </Card>
 
+          {/* Personal API Key (BYOK) */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+              <Key className="w-5 h-5 text-primary-600" /> Personal API Key
+              (Power User)
+            </h3>
+            <p className="text-gray-500 text-sm mb-4">
+              Bring your own Gemini API Key to bypass the free daily limits.
+              Your key is stored locally on your device.
+            </p>
+
+            <div className="space-y-4">
+              <div className="relative">
+                <input
+                  type={showApiKey ? "text" : "password"}
+                  value={customApiKey}
+                  onChange={(e) => setCustomApiKey(e.target.value)}
+                  placeholder="AIz..."
+                  className="w-full pl-4 pr-12 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all font-mono text-sm"
+                />
+                <button
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              <div className="flex gap-3">
+                <Button onClick={handleSaveApiKey} disabled={!customApiKey}>
+                  Save Key
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleRemoveApiKey}
+                  disabled={
+                    !customApiKey && !localStorage.getItem("custom_gemini_key")
+                  }
+                >
+                  Remove Key
+                </Button>
+              </div>
+
+              <p className="text-xs text-gray-400 mt-2">
+                Get a free key from{" "}
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-500 hover:underline"
+                >
+                  Google AI Studio
+                </a>
+                .
+              </p>
+            </div>
+          </Card>
+
           {/* Privacy */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
@@ -798,48 +881,13 @@ const SettingsPage: React.FC = () => {
 
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      Local AI Processing
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Your research data is processed through your local
-                      backend, not stored on external servers
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      Secure Storage
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      All data is stored in your personal Supabase database with
-                      row-level security
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      No Data Selling
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Your research data is never sold or shared with third
-                      parties
-                    </p>
-                  </div>
-                </div>
+                <p className="font-medium text-gray-900 dark:text-white">
+                  Data Processing
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  We process your research text locally or via our secure
+                  backend. We do not use your data for training AI models.
+                </p>
               </div>
             </div>
           </Card>
@@ -849,122 +897,86 @@ const SettingsPage: React.FC = () => {
       {/* ==================== DATA TAB ==================== */}
       {activeTab === "data" && (
         <div className="space-y-6">
-          {/* Storage Stats */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <HardDrive className="w-5 h-5 text-primary-600" /> Storage
-              Overview
-            </h3>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-primary-50 dark:bg-primary-900/20 rounded-xl">
-                <p className="text-3xl font-bold text-primary-600">
-                  {stats.items}
-                </p>
-                <p className="text-sm text-gray-500">Research Items</p>
-              </div>
-              <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
-                <p className="text-3xl font-bold text-purple-600">
-                  {stats.collections}
-                </p>
-                <p className="text-sm text-gray-500">Collections</p>
-              </div>
-              <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
-                <p className="text-3xl font-bold text-green-600">
-                  {stats.summaries}
-                </p>
-                <p className="text-sm text-gray-500">AI Summaries</p>
-              </div>
-            </div>
-          </Card>
-
-          {/* Export */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
               <Download className="w-5 h-5 text-primary-600" /> Export Data
             </h3>
-            <p className="text-gray-500 text-sm mb-4">
-              Download all your research data
+            <p className="text-gray-500 text-sm mb-6">
+              Download your research data in various formats.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
                 onClick={() => handleExport("json")}
-                className="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all text-left group"
               >
-                <FileJson className="w-8 h-8 text-blue-600" />
-                <div className="text-left">
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    JSON
-                  </p>
-                  <p className="text-xs text-gray-500">For importing back</p>
-                </div>
+                <FileJson className="w-8 h-8 text-gray-400 group-hover:text-primary-500 mb-3" />
+                <p className="font-semibold text-gray-900 dark:text-white">
+                  JSON
+                </p>
+                <p className="text-xs text-gray-500">
+                  Full data backup for developers
+                </p>
               </button>
 
               <button
                 onClick={() => handleExport("csv")}
-                className="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all text-left group"
               >
-                <FileSpreadsheet className="w-8 h-8 text-green-600" />
-                <div className="text-left">
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    CSV
-                  </p>
-                  <p className="text-xs text-gray-500">For spreadsheets</p>
-                </div>
+                <FileSpreadsheet className="w-8 h-8 text-gray-400 group-hover:text-primary-500 mb-3" />
+                <p className="font-semibold text-gray-900 dark:text-white">
+                  CSV
+                </p>
+                <p className="text-xs text-gray-500">
+                  Spreadsheet friendly format
+                </p>
               </button>
 
               <button
                 onClick={() => handleExport("txt")}
-                className="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all text-left group"
               >
-                <FileText className="w-8 h-8 text-orange-600" />
-                <div className="text-left">
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    Text
-                  </p>
-                  <p className="text-xs text-gray-500">Human readable</p>
-                </div>
+                <FileText className="w-8 h-8 text-gray-400 group-hover:text-primary-500 mb-3" />
+                <p className="font-semibold text-gray-900 dark:text-white">
+                  Text File
+                </p>
+                <p className="text-xs text-gray-500">
+                  Readable summaries and notes
+                </p>
               </button>
             </div>
           </Card>
 
-          {/* Import */}
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <Upload className="w-5 h-5 text-primary-600" /> Import Data
             </h3>
-            <p className="text-gray-500 text-sm mb-4">
-              Import research data from a JSON file exported from ResearchMate
+            <p className="text-gray-500 text-sm mb-6">
+              Restore data from a JSON backup file.
             </p>
 
-            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                {importLoading ? (
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-                ) : (
-                  <>
-                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500">
-                      <span className="font-semibold text-primary-600">
-                        Click to upload
-                      </span>{" "}
-                      or drag and drop
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      JSON files only
-                    </p>
-                  </>
-                )}
-              </div>
+            <div className="relative">
               <input
                 type="file"
-                className="hidden"
                 accept=".json"
                 onChange={handleImport}
                 disabled={importLoading}
+                className="block w-full text-sm text-gray-500
+                  file:mr-4 file:py-2.5 file:px-4
+                  file:rounded-lg file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-primary-50 file:text-primary-700
+                  hover:file:bg-primary-100
+                  dark:file:bg-primary-900/30 dark:file:text-primary-400
+                  transition-all cursor-pointer
+                "
               />
-            </label>
+              {importLoading && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600"></div>
+                </div>
+              )}
+            </div>
           </Card>
         </div>
       )}

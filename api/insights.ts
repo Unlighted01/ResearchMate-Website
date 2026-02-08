@@ -9,17 +9,7 @@ const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/models";
 
-const SYSTEM_INSTRUCTION = `
-You are ResearchMate, an academic assistant. 
-Your goal is to help users analyze research papers, citations, and academic text.
-
-STRICT GUARDRAILS:
-1. ONLY answer questions related to research, science, academic writing, or the text provided.
-2. If the user asks about general topics (e.g., "tell me a joke", "who won the game", "write a poem"), politely REFUSE.
-   Response: "I am ResearchMate, designed only for academic and research assistance. I cannot help with off-topic queries."
-3. Keep answers professional, concise, and objective.
-4. Do not hallucinatie citations. If you don't know, say so.
-`.trim();
+const INSIGHTS_PROMPT = `Extract exactly 5 bullet points of key insights from this text:\n\n`;
 
 // ============================================
 // KEY ROTATION HELPER
@@ -35,27 +25,22 @@ function getRandomGeminiKey(): string | undefined {
       return keys[Math.floor(Math.random() * keys.length)];
     }
   }
-  return process.env.GEMINI_API_KEY; // Fallback
+  return process.env.GEMINI_API_KEY;
 }
 
 // ============================================
 // GEMINI API CALLER
 // ============================================
-async function callGeminiAPI(
-  prompt: string,
-  apiKey: string,
-  options: any = {},
-) {
+async function callGeminiAPI(text: string, apiKey: string, options: any = {}) {
   const url = `${GEMINI_ENDPOINT}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
-  // Prepend System Instruction
-  const fullPrompt = `${SYSTEM_INSTRUCTION}\n\nUSER REQUEST:\n${prompt}`;
+  const fullPrompt = `${INSIGHTS_PROMPT}\n${text}`;
 
   const requestBody = {
     contents: [{ parts: [{ text: fullPrompt }] }],
     generationConfig: {
-      temperature: options.temperature || 0.7,
-      maxOutputTokens: options.maxTokens || 1024,
+      temperature: options.temperature || 0.5,
+      maxOutputTokens: options.maxTokens || 500,
     },
   };
 
@@ -80,7 +65,6 @@ async function callGeminiAPI(
 // MAIN HANDLER
 // ============================================
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS Headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader(
@@ -93,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    // 1. Authenticate & Check Credits
+    // 1. Authenticate
     const authResult = await authenticateUser(req);
 
     if (authResult.error) {
@@ -104,11 +88,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const { user, isFreeTier, customKey } = authResult;
-    const userId = user?.id; // Safely access ID
+    const userId = user?.id;
 
     // 2. Prepare Request
-    const { message, context } = req.body;
-    if (!message) return res.status(400).json({ error: "Message is required" });
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: "Text is required" });
 
     const keyToUse = customKey || getRandomGeminiKey();
     if (!keyToUse)
@@ -117,21 +101,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .json({ error: "Server misconfiguration: No API keys." });
 
     // 3. Call AI
-    const prompt = `Use this context to answer the user.\n\nCONTEXT:\n${context || "No context."}\n\nMessage: ${message}`;
-    const responseText = await callGeminiAPI(prompt, keyToUse);
+    const insights = await callGeminiAPI(text, keyToUse);
 
-    // 4. Deduct Credit (if applicable)
+    // 4. Deduct Credit
     let creditsRemaining: number | string = "Unlimited";
     if (isFreeTier && userId) {
       creditsRemaining = await deductCredit(userId);
     }
 
     return res.status(200).json({
-      response: responseText,
+      insights: insights,
       credits_remaining: creditsRemaining,
     });
   } catch (error) {
-    console.error("Chat API Error:", error);
+    console.error("Insights API Error:", error);
     return res.status(500).json({ error: (error as Error).message });
   }
 }
