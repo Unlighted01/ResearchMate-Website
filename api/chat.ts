@@ -9,6 +9,14 @@ const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/models";
 
+// Fallback 1: OpenRouter (Grok)
+const OPENROUTER_MODEL = "x-ai/grok-2-1212";
+const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+
+// Fallback 2: Groq (Llama 3 70B)
+const GROQ_MODEL = "llama3-70b-8192";
+const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+
 const SYSTEM_INSTRUCTION = `
 You are ResearchMate, an academic assistant. 
 Your goal is to help users analyze research papers, citations, and academic text.
@@ -22,7 +30,7 @@ STRICT GUARDRAILS:
 `.trim();
 
 // ============================================
-// KEY ROTATION HELPER
+// KEY ROTATION HELPER (GEMINI)
 // ============================================
 function getRandomGeminiKey(): string | undefined {
   const multipleKeys = process.env.GEMINI_API_KEYS;
@@ -39,7 +47,7 @@ function getRandomGeminiKey(): string | undefined {
 }
 
 // ============================================
-// GEMINI API CALLER
+// AI PROVIDER 1: GEMINI (Primary)
 // ============================================
 async function callGeminiAPI(
   prompt: string,
@@ -48,7 +56,6 @@ async function callGeminiAPI(
 ) {
   const url = `${GEMINI_ENDPOINT}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
-  // Prepend System Instruction
   const fullPrompt = `${SYSTEM_INSTRUCTION}\n\nUSER REQUEST:\n${prompt}`;
 
   const requestBody = {
@@ -74,6 +81,82 @@ async function callGeminiAPI(
 
   const data = await response.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+}
+
+// ============================================
+// AI PROVIDER 2: OPENROUTER (Fallback 1)
+// ============================================
+async function callOpenRouterAPI(prompt: string, options: any = {}) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("OpenRouter API Key not configured.");
+  }
+
+  const response = await fetch(OPENROUTER_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://researchmate.vercel.app",
+      "X-Title": "ResearchMate",
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_INSTRUCTION },
+        { role: "user", content: prompt },
+      ],
+      temperature: options.temperature || 0.7,
+      max_tokens: options.maxTokens || 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message || `OpenRouter API error: ${response.status}`,
+    );
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "";
+}
+
+// ============================================
+// AI PROVIDER 3: GROQ (Fallback 2)
+// ============================================
+async function callGroqAPI(prompt: string, options: any = {}) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    throw new Error("Groq API Key not configured.");
+  }
+
+  const response = await fetch(GROQ_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_INSTRUCTION },
+        { role: "user", content: prompt },
+      ],
+      temperature: options.temperature || 0.7,
+      max_tokens: options.maxTokens || 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message || `Groq API error: ${response.status}`,
+    );
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "";
 }
 
 // ============================================
@@ -104,7 +187,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const { user, isFreeTier, customKey } = authResult;
-    const userId = user?.id; // Safely access ID
+    const userId = user?.id;
 
     // 2. Prepare Request
     const { message, context } = req.body;
@@ -116,11 +199,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .status(500)
         .json({ error: "Server misconfiguration: No API keys." });
 
-    // 3. Call AI
     const prompt = `Use this context to answer the user.\n\nCONTEXT:\n${context || "No context."}\n\nMessage: ${message}`;
-    const responseText = await callGeminiAPI(prompt, keyToUse);
+    let responseText = "";
 
-    // 4. Deduct Credit (if applicable)
+    // 3. Call AI (With 3-Layer Fallback)
+    try {
+      // Attempt 1: Gemini
+      responseText = await callGeminiAPI(prompt, keyToUse);
+    } catch (geminiError) {
+      console.warn("⚠️ Gemini API Failed:", (geminiError as Error).message);
+
+      // Attempt 2: OpenRouter (Fallback 1)
+      if (process.env.OPENROUTER_API_KEY) {
+        console.log("🔄 Switching to Fallback 1: OpenRouter (Grok)...");
+        try {
+          responseText = await callOpenRouterAPI(prompt);
+        } catch (openRouterError) {
+          console.warn(
+            "❌ OpenRouter Failed:",
+            (openRouterError as Error).message,
+          );
+
+          // Attempt 3: Groq (Fallback 2)
+          if (process.env.GROQ_API_KEY) {
+            console.log("🔄 Switching to Fallback 2: Groq (Llama 3)...");
+            try {
+              responseText = await callGroqAPI(prompt);
+            } catch (groqError) {
+              console.error(
+                "❌ Groq Also Failed:",
+                (groqError as Error).message,
+              );
+              throw new Error(
+                "All AI providers (Gemini, OpenRouter, Groq) failed.",
+              );
+            }
+          } else {
+            // No Groq Key
+            throw new Error(
+              "Gemini and OpenRouter failed, and NO Groq key found.",
+            );
+          }
+        }
+      } else if (process.env.GROQ_API_KEY) {
+        // OpenRouter Key missing, but Groq exists, try Groq directly
+        console.log(
+          "🔄 OpenRouter Key missing. Switching to Fallback 2: Groq...",
+        );
+        try {
+          responseText = await callGroqAPI(prompt);
+        } catch (groqError) {
+          throw new Error("Gemini failed and Groq failed.");
+        }
+      } else {
+        // No backup keys at all
+        throw geminiError;
+      }
+    }
+
+    // 4. Deduct Credit (Only if success)
     let creditsRemaining: number | string = "Unlimited";
     if (isFreeTier && userId) {
       creditsRemaining = await deductCredit(userId);
