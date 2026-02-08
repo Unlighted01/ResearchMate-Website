@@ -173,8 +173,84 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
     setBatchProcessing(false);
   };
 
+  // Mention State
+  const [isMentionMenuOpen, setIsMentionMenuOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [cursorPosition, setCursorPosition] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
   // ============================================
-  // CHAT LOGIC
+  // MENTION LOGIC
+  // ============================================
+
+  const filteredMentions = useMemo(() => {
+    if (!mentionQuery) return items.slice(0, 5); // Show top 5 recent by default
+    return items
+      .filter((i) =>
+        i.sourceTitle?.toLowerCase().includes(mentionQuery.toLowerCase()),
+      )
+      .slice(0, 5);
+  }, [items, mentionQuery]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setChatInput(val);
+
+    const cursorPos = e.target.selectionStart || 0;
+    setCursorPosition(cursorPos);
+
+    // Check for @ trigger
+    const lastAtPos = val.lastIndexOf("@", cursorPos - 1);
+    if (lastAtPos !== -1) {
+      const query = val.substring(lastAtPos + 1, cursorPos);
+      // Only trigger if no spaces in query (simple implementation)
+      if (!query.includes(" ")) {
+        setIsMentionMenuOpen(true);
+        setMentionQuery(query);
+        return;
+      }
+    }
+    setIsMentionMenuOpen(false);
+  };
+
+  const insertMention = (item: StorageItem) => {
+    if (!inputRef.current) return;
+
+    const val = chatInput;
+    const lastAtPos = val.lastIndexOf("@", cursorPosition - 1);
+
+    if (lastAtPos !== -1) {
+      const before = val.substring(0, lastAtPos);
+      const after = val.substring(cursorPosition);
+      // Format: @[Title](id) -> Visible as just @Title in basic input,
+      // but for simple text input we'll just use the title for now and lookup by name
+      // OR better: Just insert title and keep ID in a separate list?
+      // Let's stick to simple text replacement for this V1: "@Title "
+      const newValue = `${before}@${item.sourceTitle || "Untitled"} ${after}`;
+
+      setChatInput(newValue);
+      setIsMentionMenuOpen(false);
+      inputRef.current.focus();
+    }
+  };
+
+  // ============================================
+  // CITATION REDIRECT HANDLER
+  // ============================================
+  const handleRedirectCitations = () => {
+    showToast("Redirecting to Citations Tab...", "info");
+    // Dispatch event to switch main app tab (handled in App.tsx or parent)
+    // Since specific implementation might vary, we'll try standard CustomEvent
+    window.dispatchEvent(
+      new CustomEvent("switch-tab", { detail: "citations" }),
+    );
+
+    // Fallback: If this component is inside the main dashboard, we might need a prop.
+    // For now, assuming Global Event or User will see toast.
+  };
+
+  // ============================================
+  // CHAT SEND
   // ============================================
 
   const handleSendMessage = async () => {
@@ -189,35 +265,64 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
 
     setChatHistory((prev) => [...prev, userMsg]);
     setChatInput("");
+    setIsMentionMenuOpen(false);
     setIsChatting(true);
 
-    // Prepare Context from Saved Items
-    // We take the top 5 most recent items with summaries to save tokens
-    const contextItems = items
-      .slice(0, 5)
+    // 1. Detect Mentions in Input
+    // We look for strings starting with @ that match Item Titles
+    const mentionedItems = items.filter((i) =>
+      userMsg.text.toLowerCase().includes(`@${i.sourceTitle?.toLowerCase()}`),
+    );
+
+    // 2. Prepare Context
+    // If mentions exist, ONLY use them. If none, use top 5 recent.
+    const itemsToUse =
+      mentionedItems.length > 0 ? mentionedItems : items.slice(0, 5);
+
+    console.log(
+      "Using Context Items:",
+      itemsToUse.map((i) => i.sourceTitle),
+    );
+
+    const contextItems = itemsToUse
       .map(
         (item) => `
       Title: ${item.sourceTitle}
       Date: ${item.createdAt}
       Summary: ${item.aiSummary || "No summary available"}
-      Content Snippet: ${(item.text || "").substring(0, 200)}...
-    `,
+      Content Snippet: ${(item.text || "").substring(0, 500)}... 
+    `, // Increased snippet length for mentioned items
       )
       .join("\n---\n");
 
-    const context = `Here are the user's recent saved research items:\n${contextItems}`;
+    const context = `
+    User Saved Research (Prioritize these):
+    ${contextItems}
+    `;
 
     try {
       const result = await generateChatResponse(userMsg.text, context);
 
       if (result.ok) {
-        const aiMsg: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          role: "ai",
-          text: result.response,
-          timestamp: Date.now(),
-        };
-        setChatHistory((prev) => [...prev, aiMsg]);
+        // CHECK FOR REDIRECT ACTION
+        if (result.response.includes("ACTION_REDIRECT_CITATIONS")) {
+          handleRedirectCitations();
+          const aiMsg: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            role: "ai",
+            text: "I've navigated you to the Citations tab to view accurate references.",
+            timestamp: Date.now(),
+          };
+          setChatHistory((prev) => [...prev, aiMsg]);
+        } else {
+          const aiMsg: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            role: "ai",
+            text: result.response,
+            timestamp: Date.now(),
+          };
+          setChatHistory((prev) => [...prev, aiMsg]);
+        }
 
         // Update credits if available
         if (result.credits_remaining !== undefined) {
@@ -252,9 +357,15 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
+      if (isMentionMenuOpen) {
+        e.preventDefault();
+        if (filteredMentions.length > 0) insertMention(filteredMentions[0]);
+        return;
+      }
       e.preventDefault();
       handleSendMessage();
     }
+    // Simple navigation for value could be added here
   };
 
   // ============================================
@@ -507,18 +618,37 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
           <div className="p-4 bg-white dark:bg-[#1C1C1E] border-t border-gray-200/50 dark:border-gray-800">
             <div className="relative">
               <input
+                ref={inputRef}
                 type="text"
                 value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   items.length > 0
-                    ? "Ask about your saved research..."
+                    ? "Ask about your saved research (Type @ to mention)..."
                     : "Add some items to start chatting..."
                 }
                 className="w-full pl-4 pr-12 py-3.5 bg-gray-100 dark:bg-[#2C2C2E] rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 transition-all"
                 disabled={isChatting}
               />
+
+              {/* @ MENTION MENU */}
+              {isMentionMenuOpen && filteredMentions.length > 0 && (
+                <div className="absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden z-10">
+                  <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-500">
+                    Suggest Research
+                  </div>
+                  {filteredMentions.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => insertMention(item)}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-900 dark:text-white hover:bg-[#007AFF]/10 hover:text-[#007AFF] transition-colors truncate"
+                    >
+                      {item.sourceTitle || "Untitled"}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 onClick={handleSendMessage}
                 disabled={!chatInput.trim() || isChatting}

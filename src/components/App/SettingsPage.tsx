@@ -208,6 +208,18 @@ const SettingsPage: React.FC = () => {
     fetchStats();
   }, [user]);
 
+  // Credit Reset Timer Logic
+  const getTimeUntilReset = () => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setUTCHours(24, 0, 0, 0); // Next Midnight UTC
+    const diff = tomorrow.getTime() - now.getTime();
+
+    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    const minutes = Math.floor((diff / (1000 * 60)) % 60);
+    return `${hours}h ${minutes}m`;
+  };
+
   // ============================================
   // PART 5: HANDLERS
   // ============================================
@@ -782,6 +794,16 @@ const SettingsPage: React.FC = () => {
               </span>
               <span className="text-gray-500 mb-1">credits remaining</span>
             </div>
+            {/* Low Credit Warning with Reset Timer */}
+            {stats.ai_credits < 20 && (
+              <div className="mt-4 flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg border border-orange-100 dark:border-orange-900">
+                <Clock className="w-4 h-4" />
+                <span>
+                  Free refills in <strong>{getTimeUntilReset()}</strong>{" "}
+                  (Midnight UTC)
+                </span>
+              </div>
+            )}
           </Card>
 
           {/* Backend Status */}
