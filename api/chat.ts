@@ -75,7 +75,9 @@ async function callGeminiAPI(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
-      errorData.error?.message || `Gemini API error: ${response.status}`,
+      `Gemini Error (${response.status}): ${
+        errorData.error?.message || response.statusText
+      }`,
     );
   }
 
@@ -114,7 +116,9 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
-      errorData.error?.message || `OpenRouter API error: ${response.status}`,
+      `OpenRouter Error (${response.status}): ${
+        errorData.error?.message || response.statusText
+      }`,
     );
   }
 
@@ -151,7 +155,9 @@ async function callGroqAPI(prompt: string, options: any = {}) {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
-      errorData.error?.message || `Groq API error: ${response.status}`,
+      `Groq Error (${response.status}): ${
+        errorData.error?.message || response.statusText
+      }`,
     );
   }
 
@@ -203,11 +209,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let responseText = "";
 
     // 3. Call AI (With 3-Layer Fallback)
+    const errors: string[] = [];
+
     try {
       // Attempt 1: Gemini
       responseText = await callGeminiAPI(prompt, keyToUse);
     } catch (geminiError) {
-      console.warn("⚠️ Gemini API Failed:", (geminiError as Error).message);
+      const msg = `Gemini Failed: ${(geminiError as Error).message}`;
+      console.warn(msg);
+      errors.push(msg);
 
       // Attempt 2: OpenRouter (Fallback 1)
       if (process.env.OPENROUTER_API_KEY) {
@@ -215,10 +225,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
           responseText = await callOpenRouterAPI(prompt);
         } catch (openRouterError) {
-          console.warn(
-            "❌ OpenRouter Failed:",
-            (openRouterError as Error).message,
-          );
+          const msg = `OpenRouter Failed: ${(openRouterError as Error).message}`;
+          console.warn(msg);
+          errors.push(msg);
 
           // Attempt 3: Groq (Fallback 2)
           if (process.env.GROQ_API_KEY) {
@@ -226,18 +235,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             try {
               responseText = await callGroqAPI(prompt);
             } catch (groqError) {
-              console.error(
-                "❌ Groq Also Failed:",
-                (groqError as Error).message,
-              );
+              const msg = `Groq Failed: ${(groqError as Error).message}`;
+              console.error(msg);
+              errors.push(msg);
+              // All failed
               throw new Error(
-                "All AI providers (Gemini, OpenRouter, Groq) failed.",
+                `All providers failed. Logs: ${errors.join(" | ")}`,
               );
             }
           } else {
-            // No Groq Key
+            const msg = "Groq Skipped: No GROQ_API_KEY found.";
+            errors.push(msg);
             throw new Error(
-              "Gemini and OpenRouter failed, and NO Groq key found.",
+              `Gemini/OpenRouter failed. Logs: ${errors.join(" | ")}`,
             );
           }
         }
@@ -249,11 +259,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
           responseText = await callGroqAPI(prompt);
         } catch (groqError) {
-          throw new Error("Gemini failed and Groq failed.");
+          const msg = `Groq Failed: ${(groqError as Error).message}`;
+          errors.push(msg);
+          throw new Error(`Gemini/Groq failed. Logs: ${errors.join(" | ")}`);
         }
       } else {
-        // No backup keys at all
-        throw geminiError;
+        const msg =
+          "Fallbacks Skipped: No OPENROUTER_API_KEY or GROQ_API_KEY found.";
+        errors.push(msg);
+        throw new Error(msg);
       }
     }
 
