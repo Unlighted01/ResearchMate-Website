@@ -10,11 +10,12 @@ const GEMINI_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/models";
 
 // Fallback 1: OpenRouter (Grok)
-const OPENROUTER_MODEL = "x-ai/grok-2-1212";
+const OPENROUTER_MODEL = "x-ai/grok-2-1212"; // User requested
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
-// Fallback 2: Groq (Llama 3 70B)
-const GROQ_MODEL = "llama3-70b-8192";
+// Fallback 2: Groq (Llama 3.3 70B)
+// Old "llama3-70b-8192" is deprecated. Using new stable model.
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
 const SYSTEM_INSTRUCTION = `
