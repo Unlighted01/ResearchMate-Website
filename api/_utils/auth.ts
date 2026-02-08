@@ -80,8 +80,9 @@ export async function authenticateUser(
 
     if (profileError) {
       console.error("Profile fetch error:", profileError);
+      // DETAILED ERROR LOGGING FOR DEBUGGING
       return {
-        error: "Failed to fetch user profile",
+        error: `Failed to fetch user profile: ${profileError.message} (Code: ${profileError.code})`,
         statusCode: 500,
         user: null,
         isFreeTier: true,
