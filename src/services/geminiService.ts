@@ -2,12 +2,8 @@
 // geminiService.ts - Secure AI Service
 // ============================================
 
-import { createClient } from "@supabase/supabase-js";
-
-// Initialize Supabase Client for Auth (Session Retrieval)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// IMPORT SHARED SUPABASE CLIENT to ensure we use the same session state
+import { supabase } from "./supabaseClient";
 
 // ============================================
 // PART 1: CONFIGURATION
@@ -79,8 +75,18 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
+  // DEBUG LOGGING (Temporary)
+  console.log("🔍 [GeminiService] Auth Check:");
+  console.log("   - Supabase URL Set:", !!import.meta.env.VITE_SUPABASE_URL);
+  console.log("   - Session Found:", !!data.session);
+  console.log("   - Token Present:", !!token);
+
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+  } else {
+    console.warn(
+      "⚠️ [GeminiService] No Auth Token found! Request will likely fail 401.",
+    );
   }
 
   return headers;
