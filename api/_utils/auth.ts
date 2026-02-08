@@ -79,7 +79,7 @@ export async function authenticateUser(
       .eq("id", user.id)
       .maybeSingle();
 
-    // If profile doesn't exist (Old user?), create it now
+    // CASE A: User has NO profile (Old user from before migration)
     if (!profile && !profileError) {
       console.log(`⚠️ User ${user.id} has no profile. Creating one...`);
       const { error: insertError } = await supabase
@@ -95,13 +95,25 @@ export async function authenticateUser(
           isFreeTier: true,
         };
       }
-      // Set default
       profile = { ai_credits: 50 };
+    }
+
+    // CASE B: User has profile, but ai_credits is NULL (Migration didn't backfill?)
+    if (profile && profile.ai_credits === null) {
+      console.log(`⚠️ User ${user.id} has NULL credits. Setting to 50...`);
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ ai_credits: 50 })
+        .eq("id", user.id);
+
+      if (updateError) {
+        console.error("Failed to init credits:", updateError);
+      }
+      profile.ai_credits = 50;
     }
 
     if (profileError) {
       console.error("Profile fetch error:", profileError);
-      // DETAILED ERROR LOGGING FOR DEBUGGING
       return {
         error: `Failed to fetch user profile: ${profileError.message} (Code: ${profileError.code})`,
         statusCode: 500,
@@ -110,8 +122,7 @@ export async function authenticateUser(
       };
     }
 
-    // Default to 0 if null
-    const credits = profile ? profile.ai_credits || 0 : 0;
+    const credits = profile?.ai_credits ?? 0; // Safe default
 
     if (credits <= 0) {
       return {
