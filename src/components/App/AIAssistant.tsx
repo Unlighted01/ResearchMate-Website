@@ -125,9 +125,16 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
   // ============================================
 
   const handleSummarize = async (item: StorageItem) => {
+    const textContent = item.text || item.ocrText || "";
+
+    if (!textContent.trim()) {
+      showToast("No text content to summarize (Scan might be empty)", "error");
+      return;
+    }
+
     setSummarizing(item.id);
     try {
-      const result = await generateSummary(item.text || item.ocrText || "");
+      const result = await generateSummary(textContent);
       // Note: currently generateSummary returns string directly for backward compat,
       // but ideally we'd use summarizeText to get the full object.
       // For now, prompt the user if empty string returned (error).
@@ -138,10 +145,15 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
         );
         showToast("Summary generated!", "success");
       } else {
-        showToast("Failed to summarize. Check credits.", "error");
+        // If result is empty string, it often means the API failed or returned empty
+        showToast(
+          "Summary failed. Service might be busy or out of credits.",
+          "error",
+        );
       }
     } catch (e) {
-      showToast("Failed to summarize", "error");
+      console.error("Summary error:", e);
+      showToast("Failed to summarize (Network/Server Error)", "error");
     }
     setSummarizing(null);
   };

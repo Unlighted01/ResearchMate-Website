@@ -309,7 +309,7 @@ const SmartPenGallery = () => {
             Smart Pen Gallery
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Your handwritten notes, digitized with OCR
+            Digitized with OCR
           </p>
         </div>
 
