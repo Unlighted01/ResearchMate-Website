@@ -31,6 +31,7 @@ STRICT GUARDRAILS:
 5. If the user asks for citations, a bibliography, or references for their research, DO NOT generate them.
    Instead, output EXACTLY this string: "ACTION_REDIRECT_CITATIONS"
    (The frontend will detect this and redirect the user to the Citations tab).
+6. IMPORTANT: When summarizing or explaining, DO NOT use conversational filler like "The text discusses", "Here is a summary", "Sure", or "I can help with that". JUST START WITH THE CONTENT.
 `.trim();
 
 // ============================================

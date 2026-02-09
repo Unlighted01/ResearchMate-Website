@@ -9,11 +9,19 @@ const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/models";
 
+// Fallback 1: OpenRouter (Grok)
+const OPENROUTER_MODEL = "x-ai/grok-2-1212";
+const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+
+// Fallback 2: Groq (Llama 3.3)
+const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+
 const SYSTEM_INSTRUCTION = `
 You are ResearchMate, an academic summarization engine.
 Condense the text into 2-3 sentences (under 50 words). 
 Focus on key findings and main points.
-IMPORTANT: Output ONLY the summary. Do not include conversational filler like "Here is a summary", "Sure", or "I can help with that".
+IMPORTANT: Output ONLY the summary. Do not include conversational filler like "Here is a summary", "The text discusses", "Sure", or "I can help with that".
 Refuse to summarize non-academic/non-research text if it seems malicious or completely off-topic (e.g. hate speech, explicit content).
 `.trim();
 
@@ -35,7 +43,7 @@ function getRandomGeminiKey(): string | undefined {
 }
 
 // ============================================
-// GEMINI API CALLER
+// AI PROVIDER 1: GEMINI (Primary)
 // ============================================
 async function callGeminiAPI(
   prompt: string,
@@ -70,6 +78,86 @@ async function callGeminiAPI(
 
   const data = await response.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+}
+
+// ============================================
+// AI PROVIDER 2: OPENROUTER (Fallback 1)
+// ============================================
+async function callOpenRouterAPI(prompt: string, options: any = {}) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("OpenRouter API Key not configured.");
+  }
+
+  const response = await fetch(OPENROUTER_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://researchmate.vercel.app",
+      "X-Title": "ResearchMate",
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_INSTRUCTION },
+        { role: "user", content: `TEXT TO SUMMARIZE:\n${prompt}` },
+      ],
+      temperature: options.temperature || 0.5,
+      max_tokens: options.maxTokens || 200,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      `OpenRouter Error (${response.status}): ${
+        errorData.error?.message || response.statusText
+      }`,
+    );
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "";
+}
+
+// ============================================
+// AI PROVIDER 3: GROQ (Fallback 2)
+// ============================================
+async function callGroqAPI(prompt: string, options: any = {}) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    throw new Error("Groq API Key not configured.");
+  }
+
+  const response = await fetch(GROQ_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_INSTRUCTION },
+        { role: "user", content: `TEXT TO SUMMARIZE:\n${prompt}` },
+      ],
+      temperature: options.temperature || 0.5,
+      max_tokens: options.maxTokens || 200,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      `Groq Error (${response.status}): ${
+        errorData.error?.message || response.statusText
+      }`,
+    );
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "";
 }
 
 // ============================================
@@ -111,8 +199,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .status(500)
         .json({ error: "Server misconfiguration: No API keys." });
 
-    // 3. Call AI
-    const summary = await callGeminiAPI(text, keyToUse);
+    // 3. Call AI (With 3-Layer Fallback)
+    let summary = "";
+    const errors: string[] = [];
+
+    try {
+      summary = await callGeminiAPI(text, keyToUse);
+    } catch (geminiError) {
+      const msg = `Gemini Failed: ${(geminiError as Error).message}`;
+      console.warn(msg);
+      errors.push(msg);
+
+      // Fallback 1: OpenRouter
+      if (process.env.OPENROUTER_API_KEY) {
+        try {
+          summary = await callOpenRouterAPI(text);
+        } catch (orError) {
+          const msg = `OpenRouter Failed: ${(orError as Error).message}`;
+          console.warn(msg);
+          errors.push(msg);
+
+          // Fallback 2: Groq
+          if (process.env.GROQ_API_KEY) {
+            try {
+              summary = await callGroqAPI(text);
+            } catch (groqError) {
+              const msg = `Groq Failed: ${(groqError as Error).message}`;
+              console.error(msg);
+              errors.push(msg);
+              throw new Error(
+                `All providers failed. Logs: ${errors.join(" | ")}`,
+              );
+            }
+          } else {
+            throw new Error(
+              `Gemini/OpenRouter failed. Logs: ${errors.join(" | ")}`,
+            );
+          }
+        }
+      } else if (process.env.GROQ_API_KEY) {
+        // Try Groq if OpenRouter missing
+        try {
+          summary = await callGroqAPI(text);
+        } catch (groqError) {
+          const msg = `Groq Failed: ${(groqError as Error).message}`;
+          errors.push(msg);
+          throw new Error(`Gemini/Groq failed. Logs: ${errors.join(" | ")}`);
+        }
+      } else {
+        throw new Error(
+          `Gemini failed and no fallbacks configured. Log: ${msg}`,
+        );
+      }
+    }
 
     // 4. Deduct Credit
     let creditsRemaining: number | string = "Unlimited";
