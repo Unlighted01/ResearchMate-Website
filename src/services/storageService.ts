@@ -19,6 +19,9 @@ export interface StorageItem {
   createdAt: string;
   updatedAt?: string;
   aiSummary?: string;
+  citation?: string;
+  citationFormat?: string;
+  preferredView?: "original" | "summary";
   deviceSource: DeviceSource;
   collectionId?: string;
   imageUrl?: string;
@@ -32,6 +35,9 @@ export interface AddItemInput {
   sourceUrl?: string;
   sourceTitle?: string;
   aiSummary?: string;
+  citation?: string;
+  citationFormat?: string;
+  preferredView?: "original" | "summary";
   deviceSource?: DeviceSource;
   collectionId?: string;
 }
@@ -41,6 +47,9 @@ export interface UpdateItemInput {
   note?: string;
   aiSummary?: string;
   collectionId?: string;
+  citation?: string;
+  citationFormat?: string;
+  preferredView?: "original" | "summary";
 }
 
 export interface MigrationResult {
@@ -101,6 +110,9 @@ function transformDatabaseItem(item: any): StorageItem {
     createdAt: item.created_at,
     updatedAt: item.updated_at,
     aiSummary: item.ai_summary || "",
+    citation: item.citation,
+    citationFormat: item.citation_format,
+    preferredView: item.preferred_view,
     deviceSource: item.device_source || "web",
     collectionId: item.collection_id,
     imageUrl: item.image_url,
@@ -114,7 +126,7 @@ function transformDatabaseItem(item: any): StorageItem {
  */
 function transformToDatabase(
   item: AddItemInput,
-  userId: string
+  userId: string,
 ): Record<string, any> {
   return {
     user_id: userId,
@@ -124,6 +136,9 @@ function transformToDatabase(
     source_url: item.sourceUrl || "",
     source_title: item.sourceTitle || "",
     ai_summary: item.aiSummary || "",
+    citation: item.citation,
+    citation_format: item.citationFormat,
+    preferred_view: item.preferredView || null,
     device_source: item.deviceSource || "web",
     collection_id: item.collectionId || null,
   };
@@ -141,7 +156,7 @@ function transformToDatabase(
  */
 export async function getAllItems(
   limit: number = 100,
-  offset: number = 0
+  offset: number = 0,
 ): Promise<StorageItem[]> {
   const authenticated = await isAuthenticated();
 
@@ -223,7 +238,7 @@ export async function addItem(item: AddItemInput): Promise<StorageItem> {
  */
 export async function updateItem(
   id: string,
-  updates: UpdateItemInput
+  updates: UpdateItemInput,
 ): Promise<void> {
   // Ensure id is a string
   const itemId = String(id);
@@ -256,6 +271,15 @@ export async function updateItem(
       updateData.ai_summary = updates.aiSummary;
     if (updates.collectionId !== undefined)
       updateData.collection_id = updates.collectionId;
+    // New fields
+    // @ts-ignore
+    if (updates.citation !== undefined) updateData.citation = updates.citation;
+    // @ts-ignore
+    if (updates.citationFormat !== undefined)
+      updateData.citation_format = updates.citationFormat;
+    // @ts-ignore
+    if (updates.preferredView !== undefined)
+      updateData.preferred_view = updates.preferredView;
 
     const { error } = await supabase
       .from("items")
@@ -337,7 +361,7 @@ export async function searchItems(query: string): Promise<StorageItem[]> {
         .from("items")
         .select("*")
         .or(
-          `text.ilike.%${searchTerm}%,source_title.ilike.%${searchTerm}%,note.ilike.%${searchTerm}%`
+          `text.ilike.%${searchTerm}%,source_title.ilike.%${searchTerm}%,note.ilike.%${searchTerm}%`,
         )
         .order("created_at", { ascending: false });
 
@@ -356,7 +380,7 @@ export async function searchItems(query: string): Promise<StorageItem[]> {
       item.text.toLowerCase().includes(searchTerm) ||
       item.sourceTitle.toLowerCase().includes(searchTerm) ||
       item.note.toLowerCase().includes(searchTerm) ||
-      item.tags.some((tag) => tag.toLowerCase().includes(searchTerm))
+      item.tags.some((tag) => tag.toLowerCase().includes(searchTerm)),
   );
 }
 
@@ -395,7 +419,7 @@ export async function filterByTags(tags: string[]): Promise<StorageItem[]> {
  * Get items by collection
  */
 export async function getItemsByCollection(
-  collectionId: string
+  collectionId: string,
 ): Promise<StorageItem[]> {
   const authenticated = await isAuthenticated();
 
@@ -544,7 +568,7 @@ export function subscribeToItems(
     eventType: string;
     new: StorageItem | null;
     old: StorageItem | null;
-  }) => void
+  }) => void,
 ) {
   const channel = supabase
     .channel("items_changes")
@@ -562,7 +586,7 @@ export function subscribeToItems(
           new: payload.new ? transformDatabaseItem(payload.new) : null,
           old: payload.old ? transformDatabaseItem(payload.old) : null,
         });
-      }
+      },
     )
     .subscribe();
 

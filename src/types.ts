@@ -14,13 +14,16 @@ export interface User {
 // PART 2: DEVICE SOURCE TYPES
 // ============================================
 
-export type DeviceSource = 'extension' | 'mobile' | 'smart_pen' | 'web';
+export type DeviceSource = "extension" | "mobile" | "smart_pen" | "web";
 
-export const DEVICE_SOURCES: Record<DeviceSource, { label: string; icon: string }> = {
-  extension: { label: 'Browser Extension', icon: 'Laptop' },
-  mobile: { label: 'Mobile App', icon: 'Smartphone' },
-  smart_pen: { label: 'Smart Pen', icon: 'PenTool' },
-  web: { label: 'Web App', icon: 'Globe' },
+export const DEVICE_SOURCES: Record<
+  DeviceSource,
+  { label: string; icon: string }
+> = {
+  extension: { label: "Browser Extension", icon: "Laptop" },
+  mobile: { label: "Mobile App", icon: "Smartphone" },
+  smart_pen: { label: "Smart Pen", icon: "PenTool" },
+  web: { label: "Web App", icon: "Globe" },
 };
 
 // ============================================
@@ -40,6 +43,9 @@ export interface ResearchItem {
   created_at: string;
   updated_at: string;
   notes?: string;
+  citation?: string;
+  citation_format?: string;
+  preferred_view?: "original" | "summary";
   // For smart pen specifically
   image_url?: string;
   ocr_text?: string;
@@ -59,6 +65,9 @@ export interface ResearchItemCamel {
   createdAt: string;
   updatedAt: string;
   notes?: string;
+  citation?: string;
+  citationFormat?: string;
+  preferredView?: "original" | "summary";
   imageUrl?: string;
   ocrText?: string;
 }
@@ -81,14 +90,14 @@ export interface Collection {
 }
 
 export const COLLECTION_COLORS = [
-  '#4F46E5', // Indigo
-  '#06B6D4', // Cyan
-  '#10B981', // Emerald
-  '#F59E0B', // Amber
-  '#EF4444', // Red
-  '#8B5CF6', // Purple
-  '#EC4899', // Pink
-  '#6366F1', // Blue
+  "#4F46E5", // Indigo
+  "#06B6D4", // Cyan
+  "#10B981", // Emerald
+  "#F59E0B", // Amber
+  "#EF4444", // Red
+  "#8B5CF6", // Purple
+  "#EC4899", // Pink
+  "#6366F1", // Blue
 ];
 
 // ============================================
@@ -99,7 +108,7 @@ export interface Activity {
   id: string;
   user_id?: string;
   device: DeviceSource;
-  action: 'create' | 'update' | 'delete' | 'sync' | 'login' | 'logout';
+  action: "create" | "update" | "delete" | "sync" | "login" | "logout";
   title: string;
   description: string;
   item_id?: string;
@@ -113,7 +122,7 @@ export interface Activity {
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: "user" | "assistant" | "system";
   content: string;
   timestamp: number;
   metadata?: {
@@ -158,26 +167,26 @@ export interface DailyActivity {
 // ============================================
 
 export interface UserSettings {
-  theme: 'light' | 'dark' | 'system';
+  theme: "light" | "dark" | "system";
   font_family: string;
   font_size: number;
-  default_sort: 'date-desc' | 'date-asc' | 'title-asc' | 'title-desc';
+  default_sort: "date-desc" | "date-asc" | "title-asc" | "title-desc";
   ai_enabled: boolean;
   realtime_enabled: boolean;
   notifications_enabled: boolean;
   default_collection_id?: string;
-  export_format: 'json' | 'csv' | 'markdown' | 'bibtex';
+  export_format: "json" | "csv" | "markdown" | "bibtex";
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
-  theme: 'system',
-  font_family: 'system-ui',
+  theme: "system",
+  font_family: "system-ui",
   font_size: 14,
-  default_sort: 'date-desc',
+  default_sort: "date-desc",
   ai_enabled: true,
   realtime_enabled: true,
   notifications_enabled: true,
-  export_format: 'json',
+  export_format: "json",
 };
 
 // ============================================
@@ -239,7 +248,7 @@ export interface CollectionFormData {
 // PART 11: EXPORT TYPES
 // ============================================
 
-export type ExportFormat = 'json' | 'csv' | 'markdown' | 'bibtex' | 'pdf';
+export type ExportFormat = "json" | "csv" | "markdown" | "bibtex" | "pdf";
 
 export interface ExportOptions {
   format: ExportFormat;
@@ -283,9 +292,9 @@ export interface SmartPenDevice {
 // PART 13: UTILITY TYPES
 // ============================================
 
-export type SortOrder = 'asc' | 'desc';
+export type SortOrder = "asc" | "desc";
 
-export type SortField = 'created_at' | 'updated_at' | 'title' | 'source_title';
+export type SortField = "created_at" | "updated_at" | "title" | "source_title";
 
 export interface SortConfig {
   field: SortField;
