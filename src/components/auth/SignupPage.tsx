@@ -113,12 +113,9 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
     if (error) {
       showToast(error.message, "error");
     } else {
-      showToast(
-        "Account created! Please check your email to verify your account.",
-        "success",
-      );
-      // Give user more time to read the message before redirecting
-      setTimeout(() => navigate("/login"), 4000);
+      showToast("Account created successfully! Redirecting...", "success");
+      // Redirect to login page where they can sign in
+      setTimeout(() => navigate("/login"), 1500);
     }
     setLoading(false);
   };
