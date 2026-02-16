@@ -47,7 +47,7 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(
-    null
+    null,
   );
 
   const { showToast } = useToast();
@@ -103,7 +103,7 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
     setLoading(true);
     localStorage.setItem(
       "researchmate_remember",
-      rememberMe ? "true" : "false"
+      rememberMe ? "true" : "false",
     );
 
     const { error } = await supabase.auth.signUp({
@@ -113,8 +113,12 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
     if (error) {
       showToast(error.message, "error");
     } else {
-      showToast("Account created! Check your email to verify.", "success");
-      setTimeout(() => navigate("/login"), 2000);
+      showToast(
+        "Account created! Please check your email to verify your account.",
+        "success",
+      );
+      // Give user more time to read the message before redirecting
+      setTimeout(() => navigate("/login"), 4000);
     }
     setLoading(false);
   };
@@ -123,7 +127,7 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
     setOauthLoading(provider);
     localStorage.setItem(
       "researchmate_remember",
-      rememberMe ? "true" : "false"
+      rememberMe ? "true" : "false",
     );
 
     // Get OAuth URL from Supabase
@@ -151,13 +155,13 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
       const popup = window.open(
         data.url,
         "oauth_popup",
-        `width=${width},height=${height},left=${left},top=${top},popup=true`
+        `width=${width},height=${height},left=${left},top=${top},popup=true`,
       );
 
       if (!popup) {
         showToast(
           "Popup was blocked. Please allow popups for this site.",
-          "error"
+          "error",
         );
         setOauthLoading(null);
         return;
