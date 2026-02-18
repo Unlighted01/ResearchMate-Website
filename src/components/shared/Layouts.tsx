@@ -88,9 +88,11 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
           <div className="flex justify-between h-12 items-center">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 group">
-              <div className="w-7 h-7 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-lg shadow-blue-500/25 group-hover:shadow-blue-500/40 transition-shadow">
-                R
-              </div>
+              <img
+                src="/logo.svg"
+                alt="ResearchMate Logo"
+                className="w-8 h-8 group-hover:scale-105 transition-transform"
+              />
               <span className="text-base font-semibold text-gray-900">
                 ResearchMate
               </span>
@@ -225,9 +227,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
             {/* Brand */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-lg flex items-center justify-center text-white font-semibold text-sm">
-                  R
-                </div>
+                <img src="/logo.svg" alt="Logo" className="w-6 h-6" />
                 <span className="font-semibold">ResearchMate</span>
               </div>
               <p className="text-sm text-gray-500">
@@ -467,9 +467,11 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                 sidebarCollapsed ? "justify-center" : ""
               }`}
             >
-              <div className="w-8 h-8 min-w-[32px] bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-xl flex items-center justify-center text-white font-semibold text-sm shadow-lg shadow-blue-500/20">
-                R
-              </div>
+              <img
+                src="/logo.svg"
+                alt="Logo"
+                className="w-8 h-8 hover:scale-105 transition-transform"
+              />
               {!sidebarCollapsed && (
                 <span className="text-base font-semibold text-gray-900 dark:text-white">
                   ResearchMate
@@ -779,14 +781,24 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   <div className="profile-dropdown absolute right-0 mt-2 w-64 bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50 overflow-hidden animate-slide-down">
                     <div className="px-4 py-4 border-b border-gray-200/50 dark:border-gray-800/50">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center text-white font-semibold">
-                          {user?.email?.charAt(0).toUpperCase() || "U"}
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-white flex items-center justify-center text-lg font-bold overflow-hidden">
+                          {user?.identities?.[0]?.identity_data?.avatar_url ? (
+                            <img
+                              src={user.identities[0].identity_data.avatar_url}
+                              alt={user.email}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            user?.email?.charAt(0).toUpperCase() || "U"
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                             {user?.email}
                           </p>
-                          <p className="text-xs text-gray-500">Free Plan</p>
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <span>Free Plan</span>
+                          </div>
                         </div>
                       </div>
                     </div>
