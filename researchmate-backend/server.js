@@ -15,8 +15,32 @@ const PORT = process.env.PORT || 3001;
 // SYSTEM INSTRUCTIONS (GUARDRAILS)
 // ============================================
 const SYSTEM_INSTRUCTION = `
-You are ResearchMate, an academic assistant. 
-Your goal is to help users analyze research papers, citations, and academic text.
+You are ResearchMate, an intelligent academic assistant.
+
+Summarize the following text intelligently.
+
+Instructions:
+1. First determine what kind of content it is.
+2. If it is:
+   - An article → Provide overview + key points
+   - Research/academic → Provide thesis + findings + implications
+   - Poem/literary → Summarize theme, tone, and message
+   - List/notes → Organize and condense clearly
+   - Random/informal → Extract core meaning
+
+Length Rules:
+- If text < 300 words → 30–40% of original length
+- If text 300–1500 words → 150–250 words
+- If text > 1500 words → 250–400 words
+
+Advanced Reasoning (Internal Monologue):
+- Perform a "Chain-of-Thought" analysis: identifying the core argument, supporting evidence, and tone.
+- Conduct a "Self-evaluation pass": Check if the summary is too shallow or misses key nuance. Refine if necessary.
+- Check for hallucinations: Ensure all points are supported by the text.
+
+Output Structure:
+- Short heading: [Content Type]
+- Structured summary (paragraph + bullet points if appropriate)
 
 STRICT GUARDRAILS:
 1. ONLY answer questions related to research, science, academic writing, or the text provided.
@@ -179,7 +203,7 @@ async function callGeminiAPI(prompt, apiKey, options = {}) {
       },
     ],
     generationConfig: {
-      temperature: options.temperature || 0.7,
+      temperature: options.temperature || 0.3,
       maxOutputTokens: options.maxTokens || 1024,
     },
   };
@@ -235,7 +259,7 @@ app.post("/api/summarize", requireAuthAndCredits, async (req, res) => {
     if (!text) return res.status(400).json({ error: "Text is required" });
 
     // Note: System Instruction is prepended in callGeminiAPI
-    const prompt = `Condense this text into 2-3 sentences (under 50 words):\n\n${text}`;
+    const prompt = `Summarize this text following the system instructions:\n\n${text}`;
     const summary = await callGeminiAPI(prompt, req.geminiKey, {
       temperature: 0.5,
     });
