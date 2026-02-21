@@ -11,12 +11,18 @@ import {
   deleteCollection,
   getItemsInCollection,
   removeItemFromCollection,
+  moveItemsToCollection,
   Collection as CollectionType,
   COLLECTION_COLORS,
 } from "../../services/collectionsService";
-import { StorageItem } from "../../services/storageService";
+import {
+  StorageItem,
+  getAllItems,
+  deleteItem,
+} from "../../services/storageService";
 import { Button, Card, Input, Badge, Modal } from "../shared/UIComponents";
 import ConfirmDialog from "../shared/ConfirmDialog";
+import BulkActions from "../shared/BulkActions";
 import {
   SkeletonCollection,
   SkeletonDashboardGrid,
@@ -32,6 +38,9 @@ import {
   Globe,
   Layout,
   X,
+  Check,
+  Search,
+  Plus,
 } from "lucide-react";
 import { TrashIcon } from "../icons";
 
@@ -53,6 +62,18 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
   const [collectionItems, setCollectionItems] = useState<StorageItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
+
+  // Selection and Add Items State
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [availableItems, setAvailableItems] = useState<StorageItem[]>([]);
+  const [selectedAvailableItems, setSelectedAvailableItems] = useState<
+    Set<string>
+  >(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isBulkRemoving, setIsBulkRemoving] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     collection: CollectionType | null;
@@ -65,6 +86,120 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
   const [formColor, setFormColor] = useState("#4F46E5");
 
   const { showToast } = useToast();
+
+  // Selection Handlers
+  const toggleItemSelection = (id: string, isAvailableList = false) => {
+    if (isAvailableList) {
+      setSelectedAvailableItems((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    } else {
+      setSelectedItems((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    }
+  };
+
+  const selectAllItems = (isAvailableList = false) => {
+    if (isAvailableList)
+      setSelectedAvailableItems(new Set(availableItems.map((i) => i.id)));
+    else setSelectedItems(new Set(collectionItems.map((i) => i.id)));
+  };
+
+  const deselectAllItems = (isAvailableList = false) => {
+    if (isAvailableList) setSelectedAvailableItems(new Set());
+    else setSelectedItems(new Set());
+  };
+
+  const handleBulkRemove = async () => {
+    setIsBulkRemoving(true);
+    try {
+      await moveItemsToCollection(Array.from(selectedItems), null);
+      setCollectionItems((prev) =>
+        prev.filter((i) => !selectedItems.has(i.id)),
+      );
+      setSelectedItems(new Set());
+      showToast("Removed items from collection", "success");
+      fetchCollections(); // refresh counts
+    } catch (e) {
+      showToast("Failed to remove items", "error");
+    } finally {
+      setIsBulkRemoving(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    try {
+      for (const id of selectedItems) {
+        await deleteItem(id);
+      }
+      setCollectionItems((prev) =>
+        prev.filter((i) => !selectedItems.has(i.id)),
+      );
+      setSelectedItems(new Set());
+      showToast("Deleted items successfully", "success");
+      fetchCollections(); // refresh counts
+    } catch (e) {
+      showToast("Failed to delete items", "error");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const openAddModal = async () => {
+    if (!viewingCollection) return;
+    setShowAddModal(true);
+    try {
+      const allItems = await getAllItems();
+      const currentIds = new Set(collectionItems.map((i) => i.id));
+      setAvailableItems(allItems.filter((i) => !currentIds.has(i.id)));
+    } catch (e) {
+      showToast("Failed to load available items", "error");
+    }
+  };
+
+  const handleAddSelectedItems = async () => {
+    if (!viewingCollection || selectedAvailableItems.size === 0) return;
+    try {
+      await moveItemsToCollection(
+        Array.from(selectedAvailableItems),
+        viewingCollection.id,
+      );
+
+      // refresh items view
+      const items = await getItemsInCollection(viewingCollection.id);
+      const transformed: StorageItem[] = items.map((i: any) => ({
+        id: i.id,
+        text: i.text || "",
+        tags: i.tags || [],
+        note: i.note || "",
+        sourceUrl: i.source_url || "",
+        sourceTitle: i.source_title || "",
+        createdAt: i.created_at,
+        updatedAt: i.updated_at,
+        aiSummary: i.ai_summary || "",
+        deviceSource: i.device_source || "web",
+        collectionId: i.collection_id,
+      }));
+      setCollectionItems(transformed);
+      fetchCollections(); // refresh counts
+      setShowAddModal(false);
+      setSelectedAvailableItems(new Set());
+      showToast(
+        `Added ${selectedAvailableItems.size} items to collection`,
+        "success",
+      );
+    } catch (e) {
+      showToast("Failed to add items", "error");
+    }
+  };
 
   const fetchCollections = useCallback(async () => {
     setLoading(true);
@@ -175,7 +310,10 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
       <div className="space-y-6">
         <div className="flex items-center gap-4 bg-white dark:bg-gray-900 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
           <button
-            onClick={() => setViewingCollection(null)}
+            onClick={() => {
+              setViewingCollection(null);
+              setSelectedItems(new Set());
+            }}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
             aria-label="Go back to collections"
             title="Go back"
@@ -193,6 +331,11 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
             <p className="text-xs text-gray-500">
               {viewingCollection.description || "No description"}
             </p>
+          </div>
+          <div className="ml-auto">
+            <Button onClick={openAddModal}>
+              <Plus className="w-4 h-4 mr-2" /> Add Items
+            </Button>
           </div>
         </div>
 
@@ -213,47 +356,182 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {collectionItems.map((item) => (
-              <Card
-                key={item.id}
-                className="p-4 hover:shadow-md transition-shadow relative group"
-              >
-                <button
-                  onClick={async () => {
-                    // Prevent multiple rapid clicks
-                    if (removingItemId) return;
-
-                    setRemovingItemId(item.id);
-                    try {
-                      await removeItemFromCollection(item.id);
-                      setCollectionItems((prev) =>
-                        prev.filter((i) => i.id !== item.id),
-                      );
-                      showToast("Removed from collection", "success");
-                    } catch (error) {
-                      showToast("Failed to remove item", "error");
-                    } finally {
-                      // Prevent rapid clicking with a short cooldown
-                      setTimeout(() => setRemovingItemId(null), 500);
-                    }
-                  }}
-                  disabled={removingItemId === item.id}
-                  className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                  aria-label="Remove item from collection"
-                  title="Remove from collection"
+            {collectionItems.map((item) => {
+              const isSelected = selectedItems.has(item.id);
+              return (
+                <Card
+                  key={item.id}
+                  className={`p-4 hover:shadow-md transition-shadow relative group ${isSelected ? "ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/10" : ""}`}
+                  onClick={() => toggleItemSelection(item.id)}
                 >
-                  <X className="w-4 h-4" />
-                </button>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-1">
-                  {item.sourceTitle || "Untitled"}
-                </h3>
-                <p className="text-sm text-gray-500 line-clamp-3">
-                  {item.aiSummary || item.text}
-                </p>
-              </Card>
-            ))}
+                  {/* Selection Checkbox */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleItemSelection(item.id);
+                    }}
+                    className={`absolute top-4 left-4 z-10 p-1.5 rounded-lg border bg-white/90 backdrop-blur-sm transition-all duration-200 ${
+                      isSelected || selectedItems.size > 0
+                        ? "opacity-100 scale-100"
+                        : "opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100"
+                    } ${
+                      isSelected
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300 dark:border-gray-700"
+                    }`}
+                    aria-label={isSelected ? "Deselect item" : "Select item"}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${
+                        isSelected
+                          ? "bg-blue-600 border-blue-600"
+                          : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                      }`}
+                    >
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 text-white" />
+                      )}
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      // Prevent multiple rapid clicks
+                      if (removingItemId) return;
+
+                      setRemovingItemId(item.id);
+                      try {
+                        await removeItemFromCollection(item.id);
+                        setCollectionItems((prev) =>
+                          prev.filter((i) => i.id !== item.id),
+                        );
+                        showToast("Removed from collection", "success");
+                      } catch (error) {
+                        showToast("Failed to remove item", "error");
+                      } finally {
+                        // Prevent rapid clicking with a short cooldown
+                        setTimeout(() => setRemovingItemId(null), 500);
+                      }
+                    }}
+                    disabled={removingItemId === item.id}
+                    className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Remove item from collection"
+                    title="Remove from collection"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-1">
+                    {item.sourceTitle || "Untitled"}
+                  </h3>
+                  <p className="text-sm text-gray-500 line-clamp-3">
+                    {item.aiSummary || item.text}
+                  </p>
+                </Card>
+              );
+            })}
           </div>
         )}
+
+        {/* Bulk Actions for Collection View */}
+        <BulkActions
+          selectedCount={selectedItems.size}
+          totalCount={collectionItems.length}
+          onSelectAll={() => selectAllItems()}
+          onDeselectAll={() => deselectAllItems()}
+          onBulkRemoveFromCollection={handleBulkRemove}
+          onBulkDelete={handleBulkDelete}
+          isDeleting={isBulkDeleting}
+        />
+
+        {/* Add Items Modal */}
+        <Modal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          title={`Add items to ${viewingCollection.name}`}
+        >
+          {/* Search Bar */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search available items..."
+                value={searchQuery}
+                onChange={(e: any) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          <div className="max-h-96 overflow-y-auto pr-2 space-y-2 mb-4">
+            {availableItems
+              .filter(
+                (i) =>
+                  !searchQuery ||
+                  i.sourceTitle
+                    .toLowerCase()
+                    .includes(searchQuery.toLowerCase()) ||
+                  i.text?.toLowerCase().includes(searchQuery.toLowerCase()),
+              )
+              .map((item) => {
+                const isSelected = selectedAvailableItems.has(item.id);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => toggleItemSelection(item.id, true)}
+                    className={`p-3 rounded-xl border cursor-pointer transition-colors flex items-start gap-3 ${
+                      isSelected
+                        ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
+                        : "bg-white border-gray-100 hover:border-blue-200 dark:bg-gray-800 dark:border-gray-700"
+                    }`}
+                  >
+                    <div
+                      className={`mt-1 flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${
+                        isSelected
+                          ? "bg-blue-600 border-blue-600"
+                          : "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
+                      }`}
+                    >
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 text-white" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 dark:text-white truncate">
+                        {item.sourceTitle || "Untitled"}
+                      </p>
+                      <p className="text-sm text-gray-500 line-clamp-1">
+                        {item.aiSummary || item.text || "No content"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+
+            {availableItems.length === 0 && (
+              <p className="text-center text-gray-500 py-10">
+                No items available to add.
+              </p>
+            )}
+          </div>
+
+          <div className="flex justify-between items-center border-t border-gray-100 dark:border-gray-800 pt-4">
+            <span className="text-sm text-gray-500">
+              {selectedAvailableItems.size} items selected
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowAddModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddSelectedItems}
+                disabled={selectedAvailableItems.size === 0}
+              >
+                Add to Collection
+              </Button>
+            </div>
+          </div>
+        </Modal>
       </div>
     );
   }

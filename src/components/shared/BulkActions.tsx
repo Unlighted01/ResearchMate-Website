@@ -1,5 +1,5 @@
 import React from "react";
-import { X, CheckSquare } from "lucide-react";
+import { X, CheckSquare, FolderMinus } from "lucide-react";
 import { TrashIcon, DownloadIcon } from "../icons";
 
 interface BulkActionsProps {
@@ -7,9 +7,10 @@ interface BulkActionsProps {
   totalCount: number;
   onSelectAll: () => void;
   onDeselectAll: () => void;
-  onBulkDelete: () => void;
-  onBulkExport: () => void;
-  onBulkAddToCollection: () => void;
+  onBulkDelete?: () => void;
+  onBulkExport?: () => void;
+  onBulkAddToCollection?: () => void;
+  onBulkRemoveFromCollection?: () => void;
   isDeleting?: boolean;
 }
 
@@ -25,6 +26,7 @@ const BulkActions: React.FC<BulkActionsProps> = ({
   onBulkDelete,
   onBulkExport,
   onBulkAddToCollection,
+  onBulkRemoveFromCollection,
   isDeleting = false,
 }) => {
   if (selectedCount === 0) return null;
@@ -67,43 +69,61 @@ const BulkActions: React.FC<BulkActionsProps> = ({
           </button>
 
           {/* Export */}
-          <button
-            onClick={onBulkExport}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-lg transition-colors"
-            aria-label="Export selected items"
-          >
-            <DownloadIcon size={16} />
-            Export
-          </button>
+          {onBulkExport && (
+            <button
+              onClick={onBulkExport}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-lg transition-colors"
+              aria-label="Export selected items"
+            >
+              <DownloadIcon size={16} />
+              Export
+            </button>
+          )}
 
           {/* Add to Collection */}
-          <button
-            onClick={onBulkAddToCollection}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-medium rounded-lg transition-colors"
-            aria-label="Add selected items to collection"
-          >
-            Add to Collection
-          </button>
+          {onBulkAddToCollection && (
+            <button
+              onClick={onBulkAddToCollection}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-medium rounded-lg transition-colors"
+              aria-label="Add selected items to collection"
+            >
+              Add to Collection
+            </button>
+          )}
+
+          {/* Remove from Collection */}
+          {onBulkRemoveFromCollection && (
+            <button
+              onClick={onBulkRemoveFromCollection}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-sm font-medium rounded-lg transition-colors"
+              aria-label="Remove selected items from collection"
+            >
+              <FolderMinus className="w-4 h-4" />
+              Remove
+            </button>
+          )}
 
           {/* Delete */}
-          <button
-            onClick={onBulkDelete}
-            disabled={isDeleting}
-            className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-700 dark:text-red-300 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Delete selected items"
-          >
-            {isDeleting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-red-700 dark:border-red-300 border-t-transparent rounded-full animate-spin" />
-                Deleting...
-              </>
-            ) : (
-              <>
-                <TrashIcon size={16} dangerHover />
-                Delete
-              </>
-            )}
-          </button>
+          {onBulkDelete && (
+            <button
+              onClick={onBulkDelete}
+              disabled={isDeleting}
+              className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-700 dark:text-red-300 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Delete selected items"
+            >
+              {isDeleting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-red-700 dark:border-red-300 border-t-transparent rounded-full animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <TrashIcon size={16} dangerHover />
+                  Delete
+                </>
+              )}
+            </button>
+          )}
 
           {/* Clear Selection */}
           <button
