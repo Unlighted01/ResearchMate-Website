@@ -130,7 +130,7 @@ export const useToast = () => {
     (message: string, type: "success" | "error" | "info" = "info") => {
       setToast({ message, type });
     },
-    []
+    [],
   );
 
   // Memoize Toast component - only recalculate when toast changes
@@ -167,7 +167,7 @@ const AuthCallback = () => {
           // Send message to parent window and close popup
           window.opener.postMessage(
             { type: "AUTH_SUCCESS", session },
-            window.location.origin
+            window.location.origin,
           );
           window.close();
         } else {
@@ -185,7 +185,7 @@ const AuthCallback = () => {
         if (isPopup) {
           window.opener.postMessage(
             { type: "AUTH_SUCCESS", session },
-            window.location.origin
+            window.location.origin,
           );
           window.close();
         } else {
@@ -220,11 +220,16 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
         const {
           data: { session: currentSession },
         } = await supabase.auth.getSession();
+
         if (currentSession) {
           const shouldRemember = localStorage.getItem("researchmate_remember");
           const sessionActive = sessionStorage.getItem(
-            "researchmate_session_active"
+            "researchmate_session_active",
           );
+
+          // Only force sign out if they explicitly did NOT want to be remembered
+          // AND this is a brand new browser session.
+          // Otherwise, we trust the valid Supabase session.
           if (shouldRemember !== "true" && !sessionActive) {
             await supabase.auth.signOut();
             if (mounted) {
@@ -233,8 +238,11 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
             }
             return;
           }
+
+          // Mark this tab's session as active
           sessionStorage.setItem("researchmate_session_active", "true");
         }
+
         if (mounted) {
           setSession(currentSession);
           setLoading(false);
