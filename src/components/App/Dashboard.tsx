@@ -586,7 +586,10 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           </button>
           <div className="flex bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl p-1">
             <button
-              onClick={() => setViewMode("grid")}
+              onClick={() => {
+                setViewMode("grid");
+                localStorage.setItem("researchMate_viewMode", "grid");
+              }}
               aria-label="Grid view"
               className={`p-2 rounded-lg transition-colors ${
                 viewMode === "grid"
@@ -597,7 +600,10 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
               <Grid3X3 className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setViewMode("list")}
+              onClick={() => {
+                setViewMode("list");
+                localStorage.setItem("researchMate_viewMode", "list");
+              }}
               aria-label="List view"
               className={`p-2 rounded-lg transition-colors ${
                 viewMode === "list"
@@ -809,7 +815,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         </div>
       ) : (
         /* List View */
-        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden min-w-0">
+        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800 flex flex-col w-full max-w-full overflow-hidden">
           {filteredItems.map((item) => (
             <div
               key={item.id}
@@ -817,55 +823,61 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 setSelectedItem(item);
                 setIsModalOpen(true);
               }}
-              className={`flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group ${
+              className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group ${
                 selectedItems.has(item.id)
                   ? "bg-blue-50/50 dark:bg-blue-900/10"
                   : ""
               }`}
             >
-              {/* Leftmost Checkbox */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleItemSelection(item.id);
-                }}
-                className={`flex-shrink-0 z-10 transition-all duration-200 ${
-                  selectedItems.has(item.id) || selectedItems.size > 0
-                    ? "opacity-100"
-                    : "opacity-0 group-hover:opacity-100"
-                }`}
-                aria-label={
-                  selectedItems.has(item.id) ? "Deselect item" : "Select item"
-                }
-              >
-                <div
-                  className={`w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${
-                    selectedItems.has(item.id)
-                      ? "bg-blue-600 border-blue-600"
-                      : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-blue-400"
+              {/* Leftmost Checkbox + Icon Container for Mobile */}
+              <div className="flex items-center gap-4 shrink-0">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleItemSelection(item.id);
+                  }}
+                  className={`flex-shrink-0 z-10 transition-all duration-200 ${
+                    selectedItems.has(item.id) || selectedItems.size > 0
+                      ? "opacity-100"
+                      : "opacity-0 group-hover:opacity-100"
                   }`}
+                  aria-label={
+                    selectedItems.has(item.id) ? "Deselect item" : "Select item"
+                  }
                 >
-                  {selectedItems.has(item.id) && (
-                    <Check className="w-3.5 h-3.5 text-white" />
-                  )}
-                </div>
-              </button>
+                  <div
+                    className={`w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${
+                      selectedItems.has(item.id)
+                        ? "bg-blue-600 border-blue-600"
+                        : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-blue-400"
+                    }`}
+                  >
+                    {selectedItems.has(item.id) && (
+                      <Check className="w-3.5 h-3.5 text-white" />
+                    )}
+                  </div>
+                </button>
 
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{
-                  backgroundColor: `${getSourceColor(
-                    item.deviceSource || "web",
-                  )}15`,
-                }}
-              >
-                <span
-                  style={{ color: getSourceColor(item.deviceSource || "web") }}
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                  style={{
+                    backgroundColor: `${getSourceColor(
+                      item.deviceSource || "web",
+                    )}15`,
+                  }}
                 >
-                  {getSourceIcon(item.deviceSource || "web")}
-                </span>
+                  <span
+                    style={{
+                      color: getSourceColor(item.deviceSource || "web"),
+                    }}
+                  >
+                    {getSourceIcon(item.deviceSource || "web")}
+                  </span>
+                </div>
               </div>
-              <div className="flex-1 overflow-hidden min-w-0 pr-4">
+
+              {/* Text Content */}
+              <div className="flex-1 w-full min-w-0">
                 <h3 className="font-medium text-gray-900 dark:text-white truncate">
                   {item.sourceTitle || "Untitled Research"}
                 </h3>
@@ -873,7 +885,9 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   {item.aiSummary || item.text || item.ocrText}
                 </p>
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
+
+              {/* Footer / Actions */}
+              <div className="flex items-center gap-3 shrink-0 ml-auto sm:ml-0 mt-2 sm:mt-0">
                 {item.aiSummary && (
                   <span className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white text-[10px] font-semibold rounded-full">
                     <Zap className="w-3 h-3" />
