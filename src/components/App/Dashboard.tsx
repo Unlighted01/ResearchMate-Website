@@ -35,6 +35,8 @@ import {
   Clock,
   Tag,
   HelpCircle,
+  FolderPlus,
+  FolderOpen,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon, DownloadIcon } from "../icons";
 import {
@@ -44,6 +46,12 @@ import {
   subscribeToItems,
   StorageItem,
 } from "../../services/storageService";
+import {
+  getAllCollections,
+  addItemToCollection,
+  moveItemsToCollection,
+  Collection,
+} from "../../services/collectionsService";
 import { generateSummary } from "../../services/geminiService";
 import ConfirmDialog from "../shared/ConfirmDialog";
 import {
@@ -109,6 +117,13 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   // Bulk operations
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  // Collections state
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [showCollectionModal, setShowCollectionModal] = useState(false);
+  const [collectionActionType, setCollectionActionType] = useState<
+    "single" | "bulk" | null
+  >(null);
 
   // Modals
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
@@ -193,18 +208,18 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
             showToast("New item synced!", "success");
             addNotification(
               "sync",
-              `New item "${payload.new!.sourceTitle || "Untitled"}" synced from ${payload.new!.deviceSource || "web"}`
+              `New item "${payload.new!.sourceTitle || "Untitled"}" synced from ${payload.new!.deviceSource || "web"}`,
             );
           } else if (payload.eventType === "UPDATE" && payload.new) {
             setItems((prev) =>
               prev.map((item) =>
-                item.id === payload.new!.id ? payload.new! : item
-              )
+                item.id === payload.new!.id ? payload.new! : item,
+              ),
             );
             setLastSyncTime(syncTime);
           } else if (payload.eventType === "DELETE" && payload.old) {
             setItems((prev) =>
-              prev.filter((item) => item.id !== payload.old!.id)
+              prev.filter((item) => item.id !== payload.old!.id),
             );
             setLastSyncTime(syncTime);
           }
@@ -223,6 +238,19 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     };
   }, [fetchItems, showToast]);
 
+  const fetchCollections = useCallback(async () => {
+    try {
+      const data = await getAllCollections();
+      setCollections(data);
+    } catch (error) {
+      console.error("Failed to fetch collections:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCollections();
+  }, [fetchCollections]);
+
   const handleGenerateSummary = async (item: StorageItem) => {
     showToast("Generating AI summary...", "info");
     try {
@@ -235,7 +263,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         showToast("Summary generated!", "success");
         addNotification(
           "summary",
-          `AI summary generated for "${item.sourceTitle || "Untitled"}"`
+          `AI summary generated for "${item.sourceTitle || "Untitled"}"`,
         );
       }
     } catch (error) {
@@ -255,7 +283,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     try {
       await deleteItem(confirmDialog.itemId);
       setItems((prev) =>
-        prev.filter((item) => item.id !== confirmDialog.itemId)
+        prev.filter((item) => item.id !== confirmDialog.itemId),
       );
       showToast("Item deleted successfully", "success");
       if (selectedItem?.id === confirmDialog.itemId) {
@@ -302,7 +330,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     setIsBulkDeleting(true);
     try {
       const deletePromises = Array.from(selectedItems).map((id) =>
-        deleteItem(id)
+        deleteItem(id),
       );
       await Promise.all(deletePromises);
       setItems((prev) => prev.filter((item) => !selectedItems.has(item.id)));
@@ -329,6 +357,48 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
       showToast(`Exported ${itemsToExport.length} items`, "success");
     } catch (error) {
       showToast("Export failed", "error");
+    }
+  };
+
+  const handleShare = async (item: StorageItem) => {
+    const shareData = {
+      title: item.sourceTitle || "ResearchMate Item",
+      text: item.aiSummary || item.text || item.ocrText,
+      url: item.sourceUrl || "",
+    };
+
+    try {
+      if (
+        navigator.share &&
+        (shareData.title || shareData.text || shareData.url)
+      ) {
+        await navigator.share(shareData);
+      } else {
+        const fallbackText =
+          `${shareData.title}\n\n${shareData.text}\n\n${shareData.url}`.trim();
+        await navigator.clipboard.writeText(fallbackText);
+        showToast("Copied to clipboard for sharing", "success");
+      }
+    } catch (error) {
+      if ((error as any).name !== "AbortError") {
+        showToast("Error sharing content", "error");
+      }
+    }
+  };
+
+  const handleAddToCollection = async (collectionId: string) => {
+    try {
+      if (collectionActionType === "single" && selectedItem) {
+        await addItemToCollection(selectedItem.id, collectionId);
+        showToast("Added to collection", "success");
+      } else if (collectionActionType === "bulk" && selectedItems.size > 0) {
+        await moveItemsToCollection(Array.from(selectedItems), collectionId);
+        showToast(`Added ${selectedItems.size} items to collection`, "success");
+        setSelectedItems(new Set());
+      }
+      setShowCollectionModal(false);
+    } catch (error) {
+      showToast("Failed to add to collection", "error");
     }
   };
 
@@ -374,19 +444,19 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
       advancedFilters.deviceSource.length > 0
     ) {
       filtered = filtered.filter((item) =>
-        advancedFilters.deviceSource?.includes(item.deviceSource || "")
+        advancedFilters.deviceSource?.includes(item.deviceSource || ""),
       );
     }
 
     if (advancedFilters.hasAiSummary !== undefined) {
       filtered = filtered.filter((item) =>
-        advancedFilters.hasAiSummary ? !!item.aiSummary : !item.aiSummary
+        advancedFilters.hasAiSummary ? !!item.aiSummary : !item.aiSummary,
       );
     }
 
     if (advancedFilters.tags && advancedFilters.tags.length > 0) {
       filtered = filtered.filter((item) =>
-        advancedFilters.tags?.some((tag) => item.tags?.includes(tag))
+        advancedFilters.tags?.some((tag) => item.tags?.includes(tag)),
       );
     }
 
@@ -627,7 +697,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   className="w-9 h-9 rounded-xl flex items-center justify-center"
                   style={{
                     backgroundColor: `${getSourceColor(
-                      item.deviceSource || "web"
+                      item.deviceSource || "web",
                     )}15`,
                   }}
                 >
@@ -705,7 +775,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{
                   backgroundColor: `${getSourceColor(
-                    item.deviceSource || "web"
+                    item.deviceSource || "web",
                   )}15`,
                 }}
               >
@@ -862,12 +932,29 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     </span>
                   </a>
                 )}
-                <button className="w-full flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-colors">
+                <button
+                  onClick={() => handleShare(selectedItem)}
+                  className="w-full flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-colors"
+                >
                   <div className="w-9 h-9 bg-[#5856D6]/10 rounded-lg flex items-center justify-center">
                     <Share2 className="w-4 h-4 text-[#5856D6]" />
                   </div>
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                     Share Research
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    setCollectionActionType("single");
+                    setShowCollectionModal(true);
+                  }}
+                  className="w-full flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-colors"
+                >
+                  <div className="w-9 h-9 bg-[#8B5CF6]/10 rounded-lg flex items-center justify-center">
+                    <FolderPlus className="w-4 h-4 text-[#8B5CF6]" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                    Add to Collection
                   </span>
                 </button>
                 <button
@@ -937,8 +1024,57 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         onDeselectAll={deselectAllItems}
         onBulkDelete={handleBulkDelete}
         onBulkExport={handleBulkExport}
+        onBulkAddToCollection={() => {
+          setCollectionActionType("bulk");
+          setShowCollectionModal(true);
+        }}
         isDeleting={isBulkDeleting}
       />
+
+      {/* Select Collection Modal */}
+      <Modal
+        isOpen={showCollectionModal}
+        onClose={() => setShowCollectionModal(false)}
+        title={
+          collectionActionType === "bulk"
+            ? `Add ${selectedItems.size} items to Collection`
+            : "Add to Collection"
+        }
+      >
+        <div className="max-h-96 overflow-y-auto space-y-2">
+          {collections.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              No collections found. Create one in the Collections tab.
+            </div>
+          ) : (
+            collections.map((col) => (
+              <button
+                key={col.id}
+                onClick={() => handleAddToCollection(col.id)}
+                className="w-full flex items-center gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl hover:shadow-md transition-all text-left group"
+              >
+                <div
+                  className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: `${col.color}20` }}
+                >
+                  <FolderPlus
+                    className="w-5 h-5 transition-transform group-hover:scale-110"
+                    style={{ color: col.color }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-gray-900 dark:text-white truncate">
+                    {col.name}
+                  </h4>
+                  <p className="text-xs text-gray-500 truncate">
+                    {col.description || "No description"}
+                  </p>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </Modal>
 
       {/* Keyboard Shortcuts Modal */}
       <KeyboardShortcutsModal

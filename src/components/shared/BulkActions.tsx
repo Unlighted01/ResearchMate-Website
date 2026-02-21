@@ -9,6 +9,7 @@ interface BulkActionsProps {
   onDeselectAll: () => void;
   onBulkDelete: () => void;
   onBulkExport: () => void;
+  onBulkAddToCollection: () => void;
   isDeleting?: boolean;
 }
 
@@ -23,6 +24,7 @@ const BulkActions: React.FC<BulkActionsProps> = ({
   onDeselectAll,
   onBulkDelete,
   onBulkExport,
+  onBulkAddToCollection,
   isDeleting = false,
 }) => {
   if (selectedCount === 0) return null;
@@ -72,6 +74,15 @@ const BulkActions: React.FC<BulkActionsProps> = ({
           >
             <DownloadIcon size={16} />
             Export
+          </button>
+
+          {/* Add to Collection */}
+          <button
+            onClick={onBulkAddToCollection}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-medium rounded-lg transition-colors"
+            aria-label="Add selected items to collection"
+          >
+            Add to Collection
           </button>
 
           {/* Delete */}
