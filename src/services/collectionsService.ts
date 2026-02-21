@@ -81,22 +81,34 @@ export async function getAllCollections(): Promise<Collection[]> {
   }
 
   try {
-    // Get collections with item count
-    const { data, error } = await supabase
+    // Fetch collections without relying on foreign keys
+    const { data: cols, error: colError } = await supabase
       .from("collections")
-      .select(
-        `
-        *,
-        items:items(count)
-      `
-      )
+      .select("*")
       .order("created_at", { ascending: false });
 
-    if (error) throw error;
+    if (colError) throw colError;
 
-    return (data || []).map((row) => ({
+    if (!cols || cols.length === 0) return [];
+
+    // Manually fetch item counts to avoid relationship errors
+    const { data: items } = await supabase
+      .from("items")
+      .select("collection_id")
+      .not("collection_id", "is", null);
+
+    const counts: Record<string, number> = {};
+    if (items) {
+      items.forEach((i) => {
+        if (i.collection_id) {
+          counts[i.collection_id] = (counts[i.collection_id] || 0) + 1;
+        }
+      });
+    }
+
+    return cols.map((row) => ({
       ...transformCollection(row),
-      itemCount: row.items?.[0]?.count || 0,
+      itemCount: counts[row.id] || 0,
     }));
   } catch (error) {
     console.error("❌ Failed to fetch collections:", error);
@@ -108,7 +120,7 @@ export async function getAllCollections(): Promise<Collection[]> {
  * Get a single collection by ID
  */
 export async function getCollectionById(
-  id: string
+  id: string,
 ): Promise<Collection | null> {
   try {
     const { data, error } = await supabase
@@ -130,7 +142,7 @@ export async function getCollectionById(
  * Create a new collection
  */
 export async function createCollection(
-  input: CreateCollectionInput
+  input: CreateCollectionInput,
 ): Promise<Collection> {
   const {
     data: { user },
@@ -163,7 +175,7 @@ export async function createCollection(
  */
 export async function updateCollection(
   id: string,
-  input: UpdateCollectionInput
+  input: UpdateCollectionInput,
 ): Promise<Collection> {
   const updateData: Record<string, any> = {
     updated_at: new Date().toISOString(),
@@ -212,7 +224,7 @@ export async function deleteCollection(id: string): Promise<void> {
  */
 export async function addItemToCollection(
   itemId: string,
-  collectionId: string
+  collectionId: string,
 ): Promise<void> {
   const { error } = await supabase
     .from("items")
@@ -238,7 +250,7 @@ export async function removeItemFromCollection(itemId: string): Promise<void> {
  * Get all items in a specific collection
  */
 export async function getItemsInCollection(
-  collectionId: string
+  collectionId: string,
 ): Promise<any[]> {
   const { data, error } = await supabase
     .from("items")
@@ -256,7 +268,7 @@ export async function getItemsInCollection(
  */
 export async function moveItemsToCollection(
   itemIds: string[],
-  collectionId: string | null
+  collectionId: string | null,
 ): Promise<void> {
   const { error } = await supabase
     .from("items")
@@ -279,7 +291,7 @@ export function subscribeToCollections(
     eventType: string;
     new: Collection | null;
     old: Collection | null;
-  }) => void
+  }) => void,
 ) {
   const channel = supabase
     .channel("collections_changes")
@@ -297,7 +309,7 @@ export function subscribeToCollections(
           new: payload.new ? transformCollection(payload.new) : null,
           old: payload.old ? transformCollection(payload.old) : null,
         });
-      }
+      },
     )
     .subscribe();
 

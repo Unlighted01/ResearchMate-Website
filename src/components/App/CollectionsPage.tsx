@@ -3,6 +3,7 @@
 // ============================================
 
 import React, { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
   getAllCollections,
   createCollection,
@@ -109,8 +110,8 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
       });
       setCollections((prev) =>
         prev.map((c) =>
-          c.id === updated.id ? { ...updated, itemCount: c.itemCount } : c
-        )
+          c.id === updated.id ? { ...updated, itemCount: c.itemCount } : c,
+        ),
       );
       setIsEditModalOpen(false);
       showToast("Updated!", "success");
@@ -131,7 +132,7 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
     try {
       await deleteCollection(confirmDialog.collection.id);
       setCollections((prev) =>
-        prev.filter((c) => c.id !== confirmDialog.collection?.id)
+        prev.filter((c) => c.id !== confirmDialog.collection?.id),
       );
       showToast("Collection deleted successfully", "success");
       setConfirmDialog({ isOpen: false, collection: null, isDeleting: false });
@@ -200,7 +201,15 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
         ) : collectionItems.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <FolderOpen className="w-16 h-16 mx-auto mb-4 opacity-50" />
-            <p>This collection is empty.</p>
+            <p className="mb-6 text-gray-900 dark:text-white">
+              This collection is empty.
+            </p>
+            <Link
+              to="/"
+              className="px-6 py-2.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium rounded-xl hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors inline-flex mt-4"
+            >
+              Go to Dashboard to add items
+            </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -218,7 +227,7 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
                     try {
                       await removeItemFromCollection(item.id);
                       setCollectionItems((prev) =>
-                        prev.filter((i) => i.id !== item.id)
+                        prev.filter((i) => i.id !== item.id),
                       );
                       showToast("Removed from collection", "success");
                     } catch (error) {
