@@ -37,6 +37,7 @@ import {
   HelpCircle,
   FolderPlus,
   FolderOpen,
+  Check,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon, DownloadIcon } from "../icons";
 import {
@@ -107,7 +108,12 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    return (
+      (localStorage.getItem("researchMate_viewMode") as "grid" | "list") ||
+      "grid"
+    );
+  });
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     itemId: string | null;
@@ -156,7 +162,13 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     {
       key: "g",
       description: "Toggle grid/list view",
-      handler: () => setViewMode((prev) => (prev === "grid" ? "list" : "grid")),
+      handler: () => {
+        setViewMode((prev) => {
+          const next = prev === "grid" ? "list" : "grid";
+          localStorage.setItem("researchMate_viewMode", next);
+          return next;
+        });
+      },
     },
     {
       key: "?",
@@ -689,8 +701,44 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 setSelectedItem(item);
                 setIsModalOpen(true);
               }}
-              className="group relative glass-card rounded-2xl p-5 cursor-pointer flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30"
+              className={`group relative glass-card rounded-2xl p-5 cursor-pointer flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30 ${
+                selectedItems.has(item.id)
+                  ? "ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/10"
+                  : ""
+              }`}
             >
+              {/* Box Checkbox */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleItemSelection(item.id);
+                }}
+                className={`absolute top-4 right-4 z-10 p-1.5 rounded-lg border bg-white/90 backdrop-blur-sm transition-all duration-200 ${
+                  selectedItems.has(item.id) || selectedItems.size > 0
+                    ? "opacity-100 scale-100"
+                    : "opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100"
+                } ${
+                  selectedItems.has(item.id)
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-gray-300 dark:border-gray-700"
+                }`}
+                aria-label={
+                  selectedItems.has(item.id) ? "Deselect item" : "Select item"
+                }
+              >
+                <div
+                  className={`w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${
+                    selectedItems.has(item.id)
+                      ? "bg-blue-600 border-blue-600"
+                      : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                  }`}
+                >
+                  {selectedItems.has(item.id) && (
+                    <Check className="w-3.5 h-3.5 text-white" />
+                  )}
+                </div>
+              </button>
+
               {/* Header */}
               <div className="flex items-start justify-between mb-3">
                 <div
@@ -761,7 +809,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         </div>
       ) : (
         /* List View */
-        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden min-w-0">
           {filteredItems.map((item) => (
             <div
               key={item.id}
@@ -769,8 +817,40 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 setSelectedItem(item);
                 setIsModalOpen(true);
               }}
-              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group"
+              className={`flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group ${
+                selectedItems.has(item.id)
+                  ? "bg-blue-50/50 dark:bg-blue-900/10"
+                  : ""
+              }`}
             >
+              {/* Leftmost Checkbox */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleItemSelection(item.id);
+                }}
+                className={`flex-shrink-0 z-10 transition-all duration-200 ${
+                  selectedItems.has(item.id) || selectedItems.size > 0
+                    ? "opacity-100"
+                    : "opacity-0 group-hover:opacity-100"
+                }`}
+                aria-label={
+                  selectedItems.has(item.id) ? "Deselect item" : "Select item"
+                }
+              >
+                <div
+                  className={`w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${
+                    selectedItems.has(item.id)
+                      ? "bg-blue-600 border-blue-600"
+                      : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-blue-400"
+                  }`}
+                >
+                  {selectedItems.has(item.id) && (
+                    <Check className="w-3.5 h-3.5 text-white" />
+                  )}
+                </div>
+              </button>
+
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{
@@ -785,7 +865,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   {getSourceIcon(item.deviceSource || "web")}
                 </span>
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 overflow-hidden min-w-0 pr-4">
                 <h3 className="font-medium text-gray-900 dark:text-white truncate">
                   {item.sourceTitle || "Untitled Research"}
                 </h3>
