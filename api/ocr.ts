@@ -73,24 +73,24 @@ async function extractTextFromImage(
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-pro",
+            model: "google/gemini-2.0-flash-001",
             messages: [
               {
                 role: "user",
                 content: [
                   {
                     type: "text",
-                    text: `Extract ALL text from this image. This is handwritten or printed text that needs to be digitized.
+                    text: `Extract ALL text from this image. This is a complex document with tables, forms, or handwritten notes.
 
-Instructions:
-- Extract every word and character you can see
-- Preserve the original layout and line breaks where possible
-- If there are multiple columns or sections, process them left to right, top to bottom
-- Include any numbers, dates, or special characters
-- If text is unclear, make your best guess and include it
-- Do NOT add any commentary or descriptions - just output the extracted text
+CRITICAL INSTRUCTIONS:
+- You MUST extract every single piece of text, from the top left corner all the way to the bottom right.
+- DO NOT STOP EARLY. If there is a table, extract every cell, row by row.
+- If there are checkboxes, indicate their state (e.g., [x] or [ ]).
+- Preserve the layout, structure, and line breaks as accurately as possible.
+- If text is dense or handwriting is messy, make your best absolute guess.
+- DO NOT output any conversational text like "Here is the extracted text:". Just the raw text.
 
-Output only the extracted text, nothing else.`,
+PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
                   },
                   {
                     type: "image_url",
@@ -143,17 +143,17 @@ Output only the extracted text, nothing else.`,
               {
                 parts: [
                   {
-                    text: `Extract ALL text from this image. This is handwritten or printed text that needs to be digitized.
+                    text: `Extract ALL text from this image. This is a complex document with tables, forms, or handwritten notes.
 
-Instructions:
-- Extract every word and character you can see
-- Preserve the original layout and line breaks where possible
-- If there are multiple columns or sections, process them left to right, top to bottom
-- Include any numbers, dates, or special characters
-- If text is unclear, make your best guess and include it
-- Do NOT add any commentary or descriptions - just output the extracted text
+CRITICAL INSTRUCTIONS:
+- You MUST extract every single piece of text, from the top left corner all the way to the bottom right.
+- DO NOT STOP EARLY. If there is a table, extract every cell, row by row.
+- If there are checkboxes, indicate their state (e.g., [x] or [ ]).
+- Preserve the layout, structure, and line breaks as accurately as possible.
+- If text is dense or handwriting is messy, make your best absolute guess.
+- DO NOT output any conversational text like "Here is the extracted text:". Just the raw text.
 
-Output only the extracted text, nothing else.`,
+PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
                   },
                   {
                     inlineData: {
@@ -229,17 +229,17 @@ Output only the extracted text, nothing else.`,
                 },
                 {
                   type: "text",
-                  text: `Extract ALL text from this image. This is handwritten or printed text that needs to be digitized.
+                  text: `Extract ALL text from this image. This is a complex document with tables, forms, or handwritten notes.
 
-Instructions:
-- Extract every word and character you can see
-- Preserve the original layout and line breaks where possible
-- If there are multiple columns or sections, process them left to right, top to bottom
-- Include any numbers, dates, or special characters
-- If text is unclear, make your best guess and include it
-- Do NOT add any commentary or descriptions - just output the extracted text
+CRITICAL INSTRUCTIONS:
+- You MUST extract every single piece of text, from the top left corner all the way to the bottom right.
+- DO NOT STOP EARLY. If there is a table, extract every cell, row by row.
+- If there are checkboxes, indicate their state (e.g., [x] or [ ]).
+- Preserve the layout, structure, and line breaks as accurately as possible.
+- If text is dense or handwriting is messy, make your best absolute guess.
+- DO NOT output any conversational text like "Here is the extracted text:". Just the raw text.
 
-Output only the extracted text, nothing else.`,
+PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
                 },
               ],
             },
@@ -299,7 +299,7 @@ async function generateSummary(text: string): Promise<string | null> {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-pro",
+            model: "google/gemini-2.0-flash-001",
             messages: [
               {
                 role: "user",
