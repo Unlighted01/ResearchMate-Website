@@ -22,6 +22,7 @@ import {
   Camera, // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
   Loader2,
   X,
+  BookOpen,
 } from "lucide-react";
 import {
   getAllItems,
@@ -34,6 +35,7 @@ import { Modal } from "../shared/UIComponents";
 import SmartPenPairing from "./SmartPenPairing";
 import CameraCapture from "./CameraCapture"; // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
 import { getCurrentUser, supabase } from "../../services/supabaseClient";
+import { LibrarySearch, OpenLibraryDoc } from "./LibrarySearch";
 
 // Supabase config
 const SUPABASE_URL = "https://jxevjkzojfbywxvtcwtl.supabase.co";
@@ -98,6 +100,7 @@ const SmartPenGallery = () => {
     type: "success" | "error" | "info";
   } | null>(null);
   const [extractingId, setExtractingId] = useState<string | null>(null);
+  const [isLinkingBook, setIsLinkingBook] = useState(false);
   // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
   const [showCamera, setShowCamera] = useState(false);
 
@@ -215,6 +218,53 @@ const SmartPenGallery = () => {
     } catch (err) {
       showToast("Connection error", "error");
     }
+  };
+
+  const updateScanItem = async (
+    item: StorageItem,
+    updates: Partial<StorageItem>,
+  ) => {
+    try {
+      await updateItem(item.id, updates);
+      setScans((prev) =>
+        prev.map((scan) =>
+          scan.id === item.id ? { ...scan, ...updates } : scan,
+        ),
+      );
+      if (selectedScan && selectedScan.id === item.id) {
+        setSelectedScan({ ...selectedScan, ...updates });
+      }
+    } catch (error) {
+      console.error("Failed to update item:", error);
+      showToast("Failed to act on item.", "error");
+    }
+  };
+
+  const handleLinkBook = async (book: OpenLibraryDoc) => {
+    if (!selectedScan) return;
+
+    const title = book.title;
+    const author = book.author_name
+      ? book.author_name.join(", ")
+      : "Unknown Author";
+    const year = book.first_publish_year
+      ? String(book.first_publish_year)
+      : "n.d.";
+    const publisher = book.publisher ? book.publisher[0] : "Unknown Publisher";
+    const citation = `${author}. (${year}). ${title}. ${publisher}.`;
+    const imageUrl = book.cover_i
+      ? `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg`
+      : undefined;
+
+    await updateScanItem(selectedScan, {
+      sourceTitle: title,
+      sourceUrl: `https://openlibrary.org${book.key}`,
+      citation: citation,
+      imageUrl: selectedScan.imageUrl || imageUrl, // preserve original capture if it exists
+    });
+
+    setIsLinkingBook(false);
+    showToast(`Linked "${title}" to this capture!`, "success");
   };
 
   const showToast = (message: string, type: "success" | "error" | "info") => {
@@ -716,6 +766,51 @@ const SmartPenGallery = () => {
                 </p>
               </div>
             )}
+
+            {/* Citation & Metadata */}
+            <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-2 mb-3">
+                <BookOpen className="w-4 h-4 text-primary-600" />
+                <h4 className="font-semibold text-gray-900 dark:text-white">
+                  Citation & Metadata
+                </h4>
+              </div>
+
+              {selectedScan.citation ? (
+                <div className="p-3 bg-white dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300">
+                  <p className="font-semibold mb-1">Saved Citation (APA)</p>
+                  <p>{selectedScan.citation}</p>
+                </div>
+              ) : isLinkingBook ? (
+                <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900">
+                  <LibrarySearch
+                    showToast={showToast}
+                    onSelectBook={handleLinkBook}
+                  />
+                  <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                    <button
+                      onClick={() => setIsLinkingBook(false)}
+                      className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                    >
+                      Cancel Search
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6 bg-white dark:bg-gray-800 rounded-lg">
+                  <p className="text-sm text-gray-500 mb-4">
+                    Is this physical capture from a book? Find its metadata to
+                    automatically cite it.
+                  </p>
+                  <button
+                    onClick={() => setIsLinkingBook(true)}
+                    className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Search Book to Cite
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Metadata & Actions */}
             <div className="flex items-center justify-between text-sm text-gray-500 pt-4 border-t border-gray-200 dark:border-gray-700">

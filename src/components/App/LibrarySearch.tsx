@@ -3,11 +3,12 @@ import { Button, Card, SearchInput } from "../shared/UIComponents";
 import { Search, Book, Image as ImageIcon, Loader2, Plus } from "lucide-react";
 import { addItem } from "../../services/storageService";
 
-interface LibrarySearchProps {
+export interface LibrarySearchProps {
   showToast: (msg: string, type: "success" | "error" | "info") => void;
+  onSelectBook?: (book: OpenLibraryDoc) => void;
 }
 
-interface OpenLibraryDoc {
+export interface OpenLibraryDoc {
   key: string;
   title: string;
   author_name?: string[];
@@ -17,7 +18,10 @@ interface OpenLibraryDoc {
   publisher?: string[];
 }
 
-export const LibrarySearch: React.FC<LibrarySearchProps> = ({ showToast }) => {
+export const LibrarySearch: React.FC<LibrarySearchProps> = ({
+  showToast,
+  onSelectBook,
+}) => {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<OpenLibraryDoc[]>([]);
@@ -54,6 +58,11 @@ export const LibrarySearch: React.FC<LibrarySearchProps> = ({ showToast }) => {
   };
 
   const handleAddBook = async (book: OpenLibraryDoc) => {
+    if (onSelectBook) {
+      onSelectBook(book);
+      return;
+    }
+
     setAddingStates((prev) => ({ ...prev, [book.key]: true }));
 
     try {
@@ -101,8 +110,10 @@ export const LibrarySearch: React.FC<LibrarySearchProps> = ({ showToast }) => {
           <Book className="w-5 h-5 text-primary-600" /> Book & Library Search
         </h3>
         <p className="text-gray-500 mb-6 text-sm">
-          Search for physical books by Title, Author, or ISBN barcode to add
-          them to your research collection.
+          Search for physical books by Title, Author, or ISBN barcode to{" "}
+          {onSelectBook
+            ? "cite this item."
+            : "add them to your research collection."}
         </p>
 
         <form onSubmit={handleSearch} className="flex gap-2">
@@ -171,7 +182,7 @@ export const LibrarySearch: React.FC<LibrarySearchProps> = ({ showToast }) => {
                     ) : (
                       <Plus className="w-3 h-3 mr-1" />
                     )}
-                    Add to Dashboard
+                    {onSelectBook ? "Use this Book" : "Add to Dashboard"}
                   </Button>
                 </div>
               </div>

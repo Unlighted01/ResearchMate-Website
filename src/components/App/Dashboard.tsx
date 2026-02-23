@@ -69,7 +69,6 @@ import BulkActions from "../shared/BulkActions";
 import AdvancedSearchFilter, {
   SearchFilters,
 } from "../shared/AdvancedSearchFilter";
-import AICitationExtractor from "./AICitationExtractor";
 import { exportItems } from "../../utils/export";
 import { useRef } from "react";
 import { useNotifications } from "../../context/NotificationContext";
@@ -660,6 +659,16 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         ))}
       </div>
 
+      {/* ============================================ */}
+      {/* COLLECTIONS MODAL */}
+      {/* This is where the Modal component would be if it were present */}
+      {/* For example: */}
+      {/* <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div>
+          Modal Content Here
+        </div>
+      </Modal> */}
+
       {/* ========== CONTENT ========== */}
       {loading ? (
         viewMode === "grid" ? (
@@ -1034,23 +1043,6 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     </span>
                   </a>
                 )}
-                {selectedItem.deviceSource === "smart_pen" &&
-                  !selectedItem.sourceTitle && (
-                    <button
-                      onClick={() => {
-                        setIsModalOpen(false);
-                        navigate("/settings?tab=library");
-                      }}
-                      className="w-full flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-colors"
-                    >
-                      <div className="w-9 h-9 bg-[#8B5CF6]/10 rounded-lg flex items-center justify-center">
-                        <BookOpen className="w-4 h-4 text-[#8B5CF6]" />
-                      </div>
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                        Search Book in Library
-                      </span>
-                    </button>
-                  )}
                 <button
                   onClick={() => handleShare(selectedItem)}
                   className="w-full flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-colors"
@@ -1114,119 +1106,6 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     </span>
                   </div>
                 </div>
-              </div>
-
-              {/* Editable Metadata & Citation */}
-              <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-4">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                  Citation & Metadata
-                </h4>
-
-                {/* Smart Pen Special Redirect Prompt */}
-                {selectedItem.deviceSource === "smart_pen" &&
-                  !selectedItem.sourceTitle && (
-                    <div className="mb-4 p-4 bg-primary-50 dark:bg-primary-900/10 border border-primary-100 dark:border-primary-800 rounded-lg">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-primary-100 dark:bg-primary-800 rounded-full shrink-0">
-                          <BookOpen className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                        </div>
-                        <div>
-                          <h5 className="text-sm font-semibold text-primary-900 dark:text-primary-300">
-                            Is this from a physical book?
-                          </h5>
-                          <p className="text-sm text-primary-700 dark:text-primary-400/80 mt-1 mb-3">
-                            You can easily find this book's metadata using its
-                            title, author, or ISBN barcode in the Library
-                            search.
-                          </p>
-                          <button
-                            onClick={() => {
-                              setIsModalOpen(false);
-                              navigate("/settings?tab=data"); // Assuming 'data' tab or a new 'library' tab will hold the feature
-                            }}
-                            className="text-xs font-medium px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors"
-                          >
-                            Search Library
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                {selectedItem.citation ? (
-                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300">
-                    <p className="font-semibold mb-1">Saved Citation (APA)</p>
-                    <p>{selectedItem.citation}</p>
-                  </div>
-                ) : (
-                  <AICitationExtractor
-                    onCitationExtracted={async (metadata) => {
-                      if (!selectedItem) return;
-                      // Generate basic APA
-                      const author = metadata.author || "Unknown Author";
-                      const year =
-                        metadata.publishYear ||
-                        (metadata.publishDate
-                          ? new Date(metadata.publishDate).getFullYear()
-                          : "n.d.");
-                      const title = metadata.title || "Untitled";
-                      const site = metadata.siteName || "Website";
-                      const accessDate = new Date(
-                        metadata.accessDate,
-                      ).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      });
-                      let citation = "";
-
-                      if (metadata.isbn) {
-                        citation = `${author}. (${year}). ${title}. ${metadata.publisher || "Unknown"}.`;
-                      } else if (metadata.doi) {
-                        const journal = metadata.journal
-                          ? `${metadata.journal}. `
-                          : "";
-                        citation = `${author}. (${year}). ${title}. ${journal}https://doi.org/${metadata.doi}`;
-                      } else if (metadata.channelTitle) {
-                        citation = `${metadata.channelTitle}. (${year}). ${title} [Video]. YouTube. ${metadata.url}`;
-                      } else {
-                        citation = `${author}. (${year}). ${title}. ${site}. Retrieved ${accessDate}, from ${metadata.url}`;
-                      }
-
-                      try {
-                        await updateItem(selectedItem.id, {
-                          sourceTitle:
-                            metadata.title || selectedItem.sourceTitle,
-                          sourceUrl: metadata.url || selectedItem.sourceUrl,
-                          citation: citation,
-                        });
-                        showToast("Citation saved successfully!", "success");
-                        // Refresh item in local state
-                        setSelectedItem({
-                          ...selectedItem,
-                          sourceTitle:
-                            metadata.title || selectedItem.sourceTitle,
-                          sourceUrl: metadata.url || selectedItem.sourceUrl,
-                          citation: citation,
-                        });
-                        setItems(
-                          items.map((i) =>
-                            i.id === selectedItem.id
-                              ? {
-                                  ...i,
-                                  citation,
-                                  sourceTitle: metadata.title || i.sourceTitle,
-                                  sourceUrl: metadata.url || i.sourceUrl,
-                                }
-                              : i,
-                          ),
-                        );
-                      } catch (error) {
-                        showToast("Failed to save citation", "error");
-                      }
-                    }}
-                  />
-                )}
               </div>
             </div>
           </div>
