@@ -234,9 +234,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
               <p className="text-white text-lg font-medium">
                 Extracting text...
               </p>
-              <p className="text-gray-400 text-sm mt-2">
-                Processing with Gemini Vision
-              </p>
+              <p className="text-gray-400 text-sm mt-2">Processing with AI</p>
             </div>
           )}
 
