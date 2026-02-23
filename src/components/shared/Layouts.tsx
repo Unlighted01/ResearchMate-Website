@@ -642,7 +642,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
       {/* ========== MAIN CONTENT ========== */}
       <div
         className={`
-          flex-1 flex flex-col min-h-screen
+          flex-1 flex flex-col min-h-screen min-w-0
           transition-all duration-300
           ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[260px]"}
         `}
