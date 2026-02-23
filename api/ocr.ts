@@ -73,7 +73,7 @@ async function extractTextFromImage(
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.0-flash-exp:free",
+            model: "google/gemini-2.5-pro",
             messages: [
               {
                 role: "user",
@@ -134,7 +134,7 @@ Output only the extracted text, nothing else.`,
     try {
       console.log("🔍 Processing image with Gemini Vision...");
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-exp-1206:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
