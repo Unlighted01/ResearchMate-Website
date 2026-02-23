@@ -54,6 +54,8 @@ async function extractTextFromImage(
   const mimeType = match ? match[1] : "image/jpeg";
   const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
 
+  let claudeErrorMsg = "Skipped (No Key)";
+
   if (claudeKey) {
     try {
       console.log("🔍 Processing image with Claude AI Server...");
@@ -110,13 +112,12 @@ Output only the extracted text, nothing else.`,
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error(
-          "Claude OCR failed:",
-          errorData.error?.message || `HTTP ${response.status}`,
-        );
+        claudeErrorMsg = errorData.error?.message || `HTTP ${response.status}`;
+        console.error("Claude OCR failed:", claudeErrorMsg);
       }
     } catch (error) {
-      console.error("Claude OCR error:", error);
+      claudeErrorMsg = (error as Error).message;
+      console.error("Claude OCR error:", claudeErrorMsg);
     }
     console.log("⚠️ Claude failed, falling back to Gemini Vision...");
   }
@@ -126,7 +127,7 @@ Output only the extracted text, nothing else.`,
     return {
       success: false,
       text: "",
-      error: "Claude failed and GEMINI_API_KEY not configured for fallback",
+      error: `Claude error: ${claudeErrorMsg}. GEMINI_API_KEY not configured for fallback`,
     };
   }
 
@@ -184,7 +185,7 @@ Output only the extracted text, nothing else.`,
       return {
         success: false,
         text: "",
-        error: `Gemini Vision: ${errorMsg}`,
+        error: `Claude Error: [${claudeErrorMsg}] | Gemini Vision: [${errorMsg}]`,
       };
     }
 
@@ -206,7 +207,7 @@ Output only the extracted text, nothing else.`,
     return {
       success: false,
       text: "",
-      error: (error as Error).message,
+      error: `Claude Error: [${claudeErrorMsg}] | Gemini Error: ${(error as Error).message}`,
     };
   }
 }
