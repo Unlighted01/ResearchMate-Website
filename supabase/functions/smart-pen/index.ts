@@ -57,67 +57,39 @@ serve(async (req) => {
         .getPublicUrl(filename);
       const imageUrl = urlData?.publicUrl || "";
 
-      // OCR with Gemini
+      // Forward to Vercel OCR API
       let ocrText = "";
       let summary = "";
 
-      if (geminiApiKey) {
-        console.log("Calling Gemini API...");
-        console.log("Image size:", imageBytes.length, "bytes");
+      const VERCEL_OCR_URL = "https://research-mate-website.vercel.app/api/ocr";
 
-        try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [
-                  {
-                    parts: [
-                      {
-                        inline_data: {
-                          mime_type: "image/jpeg",
-                          data: imageBase64,
-                        },
-                      },
-                      {
-                        text: 'Extract ALL text from this image. Return JSON: {"text": "extracted text", "summary": "brief 1-sentence summary"}',
-                      },
-                    ],
-                  },
-                ],
-              }),
-            },
-          );
+      console.log(
+        `Routing image payload to centralized OCR: ${VERCEL_OCR_URL}`,
+      );
 
-          const data = await res.json();
-          console.log("Gemini response status:", res.status);
-          console.log(
-            "Gemini response:",
-            JSON.stringify(data).substring(0, 500),
-          );
+      try {
+        const ocrResponse = await fetch(VERCEL_OCR_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            image: `data:image/jpeg;base64,${imageBase64}`,
+            includeSummary: true,
+          }),
+        });
 
-          if (data.error) {
-            console.error("Gemini API error:", data.error);
-          }
+        const ocrData = await ocrResponse.json();
 
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          console.log("Extracted text:", text.substring(0, 200));
-
-          try {
-            const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || "{}");
-            ocrText = parsed.text || text;
-            summary = parsed.summary || "";
-          } catch (parseErr) {
-            console.log("JSON parse failed, using raw text");
-            ocrText = text;
-          }
-        } catch (fetchErr) {
-          console.error("Gemini fetch error:", fetchErr);
+        if (ocrResponse.ok && ocrData.success) {
+          console.log("✅ Vercel OCR processing succeeded.");
+          ocrText = ocrData.ocrText;
+          summary = ocrData.aiSummary;
+        } else {
+          console.error("❌ Vercel OCR route failed:", ocrData.error);
         }
-      } else {
-        console.log("No GEMINI_API_KEY found!");
+      } catch (ocrError) {
+        console.error("Failed to route to Vercel OCR:", ocrError);
       }
 
       // Save to items table
