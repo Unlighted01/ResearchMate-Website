@@ -877,7 +877,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
               </div>
 
               {/* Text Content */}
-              <div className="flex-1 w-full min-w-0">
+              <div className="flex-1 min-w-0">
                 <h3 className="font-medium text-gray-900 dark:text-white truncate">
                   {item.sourceTitle || "Untitled Research"}
                 </h3>
