@@ -232,9 +232,8 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
             <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center">
               <Loader2 className="w-12 h-12 text-[#FF9500] animate-spin mb-4" />
               <p className="text-white text-lg font-medium">
-                Extracting text...
+                Saving capture...
               </p>
-              <p className="text-gray-400 text-sm mt-2">Processing with AI</p>
             </div>
           )}
 

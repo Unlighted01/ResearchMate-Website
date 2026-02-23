@@ -40,9 +40,12 @@ export interface AddItemInput {
   preferredView?: "original" | "summary";
   deviceSource?: DeviceSource;
   collectionId?: string;
+  imageUrl?: string;
+  ocrText?: string;
 }
 
 export interface UpdateItemInput {
+  text?: string;
   tags?: string[];
   note?: string;
   aiSummary?: string;
@@ -50,6 +53,8 @@ export interface UpdateItemInput {
   citation?: string;
   citationFormat?: string;
   preferredView?: "original" | "summary";
+  ocrText?: string;
+  imageUrl?: string;
 }
 
 export interface MigrationResult {
@@ -138,9 +143,11 @@ function transformToDatabase(
     ai_summary: item.aiSummary || "",
     citation: item.citation,
     citation_format: item.citationFormat,
-    preferred_view: item.preferredView || null,
+    preferred_view: item.preferredView || "original",
     device_source: item.deviceSource || "web",
-    collection_id: item.collectionId || null,
+    collection_id: item.collectionId,
+    image_url: item.imageUrl,
+    ocr_text: item.ocrText,
   };
 }
 
@@ -280,6 +287,9 @@ export async function updateItem(
     // @ts-ignore
     if (updates.preferredView !== undefined)
       updateData.preferred_view = updates.preferredView;
+    if (updates.text !== undefined) updateData.text = updates.text;
+    if (updates.ocrText !== undefined) updateData.ocr_text = updates.ocrText;
+    if (updates.imageUrl !== undefined) updateData.image_url = updates.imageUrl;
 
     const { error } = await supabase
       .from("items")

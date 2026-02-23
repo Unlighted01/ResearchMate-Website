@@ -16,16 +16,18 @@ import {
   Plus,
   RefreshCw,
   Check,
-  X,
   Wifi,
   WifiOff,
   Trash2,
   Camera, // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
+  Loader2,
+  X,
 } from "lucide-react";
 import {
   getAllItems,
   addItem,
   deleteItem,
+  updateItem,
   StorageItem,
 } from "../../services/storageService";
 import { Modal } from "../shared/UIComponents";
@@ -95,6 +97,7 @@ const SmartPenGallery = () => {
     message: string;
     type: "success" | "error" | "info";
   } | null>(null);
+  const [extractingId, setExtractingId] = useState<string | null>(null);
   // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
   const [showCamera, setShowCamera] = useState(false);
 
@@ -225,14 +228,43 @@ const SmartPenGallery = () => {
   };
 
   // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
-  // Handle camera capture and OCR processing
+  // Handle camera capture and save image
   const handleCameraCapture = async (imageData: string) => {
+    try {
+      // Save just the image to storage first
+      await addItem({
+        text: "",
+        imageUrl: imageData,
+        sourceTitle: `Phone Capture - ${new Date().toLocaleDateString()}`,
+        sourceUrl: "",
+        tags: ["phone-capture", "ocr"],
+        note: "",
+        deviceSource: "smart_pen", // Show in this gallery
+      });
+
+      showToast("Photo captured and saved to gallery!", "success");
+      setShowCamera(false);
+      loadScans(); // Refresh gallery
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to save image",
+        "error",
+      );
+      throw err; // Re-throw so CameraCapture shows error state
+    }
+  };
+
+  const handleExtractText = async (e: React.MouseEvent, scan: StorageItem) => {
+    e.stopPropagation();
+    if (!scan.imageUrl) return;
+
+    setExtractingId(scan.id);
     try {
       // Call OCR API
       const response = await fetch("/api/ocr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: imageData, includeSummary: true }),
+        body: JSON.stringify({ image: scan.imageUrl, includeSummary: true }),
       });
 
       if (!response.ok) {
@@ -242,26 +274,22 @@ const SmartPenGallery = () => {
 
       const result = await response.json();
 
-      // Save to storage
-      await addItem({
+      // Update the item in storage with the extracted text
+      await updateItem(scan.id, {
         text: result.ocrText,
-        sourceTitle: `Phone Capture - ${new Date().toLocaleDateString()}`,
-        sourceUrl: "",
-        tags: ["phone-capture", "ocr"],
-        note: "",
+        ocrText: result.ocrText,
         aiSummary: result.aiSummary || undefined,
-        deviceSource: "smart_pen", // Show in this gallery
       });
 
-      showToast("Photo captured and text extracted!", "success");
-      setShowCamera(false);
+      showToast("Text extracted successfully!", "success");
       loadScans(); // Refresh gallery
     } catch (err) {
       showToast(
-        err instanceof Error ? err.message : "Failed to process image",
+        err instanceof Error ? err.message : "Failed to extract text",
         "error",
       );
-      throw err; // Re-throw so CameraCapture shows error state
+    } finally {
+      setExtractingId(null);
     }
   };
 
@@ -540,9 +568,30 @@ const SmartPenGallery = () => {
                 <h4 className="font-medium text-gray-900 dark:text-white truncate">
                   {scan.sourceTitle || "Untitled Scan"}
                 </h4>
-                <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
-                  <Calendar className="w-3.5 h-3.5" />
-                  {formatDate(scan.createdAt)}
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {formatDate(scan.createdAt)}
+                  </div>
+                  {scan.imageUrl && !scan.ocrText && !scan.text && (
+                    <button
+                      onClick={(e) => handleExtractText(e, scan)}
+                      disabled={extractingId === scan.id}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF9500]/10 text-[#FF9500] hover:bg-[#FF9500]/20 disabled:opacity-50 rounded-lg text-xs font-semibold transition-colors"
+                    >
+                      {extractingId === scan.id ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Extracting...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-3.5 h-3.5" />
+                          Extract Text
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -578,12 +627,33 @@ const SmartPenGallery = () => {
                   {scan.sourceTitle || "Untitled Scan"}
                 </h4>
                 <p className="text-sm text-gray-500 truncate mt-1">
-                  {scan.ocrText?.substring(0, 100) || "No OCR text available"}
+                  {scan.text || scan.ocrText
+                    ? (scan.text || scan.ocrText)?.substring(0, 100)
+                    : "No text extracted yet"}
                 </p>
               </div>
 
               {/* Meta */}
               <div className="flex items-center gap-3 flex-shrink-0">
+                {scan.imageUrl && !scan.ocrText && !scan.text && (
+                  <button
+                    onClick={(e) => handleExtractText(e, scan)}
+                    disabled={extractingId === scan.id}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF9500]/10 text-[#FF9500] hover:bg-[#FF9500]/20 disabled:opacity-50 rounded-lg text-xs font-semibold transition-colors mr-2"
+                  >
+                    {extractingId === scan.id ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Extracting
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-3.5 h-3.5" />
+                        Extract
+                      </>
+                    )}
+                  </button>
+                )}
                 {scan.aiSummary && (
                   <span className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white text-[10px] font-semibold rounded-full">
                     <Zap className="w-3 h-3" />
