@@ -65,7 +65,11 @@ const Toast: React.FC<ToastProps> = ({ message, type, onClose }) => {
     >
       <Icon className="w-5 h-5" />
       <span className="font-medium">{message}</span>
-      <button onClick={onClose} className="ml-2 hover:opacity-70">
+      <button
+        onClick={onClose}
+        aria-label="Close toast"
+        className="ml-2 hover:opacity-70"
+      >
         <X className="w-4 h-4" />
       </button>
     </div>
@@ -546,12 +550,12 @@ const SmartPenGallery = () => {
         </div>
       ) : (
         /* List View */
-        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800 flex flex-col w-full max-w-full overflow-hidden">
           {filteredScans.map((scan) => (
             <div
               key={scan.id}
               onClick={() => setSelectedScan(scan)}
-              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors"
+              className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors w-full"
             >
               {/* Thumbnail */}
               <div className="w-16 h-20 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0">
