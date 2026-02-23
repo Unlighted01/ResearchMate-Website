@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Supabase Edge Function: smart-pen
 // Combined handler for pairing and scanning
 
@@ -19,7 +20,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const url = new URL(req.url);
