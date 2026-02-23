@@ -80,15 +80,17 @@ async function extractTextFromImage(
                 content: [
                   {
                     type: "text",
-                    text: `Extract ALL text from this image. This is a complex document with tables, forms, or handwritten notes.
+                    text: `Extract ALL text from this image and format it using beautifully structured Markdown.
 
 CRITICAL INSTRUCTIONS:
 - You MUST extract every single piece of text, from the top left corner all the way to the bottom right.
-- DO NOT STOP EARLY. If there is a table, extract every cell, row by row.
+- DO NOT STOP EARLY. If there is a table, format it cleanly as a Markdown table.
+- Use appropriate Markdown headers (#, ##, ###) for document titles and section dividers to match the visual hierarchy.
+- Bold (**text**) any form field labels, checkboxes, or emphasized text.
 - If there are checkboxes, indicate their state (e.g., [x] or [ ]).
-- Preserve the layout, structure, and line breaks as accurately as possible.
+- Preserve the layout, structure, and line breaks as accurately as possible using standard Markdown syntax.
 - If text is dense or handwriting is messy, make your best absolute guess.
-- DO NOT output any conversational text like "Here is the extracted text:". Just the raw text.
+- DO NOT output any conversational text like "Here is the extracted text:". Just the raw formatted Markdown.
 
 PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
                   },
@@ -102,6 +104,7 @@ PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
               },
             ],
             temperature: 0.1,
+            max_tokens: 8192,
           }),
         },
       );
@@ -143,15 +146,17 @@ PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
               {
                 parts: [
                   {
-                    text: `Extract ALL text from this image. This is a complex document with tables, forms, or handwritten notes.
+                    text: `Extract ALL text from this image and format it using beautifully structured Markdown.
 
 CRITICAL INSTRUCTIONS:
 - You MUST extract every single piece of text, from the top left corner all the way to the bottom right.
-- DO NOT STOP EARLY. If there is a table, extract every cell, row by row.
+- DO NOT STOP EARLY. If there is a table, format it cleanly as a Markdown table.
+- Use appropriate Markdown headers (#, ##, ###) for document titles and section dividers to match the visual hierarchy.
+- Bold (**text**) any form field labels, checkboxes, or emphasized text.
 - If there are checkboxes, indicate their state (e.g., [x] or [ ]).
-- Preserve the layout, structure, and line breaks as accurately as possible.
+- Preserve the layout, structure, and line breaks as accurately as possible using standard Markdown syntax.
 - If text is dense or handwriting is messy, make your best absolute guess.
-- DO NOT output any conversational text like "Here is the extracted text:". Just the raw text.
+- DO NOT output any conversational text like "Here is the extracted text:". Just the raw formatted Markdown.
 
 PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
                   },
@@ -171,7 +176,7 @@ PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
             ],
             generationConfig: {
               temperature: 0.1,
-              maxOutputTokens: 4096,
+              maxOutputTokens: 8192,
             },
           }),
         },
@@ -229,15 +234,17 @@ PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
                 },
                 {
                   type: "text",
-                  text: `Extract ALL text from this image. This is a complex document with tables, forms, or handwritten notes.
+                  text: `Extract ALL text from this image and format it using beautifully structured Markdown.
 
 CRITICAL INSTRUCTIONS:
 - You MUST extract every single piece of text, from the top left corner all the way to the bottom right.
-- DO NOT STOP EARLY. If there is a table, extract every cell, row by row.
+- DO NOT STOP EARLY. If there is a table, format it cleanly as a Markdown table.
+- Use appropriate Markdown headers (#, ##, ###) for document titles and section dividers to match the visual hierarchy.
+- Bold (**text**) any form field labels, checkboxes, or emphasized text.
 - If there are checkboxes, indicate their state (e.g., [x] or [ ]).
-- Preserve the layout, structure, and line breaks as accurately as possible.
+- Preserve the layout, structure, and line breaks as accurately as possible using standard Markdown syntax.
 - If text is dense or handwriting is messy, make your best absolute guess.
-- DO NOT output any conversational text like "Here is the extracted text:". Just the raw text.
+- DO NOT output any conversational text like "Here is the extracted text:". Just the raw formatted Markdown.
 
 PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
                 },
