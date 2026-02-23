@@ -1034,6 +1034,23 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     </span>
                   </a>
                 )}
+                {selectedItem.deviceSource === "smart_pen" &&
+                  !selectedItem.sourceTitle && (
+                    <button
+                      onClick={() => {
+                        setIsModalOpen(false);
+                        navigate("/settings?tab=library");
+                      }}
+                      className="w-full flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-colors"
+                    >
+                      <div className="w-9 h-9 bg-[#8B5CF6]/10 rounded-lg flex items-center justify-center">
+                        <BookOpen className="w-4 h-4 text-[#8B5CF6]" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                        Search Book in Library
+                      </span>
+                    </button>
+                  )}
                 <button
                   onClick={() => handleShare(selectedItem)}
                   className="w-full flex items-center gap-3 p-3 bg-white dark:bg-[#2C2C2E] rounded-xl hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-colors"
