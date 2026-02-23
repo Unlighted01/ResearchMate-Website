@@ -357,30 +357,68 @@ const SettingsPage: React.FC = () => {
 
     setImportLoading(true);
     try {
-      const text = await file.text();
-      const items = JSON.parse(text);
+      if (file.name.toLowerCase().endsWith(".pdf")) {
+        // PDF Import Logic
+        showToast("Extracting text from PDF...", "info");
 
-      if (!Array.isArray(items)) {
-        throw new Error("Invalid format");
-      }
+        // Dynamically import pdfjs to avoid bloating initial load
+        const pdfjsLib = await import("pdfjs-dist");
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-      let imported = 0;
-      for (const item of items) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item: any) => item.str)
+            .join(" ");
+          fullText += pageText + "\n\n";
+        }
+
+        const cleanText = fullText.trim();
+        if (!cleanText) {
+          throw new Error("No readable text found in PDF.");
+        }
+
         const { error } = await supabase.from("items").insert({
           user_id: user?.id,
-          text: item.text,
-          source_url: item.source_url,
-          source_title: item.source_title,
-          tags: item.tags,
-          ai_summary: item.ai_summary,
+          text: cleanText,
+          source_title: file.name.replace(/\.pdf$/i, ""),
           device_source: "web",
         });
-        if (!error) imported++;
-      }
 
-      showToast(`Imported ${imported} items successfully!`, "success");
+        if (error) throw error;
+        showToast(`Imported PDF "${file.name}" successfully!`, "success");
+      } else {
+        // Standard JSON Import Logic
+        const text = await file.text();
+        const items = JSON.parse(text);
+
+        if (!Array.isArray(items)) {
+          throw new Error("Invalid format");
+        }
+
+        let imported = 0;
+        for (const item of items) {
+          const { error } = await supabase.from("items").insert({
+            user_id: user?.id,
+            text: item.text,
+            source_url: item.source_url,
+            source_title: item.source_title,
+            tags: item.tags,
+            ai_summary: item.ai_summary,
+            device_source: "web",
+          });
+          if (!error) imported++;
+        }
+
+        showToast(`Imported ${imported} items successfully!`, "success");
+      }
     } catch (error) {
-      showToast("Import failed. Please use a valid JSON file.", "error");
+      showToast(`Import failed: ${(error as Error).message}`, "error");
     }
     setImportLoading(false);
     e.target.value = "";
@@ -1004,7 +1042,9 @@ const SettingsPage: React.FC = () => {
             <div className="relative">
               <input
                 type="file"
-                accept=".json"
+                accept=".json,.pdf"
+                title="Import Data"
+                aria-label="Import Data"
                 onChange={handleImport}
                 disabled={importLoading}
                 className="block w-full text-sm text-gray-500

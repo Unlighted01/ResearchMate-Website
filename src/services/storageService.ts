@@ -55,6 +55,8 @@ export interface UpdateItemInput {
   preferredView?: "original" | "summary";
   ocrText?: string;
   imageUrl?: string;
+  sourceTitle?: string;
+  sourceUrl?: string;
 }
 
 export interface MigrationResult {
@@ -290,6 +292,12 @@ export async function updateItem(
     if (updates.text !== undefined) updateData.text = updates.text;
     if (updates.ocrText !== undefined) updateData.ocr_text = updates.ocrText;
     if (updates.imageUrl !== undefined) updateData.image_url = updates.imageUrl;
+    // @ts-ignore
+    if (updates.sourceTitle !== undefined)
+      updateData.source_title = updates.sourceTitle;
+    // @ts-ignore
+    if (updates.sourceUrl !== undefined)
+      updateData.source_url = updates.sourceUrl;
 
     const { error } = await supabase
       .from("items")

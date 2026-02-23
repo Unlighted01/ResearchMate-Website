@@ -75,7 +75,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             image: `data:image/jpeg;base64,${imageBase64}`,
-            includeSummary: true,
+            includeSummary: false,
           }),
         });
 

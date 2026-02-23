@@ -68,6 +68,7 @@ import BulkActions from "../shared/BulkActions";
 import AdvancedSearchFilter, {
   SearchFilters,
 } from "../shared/AdvancedSearchFilter";
+import AICitationExtractor from "./AICitationExtractor";
 import { exportItems } from "../../utils/export";
 import { useRef } from "react";
 import { useNotifications } from "../../context/NotificationContext";
@@ -355,7 +356,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     }
   };
 
-  const handleBulkExport = () => {
+  const handleBulkExport = async (format: "json" | "csv" | "md" | "pdf") => {
     if (selectedItems.size === 0) {
       showToast("No items selected for export", "error");
       return;
@@ -363,12 +364,17 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
 
     const itemsToExport = items.filter((item) => selectedItems.has(item.id));
 
-    // Show export format menu (for now, default to JSON)
     try {
-      exportItems(itemsToExport, "json");
-      showToast(`Exported ${itemsToExport.length} items`, "success");
+      if (format === "pdf") {
+        showToast("Generating PDF...", "info");
+      }
+      await exportItems(itemsToExport, format);
+      showToast(
+        `Exported ${itemsToExport.length} items to ${format.toUpperCase()}`,
+        "success",
+      );
     } catch (error) {
-      showToast("Export failed", "error");
+      showToast(`Export failed: ${(error as Error).message}`, "error");
     }
   };
 
@@ -1089,6 +1095,87 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     </span>
                   </div>
                 </div>
+              </div>
+
+              {/* Editable Metadata & Citation */}
+              <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-4">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                  Citation & Metadata
+                </h4>
+                {selectedItem.citation ? (
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300">
+                    <p className="font-semibold mb-1">Saved Citation (APA)</p>
+                    <p>{selectedItem.citation}</p>
+                  </div>
+                ) : (
+                  <AICitationExtractor
+                    onCitationExtracted={async (metadata) => {
+                      if (!selectedItem) return;
+                      // Generate basic APA
+                      const author = metadata.author || "Unknown Author";
+                      const year =
+                        metadata.publishYear ||
+                        (metadata.publishDate
+                          ? new Date(metadata.publishDate).getFullYear()
+                          : "n.d.");
+                      const title = metadata.title || "Untitled";
+                      const site = metadata.siteName || "Website";
+                      const accessDate = new Date(
+                        metadata.accessDate,
+                      ).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      });
+                      let citation = "";
+
+                      if (metadata.isbn) {
+                        citation = `${author}. (${year}). ${title}. ${metadata.publisher || "Unknown"}.`;
+                      } else if (metadata.doi) {
+                        const journal = metadata.journal
+                          ? `${metadata.journal}. `
+                          : "";
+                        citation = `${author}. (${year}). ${title}. ${journal}https://doi.org/${metadata.doi}`;
+                      } else if (metadata.channelTitle) {
+                        citation = `${metadata.channelTitle}. (${year}). ${title} [Video]. YouTube. ${metadata.url}`;
+                      } else {
+                        citation = `${author}. (${year}). ${title}. ${site}. Retrieved ${accessDate}, from ${metadata.url}`;
+                      }
+
+                      try {
+                        await updateItem(selectedItem.id, {
+                          sourceTitle:
+                            metadata.title || selectedItem.sourceTitle,
+                          sourceUrl: metadata.url || selectedItem.sourceUrl,
+                          citation: citation,
+                        });
+                        showToast("Citation saved successfully!", "success");
+                        // Refresh item in local state
+                        setSelectedItem({
+                          ...selectedItem,
+                          sourceTitle:
+                            metadata.title || selectedItem.sourceTitle,
+                          sourceUrl: metadata.url || selectedItem.sourceUrl,
+                          citation: citation,
+                        });
+                        setItems(
+                          items.map((i) =>
+                            i.id === selectedItem.id
+                              ? {
+                                  ...i,
+                                  citation,
+                                  sourceTitle: metadata.title || i.sourceTitle,
+                                  sourceUrl: metadata.url || i.sourceUrl,
+                                }
+                              : i,
+                          ),
+                        );
+                      } catch (error) {
+                        showToast("Failed to save citation", "error");
+                      }
+                    }}
+                  />
+                )}
               </div>
             </div>
           </div>

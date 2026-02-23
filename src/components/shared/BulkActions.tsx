@@ -8,7 +8,7 @@ interface BulkActionsProps {
   onSelectAll: () => void;
   onDeselectAll: () => void;
   onBulkDelete?: () => void;
-  onBulkExport?: () => void;
+  onBulkExport?: (format: "json" | "csv" | "md" | "pdf") => void;
   onBulkAddToCollection?: () => void;
   onBulkRemoveFromCollection?: () => void;
   isDeleting?: boolean;
@@ -68,16 +68,44 @@ const BulkActions: React.FC<BulkActionsProps> = ({
             {allSelected ? "Deselect All" : "Select All"}
           </button>
 
-          {/* Export */}
+          {/* Export Dropdown */}
           {onBulkExport && (
-            <button
-              onClick={onBulkExport}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-lg transition-colors"
-              aria-label="Export selected items"
-            >
-              <DownloadIcon size={16} />
-              Export
-            </button>
+            <div className="relative group">
+              <button
+                className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-lg transition-colors"
+                aria-label="Export selected items dropdown"
+              >
+                <DownloadIcon size={16} />
+                Export
+              </button>
+
+              <div className="absolute bottom-full left-0 mb-2 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all z-50">
+                <button
+                  onClick={() => onBulkExport("pdf")}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Export as PDF
+                </button>
+                <button
+                  onClick={() => onBulkExport("json")}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Export as JSON
+                </button>
+                <button
+                  onClick={() => onBulkExport("csv")}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Export as CSV
+                </button>
+                <button
+                  onClick={() => onBulkExport("md")}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Export as Markdown
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Add to Collection */}
