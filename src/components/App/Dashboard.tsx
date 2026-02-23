@@ -3,7 +3,7 @@
 // ============================================
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { supabase } from "../../services/supabaseClient";
 import {
@@ -38,6 +38,7 @@ import {
   FolderPlus,
   FolderOpen,
   Check,
+  BookOpen,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon, DownloadIcon } from "../icons";
 import {
@@ -101,6 +102,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
+  const navigate = useNavigate();
   const [items, setItems] = useState<StorageItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<StorageItem | null>(null);
@@ -1102,6 +1104,38 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                   Citation & Metadata
                 </h4>
+
+                {/* Smart Pen Special Redirect Prompt */}
+                {selectedItem.deviceSource === "smart_pen" &&
+                  !selectedItem.sourceTitle && (
+                    <div className="mb-4 p-4 bg-primary-50 dark:bg-primary-900/10 border border-primary-100 dark:border-primary-800 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-primary-100 dark:bg-primary-800 rounded-full shrink-0">
+                          <BookOpen className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                        </div>
+                        <div>
+                          <h5 className="text-sm font-semibold text-primary-900 dark:text-primary-300">
+                            Is this from a physical book?
+                          </h5>
+                          <p className="text-sm text-primary-700 dark:text-primary-400/80 mt-1 mb-3">
+                            You can easily find this book's metadata using its
+                            title, author, or ISBN barcode in the Library
+                            search.
+                          </p>
+                          <button
+                            onClick={() => {
+                              setIsModalOpen(false);
+                              navigate("/settings?tab=data"); // Assuming 'data' tab or a new 'library' tab will hold the feature
+                            }}
+                            className="text-xs font-medium px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors"
+                          >
+                            Search Library
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                 {selectedItem.citation ? (
                   <div className="p-3 bg-white dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300">
                     <p className="font-semibold mb-1">Saved Citation (APA)</p>

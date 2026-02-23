@@ -32,8 +32,10 @@ import {
   Key,
   Eye,
   EyeOff,
+  Library,
 } from "lucide-react";
 import { TrashIcon } from "../icons";
+import { LibrarySearch } from "./LibrarySearch";
 
 // ============================================
 // PART 2: TOAST COMPONENT
@@ -452,6 +454,7 @@ const SettingsPage: React.FC = () => {
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "ai-privacy", label: "AI & Privacy", icon: Shield },
     { id: "data", label: "Data", icon: Database },
+    { id: "library", label: "Book Search", icon: Library },
   ];
 
   // ============================================
@@ -1066,6 +1069,9 @@ const SettingsPage: React.FC = () => {
           </Card>
         </div>
       )}
+
+      {/* ==================== LIBRARY TAB ==================== */}
+      {activeTab === "library" && <LibrarySearch showToast={showToast} />}
     </div>
   );
 };
