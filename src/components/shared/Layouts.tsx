@@ -840,7 +840,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 lg:p-8 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-4 lg:p-8 overflow-y-auto overflow-x-hidden w-full max-w-full">
+          {children}
+        </main>
       </div>
 
       {/* Clock Widget */}
