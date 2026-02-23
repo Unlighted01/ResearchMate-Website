@@ -37,15 +37,15 @@ function getRandomGeminiKey(): string | undefined {
 async function extractTextFromImage(
   imageBase64: string,
 ): Promise<{ success: boolean; text: string; error?: string }> {
-  // Try Claude first
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
   const claudeKey = process.env.OCR_API_KEY;
   const geminiKey = getRandomGeminiKey();
 
-  if (!claudeKey && !geminiKey) {
+  if (!openRouterKey && !claudeKey && !geminiKey) {
     return {
       success: false,
       text: "",
-      error: "No API keys configured (OCR_API_KEY or GEMINI_API_KEY)",
+      error: "No API keys configured for OCR",
     };
   }
 
@@ -54,8 +54,153 @@ async function extractTextFromImage(
   const mimeType = match ? match[1] : "image/jpeg";
   const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
 
+  let openRouterErrorMsg = "Skipped (No Key)";
+  let geminiErrorMsg = "Skipped (No Key)";
   let claudeErrorMsg = "Skipped (No Key)";
 
+  // ==========================================
+  // 1. PRIMARY: OpenRouter (Gemini EXP Free)
+  // ==========================================
+  if (openRouterKey) {
+    try {
+      console.log("🔍 Processing image with OpenRouter...");
+      const response = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openRouterKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.0-flash-exp:free",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: `Extract ALL text from this image. This is handwritten or printed text that needs to be digitized.
+
+Instructions:
+- Extract every word and character you can see
+- Preserve the original layout and line breaks where possible
+- If there are multiple columns or sections, process them left to right, top to bottom
+- Include any numbers, dates, or special characters
+- If text is unclear, make your best guess and include it
+- Do NOT add any commentary or descriptions - just output the extracted text
+
+Output only the extracted text, nothing else.`,
+                  },
+                  {
+                    type: "image_url",
+                    image_url: {
+                      url: `data:${mimeType};base64,${base64Data}`,
+                    },
+                  },
+                ],
+              },
+            ],
+            temperature: 0.1,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const extractedText = data.choices?.[0]?.message?.content || "";
+
+        if (extractedText.trim()) {
+          console.log("✅ OpenRouter OCR completed successfully");
+          return { success: true, text: extractedText.trim() };
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        openRouterErrorMsg =
+          errorData.error?.message || `HTTP ${response.status}`;
+        console.error("OpenRouter OCR failed:", openRouterErrorMsg);
+      }
+    } catch (error) {
+      openRouterErrorMsg = (error as Error).message;
+      console.error("OpenRouter OCR error:", openRouterErrorMsg);
+    }
+    console.log("⚠️ OpenRouter failed, falling back to Gemini Vision API...");
+  }
+
+  // ==========================================
+  // 2. SECONDARY: Gemini API (-exp suffix)
+  // ==========================================
+  if (geminiKey) {
+    try {
+      console.log("🔍 Processing image with Gemini Vision...");
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `Extract ALL text from this image. This is handwritten or printed text that needs to be digitized.
+
+Instructions:
+- Extract every word and character you can see
+- Preserve the original layout and line breaks where possible
+- If there are multiple columns or sections, process them left to right, top to bottom
+- Include any numbers, dates, or special characters
+- If text is unclear, make your best guess and include it
+- Do NOT add any commentary or descriptions - just output the extracted text
+
+Output only the extracted text, nothing else.`,
+                  },
+                  {
+                    inlineData: {
+                      mimeType:
+                        mimeType === "image/webp" ||
+                        mimeType === "image/png" ||
+                        mimeType === "image/jpeg"
+                          ? mimeType
+                          : "image/jpeg",
+                      data: base64Data,
+                    },
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 4096,
+            },
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const extractedText =
+          data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+        if (extractedText.trim()) {
+          console.log("✅ Gemini OCR completed successfully");
+          return { success: true, text: extractedText.trim() };
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        geminiErrorMsg = errorData.error?.message || `HTTP ${response.status}`;
+        console.error("Gemini Vision failed:", geminiErrorMsg);
+      }
+    } catch (error) {
+      geminiErrorMsg = (error as Error).message;
+      console.error("Gemini OCR error:", geminiErrorMsg);
+    }
+    console.log("⚠️ Gemini API failed, falling back to Claude...");
+  }
+
+  // ==========================================
+  // 3. TERTIARY: Claude
+  // ==========================================
   if (claudeKey) {
     try {
       console.log("🔍 Processing image with Claude AI Server...");
@@ -119,97 +264,15 @@ Output only the extracted text, nothing else.`,
       claudeErrorMsg = (error as Error).message;
       console.error("Claude OCR error:", claudeErrorMsg);
     }
-    console.log("⚠️ Claude failed, falling back to Gemini Vision...");
   }
 
-  // Fallback to Gemini
-  if (!geminiKey) {
-    return {
-      success: false,
-      text: "",
-      error: `Claude error: ${claudeErrorMsg}. GEMINI_API_KEY not configured for fallback`,
-    };
-  }
-
-  try {
-    console.log("🔍 Processing image with Gemini Vision...");
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: `Extract ALL text from this image. This is handwritten or printed text that needs to be digitized.
-
-Instructions:
-- Extract every word and character you can see
-- Preserve the original layout and line breaks where possible
-- If there are multiple columns or sections, process them left to right, top to bottom
-- Include any numbers, dates, or special characters
-- If text is unclear, make your best guess and include it
-- Do NOT add any commentary or descriptions - just output the extracted text
-
-Output only the extracted text, nothing else.`,
-                },
-                {
-                  inlineData: {
-                    mimeType:
-                      mimeType === "image/webp" ||
-                      mimeType === "image/png" ||
-                      mimeType === "image/jpeg"
-                        ? mimeType
-                        : "image/jpeg",
-                    data: base64Data,
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 4096,
-          },
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMsg = errorData.error?.message || `HTTP ${response.status}`;
-      console.error("Gemini Vision failed:", errorMsg);
-      return {
-        success: false,
-        text: "",
-        error: `Claude Error: [${claudeErrorMsg}] | Gemini Vision: [${errorMsg}]`,
-      };
-    }
-
-    const data = await response.json();
-    const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-    if (!extractedText.trim()) {
-      return {
-        success: false,
-        text: "",
-        error: "No text could be extracted from the image",
-      };
-    }
-
-    console.log("✅ Gemini OCR completed successfully");
-    return { success: true, text: extractedText.trim() };
-  } catch (error) {
-    console.error("Gemini OCR error:", error);
-    return {
-      success: false,
-      text: "",
-      error: `Claude Error: [${claudeErrorMsg}] | Gemini Error: ${(error as Error).message}`,
-    };
-  }
+  // IF ALL FALLBACKS FAIL, RETURN THE CHAINED ERROR
+  console.log("❌ All OCR endpoints failed in the fallback chain.");
+  return {
+    success: false,
+    text: "",
+    error: `OpenRouter: [${openRouterErrorMsg}] | Gemini: [${geminiErrorMsg}] | Claude: [${claudeErrorMsg}]`,
+  };
 }
 
 // ============================================
@@ -217,12 +280,82 @@ Output only the extracted text, nothing else.`,
 // ============================================
 
 async function generateSummary(text: string): Promise<string | null> {
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
   const claudeKey = process.env.OCR_API_KEY;
   const geminiKey = getRandomGeminiKey();
 
-  if (!claudeKey && !geminiKey) return null;
+  if (!openRouterKey && !claudeKey && !geminiKey) return null;
   if (!text || text.length < 50) return null;
 
+  // 1. PRIMARY: OpenRouter
+  if (openRouterKey) {
+    try {
+      const response = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openRouterKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.0-flash-exp:free",
+            messages: [
+              {
+                role: "user",
+                content: `Summarize the following handwritten note in 1-2 concise sentences. Focus on the main topic and key points:\n\n${text}`,
+              },
+            ],
+            temperature: 0.3,
+            max_tokens: 150,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const summary = data.choices?.[0]?.message?.content || null;
+        if (summary) return summary;
+      }
+    } catch (e) {
+      console.error("OpenRouter Summary error:", e);
+    }
+  }
+
+  // 2. SECONDARY: Gemini (-exp)
+  if (geminiKey) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `Summarize the following handwritten note in 1-2 concise sentences. Focus on the main topic and key points:\n\n${text}`,
+                  },
+                ],
+              },
+            ],
+            generationConfig: { temperature: 0.3, maxOutputTokens: 150 },
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const summary = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+        if (summary) return summary;
+      }
+    } catch (e) {
+      console.error("Gemini Summary error:", e);
+    }
+  }
+
+  // 3. TERTIARY: Claude
   if (claudeKey) {
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -253,39 +386,9 @@ async function generateSummary(text: string): Promise<string | null> {
     } catch (e) {
       console.error("Claude Summary error:", e);
     }
-    console.log("⚠️ Claude summary failed, falling back to Gemini...");
   }
 
-  if (!geminiKey) return null;
-
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: `Summarize the following handwritten note in 1-2 concise sentences. Focus on the main topic and key points:\n\n${text}`,
-                },
-              ],
-            },
-          ],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 150 },
-        }),
-      },
-    );
-
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 // ============================================
