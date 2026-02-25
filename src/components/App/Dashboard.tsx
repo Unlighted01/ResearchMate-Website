@@ -54,7 +54,7 @@ import {
   moveItemsToCollection,
   Collection,
 } from "../../services/collectionsService";
-import { generateSummary } from "../../services/geminiService";
+import { generateItemSummary } from "../../services/geminiService";
 import ConfirmDialog from "../shared/ConfirmDialog";
 import {
   SkeletonDashboardGrid,
@@ -268,10 +268,9 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const handleGenerateSummary = async (item: StorageItem) => {
     showToast("Generating AI summary...", "info");
     try {
-      const summary = await generateSummary(item.text || item.ocrText || "");
-      if (summary) {
-        await updateItem(item.id, { aiSummary: summary });
-        const updated = { ...item, aiSummary: summary };
+      const result = await generateItemSummary(item.id, item.text || item.ocrText || "");
+      if (result.ok && result.summary) {
+        const updated = { ...item, aiSummary: result.summary };
         setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
         setSelectedItem(updated);
         showToast("Summary generated!", "success");
@@ -279,6 +278,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           "summary",
           `AI summary generated for "${item.sourceTitle || "Untitled"}"`,
         );
+      } else {
+        showToast(`Failed to generate summary: ${result.error || result.reason}`, "error");
       }
     } catch (error) {
       showToast("Failed to generate summary", "error");
@@ -588,8 +589,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
               advancedFilters.deviceSource?.length ||
               advancedFilters.hasAiSummary !== undefined ||
               advancedFilters.tags?.length) && (
-              <span className="ml-1 w-2 h-2 bg-purple-500 rounded-full" />
-            )}
+                <span className="ml-1 w-2 h-2 bg-purple-500 rounded-full" />
+              )}
           </button>
           <div className="flex bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl p-1">
             <button
@@ -598,11 +599,10 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 localStorage.setItem("researchMate_viewMode", "grid");
               }}
               aria-label="Grid view"
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === "grid"
+              className={`p-2 rounded-lg transition-colors ${viewMode === "grid"
                   ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
                   : "text-gray-400 hover:text-gray-600"
-              }`}
+                }`}
             >
               <Grid3X3 className="w-4 h-4" />
             </button>
@@ -612,11 +612,10 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 localStorage.setItem("researchMate_viewMode", "list");
               }}
               aria-label="List view"
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === "list"
+              className={`p-2 rounded-lg transition-colors ${viewMode === "list"
                   ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
                   : "text-gray-400 hover:text-gray-600"
-              }`}
+                }`}
             >
               <List className="w-4 h-4" />
             </button>
@@ -724,11 +723,10 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 setSelectedItem(item);
                 setIsModalOpen(true);
               }}
-              className={`group relative glass-card rounded-2xl p-5 cursor-pointer flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30 ${
-                selectedItems.has(item.id)
+              className={`group relative glass-card rounded-2xl p-5 cursor-pointer flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30 ${selectedItems.has(item.id)
                   ? "ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/10"
                   : ""
-              }`}
+                }`}
             >
               {/* Box Checkbox */}
               <button
@@ -736,25 +734,22 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   e.stopPropagation();
                   toggleItemSelection(item.id);
                 }}
-                className={`absolute top-4 right-4 z-10 p-1.5 rounded-lg border bg-white/90 backdrop-blur-sm transition-all duration-200 ${
-                  selectedItems.has(item.id) || selectedItems.size > 0
+                className={`absolute top-4 right-4 z-10 p-1.5 rounded-lg border bg-white/90 backdrop-blur-sm transition-all duration-200 ${selectedItems.has(item.id) || selectedItems.size > 0
                     ? "opacity-100 scale-100"
                     : "opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100"
-                } ${
-                  selectedItems.has(item.id)
+                  } ${selectedItems.has(item.id)
                     ? "border-blue-500 bg-blue-50"
                     : "border-gray-200 hover:border-gray-300 dark:border-gray-700"
-                }`}
+                  }`}
                 aria-label={
                   selectedItems.has(item.id) ? "Deselect item" : "Select item"
                 }
               >
                 <div
-                  className={`w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${
-                    selectedItems.has(item.id)
+                  className={`w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${selectedItems.has(item.id)
                       ? "bg-blue-600 border-blue-600"
                       : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
-                  }`}
+                    }`}
                 >
                   {selectedItems.has(item.id) && (
                     <Check className="w-3.5 h-3.5 text-white" />
@@ -840,11 +835,10 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 setSelectedItem(item);
                 setIsModalOpen(true);
               }}
-              className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group ${
-                selectedItems.has(item.id)
+              className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group ${selectedItems.has(item.id)
                   ? "bg-blue-50/50 dark:bg-blue-900/10"
                   : ""
-              }`}
+                }`}
             >
               {/* Leftmost Checkbox + Icon Container for Mobile */}
               <div className="flex items-center gap-4 shrink-0">
@@ -853,21 +847,19 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     e.stopPropagation();
                     toggleItemSelection(item.id);
                   }}
-                  className={`flex-shrink-0 z-10 transition-all duration-200 ${
-                    selectedItems.has(item.id) || selectedItems.size > 0
+                  className={`flex-shrink-0 z-10 transition-all duration-200 ${selectedItems.has(item.id) || selectedItems.size > 0
                       ? "opacity-100"
                       : "opacity-0 group-hover:opacity-100"
-                  }`}
+                    }`}
                   aria-label={
                     selectedItems.has(item.id) ? "Deselect item" : "Select item"
                   }
                 >
                   <div
-                    className={`w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${
-                      selectedItems.has(item.id)
+                    className={`w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${selectedItems.has(item.id)
                         ? "bg-blue-600 border-blue-600"
                         : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-blue-400"
-                    }`}
+                      }`}
                   >
                     {selectedItems.has(item.id) && (
                       <Check className="w-3.5 h-3.5 text-white" />

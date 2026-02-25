@@ -137,6 +137,36 @@ export async function summarizeText(input: string): Promise<SummaryResult> {
 }
 
 /**
+ * Generate Summary directly onto an Item ID via backend
+ */
+export async function generateItemSummary(itemId: string, text: string): Promise<SummaryResult> {
+  if (!itemId || !text) return { ok: false, summary: "", reason: "empty" };
+
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/summarize-item`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ itemId, text }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Summary request failed");
+    }
+
+    return {
+      ok: true,
+      summary: data.summary || "",
+    };
+  } catch (error) {
+    console.error("❌ AI summarization failed:", error);
+    return { ok: false, summary: "", error: (error as Error).message };
+  }
+}
+
+/**
  * Generate tags
  */
 export async function generateTags(text: string): Promise<TagsResult> {
@@ -285,5 +315,6 @@ export default {
   extractInsights,
   generateChatResponse,
   checkBackendHealth,
+  generateItemSummary,
   generateSummary, // exported for compatibility
 };

@@ -19,8 +19,11 @@ The web application is fully functional, styled with premium Dark Mode UI, and s
     - Sub-folders explicitly count item aggregations to avoid stale 0-item caches on refresh.
     - Users can now click "Add Items" directly from inside a Collection folder, opening a searchable Modal of unassigned scans.
 5.  **Smart Pen Firmware Routing:**
-    - The Supabase Edge function (`/supabase/functions/smart-pen/index.ts`) has been optimized to passively pipe incoming ESP32 byte streams directly into the centralized Vercel OCR API.
-6.  **Smart Pen Embedded Citation (Library Search):**
+    - The Supabase Edge function (`/supabase/functions/smart-pen/index.ts`) has been optimized to passively pipe incoming ESP32 byte streams directly into the centralized Vercel OCR API. Hardcoded `includeSummary: false` so that hardware uploads are not blocked by LLM response times.
+6.  **Decoupled AI Summarization:**
+    - A dedicated `/api/summarize-item` endpoint handles on-demand AI summaries, executing database inserts directly into Supabase.
+    - Driven by a manual UI trigger in `Dashboard.tsx` detail modals via `geminiService.generateItemSummary`.
+7.  **Smart Pen Embedded Citation (Library Search):**
     - `LibrarySearch.tsx` embedded natively into the Smart Pen item details modal.
     - Users can search for books (Title, Author, ISBN) and attach robust metadata (cover images, APA citations) to existing physical captures without executing costly AI processing.
 

@@ -75,7 +75,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             image: `data:image/jpeg;base64,${imageBase64}`,
-            includeSummary: false,
+            includeSummary: false, // Explicitly tell the server NOT to generate a summary yet to save upload time
           }),
         });
 
