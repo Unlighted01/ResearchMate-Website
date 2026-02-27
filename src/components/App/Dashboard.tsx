@@ -55,6 +55,7 @@ import {
   Collection,
 } from "../../services/collectionsService";
 import { generateItemSummary } from "../../services/geminiService";
+import SmartPenScanModal from "./SmartPenScanModal";
 import ConfirmDialog from "../shared/ConfirmDialog";
 import {
   SkeletonDashboardGrid,
@@ -106,6 +107,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<StorageItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSmartPenScan, setSelectedSmartPenScan] = useState<StorageItem | null>(null);
+  const [isSummarizingSmartPen, setIsSummarizingSmartPen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
@@ -720,39 +723,46 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 boxShadow: "0 16px 40px -8px rgba(0, 122, 255, 0.15)",
               }}
               onClick={() => {
-                setSelectedItem(item);
-                setIsModalOpen(true);
+                if (item.deviceSource === "smart_pen") {
+                  setSelectedSmartPenScan(item);
+                } else {
+                  setSelectedItem(item);
+                  setIsModalOpen(true);
+                }
               }}
               className={`group relative glass-card rounded-2xl p-5 cursor-pointer flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30 ${selectedItems.has(item.id)
                   ? "ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/10"
                   : ""
                 }`}
             >
-              {/* Box Checkbox */}
+              {/* Checkbox — bottom-left, away from AI badge */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleItemSelection(item.id);
                 }}
-                className={`absolute top-4 right-4 z-10 p-1.5 rounded-lg border bg-white/90 backdrop-blur-sm transition-all duration-200 ${selectedItems.has(item.id) || selectedItems.size > 0
+                className={`absolute bottom-3 left-3 z-10 p-1 rounded-lg border bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm transition-all duration-200 ${
+                  selectedItems.has(item.id) || selectedItems.size > 0
                     ? "opacity-100 scale-100"
                     : "opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100"
-                  } ${selectedItems.has(item.id)
-                    ? "border-blue-500 bg-blue-50"
+                } ${
+                  selectedItems.has(item.id)
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/40"
                     : "border-gray-200 hover:border-gray-300 dark:border-gray-700"
-                  }`}
+                }`}
                 aria-label={
                   selectedItems.has(item.id) ? "Deselect item" : "Select item"
                 }
               >
                 <div
-                  className={`w-5 h-5 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${selectedItems.has(item.id)
+                  className={`w-4 h-4 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${
+                    selectedItems.has(item.id)
                       ? "bg-blue-600 border-blue-600"
                       : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
-                    }`}
+                  }`}
                 >
                   {selectedItems.has(item.id) && (
-                    <Check className="w-3.5 h-3.5 text-white" />
+                    <Check className="w-3 h-3 text-white" />
                   )}
                 </div>
               </button>
@@ -832,8 +842,12 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
             <div
               key={item.id}
               onClick={() => {
-                setSelectedItem(item);
-                setIsModalOpen(true);
+                if (item.deviceSource === "smart_pen") {
+                  setSelectedSmartPenScan(item);
+                } else {
+                  setSelectedItem(item);
+                  setIsModalOpen(true);
+                }
               }}
               className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group ${selectedItems.has(item.id)
                   ? "bg-blue-50/50 dark:bg-blue-900/10"
@@ -1103,6 +1117,48 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           </div>
         )}
       </Modal>
+
+      {/* ========== SMART PEN SCAN MODAL ========== */}
+      <SmartPenScanModal
+        scan={selectedSmartPenScan}
+        onClose={() => setSelectedSmartPenScan(null)}
+        onUpdate={(id, updates) => {
+          setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...updates } : i)));
+          if (selectedSmartPenScan?.id === id) {
+            setSelectedSmartPenScan((prev) => prev ? { ...prev, ...updates } : null);
+          }
+        }}
+        onDelete={(id) => handleDeleteItem(id)}
+        onGenerateSummary={async (scan) => {
+          setIsSummarizingSmartPen(true);
+          await handleGenerateSummary(scan);
+          setIsSummarizingSmartPen(false);
+        }}
+        onRunOCR={async (scan) => {
+          if (!scan.imageUrl) return;
+          try {
+            const response = await fetch("/api/ocr", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ image: scan.imageUrl, includeSummary: true }),
+            });
+            if (!response.ok) throw new Error((await response.json()).error || "OCR failed");
+            const result = await response.json();
+            const updates = {
+              text: result.ocrText,
+              ocrText: result.ocrText,
+              aiSummary: result.aiSummary || undefined,
+            };
+            await updateItem(scan.id, updates);
+            setItems((prev) => prev.map((i) => (i.id === scan.id ? { ...i, ...updates } : i)));
+            setSelectedSmartPenScan((prev) => prev ? { ...prev, ...updates } : null);
+            showToast("Text extracted!", "success");
+          } catch (err) {
+            showToast(err instanceof Error ? err.message : "OCR failed", "error");
+          }
+        }}
+        isSummarizing={isSummarizingSmartPen}
+      />
 
       {/* Confirm Delete Dialog */}
       <ConfirmDialog

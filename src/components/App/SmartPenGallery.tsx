@@ -31,8 +31,9 @@ import {
   updateItem,
   StorageItem,
 } from "../../services/storageService";
-import { Modal } from "../shared/UIComponents";
+import { generateItemSummary } from "../../services/geminiService";
 import SmartPenPairing from "./SmartPenPairing";
+import SmartPenScanModal from "./SmartPenScanModal";
 import CameraCapture from "./CameraCapture"; // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
 import { getCurrentUser, supabase } from "../../services/supabaseClient";
 import { LibrarySearch, OpenLibraryDoc } from "./LibrarySearch";
@@ -100,6 +101,7 @@ const SmartPenGallery = () => {
     type: "success" | "error" | "info";
   } | null>(null);
   const [extractingId, setExtractingId] = useState<string | null>(null);
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [isLinkingBook, setIsLinkingBook] = useState(false);
   // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
   const [showCamera, setShowCamera] = useState(false);
@@ -340,6 +342,34 @@ const SmartPenGallery = () => {
       );
     } finally {
       setExtractingId(null);
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    if (!selectedScan || (!selectedScan.text && !selectedScan.ocrText)) return;
+
+    setSummarizingId(selectedScan.id);
+    showToast("Generating AI summary...", "info");
+    try {
+      const result = await generateItemSummary(
+        selectedScan.id,
+        selectedScan.text || selectedScan.ocrText || "",
+      );
+      if (result.ok && result.summary) {
+        const updated = { ...selectedScan, aiSummary: result.summary };
+        await updateScanItem(selectedScan, { aiSummary: result.summary });
+        setSelectedScan(updated);
+        showToast("Summary generated!", "success");
+      } else {
+        showToast(
+          `Failed to generate summary: ${result.error || result.reason}`,
+          "error",
+        );
+      }
+    } catch (error) {
+      showToast("Failed to generate summary", "error");
+    } finally {
+      setSummarizingId(null);
     }
   };
 
@@ -719,119 +749,62 @@ const SmartPenGallery = () => {
         </div>
       )}
 
-      {/* ========== DETAIL MODAL ========== */}
-      <Modal
-        isOpen={!!selectedScan}
+      {/* ========== SMART PEN DETAIL MODAL ========== */}
+      <SmartPenScanModal
+        scan={selectedScan}
         onClose={() => setSelectedScan(null)}
-        title={selectedScan?.sourceTitle || "Scan Details"}
-        size="lg"
-      >
-        {selectedScan && (
-          <div className="space-y-6">
-            {/* Image */}
-            {selectedScan.imageUrl && (
-              <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                <img
-                  src={selectedScan.imageUrl}
-                  alt="Scan"
-                  className="w-full object-contain max-h-[400px]"
-                />
-              </div>
-            )}
-
-            {/* OCR Text */}
-            <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <FileText className="w-4 h-4 text-[#FF9500]" />
-                <h4 className="font-semibold text-gray-900 dark:text-white">
-                  OCR Text
-                </h4>
-              </div>
-              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                {selectedScan.ocrText || "No text extracted"}
-              </p>
-            </div>
-
-            {/* AI Summary */}
-            {selectedScan.aiSummary && (
-              <div className="bg-gradient-to-br from-[#007AFF]/10 via-[#5856D6]/10 to-[#AF52DE]/10 rounded-xl p-5 border border-[#007AFF]/20">
-                <div className="flex items-center gap-2 mb-3">
-                  <Zap className="w-4 h-4 text-[#007AFF]" />
-                  <h4 className="font-semibold text-gray-900 dark:text-white">
-                    AI Summary
-                  </h4>
-                </div>
-                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                  {selectedScan.aiSummary}
-                </p>
-              </div>
-            )}
-
-            {/* Citation & Metadata */}
-            <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-5 border border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-2 mb-3">
-                <BookOpen className="w-4 h-4 text-primary-600" />
-                <h4 className="font-semibold text-gray-900 dark:text-white">
-                  Citation & Metadata
-                </h4>
-              </div>
-
-              {selectedScan.citation ? (
-                <div className="p-3 bg-white dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300">
-                  <p className="font-semibold mb-1">Saved Citation (APA)</p>
-                  <p>{selectedScan.citation}</p>
-                </div>
-              ) : isLinkingBook ? (
-                <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900">
-                  <LibrarySearch
-                    showToast={showToast}
-                    onSelectBook={handleLinkBook}
-                  />
-                  <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-                    <button
-                      onClick={() => setIsLinkingBook(false)}
-                      className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-                    >
-                      Cancel Search
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-6 bg-white dark:bg-gray-800 rounded-lg">
-                  <p className="text-sm text-gray-500 mb-4">
-                    Is this physical capture from a book? Find its metadata to
-                    automatically cite it.
-                  </p>
-                  <button
-                    onClick={() => setIsLinkingBook(true)}
-                    className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    Search Book to Cite
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Metadata & Actions */}
-            <div className="flex items-center justify-between text-sm text-gray-500 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <span>Created {formatDate(selectedScan.createdAt, true)}</span>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => deleteScan(selectedScan)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors text-sm font-medium"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete
-                </button>
-                <span className="flex items-center gap-1.5">
-                  <PenTool className="w-4 h-4 text-[#FF9500]" />
-                  Smart Pen
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
+        onUpdate={(id, updates) => updateScanItem({ id } as StorageItem, updates)}
+        onDelete={(id) => {
+          const scan = scans.find((s) => s.id === id);
+          if (scan) deleteScan(scan);
+        }}
+        onGenerateSummary={async (scan) => {
+          setSummarizingId(scan.id);
+          showToast("Generating AI summary...", "info");
+          try {
+            const result = await generateItemSummary(
+              scan.id,
+              scan.text || scan.ocrText || "",
+            );
+            if (result.ok && result.summary) {
+              await updateScanItem(scan, { aiSummary: result.summary });
+              showToast("Summary generated!", "success");
+            } else {
+              showToast(`Failed: ${result.error || result.reason}`, "error");
+            }
+          } catch {
+            showToast("Failed to generate summary", "error");
+          } finally {
+            setSummarizingId(null);
+          }
+        }}
+        onRunOCR={async (scan) => {
+          if (!scan.imageUrl) return;
+          setExtractingId(scan.id);
+          try {
+            const response = await fetch("/api/ocr", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ image: scan.imageUrl, includeSummary: true }),
+            });
+            if (!response.ok) throw new Error((await response.json()).error || "OCR failed");
+            const result = await response.json();
+            await updateScanItem(scan, {
+              text: result.ocrText,
+              ocrText: result.ocrText,
+              aiSummary: result.aiSummary || undefined,
+            });
+            showToast("Text extracted!", "success");
+            loadScans();
+          } catch (err) {
+            showToast(err instanceof Error ? err.message : "OCR failed", "error");
+          } finally {
+            setExtractingId(null);
+          }
+        }}
+        isSummarizing={summarizingId === selectedScan?.id}
+        isRunningOCR={extractingId === selectedScan?.id}
+      />
 
       {/* ========== PAIRING MODAL ========== */}
       <SmartPenPairing

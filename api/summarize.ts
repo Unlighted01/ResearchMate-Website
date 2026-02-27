@@ -20,7 +20,7 @@ const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 const SYSTEM_INSTRUCTION = `
 You are ResearchMate, an intelligent academic assistant.
 
-Summarize the following text intelligently.
+Summarize the following text intelligently. The word count of the original text will be provided to you.
 
 Instructions:
 1. First determine what kind of content it is.
@@ -32,18 +32,21 @@ Instructions:
    - Random/informal → Extract core meaning
 
 Length Rules:
-- If text < 300 words → 30–40% of original length
-- If text 300–1500 words → 150–250 words
-- If text > 1500 words → 250–400 words
+- Target summary length = 25% to 30% of the original word count provided.
+- NEVER produce a summary shorter than 25% or longer than 35% of the original word count.
+- Example: If original is 5000 words → your summary must be 1250–1500 words.
+- Example: If original is 500 words → your summary must be 125–175 words.
+- Do NOT truncate early. Write a full, proportionally-sized summary.
 
 Advanced Reasoning (Internal Monologue):
 - Perform a "Chain-of-Thought" analysis: identifying the core argument, supporting evidence, and tone.
-- Conduct a "Self-evaluation pass": Check if the summary is too shallow or misses key nuance. Refine if necessary.
+- Conduct a "Self-evaluation pass": Check if the summary is too shallow or misses key nuance. Refine if needed.
 - Check for hallucinations: Ensure all points are supported by the text.
 
 Output Structure:
 - Short heading: [Content Type]
-- Structured summary (paragraph + bullet points if appropriate)
+- Structured summary using paragraphs and bullet points where appropriate
+- Preserve section structure from the original text when relevant
 `.trim();
 
 // ============================================
@@ -73,14 +76,15 @@ async function callGeminiAPI(
 ) {
   const url = `${GEMINI_ENDPOINT}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
-  // Prepend System Instruction
-  const fullPrompt = `${SYSTEM_INSTRUCTION}\n\nTEXT TO SUMMARIZE:\n${prompt}`;
+  // Count words and inject into prompt so the AI can compute the target length
+  const wordCount = prompt.trim().split(/\s+/).length;
+  const fullPrompt = `${SYSTEM_INSTRUCTION}\n\nORIGINAL WORD COUNT: ${wordCount} words\nTARGET SUMMARY LENGTH: ${Math.round(wordCount * 0.25)}–${Math.round(wordCount * 0.30)} words\n\nTEXT TO SUMMARIZE:\n${prompt}`;
 
   const requestBody = {
     contents: [{ parts: [{ text: fullPrompt }] }],
     generationConfig: {
       temperature: options.temperature || 0.3,
-      maxOutputTokens: options.maxTokens || 1024,
+      maxOutputTokens: options.maxTokens || 4096,
     },
   };
 
@@ -110,6 +114,7 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
     throw new Error("OpenRouter API Key not configured.");
   }
 
+  const wordCount = prompt.trim().split(/\s+/).length;
   const response = await fetch(OPENROUTER_ENDPOINT, {
     method: "POST",
     headers: {
@@ -122,10 +127,10 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
       model: OPENROUTER_MODEL,
       messages: [
         { role: "system", content: SYSTEM_INSTRUCTION },
-        { role: "user", content: `TEXT TO SUMMARIZE:\n${prompt}` },
+        { role: "user", content: `ORIGINAL WORD COUNT: ${wordCount} words\nTARGET SUMMARY LENGTH: ${Math.round(wordCount * 0.25)}–${Math.round(wordCount * 0.30)} words\n\nTEXT TO SUMMARIZE:\n${prompt}` },
       ],
       temperature: options.temperature || 0.3,
-      max_tokens: options.maxTokens || 1024,
+      max_tokens: options.maxTokens || 4096,
     }),
   });
 
@@ -151,6 +156,7 @@ async function callGroqAPI(prompt: string, options: any = {}) {
     throw new Error("Groq API Key not configured.");
   }
 
+  const wordCount = prompt.trim().split(/\s+/).length;
   const response = await fetch(GROQ_ENDPOINT, {
     method: "POST",
     headers: {
@@ -161,10 +167,10 @@ async function callGroqAPI(prompt: string, options: any = {}) {
       model: GROQ_MODEL,
       messages: [
         { role: "system", content: SYSTEM_INSTRUCTION },
-        { role: "user", content: `TEXT TO SUMMARIZE:\n${prompt}` },
+        { role: "user", content: `ORIGINAL WORD COUNT: ${wordCount} words\nTARGET SUMMARY LENGTH: ${Math.round(wordCount * 0.25)}–${Math.round(wordCount * 0.30)} words\n\nTEXT TO SUMMARIZE:\n${prompt}` },
       ],
       temperature: options.temperature || 0.3,
-      max_tokens: options.maxTokens || 1024,
+      max_tokens: options.maxTokens || 4096,
     }),
   });
 

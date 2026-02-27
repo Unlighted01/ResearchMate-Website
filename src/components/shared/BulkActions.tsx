@@ -35,7 +35,7 @@ const BulkActions: React.FC<BulkActionsProps> = ({
 
   return (
     <div
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-4 duration-300"
+      className="fixed top-4 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-top-4 duration-300"
       role="region"
       aria-label="Bulk actions"
     >
@@ -79,7 +79,7 @@ const BulkActions: React.FC<BulkActionsProps> = ({
                 Export
               </button>
 
-              <div className="absolute bottom-full left-0 mb-2 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all z-50">
+              <div className="absolute top-full left-0 mt-2 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all z-50">
                 <button
                   onClick={() => onBulkExport("pdf")}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"

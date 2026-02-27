@@ -84,7 +84,7 @@ serve(async (req) => {
         if (ocrResponse.ok && ocrData.success) {
           console.log("✅ Vercel OCR processing succeeded.");
           ocrText = ocrData.ocrText;
-          summary = ocrData.aiSummary;
+          summary = ""; // Explicitly disable auto-summarization on capture
         } else {
           console.error("❌ Vercel OCR route failed:", ocrData.error);
         }
