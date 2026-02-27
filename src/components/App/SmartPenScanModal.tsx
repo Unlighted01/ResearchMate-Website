@@ -128,7 +128,7 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
     <>
       {/* ===== BACKDROP ===== */}
       <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm animate-fade-in"
+        className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px] animate-fade-in"
         onClick={onClose}
       />
 
@@ -167,11 +167,11 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
           </div>
 
           {/* ---- BODY ---- */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:divide-x divide-gray-100 dark:divide-gray-800">
+          <div className="flex-1 overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-2 h-full lg:divide-x divide-gray-100 dark:divide-gray-800">
 
               {/* ==== LEFT: IMAGE ==== */}
-              <div className="p-6 flex flex-col gap-4">
+              <div className="p-6 flex flex-col gap-4 overflow-y-auto lg:max-h-[calc(90vh-72px)]">
                 {scan.imageUrl ? (
                   <div className="relative group">
                     <div
@@ -221,7 +221,7 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
               </div>
 
               {/* ==== RIGHT: DETAILS ==== */}
-              <div className="p-6 flex flex-col gap-5">
+              <div className="p-6 flex flex-col gap-5 overflow-y-auto lg:max-h-[calc(90vh-72px)]">
 
                 {/* -- OCR TEXT -- */}
                 <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-4">
