@@ -44,9 +44,9 @@ Advanced Reasoning (Internal Monologue):
 - Check for hallucinations: Ensure all points are supported by the text.
 
 Output Structure:
-- Short heading: [Content Type]
 - Structured summary using paragraphs and bullet points where appropriate
 - Preserve section structure from the original text when relevant
+- Do NOT include any label or heading like [Research/Academic] or [Article] — output only the summary itself
 `.trim();
 
 // ============================================

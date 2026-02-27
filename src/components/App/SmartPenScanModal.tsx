@@ -135,7 +135,7 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
       {/* ===== MODAL PANEL ===== */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="pointer-events-auto w-full max-w-4xl max-h-[90vh] bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in"
+          className="pointer-events-auto w-full max-w-4xl h-[90vh] bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in"
           onClick={(e) => e.stopPropagation()}
         >
           {/* ---- HEADER ---- */}
@@ -167,11 +167,11 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
           </div>
 
           {/* ---- BODY ---- */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <div className="grid grid-cols-1 lg:grid-cols-2 h-full lg:divide-x divide-gray-100 dark:divide-gray-800">
 
               {/* ==== LEFT: IMAGE ==== */}
-              <div className="p-6 flex flex-col gap-4 overflow-y-auto lg:max-h-[calc(90vh-72px)]">
+              <div className="p-6 flex flex-col gap-4 overflow-y-auto">
                 {scan.imageUrl ? (
                   <div className="relative group">
                     <div
@@ -221,7 +221,7 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
               </div>
 
               {/* ==== RIGHT: DETAILS ==== */}
-              <div className="p-6 flex flex-col gap-5 overflow-y-auto lg:max-h-[calc(90vh-72px)]">
+              <div className="p-6 flex flex-col gap-5 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
 
                 {/* -- OCR TEXT -- */}
                 <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-4">
@@ -253,7 +253,7 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
                     )}
                   </div>
                   {ocrText ? (
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto font-mono">
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-[120px] overflow-y-auto font-mono">
                       {ocrText}
                     </p>
                   ) : (
