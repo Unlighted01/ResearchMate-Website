@@ -26,7 +26,7 @@ import {
 // Team Data
 const teamMembers = [
   {
-    name: "Kenneth Ian R Uson",
+    name: "Kenneth Ian Ramos Uson",
     role: "Founder & Full-Stack Developer",
     bio: "Passionate about building tools that help researchers and students organize their knowledge. Leading the development of ResearchMate from concept to reality.",
     avatar: "K",
