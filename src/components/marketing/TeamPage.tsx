@@ -20,21 +20,69 @@ import {
   Server,
   ArrowRight,
   Sparkles,
+  Facebook,
 } from "lucide-react";
 
 // Team Data
 const teamMembers = [
   {
-    name: "Kian",
+    name: "Kenneth Ian R Uson",
     role: "Founder & Full-Stack Developer",
     bio: "Passionate about building tools that help researchers and students organize their knowledge. Leading the development of ResearchMate from concept to reality.",
     avatar: "K",
     gradient: "from-[#007AFF] to-[#5856D6]",
     skills: ["React", "TypeScript", "Node.js", "Supabase", "AI"],
     social: {
-      github: "https://github.com",
-      linkedin: "https://linkedin.com",
-      email: "mailto:hello@researchmate.app",
+      facebook: "#",
+      email: "mailto:kera.uson.up@phinmaed.com",
+    },
+  },
+  {
+    name: "Jhazell Tantay Elcano",
+    role: "Co-Founder / Researcher",
+    bio: "Dedicated to improving the research workflow through innovative tools and ensuring our product meets the needs of modern students.",
+    avatar: "J",
+    gradient: "from-[#5856D6] to-[#AF52DE]",
+    skills: ["Research", "Product Strategy", "User Experience"],
+    social: {
+      facebook: "#",
+      email: "mailto:jhta.elcano.up@phinmaed.com",
+    },
+  },
+  {
+    name: "Xyrhielle Mhie Maramba Honrado",
+    role: "Co-Founder / UI Designer",
+    bio: "Focused on creating intuitive and beautiful interfaces that make organizing complex research a delightful experience.",
+    avatar: "X",
+    gradient: "from-[#AF52DE] to-[#FF2D55]",
+    skills: ["UI/UX Design", "Figma", "User Research"],
+    social: {
+      facebook: "#",
+      email: "mailto:xyma.honrado.up@phinmaed.com",
+    },
+  },
+  {
+    name: "Kyla Shane Vinluan Payas",
+    role: "Co-Founder / QA Engineer",
+    bio: "Ensuring ResearchMate is bug-free, reliable, and smooth across all platforms before it reaches our users' hands.",
+    avatar: "K",
+    gradient: "from-[#FF9500] to-[#FF3B30]",
+    skills: ["Quality Assurance", "Testing", "Product Management"],
+    social: {
+      facebook: "#",
+      email: "mailto:kyvi.payas.up@phinmaed.com",
+    },
+  },
+  {
+    name: "Yiesha Bataller Soriano",
+    role: "Co-Founder / Marketing & Strategy",
+    bio: "Crafting narratives and outreach strategies that connect ResearchMate with academics and students across the globe.",
+    avatar: "Y",
+    gradient: "from-[#34C759] to-[#30D158]",
+    skills: ["Marketing", "Strategy", "Public Relations"],
+    social: {
+      facebook: "#",
+      email: "mailto:yiba.soriano.up@phinmaed.com",
     },
   },
 ];
@@ -248,24 +296,14 @@ const TeamPage = () => {
 
                 {/* Social */}
                 <div className="flex justify-center gap-2">
-                  {member.social.github && (
+                  {member.social.facebook && (
                     <a
-                      href={member.social.github}
+                      href={member.social.facebook}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2.5 rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-500/10 transition-colors"
+                      className="p-2.5 rounded-xl text-gray-400 hover:text-[#1877F2] hover:bg-blue-500/10 transition-colors"
                     >
-                      <Github className="w-5 h-5" />
-                    </a>
-                  )}
-                  {member.social.linkedin && (
-                    <a
-                      href={member.social.linkedin}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2.5 rounded-xl text-gray-400 hover:text-[#0077B5] hover:bg-blue-500/10 transition-colors"
-                    >
-                      <Linkedin className="w-5 h-5" />
+                      <Facebook className="w-5 h-5" />
                     </a>
                   )}
                   {member.social.email && (
