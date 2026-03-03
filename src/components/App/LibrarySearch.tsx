@@ -35,11 +35,15 @@ export const LibrarySearch: React.FC<LibrarySearchProps> = ({
     setResults([]);
 
     try {
-      // Using Google Books API for richer search results
+      // Primary: Google Books API for richer search results
       const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=12`;
       const response = await fetch(url);
 
       if (!response.ok) {
+        if (response.status === 429) {
+          console.warn("Google Books API rate limited, falling back to Open Library...");
+          throw new Error("RATE_LIMIT");
+        }
         throw new Error("Failed to fetch results from Google Books");
       }
 
@@ -58,11 +62,41 @@ export const LibrarySearch: React.FC<LibrarySearchProps> = ({
       setResults(mappedBooks);
 
       if (mappedBooks.length === 0) {
-        showToast("No books found. Try a different search term.", "info");
+        showToast("No books found in Google Books. Try a different search term.", "info");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      showToast("Error searching for books. Please try again.", "error");
+      
+      // Fallback to Open Library
+      try {
+        console.log("Attempting fallback to Open Library API...");
+        const fallbackUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=12`;
+        const fallbackResponse = await fetch(fallbackUrl);
+        
+        if (!fallbackResponse.ok) {
+          throw new Error("Failed to fetch from Open Library as well");
+        }
+        
+        const fallbackData = await fallbackResponse.json();
+        
+        const fallbackBooks: BookDocument[] = (fallbackData.docs || []).map((doc: any) => ({
+          key: doc.key,
+          title: doc.title || "Unknown Title",
+          author_name: doc.author_name,
+          first_publish_year: doc.first_publish_year,
+          cover_url: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : undefined,
+          isbn: doc.isbn,
+          publisher: doc.publisher
+        }));
+        
+        setResults(fallbackBooks);
+        if (fallbackBooks.length === 0) {
+          showToast("No books found. Try a different search term.", "info");
+        }
+      } catch (fallbackError) {
+        console.error("Fallback error:", fallbackError);
+        showToast(error.message === "RATE_LIMIT" ? "Search services are temporarily busy. Please try again later." : "Error searching for books. Please try again.", "error");
+      }
     } finally {
       setLoading(false);
     }
