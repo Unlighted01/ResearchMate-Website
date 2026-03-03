@@ -64,12 +64,8 @@ async function getAuthHeaders(): Promise<HeadersInit> {
     "Content-Type": "application/json",
   };
 
-  // 1. Check for Custom User Key (BYOK)
-  const customKey = localStorage.getItem("custom_gemini_key");
-  if (customKey) {
-    headers["x-custom-api-key"] = customKey;
-    // We still send the token if available, just in case backend wants identity
-  }
+  // Note: custom user API keys (BYOK) are now sent securely via HttpOnly cookies.
+  // We no longer read from localStorage or send them in headers.
 
   // 2. Get Supabase Session Token
   const { data } = await supabase.auth.getSession();

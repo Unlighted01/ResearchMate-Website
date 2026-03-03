@@ -5,6 +5,7 @@
 // ============================================
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { authenticateUser, deductCredit } from "./_utils/auth.js";
 
 // ============================================
 // API KEY ROTATION HELPER
@@ -425,6 +426,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Image data is required" });
     }
 
+    // 1. Authenticate Request
+    const authResult = await authenticateUser(req);
+    if (authResult.error) {
+      return res.status(authResult.statusCode || 401).json({
+        error: authResult.error,
+        code: authResult.statusCode === 403 ? "NO_CREDITS" : "AUTH_ERROR",
+      });
+    }
+
     // Extract text from image
     const ocrResult = await extractTextFromImage(image);
 
@@ -438,6 +448,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let summary = null;
     if (includeSummary) {
       summary = await generateSummary(ocrResult.text);
+    }
+
+    // Charge credit if on free tier
+    if (authResult.isFreeTier && authResult.user?.id) {
+      await deductCredit(authResult.user.id);
     }
 
     return res.status(200).json({

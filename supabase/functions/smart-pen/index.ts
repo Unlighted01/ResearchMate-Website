@@ -47,7 +47,7 @@ serve(async (req) => {
       console.log("Received image:", imageBytes.length, "bytes");
 
       // Save to Storage
-      const filename = `smart-pen/scan_${Date.now()}.bmp`;
+      const filename = `smart-pen/scan_${crypto.randomUUID()}.bmp`;
       await supabase.storage
         .from("scans")
         .upload(filename, imageBuffer, { contentType: "image/bmp" });

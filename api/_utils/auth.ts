@@ -37,10 +37,10 @@ export async function authenticateUser(
   req: VercelRequest,
 ): Promise<AuthResult> {
   try {
-    // 1. Check for Custom API Key (BYOK Bypass)
-    const customKey = req.headers["x-custom-api-key"] as string;
+    // 1. Check for Custom API Key (BYOK Bypass via Secure Cookie)
+    const customKey = req.cookies?.custom_gemini_key;
     if (customKey && customKey.startsWith("AIz")) {
-      console.log("⚡ Using User's Custom API Key (Bypassing Limits)");
+      console.log("⚡ Using User's Custom API Key (Bypassing Limits) via Secure Cookie");
       return { user: { id: "custom-key-user" }, isFreeTier: false, customKey };
     }
 

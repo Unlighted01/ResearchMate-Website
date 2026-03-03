@@ -167,10 +167,10 @@ const SettingsPage: React.FC = () => {
     checkBackend();
   }, []);
 
-  // Load API Key
+  // Load API Key Check (Note: we can't read HttpOnly cookie, so we just show if it's "set" based on a flag or assume blank if not explicitly saved here)
   useEffect(() => {
-    const storedKey = localStorage.getItem("custom_gemini_key");
-    if (storedKey) setCustomApiKey(storedKey);
+    const isSet = localStorage.getItem("custom_gemini_key_set");
+    if (isSet) setCustomApiKey("********"); // Hide the actual value since it's in a cookie
   }, []);
 
   // Fetch stats
@@ -250,16 +250,37 @@ const SettingsPage: React.FC = () => {
     setPasswordLoading(false);
   };
 
-  // Save API Key
-  const handleSaveApiKey = () => {
-    localStorage.setItem("custom_gemini_key", customApiKey);
-    showToast("Personal API Key saved!", "success");
+  // Save API Key via Secure Cookie
+  const handleSaveApiKey = async () => {
+    try {
+      const response = await fetch("/api/set-custom-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: customApiKey }),
+      });
+      if (!response.ok) throw new Error("Failed to save API key securely");
+      localStorage.setItem("custom_gemini_key_set", "true");
+      showToast("Personal API Key saved securely!", "success");
+      setCustomApiKey("********");
+    } catch (e) {
+      showToast("Failed to save key.", "error");
+    }
   };
 
-  const handleRemoveApiKey = () => {
-    localStorage.removeItem("custom_gemini_key");
-    setCustomApiKey("");
-    showToast("Personal API Key removed.", "info");
+  const handleRemoveApiKey = async () => {
+    try {
+      const response = await fetch("/api/set-custom-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: "" }),
+      });
+      if (!response.ok) throw new Error("Failed to remove API key securely");
+      localStorage.removeItem("custom_gemini_key_set");
+      setCustomApiKey("");
+      showToast("Personal API Key removed.", "info");
+    } catch (e) {
+      showToast("Failed to remove key.", "error");
+    }
   };
 
   // Handle data export
@@ -984,7 +1005,7 @@ const SettingsPage: React.FC = () => {
                   variant="outline"
                   onClick={handleRemoveApiKey}
                   disabled={
-                    !customApiKey && !localStorage.getItem("custom_gemini_key")
+                    !customApiKey && !localStorage.getItem("custom_gemini_key_set")
                   }
                 >
                   Remove Key

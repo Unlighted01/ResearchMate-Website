@@ -105,7 +105,7 @@ app.use(
       // Add your Vercel URL here after deployment if different
     ],
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-custom-api-key"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   }),
 );
@@ -117,10 +117,16 @@ app.use(express.json({ limit: "10mb" }));
 // --------------------------------------------
 const requireAuthAndCredits = async (req, res, next) => {
   try {
-    // 1. Check for Custom API Key (BYOK Bypass)
-    const customKey = req.headers["x-custom-api-key"];
+    // 1. Check for Custom API Key (BYOK Bypass via Secure Cookie)
+    const cookies = req.headers.cookie;
+    let customKey = null;
+    if (cookies) {
+      const match = cookies.match(/custom_gemini_key=([^;]+)/);
+      if (match) customKey = match[1];
+    }
+    
     if (customKey && customKey.startsWith("AIz")) {
-      console.log("⚡ Using User's Custom API Key (Bypassing Limits)");
+      console.log("⚡ Using User's Custom API Key (Bypassing Limits) via Secure Cookie");
       req.geminiKey = customKey; // Use user's key
       req.isFreeTier = false;
       return next(); // Skip credit check

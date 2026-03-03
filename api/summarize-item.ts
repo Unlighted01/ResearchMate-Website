@@ -5,6 +5,7 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
+import { authenticateUser, deductCredit } from "./_utils/auth.js";
 
 // ============================================
 // API KEY ROTATION HELPER
@@ -47,6 +48,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (!itemId || !text) {
             return res.status(400).json({ error: "Item ID and Text are required" });
+        }
+
+        // 1. Authenticate Request
+        const authResult = await authenticateUser(req);
+        if (authResult.error) {
+            return res.status(authResult.statusCode || 401).json({
+                error: authResult.error,
+                code: authResult.statusCode === 403 ? "NO_CREDITS" : "AUTH_ERROR",
+            });
         }
 
         const openRouterKey = process.env.OPENROUTER_API_KEY;
@@ -129,16 +139,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Connect to Supabase and update the database row immediately
         const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-        const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+        
+        // Use the ADMIN key instead of the ANON key to securely bypass RLS 
+        // because this is a protected serverless function that just verified the user's JWT.
+        // Alternatively, we could set the user's session, but the Service Key is guaranteed to work for this background task.
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
         if (supabaseUrl && supabaseKey) {
             const supabase = createClient(supabaseUrl, supabaseKey);
             await supabase
                 .from("items")
                 .update({ ai_summary: summary })
-                .eq("id", itemId);
+                .eq("id", itemId)
+                .eq("user_id", authResult.user?.id); // Extra safety check to ensure they own the item
         } else {
             console.error("Supabase Environment Variables not found inside Vercel handler");
+        }
+
+        // Charge credit if on free tier
+        if (authResult.isFreeTier && authResult.user?.id) {
+            await deductCredit(authResult.user.id);
         }
 
         return res.status(200).json({ success: true, summary });
