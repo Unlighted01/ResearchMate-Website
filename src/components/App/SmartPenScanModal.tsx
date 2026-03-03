@@ -23,7 +23,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import { StorageItem, updateItem } from "../../services/storageService";
-import { LibrarySearch, OpenLibraryDoc } from "./LibrarySearch";
+import { LibrarySearch, BookDocument } from "./LibrarySearch";
 
 // ----------------------------------------
 // Props
@@ -93,7 +93,7 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
     onUpdate(scan.id, { note: noteValue });
   };
 
-  const handleLinkBook = async (book: OpenLibraryDoc) => {
+  const handleLinkBook = async (book: BookDocument) => {
     const title = book.title;
     const author = book.author_name?.join(", ") || "Unknown Author";
     const year = book.first_publish_year ? String(book.first_publish_year) : "n.d.";
@@ -102,7 +102,7 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
 
     const updates: Partial<StorageItem> = {
       sourceTitle: title,
-      sourceUrl: `https://openlibrary.org${book.key}`,
+      sourceUrl: `https://books.google.com/books?id=${book.key}`,
       citation,
     };
     await updateItem(scan.id, updates);

@@ -36,7 +36,7 @@ import SmartPenPairing from "./SmartPenPairing";
 import SmartPenScanModal from "./SmartPenScanModal";
 import CameraCapture from "./CameraCapture"; // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
 import { getCurrentUser, supabase } from "../../services/supabaseClient";
-import { LibrarySearch, OpenLibraryDoc } from "./LibrarySearch";
+import { LibrarySearch, BookDocument } from "./LibrarySearch";
 
 // Supabase config
 const SUPABASE_URL = "https://jxevjkzojfbywxvtcwtl.supabase.co";
@@ -242,7 +242,7 @@ const SmartPenGallery = () => {
     }
   };
 
-  const handleLinkBook = async (book: OpenLibraryDoc) => {
+  const handleLinkBook = async (book: BookDocument) => {
     if (!selectedScan) return;
 
     const title = book.title;
@@ -254,13 +254,11 @@ const SmartPenGallery = () => {
       : "n.d.";
     const publisher = book.publisher ? book.publisher[0] : "Unknown Publisher";
     const citation = `${author}. (${year}). ${title}. ${publisher}.`;
-    const imageUrl = book.cover_i
-      ? `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg`
-      : undefined;
+    const imageUrl = book.cover_url || undefined;
 
     await updateScanItem(selectedScan, {
       sourceTitle: title,
-      sourceUrl: `https://openlibrary.org${book.key}`,
+      sourceUrl: `https://books.google.com/books?id=${book.key}`,
       citation: citation,
       imageUrl: selectedScan.imageUrl || imageUrl, // preserve original capture if it exists
     });

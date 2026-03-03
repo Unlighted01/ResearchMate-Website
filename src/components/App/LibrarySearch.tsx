@@ -5,15 +5,15 @@ import { addItem } from "../../services/storageService";
 
 export interface LibrarySearchProps {
   showToast: (msg: string, type: "success" | "error" | "info") => void;
-  onSelectBook?: (book: OpenLibraryDoc) => void;
+  onSelectBook?: (book: BookDocument) => void;
 }
 
-export interface OpenLibraryDoc {
+export interface BookDocument {
   key: string;
   title: string;
   author_name?: string[];
-  first_publish_year?: number;
-  cover_i?: number;
+  first_publish_year?: number | string;
+  cover_url?: string;
   isbn?: string[];
   publisher?: string[];
 }
@@ -24,7 +24,7 @@ export const LibrarySearch: React.FC<LibrarySearchProps> = ({
 }) => {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<OpenLibraryDoc[]>([]);
+  const [results, setResults] = useState<BookDocument[]>([]);
   const [addingStates, setAddingStates] = useState<Record<string, boolean>>({});
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -35,18 +35,29 @@ export const LibrarySearch: React.FC<LibrarySearchProps> = ({
     setResults([]);
 
     try {
-      // Using generic search, works for title, author, and ISBN
-      const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=10`;
+      // Using Google Books API for richer search results
+      const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=12`;
       const response = await fetch(url);
 
       if (!response.ok) {
-        throw new Error("Failed to fetch results from OpenLibrary");
+        throw new Error("Failed to fetch results from Google Books");
       }
 
       const data = await response.json();
-      setResults(data.docs || []);
+      
+      const mappedBooks: BookDocument[] = (data.items || []).map((item: any) => ({
+        key: item.id,
+        title: item.volumeInfo.title || "Unknown Title",
+        author_name: item.volumeInfo.authors,
+        first_publish_year: item.volumeInfo.publishedDate ? item.volumeInfo.publishedDate.substring(0, 4) : undefined,
+        cover_url: item.volumeInfo.imageLinks?.thumbnail?.replace('http:', 'https:'),
+        isbn: item.volumeInfo.industryIdentifiers?.map((id: any) => id.identifier),
+        publisher: item.volumeInfo.publisher ? [item.volumeInfo.publisher] : undefined
+      }));
 
-      if (data.docs?.length === 0) {
+      setResults(mappedBooks);
+
+      if (mappedBooks.length === 0) {
         showToast("No books found. Try a different search term.", "info");
       }
     } catch (error) {
@@ -57,7 +68,7 @@ export const LibrarySearch: React.FC<LibrarySearchProps> = ({
     }
   };
 
-  const handleAddBook = async (book: OpenLibraryDoc) => {
+  const handleAddBook = async (book: BookDocument) => {
     if (onSelectBook) {
       onSelectBook(book);
       return;
@@ -86,12 +97,10 @@ export const LibrarySearch: React.FC<LibrarySearchProps> = ({
       await addItem({
         text: placeholderText,
         sourceTitle: title,
-        sourceUrl: `https://openlibrary.org${book.key}`,
+        sourceUrl: `https://books.google.com/books?id=${book.key}`,
         citation: citation,
         deviceSource: "web",
-        imageUrl: book.cover_i
-          ? `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg`
-          : undefined,
+        imageUrl: book.cover_url,
       });
 
       showToast(`Added "${title}" to your Dashboard!`, "success");
@@ -145,9 +154,9 @@ export const LibrarySearch: React.FC<LibrarySearchProps> = ({
             >
               {/* Cover Image */}
               <div className="w-20 h-28 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center shrink-0 overflow-hidden shadow-sm">
-                {book.cover_i ? (
+                {book.cover_url ? (
                   <img
-                    src={`https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`}
+                    src={book.cover_url}
                     alt={`Cover for ${book.title}`}
                     className="w-full h-full object-cover"
                   />
