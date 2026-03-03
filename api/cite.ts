@@ -4,6 +4,7 @@
 // ============================================
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { authenticateUser, deductCredit } from "./_utils/auth.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
@@ -158,12 +159,20 @@ async function lookupYouTubeData(url: string) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
+    const authResult = await authenticateUser(req);
+    if (authResult.error) {
+      return res.status(authResult.statusCode || 401).json({
+        error: authResult.error,
+        code: authResult.statusCode === 403 ? "NO_CREDITS" : "AUTH_ERROR",
+      });
+    }
+
     const { isbn, doi, url } = req.body;
 
     let result = null;
@@ -182,6 +191,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!result) {
         return res.status(404).json({ error: "Citation data not found." });
+    }
+
+    if (authResult.isFreeTier && authResult.user?.id) {
+      await deductCredit(authResult.user.id);
     }
 
     return res.status(200).json(result);

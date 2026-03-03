@@ -24,6 +24,7 @@ import {
   GraduationCap,
   HelpCircle,
 } from "lucide-react";
+import { supabase } from "../../services/supabaseClient";
 
 // ============================================
 // PART 1: TYPES
@@ -271,9 +272,15 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
   // ============================================
 
   const extractISBN = async (isbn: string): Promise<ExtractedMetadata> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    
     const response = await fetch(`${API_BASE_URL}/cite`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ isbn }),
     });
 
@@ -300,9 +307,15 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
   };
 
   const extractDOI = async (doi: string): Promise<ExtractedMetadata> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
     const response = await fetch(`${API_BASE_URL}/cite`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ doi }),
     });
 
@@ -337,9 +350,15 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
   const extractYouTube = async (
     videoId: string
   ): Promise<ExtractedMetadata> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
     const response = await fetch(`${API_BASE_URL}/cite`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ url: `https://youtube.com/watch?v=${videoId}` }),
     });
 
@@ -362,9 +381,15 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
   };
 
   const extractURL = async (url: string): Promise<ExtractedMetadata> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
     const response = await fetch(`${API_BASE_URL}/extract-citation`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ url, useAI }),
     });
 
