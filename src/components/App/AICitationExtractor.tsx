@@ -271,7 +271,7 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
   // ============================================
 
   const extractISBN = async (isbn: string): Promise<ExtractedMetadata> => {
-    const response = await fetch(`${API_BASE_URL}/cite-isbn`, {
+    const response = await fetch(`${API_BASE_URL}/cite`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isbn }),
@@ -285,7 +285,7 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
       title: book.title,
       author: book.authors?.join(", ") || "Unknown Author",
       authors: book.authors,
-      publishDate: book.publishYear ? `${book.publishYear}-01-01` : "",
+      publishDate: book.publishYear && book.publishYear !== "n.d." ? `${book.publishYear}-01-01` : "",
       publishYear: book.publishYear,
       accessDate: new Date().toISOString(),
       siteName: book.publisher || "Unknown Publisher",
@@ -300,7 +300,7 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
   };
 
   const extractDOI = async (doi: string): Promise<ExtractedMetadata> => {
-    const response = await fetch(`${API_BASE_URL}/cite-doi`, {
+    const response = await fetch(`${API_BASE_URL}/cite`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ doi }),
@@ -316,7 +316,7 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
       title: paper.title,
       author: formatAuthors(authors),
       authors: authors,
-      publishDate: paper.publishYear
+      publishDate: paper.publishYear && paper.publishYear !== "n.d."
         ? `${paper.publishYear}-${paper.publishMonth || "01"}-${
             paper.publishDay || "01"
           }`
@@ -337,7 +337,7 @@ const AICitationExtractor: React.FC<AICitationExtractorProps> = ({
   const extractYouTube = async (
     videoId: string
   ): Promise<ExtractedMetadata> => {
-    const response = await fetch(`${API_BASE_URL}/cite-youtube`, {
+    const response = await fetch(`${API_BASE_URL}/cite`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: `https://youtube.com/watch?v=${videoId}` }),
