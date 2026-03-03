@@ -25,10 +25,12 @@ Instructions:
    - An article → Provide overview + key points
    - Research/academic → Provide thesis + findings + implications
    - Poem/literary → Summarize theme, tone, and message
-   - List/notes → Organize and condense clearly
+   - List/notes → Organize and condense clearly. IMPORTANT: Retain key bullets and headings as condensed points. Do not lose the structure of bulleted lists or headings.
+   - Very short input (<= 10 words) → If the input is very short and lacks context for a full summary, simply return the same sentence or a brief paraphrase. Do not hallucinate meaningless text.
    - Random/informal → Extract core meaning
 
 Length Rules:
+- If text length is <= 10 words, just paraphrase or return it as is.
 - If text < 300 words → 30–40% of original length
 - If text 300–1500 words → 150–250 words
 - If text > 1500 words → 250–400 words
@@ -40,7 +42,7 @@ Advanced Reasoning (Internal Monologue):
 
 Output Structure:
 - Short heading: [Content Type]
-- Structured summary (paragraph + bullet points if appropriate)
+- Structured summary (paragraph + bullet points if appropriate). Maintain bullets for lists.
 
 STRICT GUARDRAILS:
 1. ONLY answer questions related to research, science, academic writing, or the text provided.
@@ -322,6 +324,61 @@ app.post("/api/insights", requireAuthAndCredits, async (req, res) => {
     res.json({ insights, credits_remaining: remaining });
   } catch (error) {
     console.error("Insights error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Extract text from Image (OCR via Gemini Vision)
+app.post("/api/extract-image", requireAuthAndCredits, async (req, res) => {
+  try {
+    const { imageBase64, mimeType } = req.body;
+    if (!imageBase64 || !mimeType) {
+       return res.status(400).json({ error: "imageBase64 and mimeType are required" });
+    }
+
+    const url = `${GEMINI_ENDPOINT}/${GEMINI_MODEL}:generateContent?key=${req.geminiKey}`;
+    
+    const requestBody = {
+      contents: [
+        {
+          parts: [
+            { text: "Extract and transcribe all the readable text from this image precisely. Do not add any extra commentary or markup, just return the raw text." },
+            { 
+               inlineData: {
+                  mimeType: mimeType,
+                  data: imageBase64
+               }
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.1,
+      }
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+
+    let remaining = "Unlimited";
+    if (req.isFreeTier) {
+      remaining = await deductCredit(req.user.id, req.currentCredits);
+    }
+
+    res.json({ text: extractedText, credits_remaining: remaining });
+  } catch (error) {
+    console.error("Image Extraction error:", error.message);
     res.status(500).json({ error: error.message });
   }
 });

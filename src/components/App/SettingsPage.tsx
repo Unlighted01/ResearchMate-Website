@@ -394,6 +394,55 @@ const SettingsPage: React.FC = () => {
 
         if (error) throw error;
         showToast(`Imported PDF "${file.name}" successfully!`, "success");
+      } else if (file.type.startsWith('image/')) {
+        // Image Import Logic using our backend Gemini endpoint
+        showToast("Extracting text via AI OCR...", "info");
+        
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        
+        await new Promise<void>((resolve, reject) => {
+          reader.onload = async () => {
+             try {
+                const base64Data = (reader.result as string).split(',')[1];
+                const mimeType = file.type;
+
+                const response = await fetch('/api/extract-image', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                  },
+                  body: JSON.stringify({ imageBase64: base64Data, mimeType })
+                });
+
+                if (!response.ok) {
+                   const errData = await response.json();
+                   throw new Error(errData.error || 'Failed to extract text from image');
+                }
+
+                const data = await response.json();
+                
+                if (!data.text || !data.text.trim()) {
+                   throw new Error("No readable text found in image.");
+                }
+
+                const { error } = await supabase.from("items").insert({
+                  user_id: user?.id,
+                  text: data.text.trim(),
+                  source_title: file.name,
+                  device_source: "web",
+                });
+        
+                if (error) throw error;
+                showToast(`Imported Image "${file.name}" successfully!`, "success");
+                resolve();
+             } catch (err: any) {
+                reject(err);
+             }
+          };
+          reader.onerror = () => reject(new Error("Failed to read image file"));
+        });
       } else {
         // Standard JSON Import Logic
         const text = await file.text();
@@ -1045,7 +1094,7 @@ const SettingsPage: React.FC = () => {
             <div className="relative">
               <input
                 type="file"
-                accept=".json,.pdf"
+                accept=".json,.pdf,.png,.jpg,.jpeg"
                 title="Import Data"
                 aria-label="Import Data"
                 onChange={handleImport}

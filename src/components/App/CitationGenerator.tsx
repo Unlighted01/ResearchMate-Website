@@ -44,52 +44,38 @@ const formatDate = (
   dateStr: string,
   format: "full" | "year" | "mla" | "chicago"
 ) => {
-  const date = new Date(dateStr);
+  let date = new Date(dateStr);
+  if (isNaN(date.getTime())) {
+    // attempt fallback parsing if it's non-standard, or default to current date
+    // (A more advanced date parser could be used, but this ensures it won't crash/show 'NaN')
+    // We'll try just taking the year if it looks like a year string.
+    const yearMatch = dateStr.match(/\d{4}/);
+    if (yearMatch) {
+       date = new Date(`${yearMatch[0]}-01-01`);
+    } else {
+       date = new Date(); // fallback to today as a last resort
+    }
+  }
+
   const months = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
+    "January", "February", "March", "April", "May", "June", 
+    "July", "August", "September", "October", "November", "December"
   ];
   const monthsShort = [
-    "Jan.",
-    "Feb.",
-    "Mar.",
-    "Apr.",
-    "May",
-    "June",
-    "July",
-    "Aug.",
-    "Sept.",
-    "Oct.",
-    "Nov.",
-    "Dec.",
+    "Jan.", "Feb.", "Mar.", "Apr.", "May", "June", 
+    "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."
   ];
 
   switch (format) {
     case "year":
       return date.getFullYear().toString();
     case "mla":
-      return `${date.getDate()} ${
-        monthsShort[date.getMonth()]
-      } ${date.getFullYear()}`;
+      return `${date.getDate()} ${monthsShort[date.getMonth()]} ${date.getFullYear()}`;
     case "chicago":
-      return `${
-        months[date.getMonth()]
-      } ${date.getDate()}, ${date.getFullYear()}`;
+      return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
     case "full":
     default:
-      return `${
-        months[date.getMonth()]
-      } ${date.getDate()}, ${date.getFullYear()}`;
+      return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   }
 };
 
