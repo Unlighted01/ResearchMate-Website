@@ -158,7 +158,7 @@ const SettingsPage: React.FC = () => {
     const checkBackend = async () => {
       // Always use /api since we use Vercel serverless functions
       try {
-        const response = await fetch("/api/health");
+        const response = await fetch("/api/chat", { method: "OPTIONS" });
         setBackendStatus(response.ok ? "online" : "offline");
       } catch {
         setBackendStatus("offline");
