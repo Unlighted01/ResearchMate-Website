@@ -26,6 +26,22 @@ function getRandomGeminiKey(): string | undefined {
 }
 
 // ============================================
+// SUMMARIZATION PROMPT
+// ============================================
+
+const ITEM_SUMMARY_PROMPT = `Summarize the following document content in 2-4 concise, information-dense sentences.
+
+Rules:
+- Lead with the core finding, thesis, or main point — not filler like "This document discusses".
+- Preserve critical specifics: names, numbers, key terms, conclusions.
+- If it is academic/research content, mention the methodology and key result.
+- If it is handwritten notes, extract and organize the key actionable points.
+- NEVER hallucinate or add information not present in the text.
+
+Text to summarize:
+`;
+
+// ============================================
 // MAIN HANDLER
 // ============================================
 
@@ -75,15 +91,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        model: "google/gemini-2.0-flash-001",
+                        model: "google/gemini-2.5-flash",
                         messages: [
                             {
                                 role: "user",
-                                content: `Summarize the following scanned document in 1-2 concise sentences. Focus on the main topic and key points:\n\n${text}`,
+                                content: `${ITEM_SUMMARY_PROMPT}${text}`,
                             },
                         ],
                         temperature: 0.3,
-                        max_tokens: 150,
+                        max_tokens: 300,
                     }),
                 });
                 if (response.ok) summary = (await response.json()).choices?.[0]?.message?.content || null;
@@ -100,8 +116,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            contents: [{ parts: [{ text: `Summarize the following scanned document in 1-2 concise sentences. Focus on the main topic and key points:\n\n${text}` }] }],
-                            generationConfig: { temperature: 0.3, maxOutputTokens: 150 },
+                            contents: [{ parts: [{ text: `${ITEM_SUMMARY_PROMPT}${text}` }] }],
+                            generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
                         }),
                     }
                 );
@@ -122,9 +138,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     },
                     body: JSON.stringify({
                         model: "claude-3-5-sonnet-20241022",
-                        max_tokens: 150,
+                        max_tokens: 300,
                         temperature: 0.3,
-                        messages: [{ role: "user", content: `Summarize the following scanned document in 1-2 concise sentences. Focus on the main topic and key points:\n\n${text}` }],
+                        messages: [{ role: "user", content: `${ITEM_SUMMARY_PROMPT}${text}` }],
                     }),
                 });
                 if (response.ok) summary = (await response.json()).content?.[0]?.text || null;

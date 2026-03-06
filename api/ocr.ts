@@ -289,6 +289,17 @@ PROCESS THE ENTIRE IMAGE. Do not leave anything out.`,
 // OPTIONAL: GENERATE SUMMARY OF EXTRACTED TEXT
 // ============================================
 
+const OCR_SUMMARY_PROMPT = `Summarize the following scanned content in 2-4 concise, information-dense sentences.
+
+Rules:
+- Auto-detect content type: if it appears to be from a research paper, extract the key finding and methodology. If handwritten notes, organize the key actionable points. If a form or document, describe its purpose and key data.
+- Lead with the core point — not filler like "This document contains" or "The scanned text shows".
+- Preserve critical specifics: names, numbers, dates, key terms.
+- NEVER hallucinate or add information not in the text.
+
+Content:
+`;
+
 async function generateSummary(text: string): Promise<string | null> {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   const claudeKey = process.env.OCR_API_KEY;
@@ -313,11 +324,11 @@ async function generateSummary(text: string): Promise<string | null> {
             messages: [
               {
                 role: "user",
-                content: `Summarize the following handwritten note in 1-2 concise sentences. Focus on the main topic and key points:\n\n${text}`,
+                content: `${OCR_SUMMARY_PROMPT}${text}`,
               },
             ],
             temperature: 0.3,
-            max_tokens: 150,
+            max_tokens: 300,
           }),
         },
       );
@@ -345,12 +356,12 @@ async function generateSummary(text: string): Promise<string | null> {
               {
                 parts: [
                   {
-                    text: `Summarize the following handwritten note in 1-2 concise sentences. Focus on the main topic and key points:\n\n${text}`,
+                    text: `${OCR_SUMMARY_PROMPT}${text}`,
                   },
                 ],
               },
             ],
-            generationConfig: { temperature: 0.3, maxOutputTokens: 150 },
+            generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
           }),
         },
       );
@@ -377,12 +388,12 @@ async function generateSummary(text: string): Promise<string | null> {
         },
         body: JSON.stringify({
           model: "claude-3-5-sonnet-20241022",
-          max_tokens: 150,
+          max_tokens: 300,
           temperature: 0.3,
           messages: [
             {
               role: "user",
-              content: `Summarize the following handwritten note in 1-2 concise sentences. Focus on the main topic and key points:\n\n${text}`,
+              content: `${OCR_SUMMARY_PROMPT}${text}`,
             },
           ],
         }),

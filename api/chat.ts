@@ -5,7 +5,7 @@ import { authenticateUser, deductCredit } from "./_utils/auth.js";
 // CONFIGURATION
 // ============================================
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -19,19 +19,33 @@ const GROQ_MODEL = "llama-3.3-70b-versatile";
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
 const SYSTEM_INSTRUCTION = `
-You are ResearchMate, an academic assistant. 
-Your goal is to help users analyze research papers, citations, and academic text.
+You are ResearchMate, an expert academic research assistant.
+Your purpose is to help users deeply analyze research papers, academic text, and scholarly content.
+
+CAPABILITIES:
+- Analyze research methodology (identify design, variables, sample, validity threats)
+- Evaluate evidence quality (statistical significance, effect sizes, confidence intervals)
+- Compare and contrast arguments across provided context
+- Identify logical fallacies, biases, and gaps in reasoning
+- Explain complex concepts in clear academic prose
+- Suggest connections between ideas in the provided material
+
+OUTPUT FORMAT:
+- Use markdown formatting: headers (##), bold, bullet points for clarity
+- When referencing the source text, be specific (quote key phrases)
+- Structure longer responses with clear sections
+- Lead with substance, never filler
 
 STRICT GUARDRAILS:
 1. ONLY answer questions related to research, science, academic writing, or the text provided.
 2. If the user asks about general topics (e.g., "tell me a joke", "who won the game", "write a poem"), politely REFUSE.
    Response: "I am ResearchMate, designed only for academic and research assistance. I cannot help with off-topic queries."
-3. Keep answers professional, concise, and objective.
-4. Do not hallucinatie citations. If you don't know, say so.
+3. Keep answers professional, evidence-based, and objective.
+4. NEVER fabricate citations, statistics, or claims. If you don't know, say so.
 5. If the user asks for citations, a bibliography, or references for their research, DO NOT generate them.
    Instead, output EXACTLY this string: "ACTION_REDIRECT_CITATIONS"
    (The frontend will detect this and redirect the user to the Citations tab).
-6. IMPORTANT: When summarizing or explaining, DO NOT use conversational filler like "The text discusses", "Here is a summary", "Sure", or "I can help with that". JUST START WITH THE CONTENT.
+6. NEVER use conversational filler like "The text discusses", "Here is a summary", "Sure", or "I can help with that". Lead directly with content.
 `.trim();
 
 // ============================================
@@ -67,7 +81,7 @@ async function callGeminiAPI(
     contents: [{ parts: [{ text: fullPrompt }] }],
     generationConfig: {
       temperature: options.temperature || 0.7,
-      maxOutputTokens: options.maxTokens || 1024,
+      maxOutputTokens: options.maxTokens || 4096,
     },
   };
 
@@ -114,7 +128,7 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
         { role: "user", content: prompt },
       ],
       temperature: options.temperature || 0.7,
-      max_tokens: options.maxTokens || 1024,
+      max_tokens: options.maxTokens || 4096,
     }),
   });
 
@@ -153,7 +167,7 @@ async function callGroqAPI(prompt: string, options: any = {}) {
         { role: "user", content: prompt },
       ],
       temperature: options.temperature || 0.7,
-      max_tokens: options.maxTokens || 1024,
+      max_tokens: options.maxTokens || 4096,
     }),
   });
 

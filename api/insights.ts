@@ -5,11 +5,35 @@ import { authenticateUser, deductCredit } from "./_utils/auth.js";
 // CONFIGURATION
 // ============================================
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/models";
 
-const INSIGHTS_PROMPT = `Extract exactly 5 bullet points of key insights from this text:\n\n`;
+// Fallback 1: OpenRouter
+const OPENROUTER_MODEL = "x-ai/grok-2-1212";
+const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+
+// Fallback 2: Groq
+const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+
+const INSIGHTS_PROMPT = `You are ResearchMate, an expert academic analysis engine.
+
+Extract exactly 5 key insights from the following text. Each insight must be:
+
+1. **Specific** — Include concrete details (numbers, names, findings) from the text. Never be vague.
+2. **Categorized** — Prefix each insight with one of these labels in bold:
+   - **Finding**: A concrete result or conclusion from the text
+   - **Method**: A notable approach, technique, or methodology used
+   - **Implication**: A consequence, application, or significance of the findings
+   - **Gap**: A limitation, unanswered question, or area for future work
+   - **Connection**: A relationship between ideas, or how this relates to broader knowledge
+3. **Evidence-backed** — Each insight must be directly supported by the source text. Do not hallucinate.
+
+Output format: Return exactly 5 bullet points (using -), each 1-2 sentences. Start each with the bold category label.
+
+Text to analyze:
+`;
 
 // ============================================
 // KEY ROTATION HELPER
@@ -29,9 +53,9 @@ function getRandomGeminiKey(): string | undefined {
 }
 
 // ============================================
-// GEMINI API CALLER
+// AI PROVIDER 1: GEMINI (Primary)
 // ============================================
-async function callGeminiAPI(text: string, apiKey: string, options: any = {}) {
+async function callGeminiAPI(text: string, apiKey: string) {
   const url = `${GEMINI_ENDPOINT}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const fullPrompt = `${INSIGHTS_PROMPT}\n${text}`;
@@ -39,8 +63,8 @@ async function callGeminiAPI(text: string, apiKey: string, options: any = {}) {
   const requestBody = {
     contents: [{ parts: [{ text: fullPrompt }] }],
     generationConfig: {
-      temperature: options.temperature || 0.5,
-      maxOutputTokens: options.maxTokens || 500,
+      temperature: 0.5,
+      maxOutputTokens: 1024,
     },
   };
 
@@ -59,6 +83,84 @@ async function callGeminiAPI(text: string, apiKey: string, options: any = {}) {
 
   const data = await response.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+}
+
+// ============================================
+// AI PROVIDER 2: OPENROUTER (Fallback 1)
+// ============================================
+async function callOpenRouterAPI(text: string) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("OpenRouter API Key not configured.");
+  }
+
+  const response = await fetch(OPENROUTER_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://researchmate.vercel.app",
+      "X-Title": "ResearchMate",
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [
+        { role: "user", content: `${INSIGHTS_PROMPT}\n${text}` },
+      ],
+      temperature: 0.5,
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      `OpenRouter Error (${response.status}): ${
+        errorData.error?.message || response.statusText
+      }`,
+    );
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "";
+}
+
+// ============================================
+// AI PROVIDER 3: GROQ (Fallback 2)
+// ============================================
+async function callGroqAPI(text: string) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    throw new Error("Groq API Key not configured.");
+  }
+
+  const response = await fetch(GROQ_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [
+        { role: "user", content: `${INSIGHTS_PROMPT}\n${text}` },
+      ],
+      temperature: 0.5,
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      `Groq Error (${response.status}): ${
+        errorData.error?.message || response.statusText
+      }`,
+    );
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "";
 }
 
 // ============================================
@@ -100,8 +202,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .status(500)
         .json({ error: "Server misconfiguration: No API keys." });
 
-    // 3. Call AI
-    const insights = await callGeminiAPI(text, keyToUse);
+    // 3. Call AI (With 3-Layer Fallback)
+    let insights = "";
+    const errors: string[] = [];
+
+    try {
+      insights = await callGeminiAPI(text, keyToUse);
+    } catch (geminiError) {
+      const msg = `Gemini Failed: ${(geminiError as Error).message}`;
+      console.warn(msg);
+      errors.push(msg);
+
+      // Fallback 1: OpenRouter
+      if (process.env.OPENROUTER_API_KEY) {
+        try {
+          insights = await callOpenRouterAPI(text);
+        } catch (orError) {
+          const msg = `OpenRouter Failed: ${(orError as Error).message}`;
+          console.warn(msg);
+          errors.push(msg);
+
+          // Fallback 2: Groq
+          if (process.env.GROQ_API_KEY) {
+            try {
+              insights = await callGroqAPI(text);
+            } catch (groqError) {
+              const msg = `Groq Failed: ${(groqError as Error).message}`;
+              console.error(msg);
+              errors.push(msg);
+              throw new Error(
+                `All providers failed. Logs: ${errors.join(" | ")}`,
+              );
+            }
+          } else {
+            throw new Error(
+              `Gemini/OpenRouter failed. Logs: ${errors.join(" | ")}`,
+            );
+          }
+        }
+      } else if (process.env.GROQ_API_KEY) {
+        try {
+          insights = await callGroqAPI(text);
+        } catch (groqError) {
+          const msg = `Groq Failed: ${(groqError as Error).message}`;
+          errors.push(msg);
+          throw new Error(`Gemini/Groq failed. Logs: ${errors.join(" | ")}`);
+        }
+      } else {
+        throw new Error(
+          `Gemini failed and no fallbacks configured. Log: ${msg}`,
+        );
+      }
+    }
 
     // 4. Deduct Credit
     let creditsRemaining: number | string = "Unlimited";
