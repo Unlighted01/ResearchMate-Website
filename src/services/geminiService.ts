@@ -23,6 +23,8 @@ export const CONFIG = {
 // PART 2: TYPE DEFINITIONS
 // ============================================
 
+export type SummaryMode = "ultra-short" | "standard" | "detailed";
+
 export interface SummaryResult {
   ok: boolean;
   summary: string;
@@ -95,7 +97,7 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 /**
  * Main summarization function
  */
-export async function summarizeText(input: string): Promise<SummaryResult> {
+export async function summarizeText(input: string, mode: SummaryMode = "standard"): Promise<SummaryResult> {
   const text = (input || "").trim();
   if (!text) return { ok: false, summary: "", reason: "empty" };
 
@@ -104,7 +106,7 @@ export async function summarizeText(input: string): Promise<SummaryResult> {
     const response = await fetch(`${API_BASE_URL}/summarize`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, mode }),
     });
 
     const data = await response.json();
@@ -299,9 +301,8 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
 }
 
-// For backwards compatibility
-export async function generateSummary(text: string): Promise<string> {
-  const res = await summarizeText(text);
+export async function generateSummary(text: string, mode: SummaryMode = "standard"): Promise<string> {
+  const res = await summarizeText(text, mode);
   return res.ok ? res.summary : "";
 }
 

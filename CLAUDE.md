@@ -7,12 +7,26 @@
 ## 🎯 Project Overview
 
 **ResearchMate** - A multi-platform research management ecosystem
-- Web Dashboard (React/TypeScript/Vite)
-- Chrome Extension
-- Mobile App (Coming Soon)
-- Smart Pen Integration (Hardware)
+- Web Dashboard (React/TypeScript/Vite) — hosted on Vercel
+- Chrome Extension — calls the same Vercel API endpoints
+- Smart Pen (ESP32-S3 Hardware) — routes through Supabase Edge Function → Vercel API
 
-**Tech Stack:** React, TypeScript, Vite, Supabase, Tailwind CSS, Netlify Functions
+**Tech Stack:** React, TypeScript, Vite, Supabase, Vanilla CSS, Vercel Serverless Functions
+
+### AI Architecture
+
+All AI features are centralized in `api/` (Vercel Serverless Functions). Enhancing any endpoint here automatically benefits all platforms.
+
+| Endpoint | Purpose | Model | Fallback Chain |
+|---|---|---|---|
+| `api/summarize.ts` | Full-text summarization | `gemini-2.5-flash` | Gemini → OpenRouter (Grok) → Groq (Llama 3.3) |
+| `api/summarize-item.ts` | Quick item/scan summaries | `gemini-2.5-flash` | OpenRouter → Gemini → Claude |
+| `api/chat.ts` | Academic chat assistant | `gemini-2.5-flash` | Gemini → OpenRouter → Groq |
+| `api/insights.ts` | Key insights extraction | `gemini-2.5-flash` | Gemini → OpenRouter → Groq |
+| `api/generate-tags.ts` | Auto-tagging | `gemini-2.5-flash` | Gemini → OpenRouter → Groq |
+| `api/ocr.ts` | Image text extraction | `gemini-2.5-flash` | OpenRouter → Gemini → Claude |
+| `api/extract-citation.ts` | URL → citation metadata | `gemini-2.5-flash` | DOI/Crossref/Semantic Scholar + AI enhancement |
+| `api/cite.ts` | ISBN/DOI/YouTube lookup | N/A (data lookup only) | OpenLibrary → Google Books / CrossRef / oEmbed |
 
 ---
 
@@ -243,8 +257,20 @@ shadow-apple-lg: 0 8px 16px rgba(0,0,0,0.06), 0 20px 40px rgba(0,0,0,0.12)
 ## 📂 Project Structure
 
 ```
-ResearchMate/
+ResearchMate Website/
 ├── CLAUDE.md                    # You are here!
+├── api/                         # Vercel Serverless Functions (AI brain)
+│   ├── _utils/auth.ts           # Auth + credit system
+│   ├── summarize.ts             # Full-text summarization
+│   ├── summarize-item.ts        # Quick item summaries
+│   ├── chat.ts                  # Academic chat assistant
+│   ├── insights.ts              # Key insights extraction
+│   ├── generate-tags.ts         # Auto-tagging
+│   ├── ocr.ts                   # Image text extraction (OCR)
+│   ├── extract-citation.ts      # URL → citation metadata
+│   ├── cite.ts                  # ISBN/DOI/YouTube lookup
+│   └── set-custom-key.ts        # BYOK key management
+│
 ├── src/
 │   ├── index.tsx                # App entry
 │   ├── index.css                # Global styles + animations
@@ -275,16 +301,13 @@ ResearchMate/
 │   │
 │   └── services/
 │       ├── supabaseClient.ts
-│       ├── geminiService.ts
+│       ├── geminiService.ts     # Extension calls production API
 │       ├── storageService.ts
 │       └── collectionsService.ts
 │
-├── netlify/
-│   └── functions/               # Serverless API endpoints
-│       ├── chat.ts
-│       ├── summarize.ts
-│       ├── extract-citation.ts
-│       └── generate-tags.ts
+├── supabase/
+│   └── functions/
+│       └── smart-pen/           # Edge Function for smart pen
 │
 └── public/
 ```
@@ -368,12 +391,14 @@ const filteredItems = useMemo(() =>
 
 ## 🚫 Things to Avoid
 
-- ❌ Hardcoding API keys (use Netlify Functions)
+- ❌ Hardcoding API keys (use Vercel Serverless Functions in `api/`)
 - ❌ Using `any` type in TypeScript
-- ❌ Inline styles (use Tailwind classes)
-- ❌ `console.log` in production code
+- ❌ Inline styles (use CSS classes)
+- ❌ `console.log` in production frontend code (OK in API logs)
 - ❌ Forgetting cleanup in useEffect
 - ❌ Walls of text in responses
+- ❌ Using different AI models across endpoints (keep all on `gemini-2.5-flash`)
+- ❌ Single-provider AI endpoints without fallbacks
 - ❌ Being robotic or overly formal
 
 ---
@@ -401,4 +426,4 @@ const filteredItems = useMemo(() =>
 
 ---
 
-*Last Updated: December 2024*
+*Last Updated: March 2026*

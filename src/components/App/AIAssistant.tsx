@@ -31,6 +31,7 @@ import {
   generateSummary,
   generateChatResponse,
 } from "../../services/geminiService";
+import type { SummaryMode } from "../../services/geminiService";
 
 interface AIProps {
   useToast: () => {
@@ -56,6 +57,7 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<StorageItem | null>(null);
+  const [summaryMode, setSummaryMode] = useState<SummaryMode>("standard");
 
   // Chat State
   const [chatInput, setChatInput] = useState("");
@@ -134,7 +136,7 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
 
     setSummarizing(item.id);
     try {
-      const result = await generateSummary(textContent);
+      const result = await generateSummary(textContent, summaryMode);
       // Note: currently generateSummary returns string directly for backward compat,
       // but ideally we'd use summarizeText to get the full object.
       // For now, prompt the user if empty string returned (error).
@@ -164,7 +166,7 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
 
     for (const item of itemsWithoutSummary.slice(0, 5)) {
       try {
-        const result = await generateSummary(item.text || item.ocrText || "");
+        const result = await generateSummary(item.text || item.ocrText || "", summaryMode);
         if (result) {
           await updateItem(item.id, { aiSummary: result });
           setItems((prev) =>
@@ -520,6 +522,31 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
                 )}
               </button>
             )}
+          </div>
+
+          {/* Summary Mode Toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Mode:</span>
+            <div className="flex bg-gray-100 dark:bg-[#2C2C2E] rounded-lg p-0.5">
+              {([
+                { key: "ultra-short" as SummaryMode, label: "⚡ Short", desc: "5-10%" },
+                { key: "standard" as SummaryMode, label: "📝 Standard", desc: "15-25%" },
+                { key: "detailed" as SummaryMode, label: "📖 Detailed", desc: "30-40%" },
+              ]).map((mode) => (
+                <button
+                  key={mode.key}
+                  onClick={() => setSummaryMode(mode.key)}
+                  title={`${mode.label} — ${mode.desc} of original`}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    summaryMode === mode.key
+                      ? "bg-white dark:bg-[#3A3A3C] text-[#007AFF] shadow-sm"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* List Content */}

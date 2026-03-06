@@ -20,7 +20,7 @@ const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 const SYSTEM_INSTRUCTION = `
 You are ResearchMate, an expert academic summarization engine.
 
-Summarize the following text with precision and depth. The word count of the original text will be provided.
+Summarize the following text with precision and depth. The word count of the original text and the desired summary mode will be provided.
 
 STEP 1 — Content Classification (internal, do not output):
 Identify the content type to adapt your approach:
@@ -39,25 +39,49 @@ STEP 2 — Deep Analysis (internal, do not output):
 
 STEP 3 — Output Rules:
 
-Length Calibration:
-- Target = 25%–30% of the original word count
-- NEVER go below 20% or above 35%
-- If original is 5000 words → produce 1250–1500 words
-- If original is 300 words → produce 75–100 words
-- Do NOT truncate early. Complete the full proportional summary.
+You will receive a TARGET SUMMARY LENGTH range. Follow it precisely.
 
 Structure:
-- Use clear paragraphs. For longer summaries (500+ words), use markdown headers (##) matching the source structure.
-- For research papers: organize as Overview → Methodology → Key Findings → Implications
-- Preserve critical data: specific percentages, p-values, sample sizes, named frameworks
-- Use bullet points ONLY for lists of distinct items (e.g., multiple findings). Prefer flowing prose otherwise.
+- For ULTRA-SHORT mode: Write a single tight paragraph. No headers, no bullets. Just the essential point.
+- For STANDARD mode: Use clear paragraphs. Bullet points for multiple distinct findings only.
+- For DETAILED mode: Use markdown headers (##) matching the source structure. For research papers: organize as Overview → Methodology → Key Findings → Implications. Preserve critical data: percentages, p-values, sample sizes, named frameworks.
 
 Tone & Style:
 - Write in authoritative academic prose
 - NEVER start with filler like "This paper discusses" or "The author argues that". Lead with the substance.
 - NEVER include labels like [Research/Academic] or meta-commentary about the summary itself
 - NEVER introduce information not present in the source text (zero hallucination tolerance)
+- Do NOT truncate early. Complete the full proportional summary within the target range.
 `.trim();
+
+// ============================================
+// SUMMARY MODE CONFIGURATION
+// ============================================
+type SummaryMode = "ultra-short" | "standard" | "detailed";
+
+function getSummaryRange(mode: SummaryMode, wordCount: number): { min: number; max: number; label: string } {
+  switch (mode) {
+    case "ultra-short":
+      return {
+        min: Math.round(wordCount * 0.05),
+        max: Math.round(wordCount * 0.10),
+        label: "Ultra-Short (5–10% — headlines, quick notes, AI previews)",
+      };
+    case "detailed":
+      return {
+        min: Math.round(wordCount * 0.30),
+        max: Math.round(wordCount * 0.40),
+        label: "Detailed (30–40% — full context, examples, and steps preserved)",
+      };
+    case "standard":
+    default:
+      return {
+        min: Math.round(wordCount * 0.15),
+        max: Math.round(wordCount * 0.25),
+        label: "Standard (15–25% — core ideas, most research summaries)",
+      };
+  }
+}
 
 // ============================================
 // KEY ROTATION HELPER
@@ -82,13 +106,15 @@ function getRandomGeminiKey(): string | undefined {
 async function callGeminiAPI(
   prompt: string,
   apiKey: string,
+  mode: SummaryMode = "standard",
   options: any = {},
 ) {
   const url = `${GEMINI_ENDPOINT}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
-  // Count words and inject into prompt so the AI can compute the target length
+  // Count words and compute target range based on mode
   const wordCount = prompt.trim().split(/\s+/).length;
-  const fullPrompt = `${SYSTEM_INSTRUCTION}\n\nORIGINAL WORD COUNT: ${wordCount} words\nTARGET SUMMARY LENGTH: ${Math.round(wordCount * 0.25)}–${Math.round(wordCount * 0.30)} words\n\nTEXT TO SUMMARIZE:\n${prompt}`;
+  const range = getSummaryRange(mode, wordCount);
+  const fullPrompt = `${SYSTEM_INSTRUCTION}\n\nORIGINAL WORD COUNT: ${wordCount} words\nSUMMARY MODE: ${range.label}\nTARGET SUMMARY LENGTH: ${range.min}–${range.max} words\n\nTEXT TO SUMMARIZE:\n${prompt}`;
 
   const requestBody = {
     contents: [{ parts: [{ text: fullPrompt }] }],
@@ -118,13 +144,14 @@ async function callGeminiAPI(
 // ============================================
 // AI PROVIDER 2: OPENROUTER (Fallback 1)
 // ============================================
-async function callOpenRouterAPI(prompt: string, options: any = {}) {
+async function callOpenRouterAPI(prompt: string, mode: SummaryMode = "standard", options: any = {}) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("OpenRouter API Key not configured.");
   }
 
   const wordCount = prompt.trim().split(/\s+/).length;
+  const range = getSummaryRange(mode, wordCount);
   const response = await fetch(OPENROUTER_ENDPOINT, {
     method: "POST",
     headers: {
@@ -137,7 +164,7 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
       model: OPENROUTER_MODEL,
       messages: [
         { role: "system", content: SYSTEM_INSTRUCTION },
-        { role: "user", content: `ORIGINAL WORD COUNT: ${wordCount} words\nTARGET SUMMARY LENGTH: ${Math.round(wordCount * 0.25)}–${Math.round(wordCount * 0.30)} words\n\nTEXT TO SUMMARIZE:\n${prompt}` },
+        { role: "user", content: `ORIGINAL WORD COUNT: ${wordCount} words\nSUMMARY MODE: ${range.label}\nTARGET SUMMARY LENGTH: ${range.min}–${range.max} words\n\nTEXT TO SUMMARIZE:\n${prompt}` },
       ],
       temperature: options.temperature || 0.3,
       max_tokens: options.maxTokens || 4096,
@@ -160,13 +187,14 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
 // ============================================
 // AI PROVIDER 3: GROQ (Fallback 2)
 // ============================================
-async function callGroqAPI(prompt: string, options: any = {}) {
+async function callGroqAPI(prompt: string, mode: SummaryMode = "standard", options: any = {}) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     throw new Error("Groq API Key not configured.");
   }
 
   const wordCount = prompt.trim().split(/\s+/).length;
+  const range = getSummaryRange(mode, wordCount);
   const response = await fetch(GROQ_ENDPOINT, {
     method: "POST",
     headers: {
@@ -177,7 +205,7 @@ async function callGroqAPI(prompt: string, options: any = {}) {
       model: GROQ_MODEL,
       messages: [
         { role: "system", content: SYSTEM_INSTRUCTION },
-        { role: "user", content: `ORIGINAL WORD COUNT: ${wordCount} words\nTARGET SUMMARY LENGTH: ${Math.round(wordCount * 0.25)}–${Math.round(wordCount * 0.30)} words\n\nTEXT TO SUMMARIZE:\n${prompt}` },
+        { role: "user", content: `ORIGINAL WORD COUNT: ${wordCount} words\nSUMMARY MODE: ${range.label}\nTARGET SUMMARY LENGTH: ${range.min}–${range.max} words\n\nTEXT TO SUMMARIZE:\n${prompt}` },
       ],
       temperature: options.temperature || 0.3,
       max_tokens: options.maxTokens || 4096,
@@ -227,8 +255,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userId = user?.id;
 
     // 2. Prepare Request
-    const { text } = req.body;
+    const { text, mode } = req.body;
     if (!text) return res.status(400).json({ error: "Text is required" });
+
+    // Validate mode (default to "standard" if not provided or invalid)
+    const validModes: SummaryMode[] = ["ultra-short", "standard", "detailed"];
+    const summaryMode: SummaryMode = validModes.includes(mode) ? mode : "standard";
 
     const keyToUse = customKey || getRandomGeminiKey();
     if (!keyToUse)
@@ -241,7 +273,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const errors: string[] = [];
 
     try {
-      summary = await callGeminiAPI(text, keyToUse);
+      summary = await callGeminiAPI(text, keyToUse, summaryMode);
     } catch (geminiError) {
       const msg = `Gemini Failed: ${(geminiError as Error).message}`;
       console.warn(msg);
@@ -250,7 +282,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Fallback 1: OpenRouter
       if (process.env.OPENROUTER_API_KEY) {
         try {
-          summary = await callOpenRouterAPI(text);
+          summary = await callOpenRouterAPI(text, summaryMode);
         } catch (orError) {
           const msg = `OpenRouter Failed: ${(orError as Error).message}`;
           console.warn(msg);
@@ -259,7 +291,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Fallback 2: Groq
           if (process.env.GROQ_API_KEY) {
             try {
-              summary = await callGroqAPI(text);
+              summary = await callGroqAPI(text, summaryMode);
             } catch (groqError) {
               const msg = `Groq Failed: ${(groqError as Error).message}`;
               console.error(msg);
@@ -277,7 +309,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (process.env.GROQ_API_KEY) {
         // Try Groq if OpenRouter missing
         try {
-          summary = await callGroqAPI(text);
+          summary = await callGroqAPI(text, summaryMode);
         } catch (groqError) {
           const msg = `Groq Failed: ${(groqError as Error).message}`;
           errors.push(msg);
