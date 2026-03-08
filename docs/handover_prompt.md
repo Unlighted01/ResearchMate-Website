@@ -1,49 +1,39 @@
-# 📦 Project Handover: ResearchMate Web Platform
+# 📦 AI Handover: ResearchMate Web Platform
 
-## 🚀 Current Status: STABLE & DEPLOYED
+## 🚀 Architectural Context
+The ResearchMate Web Platform serves as the centralized hub for research management. Built with **React** and **Vite**, it features a premium "Apple-style" Dark Mode Dashboard and integrates deeply with **Supabase** and **Vercel Serverless Functions**.
 
-The web application is fully functional, styled with premium Dark Mode UI, and securely connected to Supabase for real-time data persistence. The OCR Pipeline has been completely refactored.
+### 🧠 Strategic "Magic" Logic (Read Carefully)
+1.  **3-Tier OCR Fallback Chain:**
+    - Located in `api/ocr.ts` (Vercel API).
+    - Pipeline: **OpenRouter (gpt-4o) -> Gemini 1.5 Pro -> Claude 3.5 Sonnet**.
+    - If one fails or hits rate limits, it automatically falls back to the next.
+2.  **Interactive Color Metadata:**
+    - Like the extension, the website uses the `tags` array to store `color:x` metadata.
+    - **Dashboard Interaction:** Users can change an item's color in the `Dashboard.tsx` detail modal. This triggers an `updateItem` call which correctly replaces the existing `color:` tag in the array.
+    - **Rendering:** `List/Grid` views dynamically extract this color to render sidebar accents and badges without requiring a separate database column.
+3.  **Decoupled Summarization:**
+    - Summaries are not generated automatically on upload (to save tokens/performance).
+    - Users must trigger them manually via the "Generate Summary" button in the item modal.
+4.  **Hardware Ingestion (Smart Pen):**
+    - The `/supabase/functions/smart-pen/` Edge Function directs byte streams from the ESP32 directly to the OCR API.
+    - Metadata is added later via the `SmartPenScanModal.tsx` on the website.
 
-### ✅ Key Features Working:
+### 🛠️ Core Workflows
+- **Research Dashboard:** `Dashboard.tsx` implements a dual-view (List/Grid) interface with bulk selection, filtering (by tag, source, or color), and detailed modals.
+- **Bulk Operations:** `BulkActions.tsx` handles batch deletions, collection moves, and the new **Bulk Markdown Export**.
+- **Collection Management:** Aggregated counts are handled client-side in `collectionsService.ts` to ensure UI reactivity.
 
-1.  **3-Tier OCR Integration:**
-    - The extraction system (`/api/ocr`) utilizes a robust fallback chain: **OpenRouter (Primary)** -> **Gemini EXP (Secondary)** -> **Claude 3.5 Sonnet (Tertiary)**.
-    - OCR extraction dynamically limits tokens (`max_tokens: 8192`) and aggressively formats output into strictly structured Markdown (Headers, Checkboxes, Tables), ignoring noise like page numbers and artifacts.
-2.  **Decoupled Smart Gallery:**
-    - Images uploaded from the desktop, phone, or Smart Pen no longer freeze the UI to process text automatically. They are cached in the gallery, waiting for the user to explicitly hit "Extract Text".
-3.  **Dashboard Architecture:**
-    - Persistent List/Grid view toggles (via `localStorage`).
-    - Smart List View layout constraints (`min-w-0`) implemented to restrict long string overflow and stretching bugs.
-    - Bulk Selection handles checkboxes dynamically across all items for Batch Collection moves and Deletions.
-    - **Interactive Color Tagging**: The Dashboard detail modal now features a 5-color aesthetic picker. Users can change or clear highlight colors directly from the web interface. These colors are extracted dynamically from the Supabase `tags` array (e.g. `"color:blue"`) and rendered as consistent UI accents across the List/Grid views.
-    - **Markdown Bulk Export**: Integrated high-fidelity Markdown generation into the Bulk Export flow (`handleBulkExport`), allowing users to export entire collections for Notion/Obsidian with citations included.
-4.  **Collections Engine:**
-    - Sub-folders explicitly count item aggregations to avoid stale 0-item caches on refresh.
-    - Users can now click "Add Items" directly from inside a Collection folder, opening a searchable Modal of unassigned scans.
-5.  **Smart Pen Firmware Routing:**
-    - The Supabase Edge function (`/supabase/functions/smart-pen/index.ts`) has been optimized to passively pipe incoming ESP32 byte streams directly into the centralized Vercel OCR API. Hardcoded `includeSummary: false` so that hardware uploads are not blocked by LLM response times.
-6.  **Decoupled AI Summarization:**
-    - A dedicated `/api/summarize-item` endpoint handles on-demand AI summaries, executing database inserts directly into Supabase.
-    - Driven by a manual UI trigger in `Dashboard.tsx` detail modals via `geminiService.generateItemSummary`.
-7.  **Smart Pen Embedded Citation (Library Search):**
-    - `LibrarySearch.tsx` embedded natively into the Smart Pen item details modal.
-    - Users can search for books (Title, Author, ISBN) and attach robust metadata (cover images, APA citations) to existing physical captures without executing costly AI processing.
+### 💅 Design Language
+- **Styling:** TailwindCSS with a custom palette (`#007AFF` blue, high-contrast dark backgrounds).
+- **Animations:** Powered by `framer-motion` (aliased as `motion/react`).
+- **Layout:** Strict Apple Design guidelines—liberal whitespace, rounded `2xl` corners, and subtle borders.
 
-### 🛠️ Technology Stack
+### ⏭️ Roadmap for the Next AI
+1.  **Global Search (Command+K):** A high-priority request to search across all collections and OCR texts instantly.
+2.  **Shared Collections:** Implementing Supabase RLS policies to allow researchers to collaborate on a single folder.
+3.  **AI Assistant Chat:** An interface (`AIAssistant.tsx` draft already exists) to "chat" with your research collection via RAG.
 
-- **Frontend:** React, Vite, TailwindCSS (Dark Mode Centric), Lucide Icons
-- **Backend:** Serverless Vercel Functions (`@vercel/node`)
-- **Database:** Supabase (PostgreSQL, Edge Functions, Storage Buckets, RLS Policies)
-- **AI Integrations:** OpenRouter API, Google Gemini Vision API, Anthropic Claude API
-
-### 📂 Code Structure
-
-- `src/components/App/`: Main React components for Dashboard, Collections, and Smart Pen UI.
-- `src/services/`: Client-side Database logic (`storageService.ts`, `collectionsService.ts`).
-- `api/`: Vercel Serverless endpoints (`ocr.ts`).
-- `supabase/functions/`: Deno Edge routing logic for the ESP32 hardware interactions.
-
-### ⏭️ Next Steps / Maintenance:
-
-1.  **Monitor Vercel Logs:** Keep an eye on the `api/ocr` endpoint on the Vercel dashboard to ensure the OpenRouter API limits aren't being aggressively tripped during heavy bulk extractions.
-2.  **Responsive UI Polish:** Double-check padding and scrolling breakpoints on extreme mobile dimensions (`<350px`) for the "Select Collection" modal.
+### ⚠️ Dev Notes
+- **Lints:** CSS inline styles are used for collection color visualization and dynamic highlight rendering.
+- **Real-time:** Supabase `subscribeToItems` is enabled in the Dashboard to instantly reflect extension captures.
