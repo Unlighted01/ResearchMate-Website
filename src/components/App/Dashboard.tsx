@@ -730,10 +730,18 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   setIsModalOpen(true);
                 }
               }}
-              className={`group relative glass-card rounded-2xl p-5 cursor-pointer flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30 ${selectedItems.has(item.id)
+              className={`group relative glass-card rounded-2xl p-5 flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30
+                ${
+                  item.color === "yellow" ? "border-l-[4px] border-l-[#FBBF24] bg-amber-50/10 dark:bg-amber-900/10" :
+                  item.color === "green" ? "border-l-[4px] border-l-[#34D399] bg-emerald-50/10 dark:bg-emerald-900/10" :
+                  item.color === "blue" ? "border-l-[4px] border-l-[#60A5FA] bg-blue-50/10 dark:bg-blue-900/10" :
+                  item.color === "red" ? "border-l-[4px] border-l-[#F87171] bg-red-50/10 dark:bg-red-900/10" :
+                  item.color === "purple" ? "border-l-[4px] border-l-[#A78BFA] bg-purple-50/10 dark:bg-purple-900/10" : ""
+                }
+                ${selectedItems.has(item.id)
                   ? "ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/10"
                   : ""
-                }`}
+                } cursor-pointer`}
             >
               {/* Checkbox — bottom-left, away from AI badge */}
               <button
@@ -849,10 +857,18 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   setIsModalOpen(true);
                 }
               }}
-              className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group ${selectedItems.has(item.id)
+              className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group 
+                ${
+                  item.color === "yellow" ? "border-l-[4px] border-l-[#FBBF24] bg-amber-50/10 dark:bg-amber-900/10" :
+                  item.color === "green" ? "border-l-[4px] border-l-[#34D399] bg-emerald-50/10 dark:bg-emerald-900/10" :
+                  item.color === "blue" ? "border-l-[4px] border-l-[#60A5FA] bg-blue-50/10 dark:bg-blue-900/10" :
+                  item.color === "red" ? "border-l-[4px] border-l-[#F87171] bg-red-50/10 dark:bg-red-900/10" :
+                  item.color === "purple" ? "border-l-[4px] border-l-[#A78BFA] bg-purple-50/10 dark:bg-purple-900/10" : ""
+                }
+                ${selectedItems.has(item.id)
                   ? "bg-blue-50/50 dark:bg-blue-900/10"
                   : ""
-                }`}
+                } cursor-pointer`}
             >
               {/* Leftmost Checkbox + Icon Container for Mobile */}
               <div className="flex items-center gap-4 shrink-0">
@@ -968,6 +984,29 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   {selectedItem.text || selectedItem.ocrText}
                 </div>
               </div>
+
+              {/* Color Metadata Details (Only shown if a color was saved) */}
+              {selectedItem.color && (
+                <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-4">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Highlight Color
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className={`w-4 h-4 rounded-full ${
+                        selectedItem.color === "yellow" ? "bg-[#FBBF24]" :
+                        selectedItem.color === "green" ? "bg-[#34D399]" :
+                        selectedItem.color === "blue" ? "bg-[#60A5FA]" :
+                        selectedItem.color === "red" ? "bg-[#F87171]" :
+                        selectedItem.color === "purple" ? "bg-[#A78BFA]" : "bg-[#D1D5DB]"
+                      }`}
+                    />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+                      {selectedItem.color} Highlight
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Image Preview */}
               {selectedItem.imageUrl && (

@@ -46,6 +46,7 @@ export interface ResearchItem {
   citation?: string;
   citation_format?: string;
   preferred_view?: "original" | "summary";
+  color?: "yellow" | "green" | "blue" | "red" | "purple";
   // For smart pen specifically
   image_url?: string;
   ocr_text?: string;
@@ -68,6 +69,7 @@ export interface ResearchItemCamel {
   citation?: string;
   citationFormat?: string;
   preferredView?: "original" | "summary";
+  color?: "yellow" | "green" | "blue" | "red" | "purple";
   imageUrl?: string;
   ocrText?: string;
 }

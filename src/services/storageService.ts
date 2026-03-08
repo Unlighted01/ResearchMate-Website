@@ -23,6 +23,7 @@ export interface StorageItem {
   citationFormat?: string;
   preferredView?: "original" | "summary";
   deviceSource: DeviceSource;
+  color?: "yellow" | "green" | "blue" | "red" | "purple";
   collectionId?: string;
   imageUrl?: string;
   ocrText?: string;
@@ -39,6 +40,7 @@ export interface AddItemInput {
   citationFormat?: string;
   preferredView?: "original" | "summary";
   deviceSource?: DeviceSource;
+  color?: "yellow" | "green" | "blue" | "red" | "purple";
   collectionId?: string;
   imageUrl?: string;
   ocrText?: string;
@@ -53,6 +55,7 @@ export interface UpdateItemInput {
   citation?: string;
   citationFormat?: string;
   preferredView?: "original" | "summary";
+  color?: "yellow" | "green" | "blue" | "red" | "purple";
   ocrText?: string;
   imageUrl?: string;
   sourceTitle?: string;
@@ -107,10 +110,20 @@ function setLocalItems(items: StorageItem[]): void {
  * Handles snake_case to camelCase conversion
  */
 function transformDatabaseItem(item: any): StorageItem {
+  // Extract color tag if it exists in the 'color:X' format
+  let rawTags = Array.isArray(item.tags) ? item.tags : [];
+  let colorMatch = null;
+  
+  const extractedColorStr = rawTags.find((t: string) => t.startsWith("color:"));
+  if (extractedColorStr) {
+    colorMatch = extractedColorStr.split(":")[1];
+    rawTags = rawTags.filter((t: string) => !t.startsWith("color:"));
+  }
+
   return {
     id: item.id,
     text: item.text || "",
-    tags: Array.isArray(item.tags) ? item.tags : [],
+    tags: rawTags,
     note: item.note || item.notes || "",
     sourceUrl: item.source_url || "",
     sourceTitle: item.source_title || "",
@@ -124,6 +137,7 @@ function transformDatabaseItem(item: any): StorageItem {
     collectionId: item.collection_id,
     imageUrl: item.image_url,
     ocrText: item.ocr_text,
+    color: colorMatch as any,
   };
 }
 
@@ -135,10 +149,21 @@ function transformToDatabase(
   item: AddItemInput,
   userId: string,
 ): Record<string, any> {
+  const finalTags = item.tags ? [...item.tags] : [];
+  if (item.color) {
+    // Inject the selected color string format so it saves into supabase effortlessly 
+    // without requiring complex column migrations on the backend
+    // Prevents pushing duplicate color tags
+    const cleanTags = finalTags.filter(t => !t.startsWith("color:"));
+    cleanTags.push(`color:${item.color}`);
+    finalTags.length = 0;
+    finalTags.push(...cleanTags);
+  }
+
   return {
     user_id: userId,
     text: item.text,
-    tags: item.tags || [],
+    tags: finalTags,
     note: item.note || "",
     source_url: item.sourceUrl || "",
     source_title: item.sourceTitle || "",
