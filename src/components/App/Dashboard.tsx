@@ -71,6 +71,7 @@ import AdvancedSearchFilter, {
   SearchFilters,
 } from "../shared/AdvancedSearchFilter";
 import { exportItems } from "../../utils/export";
+import { generateMarkdownTemplate } from "../../utils/markdownGenerator";
 import { useRef } from "react";
 import { useNotifications } from "../../context/NotificationContext";
 
@@ -293,6 +294,27 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     setConfirmDialog({ isOpen: true, itemId: id, isDeleting: false });
   };
 
+  const handleColorChange = async (item: StorageItem, color: string) => {
+    try {
+      const newColor = item.color === color ? undefined : (color as any);
+      const updates = { color: newColor };
+      await updateItem(item.id, updates);
+      
+      // Update local state
+      setItems((prev) =>
+        prev.map((i) => (i.id === item.id ? { ...i, ...updates } : i))
+      );
+      
+      if (selectedItem?.id === item.id) {
+        setSelectedItem((prev) => (prev ? { ...prev, ...updates } : null));
+      }
+      
+      showToast("Color updated!", "success");
+    } catch (err) {
+      showToast("Failed to update color", "error");
+    }
+  };
+
   const confirmDeleteItem = async () => {
     if (!confirmDialog.itemId) return;
 
@@ -384,28 +406,34 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   };
 
   const handleShare = async (item: StorageItem) => {
-    const shareData = {
-      title: item.sourceTitle || "ResearchMate Item",
-      text: item.aiSummary || item.text || item.ocrText,
-      url: item.sourceUrl || "",
-    };
-
     try {
-      if (
-        navigator.share &&
-        (shareData.title || shareData.text || shareData.url)
-      ) {
-        await navigator.share(shareData);
+      if (navigator.share) {
+        await navigator.share({
+          title: item.sourceTitle || "Research Note",
+          text: item.aiSummary || item.text || item.ocrText,
+          url: item.sourceUrl,
+        });
       } else {
-        const fallbackText =
-          `${shareData.title}\n\n${shareData.text}\n\n${shareData.url}`.trim();
-        await navigator.clipboard.writeText(fallbackText);
+        const textToCopy = `${item.sourceTitle || "Research Note"}\n\n${
+          item.aiSummary || item.text || item.ocrText
+        }\n\n${item.sourceUrl || ""}`;
+        await navigator.clipboard.writeText(textToCopy);
         showToast("Copied to clipboard for sharing", "success");
       }
     } catch (error) {
-      if ((error as any).name !== "AbortError") {
-        showToast("Error sharing content", "error");
+      if ((error as Error).name !== "AbortError") {
+        showToast("Failed to share item", "error");
       }
+    }
+  };
+
+  const handleCopyMarkdown = async (item: StorageItem) => {
+    try {
+      const mdContent = generateMarkdownTemplate(item);
+      await navigator.clipboard.writeText(mdContent);
+      showToast("Markdown copied to clipboard!", "success");
+    } catch (e) {
+      showToast("Failed to copy markdown", "error");
     }
   };
 
@@ -969,44 +997,69 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Content
                   </h4>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(selectedItem.text || "");
-                      showToast("Copied to clipboard!", "success");
-                    }}
-                    aria-label="Copy to clipboard"
-                    className="p-1.5 text-[#007AFF] hover:bg-[#007AFF]/10 rounded-lg transition-colors"
-                  >
-                    <CopyIcon size={16} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleCopyMarkdown(selectedItem)}
+                      aria-label="Copy as Markdown"
+                      title="Copy as Markdown"
+                      className="flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-[#3A3A3C] border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-type-2"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2.5 15h3"/><path d="M4 13v6"/><path d="M9 13v6"/><path d="M11 16l-2-3"/><path d="M11 19l-2-3"/><path d="M16 13v6"/><path d="M14 15h3"/></svg>
+                      Markdown
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedItem.text || "");
+                        showToast("Copied to clipboard!", "success");
+                      }}
+                      aria-label="Copy to clipboard"
+                      title="Copy Raw Text"
+                      className="p-1.5 text-[#007AFF] hover:bg-[#007AFF]/10 rounded-lg transition-colors border border-transparent"
+                    >
+                      <CopyIcon size={16} />
+                    </button>
+                  </div>
                 </div>
                 <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed max-h-[300px] overflow-y-auto">
                   {selectedItem.text || selectedItem.ocrText}
                 </div>
               </div>
 
-              {/* Color Metadata Details (Only shown if a color was saved) */}
-              {selectedItem.color && (
-                <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-4">
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Highlight Color
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className={`w-4 h-4 rounded-full ${
-                        selectedItem.color === "yellow" ? "bg-[#FBBF24]" :
-                        selectedItem.color === "green" ? "bg-[#34D399]" :
-                        selectedItem.color === "blue" ? "bg-[#60A5FA]" :
-                        selectedItem.color === "red" ? "bg-[#F87171]" :
-                        selectedItem.color === "purple" ? "bg-[#A78BFA]" : "bg-[#D1D5DB]"
+              {/* Highlight Color Picker */}
+              <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-4">
+                <h4 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+                  Highlight Color
+                </h4>
+                <div className="flex items-center gap-3">
+                  {[
+                    { name: "yellow", hex: "#FBBF24" },
+                    { name: "green", hex: "#34D399" },
+                    { name: "blue", hex: "#60A5FA" },
+                    { name: "red", hex: "#F87171" },
+                    { name: "purple", hex: "#A78BFA" },
+                  ].map((c) => (
+                    <button
+                      key={c.name}
+                      onClick={() => handleColorChange(selectedItem, c.name)}
+                      className={`w-6 h-6 rounded-full border-2 transition-all ${
+                        selectedItem.color === c.name
+                          ? "border-gray-900 dark:border-white scale-110 shadow-sm"
+                          : "border-transparent hover:scale-110"
                       }`}
+                      style={{ backgroundColor: c.hex }}
+                      title={`Mark as ${c.name}`}
                     />
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
-                      {selectedItem.color} Highlight
-                    </span>
-                  </div>
+                  ))}
+                  {selectedItem.color && (
+                    <button
+                      onClick={() => handleColorChange(selectedItem, "")}
+                      className="ml-auto text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors uppercase font-bold tracking-tighter"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Image Preview */}
               {selectedItem.imageUrl && (

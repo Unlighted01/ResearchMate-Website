@@ -5,6 +5,7 @@
 
 import { StorageItem } from "../services/storageService";
 import { EXPORT_FORMATS } from "../constants";
+import { generateMarkdownTemplate } from "./markdownGenerator";
 
 /**
  * Export items to JSON format
@@ -71,42 +72,8 @@ export function exportToMarkdown(
 ): void {
   const markdown = items
     .map((item) => {
-      const parts: string[] = [];
-
-      // Title
-      parts.push(`# ${item.sourceTitle || "Untitled"}\n`);
-
-      // Metadata
-      if (item.sourceUrl) {
-        parts.push(
-          `**Source:** [${item.sourceTitle || "Link"}](${item.sourceUrl})\n`,
-        );
-      }
-      if (item.tags && item.tags.length > 0) {
-        parts.push(
-          `**Tags:** ${item.tags.map((tag) => `\`${tag}\``).join(", ")}\n`,
-        );
-      }
-      if (item.deviceSource) {
-        parts.push(`**Device:** ${item.deviceSource}\n`);
-      }
-      parts.push(
-        `**Created:** ${new Date(item.createdAt).toLocaleDateString()}\n`,
-      );
-
-      // AI Summary
-      if (item.aiSummary) {
-        parts.push(`\n## AI Summary\n\n${item.aiSummary}\n`);
-      }
-
-      // Content
-      if (item.text) {
-        parts.push(`\n## Content\n\n${item.text}\n`);
-      }
-
-      parts.push("\n---\n");
-
-      return parts.join("\n");
+      // Use the shared template generator, then append a visual divider
+      return generateMarkdownTemplate(item) + "\n---\n";
     })
     .join("\n");
 

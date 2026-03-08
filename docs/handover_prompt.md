@@ -15,6 +15,8 @@ The web application is fully functional, styled with premium Dark Mode UI, and s
     - Persistent List/Grid view toggles (via `localStorage`).
     - Smart List View layout constraints (`min-w-0`) implemented to restrict long string overflow and stretching bugs.
     - Bulk Selection handles checkboxes dynamically across all items for Batch Collection moves and Deletions.
+    - **Interactive Color Tagging**: The Dashboard detail modal now features a 5-color aesthetic picker. Users can change or clear highlight colors directly from the web interface. These colors are extracted dynamically from the Supabase `tags` array (e.g. `"color:blue"`) and rendered as consistent UI accents across the List/Grid views.
+    - **Markdown Bulk Export**: Integrated high-fidelity Markdown generation into the Bulk Export flow (`handleBulkExport`), allowing users to export entire collections for Notion/Obsidian with citations included.
 4.  **Collections Engine:**
     - Sub-folders explicitly count item aggregations to avoid stale 0-item caches on refresh.
     - Users can now click "Add Items" directly from inside a Collection folder, opening a searchable Modal of unassigned scans.
