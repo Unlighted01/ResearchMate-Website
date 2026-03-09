@@ -17,6 +17,7 @@ The ResearchMate Web Platform serves as the centralized hub for research managem
     - Users must trigger them manually via the "Generate Summary" button in the item modal.
 4.  **Hardware Ingestion (Smart Pen):**
     - The `/supabase/functions/smart-pen/` Edge Function directs byte streams from the ESP32 directly to the OCR API.
+    - **Enhanced Actions (NEW):** Added `list` and `unpair` actions to the Edge Function to allow the UI (website and extension) to manage devices without hitting RLS restrictions on the `paired_pens` table.
     - Metadata is added later via the `SmartPenScanModal.tsx` on the website.
 
 ### 🛠️ Core Workflows

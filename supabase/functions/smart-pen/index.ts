@@ -218,6 +218,39 @@ serve(async (req) => {
       );
     }
 
+    // List paired pens (from website/extension)
+    if (action === "list") {
+      const { user_id } = body;
+      if (!user_id) {
+        return new Response(JSON.stringify({ success: false, error: "Missing user_id" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: pens, error } = await supabase
+        .from("paired_pens")
+        .select("*")
+        .eq("user_id", user_id);
+
+      return new Response(JSON.stringify({ success: !error, pens, error: error?.message }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Unpair pen (from website/extension)
+    if (action === "unpair") {
+      const { pen_id } = body;
+      const { error } = await supabase
+        .from("paired_pens")
+        .delete()
+        .eq("pen_id", pen_id);
+
+      return new Response(JSON.stringify({ success: !error, error: error?.message }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Check pairing status (from pen)
     if (action === "status") {
       const { pen_id, code } = body;

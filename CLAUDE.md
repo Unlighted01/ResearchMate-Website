@@ -27,6 +27,7 @@ All AI features are centralized in `api/` (Vercel Serverless Functions). Enhanci
 | `api/ocr.ts` | Image text extraction | `gemini-2.5-flash` | OpenRouter → Gemini → Claude |
 | `api/extract-citation.ts` | URL → citation metadata | `gemini-2.5-flash` | DOI/Crossref/Semantic Scholar + AI enhancement |
 | `api/cite.ts` | ISBN/DOI/YouTube lookup | N/A (data lookup only) | OpenLibrary → Google Books / CrossRef / oEmbed |
+| `supabase/functions/smart-pen/` | Hardware pairing & listing | N/A | Added `list`, `unpair`, and `confirm` actions |
 
 ---
 

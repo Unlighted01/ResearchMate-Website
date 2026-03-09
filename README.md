@@ -99,8 +99,10 @@ This website is designed to work seamlessly with:
 | --------------------- | ------------------------------- | ---------------------- |
 | **Browser Extension** | Highlight & save text           | → Supabase → Website   |
 | **Mobile App**        | Camera scanning, offline access | → Supabase → Website   |
-| **Smart Pen**         | Handwritten notes with OCR      | → Supabase → Website   |
-| **Website**           | View, manage, analyze           | ← Supabase (real-time) |
+| **Smart Pen**         | Handwritten notes with OCR      | → Supabase Edge Function → Website |
+| **Website**           | View, manage, analyze           | ← Supabase (real-time)             |
+
+> **Note on Pairing**: Device pairing is handled via the `/smart-pen` Edge Function to bypass RLS restrictions and ensure unique hardware identity.
 
 All components share the same Supabase database, enabling:
 
