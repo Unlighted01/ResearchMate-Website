@@ -57,6 +57,9 @@
   --font-sans:
     "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
     Roboto, sans-serif;
+  --font-title:
+    "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    Roboto, sans-serif;
 
   /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -104,6 +107,12 @@ body {
 
 /* App-wide visual theme switch (minimalist | bubble | glass) */
 html[data-ui-theme] {
+  --font-sans:
+    "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    Roboto, sans-serif;
+  --font-title:
+    "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    Roboto, sans-serif;
   --ui-radius-md: 10px;
   --ui-radius-lg: 12px;
   --ui-surface-bg: #ffffff;
@@ -131,6 +140,17 @@ html[data-ui-theme] {
   --ui-sidebar-active-icon: #ffffff;
   --ui-sidebar-active-shadow: none;
   --ui-header-bg: rgba(245, 245, 247, 0.95);
+  --ui-chrome-border: rgba(15, 23, 42, 0.08);
+  --ui-hover-bg: rgba(15, 23, 42, 0.05);
+  --ui-hover-strong-bg: rgba(15, 23, 42, 0.08);
+  --ui-muted-text: #6b7280;
+  --ui-subtle-surface: rgba(15, 23, 42, 0.04);
+  --ui-subtle-elevated: #ffffff;
+  --ui-tooltip-bg: #111827;
+  --ui-tooltip-text: #ffffff;
+  --ui-overlay-bg: rgba(2, 6, 23, 0.45);
+  --ui-unread-bg: rgba(37, 99, 235, 0.10);
+  --ui-kbd-bg: rgba(15, 23, 42, 0.08);
   --ui-glass-blur: 0px;
 }
 
@@ -150,10 +170,26 @@ html.dark[data-ui-theme] {
   --ui-sidebar-text: #d1d5db;
   --ui-sidebar-icon: #9ca3af;
   --ui-header-bg: rgba(2, 6, 23, 0.9);
+  --ui-chrome-border: rgba(148, 163, 184, 0.18);
+  --ui-hover-bg: rgba(255, 255, 255, 0.06);
+  --ui-hover-strong-bg: rgba(255, 255, 255, 0.1);
+  --ui-muted-text: #9ca3af;
+  --ui-subtle-surface: rgba(255, 255, 255, 0.05);
+  --ui-subtle-elevated: rgba(255, 255, 255, 0.08);
+  --ui-tooltip-bg: #f8fafc;
+  --ui-tooltip-text: #111827;
+  --ui-overlay-bg: rgba(0, 0, 0, 0.55);
+  --ui-unread-bg: rgba(59, 130, 246, 0.16);
+  --ui-kbd-bg: rgba(255, 255, 255, 0.08);
 }
 
 /* ── MINIMALIST: Editorial precision — blue accent, hairline borders, no blur ── */
 html[data-ui-theme="minimalist"] {
+  --font-sans:
+    "Manrope", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    sans-serif;
+  --font-title:
+    "Fraunces", Georgia, Cambria, "Times New Roman", Times, serif;
   --ui-radius-md: 6px;
   --ui-radius-lg: 8px;
   --ui-surface-bg: #ffffff;
@@ -181,6 +217,17 @@ html[data-ui-theme="minimalist"] {
   --ui-sidebar-active-icon: #ffffff;
   --ui-sidebar-active-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
   --ui-header-bg: rgba(255, 255, 255, 0.97);
+  --ui-chrome-border: #e5e7eb;
+  --ui-hover-bg: rgba(37, 99, 235, 0.06);
+  --ui-hover-strong-bg: rgba(37, 99, 235, 0.1);
+  --ui-muted-text: #6b7280;
+  --ui-subtle-surface: #f3f4f6;
+  --ui-subtle-elevated: #ffffff;
+  --ui-tooltip-bg: #111827;
+  --ui-tooltip-text: #ffffff;
+  --ui-overlay-bg: rgba(15, 23, 42, 0.4);
+  --ui-unread-bg: rgba(37, 99, 235, 0.08);
+  --ui-kbd-bg: #e5e7eb;
   --ui-glass-blur: 0px;
 }
 
@@ -204,6 +251,17 @@ html.dark[data-ui-theme="minimalist"] {
   --ui-sidebar-active-icon: #ffffff;
   --ui-sidebar-active-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
   --ui-header-bg: rgba(0, 0, 0, 0.97);
+  --ui-chrome-border: #1f1f1f;
+  --ui-hover-bg: rgba(59, 130, 246, 0.12);
+  --ui-hover-strong-bg: rgba(59, 130, 246, 0.18);
+  --ui-muted-text: #71717a;
+  --ui-subtle-surface: #111111;
+  --ui-subtle-elevated: #18181b;
+  --ui-tooltip-bg: #f8fafc;
+  --ui-tooltip-text: #111827;
+  --ui-overlay-bg: rgba(0, 0, 0, 0.58);
+  --ui-unread-bg: rgba(37, 99, 235, 0.16);
+  --ui-kbd-bg: #18181b;
 }
 
 html[data-ui-theme="minimalist"] body {
@@ -225,6 +283,12 @@ html[data-ui-theme="minimalist"] h3 {
 
 /* ── BUBBLE: Playful premium — rose/lavender palette, iridescent surfaces ── */
 html[data-ui-theme="bubble"] {
+  --font-sans:
+    "Nunito", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    sans-serif;
+  --font-title:
+    "Fredoka", "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   --ui-radius-md: 18px;
   --ui-radius-lg: 24px;
   --ui-surface-bg: rgba(255, 255, 255, 0.88);
@@ -251,6 +315,17 @@ html[data-ui-theme="bubble"] {
   --ui-sidebar-active-icon: #ffffff;
   --ui-sidebar-active-shadow: 0 6px 18px rgba(167, 139, 250, 0.4);
   --ui-header-bg: rgba(253, 249, 255, 0.90);
+  --ui-chrome-border: rgba(196, 181, 253, 0.35);
+  --ui-hover-bg: rgba(244, 114, 182, 0.08);
+  --ui-hover-strong-bg: rgba(167, 139, 250, 0.14);
+  --ui-muted-text: #7c3aed;
+  --ui-subtle-surface: rgba(255, 255, 255, 0.55);
+  --ui-subtle-elevated: rgba(255, 255, 255, 0.95);
+  --ui-tooltip-bg: #5b21b6;
+  --ui-tooltip-text: #ffffff;
+  --ui-overlay-bg: rgba(76, 29, 149, 0.28);
+  --ui-unread-bg: rgba(244, 114, 182, 0.12);
+  --ui-kbd-bg: rgba(167, 139, 250, 0.14);
   --ui-glass-blur: 14px;
 }
 
@@ -275,6 +350,17 @@ html.dark[data-ui-theme="bubble"] {
   --ui-sidebar-active-icon: #ffffff;
   --ui-sidebar-active-shadow: 0 6px 18px rgba(168, 85, 247, 0.4);
   --ui-header-bg: rgba(13, 8, 20, 0.88);
+  --ui-chrome-border: rgba(196, 181, 253, 0.15);
+  --ui-hover-bg: rgba(232, 121, 249, 0.1);
+  --ui-hover-strong-bg: rgba(168, 85, 247, 0.18);
+  --ui-muted-text: #c084fc;
+  --ui-subtle-surface: rgba(255, 255, 255, 0.05);
+  --ui-subtle-elevated: rgba(255, 255, 255, 0.09);
+  --ui-tooltip-bg: #f5d0fe;
+  --ui-tooltip-text: #3b0764;
+  --ui-overlay-bg: rgba(13, 8, 20, 0.62);
+  --ui-unread-bg: rgba(232, 121, 249, 0.16);
+  --ui-kbd-bg: rgba(255, 255, 255, 0.08);
 }
 
 html[data-ui-theme="bubble"] body {
@@ -301,6 +387,12 @@ html.dark[data-ui-theme="bubble"] body {
 
 
 html[data-ui-theme="glass"] {
+  --font-sans:
+    "Sora", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    sans-serif;
+  --font-title:
+    "Barlow Condensed", "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   --ui-radius-md: 14px;
   --ui-radius-lg: 20px;
 
@@ -330,6 +422,17 @@ html[data-ui-theme="glass"] {
   --ui-sidebar-active-icon: #0891b2;
   --ui-sidebar-active-shadow: 0 4px 16px rgba(8, 145, 178, 0.15);
   --ui-header-bg: rgba(255, 255, 255, 0.72);
+  --ui-chrome-border: rgba(0, 0, 0, 0.06);
+  --ui-hover-bg: rgba(8, 145, 178, 0.08);
+  --ui-hover-strong-bg: rgba(8, 145, 178, 0.14);
+  --ui-muted-text: #64748b;
+  --ui-subtle-surface: rgba(255, 255, 255, 0.38);
+  --ui-subtle-elevated: rgba(255, 255, 255, 0.82);
+  --ui-tooltip-bg: rgba(15, 23, 42, 0.88);
+  --ui-tooltip-text: #f8fafc;
+  --ui-overlay-bg: rgba(15, 23, 42, 0.32);
+  --ui-unread-bg: rgba(8, 145, 178, 0.12);
+  --ui-kbd-bg: rgba(255, 255, 255, 0.55);
   --ui-glass-blur: 18px;
 }
 
@@ -357,6 +460,17 @@ html.dark[data-ui-theme="glass"] {
   --ui-sidebar-active-icon: #22d3ee;
   --ui-sidebar-active-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
   --ui-header-bg: rgba(0, 0, 0, 0.45);
+  --ui-chrome-border: rgba(255, 255, 255, 0.07);
+  --ui-hover-bg: rgba(34, 211, 238, 0.08);
+  --ui-hover-strong-bg: rgba(34, 211, 238, 0.14);
+  --ui-muted-text: #94a3b8;
+  --ui-subtle-surface: rgba(255, 255, 255, 0.04);
+  --ui-subtle-elevated: rgba(255, 255, 255, 0.08);
+  --ui-tooltip-bg: rgba(226, 232, 240, 0.95);
+  --ui-tooltip-text: #0f172a;
+  --ui-overlay-bg: rgba(2, 6, 23, 0.62);
+  --ui-unread-bg: rgba(34, 211, 238, 0.16);
+  --ui-kbd-bg: rgba(255, 255, 255, 0.08);
   --ui-glass-blur: 16px;
 }
 
@@ -410,8 +524,13 @@ html.dark[data-ui-theme="glass"] .theme-btn-primary:hover {
 }
 
 .theme-page .theme-title {
+  font-family: var(--font-title) !important;
   font-weight: var(--ui-title-weight) !important;
   color: var(--ui-title-color) !important;
+}
+
+.theme-page {
+  font-family: var(--font-sans) !important;
 }
 
 .theme-surface {
@@ -489,6 +608,60 @@ html.dark[data-ui-theme="glass"] .theme-btn-primary:hover {
 
 .theme-stat {
   color: var(--ui-stat-accent) !important;
+}
+
+.theme-divider {
+  border-color: var(--ui-chrome-border) !important;
+}
+
+.theme-muted-text {
+  color: var(--ui-muted-text) !important;
+}
+
+.theme-icon-button {
+  color: var(--ui-sidebar-icon) !important;
+}
+
+.theme-icon-button:hover {
+  background: var(--ui-hover-bg) !important;
+  color: var(--ui-title-color) !important;
+}
+
+.theme-hover-surface:hover {
+  background: var(--ui-hover-bg) !important;
+}
+
+.theme-hover-surface-strong:hover {
+  background: var(--ui-hover-strong-bg) !important;
+}
+
+.theme-panel-muted {
+  background: var(--ui-subtle-surface) !important;
+  border: 1px solid var(--ui-chrome-border) !important;
+}
+
+.theme-panel-elevated {
+  background: var(--ui-subtle-elevated) !important;
+  border: 1px solid var(--ui-chrome-border) !important;
+}
+
+.theme-tooltip {
+  background: var(--ui-tooltip-bg) !important;
+  color: var(--ui-tooltip-text) !important;
+}
+
+.theme-overlay {
+  background: var(--ui-overlay-bg) !important;
+}
+
+.theme-dropdown-highlight {
+  background: var(--ui-unread-bg) !important;
+}
+
+.theme-kbd {
+  background: var(--ui-kbd-bg) !important;
+  color: var(--ui-muted-text) !important;
+  border: 1px solid var(--ui-chrome-border) !important;
 }
 
 /* Apple-style text rendering */

@@ -464,9 +464,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         className={`
           theme-sidebar
           fixed inset-y-0 left-0 z-30
-          bg-white/80 dark:bg-[#1C1C1E]/80
           backdrop-blur-xl backdrop-saturate-150
-          border-r border-gray-200/50 dark:border-gray-800/50
           transition-all duration-300 ease-out
           overflow-hidden
           ${sidebarCollapsed ? "w-[72px]" : "w-[260px]"}
@@ -477,7 +475,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         <div className="h-full flex flex-col">
           {/* Header: Logo */}
           <div
-            className={`h-14 flex items-center border-b border-gray-200/50 dark:border-gray-800/50 ${
+            className={`theme-divider h-14 flex items-center border-b ${
               sidebarCollapsed ? "justify-center px-2" : "px-5"
             }`}
           >
@@ -493,7 +491,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                 className="w-8 h-8 hover:scale-105 transition-transform"
               />
               {!sidebarCollapsed && (
-                <span className="theme-title text-base font-semibold text-gray-900 dark:text-white">
+                <span className="theme-title text-base font-semibold">
                   ResearchMate
                 </span>
               )}
@@ -517,23 +515,17 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                         hover:scale-[1.02] active:scale-[0.98]
                         ${
                           isActive
-                            ? "theme-sidebar-item-active bg-[#007AFF] text-white shadow-lg shadow-blue-500/25"
-                            : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                            ? "theme-sidebar-item-active"
+                            : "theme-hover-surface"
                         }
                         ${sidebarCollapsed ? "justify-center" : ""}
                       `}
                     >
-                      <item.icon
-                        className={`theme-nav-icon w-5 h-5 flex-shrink-0 ${
-                          isActive
-                            ? "text-white"
-                            : "text-gray-500 dark:text-gray-400"
-                        }`}
-                      />
+                      <item.icon className="theme-nav-icon w-5 h-5 flex-shrink-0" />
                       {!sidebarCollapsed && (
                         <span
                           className={`text-sm font-medium ${
-                            isActive ? "text-white" : ""
+                            isActive ? "" : "theme-muted-text"
                           }`}
                         >
                           {item.label}
@@ -542,7 +534,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
                       {/* Tooltip */}
                       {sidebarCollapsed && (
-                        <div className="absolute left-full ml-3 px-3 py-1.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none whitespace-nowrap z-50">
+                        <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none whitespace-nowrap z-50">
                           {item.label}
                         </div>
                       )}
@@ -553,7 +545,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
             </ul>
 
             {/* Divider */}
-            <div className="my-4 h-px bg-gray-200/50 dark:bg-gray-800/50" />
+            <div className="theme-divider my-4 h-px border-t" />
 
             {/* Bottom Nav */}
             <ul className="space-y-1">
@@ -567,18 +559,26 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                     transition-all duration-200 group relative
                     ${
                       location.pathname === "/app/settings"
-                        ? "theme-sidebar-item-active bg-[#007AFF] text-white shadow-lg shadow-blue-500/25"
-                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                        ? "theme-sidebar-item-active"
+                        : "theme-hover-surface"
                     }
                     ${sidebarCollapsed ? "justify-center" : ""}
                   `}
                 >
                   <Settings className="theme-nav-icon w-5 h-5 flex-shrink-0" />
                   {!sidebarCollapsed && (
-                    <span className="text-sm font-medium">Settings</span>
+                    <span
+                      className={`text-sm font-medium ${
+                        location.pathname === "/app/settings"
+                          ? ""
+                          : "theme-muted-text"
+                      }`}
+                    >
+                      Settings
+                    </span>
                   )}
                   {sidebarCollapsed && (
-                    <div className="absolute left-full ml-3 px-3 py-1.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none whitespace-nowrap z-50">
+                    <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none whitespace-nowrap z-50">
                       Settings
                     </div>
                   )}
@@ -590,13 +590,13 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
           {/* Device Status (only when expanded) */}
           {!sidebarCollapsed && (
             <div className="px-4 pb-4">
-              <div className="bg-gray-100/80 dark:bg-gray-800/50 rounded-xl p-4">
-                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+              <div className="theme-panel-muted rounded-xl p-4">
+                <h4 className="theme-muted-text text-xs font-semibold uppercase tracking-wider mb-3">
                   Devices
                 </h4>
                 <div className="space-y-2.5">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white dark:bg-gray-700 rounded-lg flex items-center justify-center shadow-sm">
+                    <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
                       <Laptop className="w-4 h-4 text-[#007AFF]" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -607,7 +607,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                     <div className="w-2 h-2 bg-[#34C759] rounded-full" />
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white dark:bg-gray-700 rounded-lg flex items-center justify-center shadow-sm">
+                    <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
                       <Smartphone className="w-4 h-4 text-[#5856D6]" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -618,7 +618,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                     <div className="w-2 h-2 bg-[#34C759] rounded-full" />
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white dark:bg-gray-700 rounded-lg flex items-center justify-center shadow-sm">
+                    <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
                       <PenTool className="w-4 h-4 text-[#FF9500]" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -634,16 +634,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
           )}
 
           {/* Collapse Toggle */}
-          <div className="p-3 border-t border-gray-200/50 dark:border-gray-800/50">
+          <div className="theme-divider p-3 border-t">
             <button
               onClick={toggleSidebar}
               aria-label={
                 sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
               }
               className={`
+                theme-sidebar-item theme-hover-surface
                 hidden lg:flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
-                text-gray-500 dark:text-gray-400
-                hover:bg-gray-100 dark:hover:bg-gray-800/50
                 transition-all duration-200
                 ${sidebarCollapsed ? "justify-center" : ""}
               `}
@@ -670,18 +669,12 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         `}
       >
         {/* Header */}
-        <header
-          className={`theme-headerbar sticky top-0 z-20 backdrop-blur-xl backdrop-saturate-150 border-b border-gray-200/50 dark:border-gray-800/50 ${
-            isGlassTheme
-              ? "bg-white/55 dark:bg-[#0f172a]/55"
-              : "bg-[#F5F5F7]/80 dark:bg-[#000000]/80"
-          }`}
-        >
+        <header className="theme-headerbar theme-divider sticky top-0 z-20 backdrop-blur-xl backdrop-saturate-150 border-b">
           <div className="h-14 px-4 lg:px-8 flex items-center justify-between gap-4">
             {/* Left: Mobile Menu + Search */}
             <div className="flex items-center gap-4 flex-1">
               <button
-                className="lg:hidden p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="theme-icon-button theme-hover-surface lg:hidden p-2 rounded-xl transition-colors"
                 onClick={() => setMobileSidebarOpen(true)}
                 aria-label="Open sidebar"
               >
@@ -696,16 +689,16 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   ${searchFocused ? "max-w-lg" : ""}
                 `}
                 >
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="theme-muted-text absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" />
                   <input
                     type="text"
                     placeholder="Search..."
-                    className="theme-search theme-input w-full pl-11 pr-4 py-2 bg-gray-100 dark:bg-[#2C2C2E] border-0 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 transition-all"
+                    className="theme-search theme-input w-full pl-11 pr-4 py-2 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 transition-all"
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setSearchFocused(false)}
                   />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs text-gray-400">
-                    <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[10px]">
+                  <div className="theme-muted-text absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs">
+                    <kbd className="theme-kbd px-1.5 py-0.5 rounded text-[10px]">
                       ⌘K
                     </kbd>
                   </div>
@@ -723,7 +716,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                     setProfileOpen(false);
                   }}
                   aria-label="Notifications"
-                  className="notifications-trigger p-2.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
+                  className="theme-icon-button theme-hover-surface notifications-trigger p-2.5 rounded-xl transition-colors relative"
                 >
                   <Bell className="w-5 h-5" />
                   {unreadCount > 0 && (
@@ -733,8 +726,8 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
                 {/* Notifications Dropdown */}
                 {notificationsOpen && (
-                  <div className="theme-surface notifications-dropdown absolute right-0 mt-2 w-80 bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50 overflow-hidden animate-slide-down">
-                    <div className="px-4 py-3 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center justify-between">
+                  <div className="theme-surface notifications-dropdown absolute right-0 mt-2 w-80 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden animate-slide-down">
+                    <div className="theme-divider px-4 py-3 border-b flex items-center justify-between">
                       <h3 className="font-semibold text-gray-900 dark:text-white">
                         Notifications
                       </h3>
@@ -759,14 +752,12 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                         activities.map((activity) => (
                           <div
                             key={activity.id}
-                            className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
-                              !activity.read
-                                ? "bg-blue-50/50 dark:bg-blue-900/10"
-                                : ""
+                            className={`theme-hover-surface px-4 py-3 transition-colors ${
+                              !activity.read ? "theme-dropdown-highlight" : ""
                             }`}
                           >
                             <div className="flex gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                              <div className="theme-panel-muted w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
                                 {getActivityIcon(activity.type)}
                               </div>
                               <div className="flex-1 min-w-0">
@@ -797,7 +788,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                     setNotificationsOpen(false);
                   }}
                   aria-label="User profile menu"
-                  className="profile-trigger flex items-center gap-2 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  className="theme-icon-button theme-hover-surface profile-trigger flex items-center gap-2 p-1.5 rounded-xl transition-colors"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center text-white font-medium text-sm">
                     {user?.email?.charAt(0).toUpperCase() || "U"}
@@ -806,8 +797,8 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
                 {/* Profile Dropdown */}
                 {profileOpen && (
-                  <div className="theme-surface profile-dropdown absolute right-0 mt-2 w-64 bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50 overflow-hidden animate-slide-down">
-                    <div className="px-4 py-4 border-b border-gray-200/50 dark:border-gray-800/50">
+                  <div className="theme-surface profile-dropdown absolute right-0 mt-2 w-64 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden animate-slide-down">
+                    <div className="theme-divider px-4 py-4 border-b">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-white flex items-center justify-center text-lg font-bold overflow-hidden">
                           {user?.identities?.[0]?.identity_data?.avatar_url ? (
@@ -836,18 +827,18 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                           key={item.path}
                           to={item.path}
                           onClick={() => setProfileOpen(false)}
-                          className="flex items-center gap-3 px-3 py-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors"
+                          className="theme-sidebar-item theme-hover-surface flex items-center gap-3 px-3 py-2 rounded-xl transition-colors"
                         >
                           <item.icon className="w-4 h-4" />
                           <span className="text-sm">{item.label}</span>
                         </Link>
                       ))}
                     </div>
-                    <div className="p-2 border-t border-gray-200/50 dark:border-gray-800/50">
+                    <div className="theme-divider p-2 border-t">
                       <Link
                         to="/app/settings"
                         onClick={() => setProfileOpen(false)}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors"
+                        className="theme-sidebar-item theme-hover-surface flex items-center gap-3 px-3 py-2 rounded-xl transition-colors"
                       >
                         <Settings className="w-4 h-4" />
                         <span className="text-sm">Settings</span>
@@ -885,7 +876,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
       {/* Mobile Sidebar Overlay */}
       {mobileSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden animate-fade-in"
+          className="theme-overlay fixed inset-0 z-20 lg:hidden animate-fade-in"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}

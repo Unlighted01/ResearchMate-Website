@@ -32,7 +32,8 @@
               },
             },
             fontFamily: {
-              sans: ["Inter", "system-ui", "sans-serif"],
+              sans: ["var(--font-sans)"],
+              title: ["var(--font-title)"],
               mono: ["JetBrains Mono", "monospace"],
             },
           },
@@ -40,10 +41,10 @@
       };
     </script>
     <style>
-      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono&display=swap");
+      @import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Fredoka:wght@500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono&family=Manrope:wght@400;500;600;700;800&family=Nunito:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700&display=swap");
 
       body {
-        font-family: "Inter", sans-serif;
+        font-family: var(--font-sans);
       }
 
       /* Glassmorphism utility */
