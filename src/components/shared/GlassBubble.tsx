@@ -69,7 +69,7 @@ const SIMPLEX_NOISE_GLSL = /* glsl */ `
   }
 `;
 
-const LERP = 0.09; // How fast the bubble follows the mouse (0 = frozen, 1 = instant)
+const LERP = 0.05; // Lower = more lag / liquid feel
 
 // Convert NDC mouse coords [-1,+1] to Three.js world position at Z=0
 function ndcToWorld(
@@ -122,16 +122,17 @@ const GlassBubble: React.FC = () => {
 
     // ── GLASS MATERIAL WITH NOISE VERTEX SHADER ──────
     const material = new THREE.MeshPhysicalMaterial({
-      transmission: 1.0,
-      roughness: 0.02,
+      transmission: 0.6,         // Less see-through — sphere is more physically present
+      roughness: 0.05,
       metalness: 0.0,
-      thickness: 0.8,
+      thickness: 1.2,
       ior: 1.45,
-      envMapIntensity: 2.0,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.05,
-      attenuationColor: new THREE.Color(0x99c4ff),
-      attenuationDistance: 0.4,
+      envMapIntensity: 2.5,
+      clearcoat: 0.8,
+      clearcoatRoughness: 0.1,
+      color: new THREE.Color(0x7ab8ff), // Soft blue tint — more visible
+      attenuationColor: new THREE.Color(0x88aaff),
+      attenuationDistance: 0.5,
       side: THREE.FrontSide,
     });
 
@@ -145,13 +146,15 @@ const GlassBubble: React.FC = () => {
       // Prepend noise helpers
       shader.vertexShader = SIMPLEX_NOISE_GLSL + "\nuniform float uTime;\n" + shader.vertexShader;
 
-      // Displace vertices along their normals using noise
+      // Displace vertices along their normals using layered noise for liquid feel
       shader.vertexShader = shader.vertexShader.replace(
         "#include <begin_vertex>",
         /* glsl */ `
         vec3 transformed = position;
-        float n = snoise(normalize(position) * 2.0 + uTime * 0.3);
-        transformed += normal * n * 0.12;
+        // Layer two noise octaves: low-freq base shape + high-freq surface ripple
+        float n1 = snoise(normalize(position) * 1.4 + uTime * 0.22);
+        float n2 = snoise(normalize(position) * 3.2 + uTime * 0.55) * 0.4;
+        transformed += normal * (n1 + n2) * 0.26;
         `
       );
     };
@@ -284,7 +287,7 @@ const GlassBubble: React.FC = () => {
         width: "100%",
         height: "100%",
         pointerEvents: "none",
-        zIndex: 9999,
+        zIndex: 2,         // Behind UI (sidebar, cards, modals) but above base background
         opacity: 0,
       }}
     />
