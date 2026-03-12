@@ -122,17 +122,17 @@ const GlassBubble: React.FC = () => {
 
     // ── GLASS MATERIAL WITH NOISE VERTEX SHADER ──────
     const material = new THREE.MeshPhysicalMaterial({
-      transmission: 0.95,        // Very glassy — mostly shows environment reflections
+      transmission: 0.78,        // Glass — surface catches light and shimmers
       roughness: 0.0,
       metalness: 0.0,
-      thickness: 0.5,
-      ior: 1.4,
-      envMapIntensity: 3.0,      // Strong environment reflections = visible shimmer
+      thickness: 0.6,
+      ior: 1.45,
+      envMapIntensity: 4.0,      // High env reflections = visible shimmer even from behind
       clearcoat: 1.0,
       clearcoatRoughness: 0.0,
-      color: new THREE.Color(0xadd8ff), // Very light blue tint
-      attenuationColor: new THREE.Color(0xaaccff),
-      attenuationDistance: 1.5,
+      color: new THREE.Color(0xc8e8ff), // Pale blue tint
+      attenuationColor: new THREE.Color(0x99ccff),
+      attenuationDistance: 1.0,
       side: THREE.FrontSide,
     });
 
@@ -168,20 +168,20 @@ const GlassBubble: React.FC = () => {
     scene.add(sphere);
 
     // ── LIGHTING ─────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
-    // Cyan key light — bubble theme primary
-    const cyanLight = new THREE.PointLight(0x60a5fa, 6, 15);
+    // Cyan key light — strong enough to create visible highlights on glass
+    const cyanLight = new THREE.PointLight(0x60a5fa, 10, 15);
     cyanLight.position.set(4, 3, 4);
     scene.add(cyanLight);
 
-    // Violet fill light — bubble theme secondary
-    const violetLight = new THREE.PointLight(0xa78bfa, 4, 15);
+    // Violet fill light
+    const violetLight = new THREE.PointLight(0xa78bfa, 7, 15);
     violetLight.position.set(-4, -2, 3);
     scene.add(violetLight);
 
-    // Warm rim light — adds depth
-    const rimLight = new THREE.PointLight(0xffffff, 2, 10);
+    // Warm rim light — catches the clearcoat edge
+    const rimLight = new THREE.PointLight(0xffffff, 4, 10);
     rimLight.position.set(0, 4, 2);
     scene.add(rimLight);
 
@@ -290,7 +290,6 @@ const GlassBubble: React.FC = () => {
         pointerEvents: "none",
         zIndex: 0,           // Background layer — behind all UI content
         opacity: 0,
-        mixBlendMode: "screen", // Blends with background instead of covering content
       }}
     />
   );
