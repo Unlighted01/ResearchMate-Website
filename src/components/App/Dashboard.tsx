@@ -539,7 +539,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
       {/* ========== HEADER ========== */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+          <h1 className="theme-title text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
             Dashboard
           </h1>
           <div className="flex items-center gap-3 mt-1">
@@ -582,7 +582,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
             <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
           </button>
           <Link to="/app/settings">
-            <button className="flex items-center gap-2 px-4 py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 active:scale-95">
+            <button className="theme-btn theme-btn-primary flex items-center gap-2 px-4 py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 active:scale-95">
               <Plus className="w-4 h-4" />
               Import
             </button>
@@ -600,7 +600,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
             placeholder="Search research items..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 transition-all"
+            className="theme-search theme-input w-full pl-11 pr-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 transition-all"
             aria-label="Search research items"
             aria-describedby="search-hint"
           />
@@ -611,7 +611,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowAdvancedFilters(true)}
-            className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            className="theme-surface theme-btn theme-btn-outline flex items-center gap-2 px-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             aria-label="Advanced filters"
           >
             <Filter className="w-4 h-4" />
@@ -676,13 +676,13 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         ].map((stat, idx) => (
           <div
             key={idx}
-            className="glass-card hover-lift rounded-xl p-4 animate-fade-up"
+            className="theme-surface glass-card hover-lift rounded-xl p-4 animate-fade-up"
             style={{ animationDelay: `${idx * 100}ms` }}
           >
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
               {stat.label}
             </p>
-            <p className="text-2xl font-bold" style={{ color: stat.color }}>
+            <p className="theme-stat text-2xl font-bold" style={{ color: stat.color }}>
               {stat.value}
             </p>
           </div>

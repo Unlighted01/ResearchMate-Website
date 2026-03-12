@@ -545,7 +545,7 @@ const SettingsPage: React.FC = () => {
 
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+        <h1 className="theme-title text-2xl font-bold text-gray-900 dark:text-white">
           Settings
         </h1>
         <p className="text-gray-500 mt-1">

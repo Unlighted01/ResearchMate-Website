@@ -195,11 +195,11 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 relative">
+    <div className="theme-page min-h-screen flex items-center justify-center px-4 py-12 relative">
       {/* OAuth Loading Overlay */}
       {oauthLoading && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-8 shadow-2xl text-center max-w-sm mx-4">
+          <div className="theme-surface bg-white dark:bg-[#1C1C1E] rounded-2xl p-8 shadow-2xl text-center max-w-sm mx-4">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
               {oauthLoading === "google" ? <GoogleIcon /> : <GitHubIcon />}
             </div>
@@ -238,13 +238,13 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50">
+        <div className="theme-surface bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50">
           {/* OAuth Buttons */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             <button
               onClick={() => handleOAuthSignup("google")}
               disabled={loading}
-              className="flex items-center justify-center gap-2 py-3 bg-gray-100 dark:bg-[#2C2C2E] hover:bg-gray-200 dark:hover:bg-[#3A3A3C] rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
+              className="theme-btn theme-btn-secondary flex items-center justify-center gap-2 py-3 bg-gray-100 dark:bg-[#2C2C2E] hover:bg-gray-200 dark:hover:bg-[#3A3A3C] rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
             >
               <GoogleIcon />
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -254,7 +254,7 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
             <button
               onClick={() => handleOAuthSignup("github")}
               disabled={loading}
-              className="flex items-center justify-center gap-2 py-3 bg-gray-100 dark:bg-[#2C2C2E] hover:bg-gray-200 dark:hover:bg-[#3A3A3C] rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
+              className="theme-btn theme-btn-secondary flex items-center justify-center gap-2 py-3 bg-gray-100 dark:bg-[#2C2C2E] hover:bg-gray-200 dark:hover:bg-[#3A3A3C] rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
             >
               <GitHubIcon />
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -395,7 +395,7 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center"
+              className="theme-btn theme-btn-primary w-full py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

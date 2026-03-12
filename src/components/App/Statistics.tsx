@@ -230,7 +230,7 @@ const Statistics = () => {
       {/* ========== HEADER ========== */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight flex items-center gap-3">
+          <h1 className="theme-title text-2xl font-bold text-gray-900 dark:text-white tracking-tight flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-[#34C759] to-[#30D158] rounded-xl flex items-center justify-center">
               <BarChart2 className="w-5 h-5 text-white" />
             </div>
@@ -242,7 +242,7 @@ const Statistics = () => {
         </div>
 
         {/* Time Range Selector */}
-        <div className="flex bg-gray-100 dark:bg-[#2C2C2E] rounded-xl p-1">
+        <div className="theme-surface flex bg-gray-100 dark:bg-[#2C2C2E] rounded-xl p-1">
           {(["week", "month", "all"] as const).map((range) => (
             <button
               key={range}
@@ -264,7 +264,7 @@ const Statistics = () => {
         {statCards.map((stat, idx) => (
           <div
             key={idx}
-            className="glass-card rounded-2xl p-5 hover-lift transition-all"
+            className="theme-surface glass-card rounded-2xl p-5 hover-lift transition-all"
           >
             <div className="flex items-start justify-between mb-3">
               <div
@@ -277,7 +277,7 @@ const Statistics = () => {
                 {stat.change}
               </span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            <p className="theme-stat text-2xl font-bold text-gray-900 dark:text-white">
               {stat.value}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -291,7 +291,7 @@ const Statistics = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Weekly Activity */}
         {/* Weekly Activity */}
-        <div className="glass-card rounded-2xl p-6">
+        <div className="theme-surface glass-card rounded-2xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-semibold text-gray-900 dark:text-white">
               Weekly Activity
@@ -333,7 +333,7 @@ const Statistics = () => {
 
         {/* Source Breakdown */}
         {/* Source Breakdown */}
-        <div className="glass-card rounded-2xl p-6">
+        <div className="theme-surface glass-card rounded-2xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-semibold text-gray-900 dark:text-white">
               Source Breakdown
@@ -395,7 +395,7 @@ const Statistics = () => {
 
       {/* ========== ACTIVITY TREND ========== */}
       {/* ========== ACTIVITY TREND ========== */}
-      <div className="glass-card rounded-2xl p-6">
+      <div className="theme-surface glass-card rounded-2xl p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#007AFF]/10 rounded-xl flex items-center justify-center">
@@ -480,7 +480,7 @@ const Statistics = () => {
         ].map((insight, idx) => (
           <div
             key={idx}
-            className="glass-card rounded-xl p-4 hover-lift flex items-center gap-4"
+            className="theme-surface glass-card rounded-xl p-4 hover-lift flex items-center gap-4"
           >
             <div
               className="w-12 h-12 rounded-xl flex items-center justify-center"
@@ -493,7 +493,7 @@ const Statistics = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">{insight.title}</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">
+              <p className="theme-stat text-xl font-bold text-gray-900 dark:text-white">
                 {insight.value}
               </p>
             </div>

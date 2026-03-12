@@ -404,7 +404,7 @@ const ProductsSection = () => {
       {/* Hero */}
       <div className="relative pt-24 pb-16 px-6">
         <div className="relative z-10 max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-gray-900 mb-6">
+          <h2 className="theme-title text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-gray-900 mb-6">
             One ecosystem.
             <br />
             <span className="bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE] bg-clip-text text-transparent">
@@ -426,7 +426,7 @@ const ProductsSection = () => {
                 key={idx}
                 className="bg-white/50 backdrop-blur-md rounded-2xl px-6 py-4 border border-white/50"
               >
-                <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+                <p className="theme-stat text-3xl font-bold text-gray-900">{stat.value}</p>
                 <p className="text-sm text-gray-500">{stat.label}</p>
               </div>
             ))}
@@ -461,7 +461,7 @@ const ProductsSection = () => {
                     </span>
                   </div>
 
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  <h3 className="theme-title text-2xl font-bold text-gray-900 mb-2">
                     {product.name}
                   </h3>
                   <p
@@ -564,7 +564,7 @@ const ProductsSection = () => {
                     Featured Product
                   </span>
                 </div>
-                <h3 className="text-3xl md:text-4xl font-bold mb-4">
+                <h3 className="theme-title text-3xl md:text-4xl font-bold mb-4">
                   Get the Browser Extension
                 </h3>
                 <p className="text-lg opacity-90 mb-6 max-w-lg">
@@ -733,7 +733,7 @@ const TeamSection = () => {
             </span>
           </div>
 
-          <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6">
+          <h2 className="theme-title text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6">
             <span className="text-gray-900">Meet the</span>
             <br />
             <span className="bg-gradient-to-r from-[#5856D6] via-[#AF52DE] to-[#FF2D55] bg-clip-text text-transparent">
@@ -753,7 +753,7 @@ const TeamSection = () => {
         <div className="max-w-6xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
-              <h3 className="text-3xl font-bold text-gray-900 mb-6">
+              <h3 className="theme-title text-3xl font-bold text-gray-900 mb-6">
                 Our Story
               </h3>
               <div className="space-y-4 text-gray-600 leading-relaxed">
@@ -844,7 +844,7 @@ const TeamSection = () => {
       <div className="py-20 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
-            <h3 className="text-3xl font-bold text-gray-900 mb-4">
+            <h3 className="theme-title text-3xl font-bold text-gray-900 mb-4">
               The People Behind ResearchMate
             </h3>
             <p className="text-gray-600">A small team with big ambitions</p>
@@ -936,7 +936,7 @@ const TeamSection = () => {
       <div className="py-20 px-6 bg-white/40 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
-            <h3 className="text-3xl font-bold text-gray-900 mb-4">
+            <h3 className="theme-title text-3xl font-bold text-gray-900 mb-4">
               Our Values
             </h3>
             <p className="text-gray-600">
@@ -981,7 +981,7 @@ const TeamSection = () => {
             </div>
 
             <div className="relative z-10">
-              <h3 className="text-3xl md:text-4xl font-bold mb-4">
+              <h3 className="theme-title text-3xl md:text-4xl font-bold mb-4">
                 Have Questions?
               </h3>
               <p className="text-lg opacity-90 mb-8 max-w-2xl mx-auto">
@@ -1043,7 +1043,7 @@ const MarketingHome = () => {
       {/* Final CTA */}
       <section className="py-24 px-6 bg-white/50 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl md:text-5xl font-bold text-gray-900 mb-6">
+          <h2 className="theme-title text-3xl md:text-5xl font-bold text-gray-900 mb-6">
             Ready to transform your research?
           </h2>
           <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">

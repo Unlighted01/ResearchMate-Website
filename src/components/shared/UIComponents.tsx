@@ -31,34 +31,34 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variants = {
     primary: `
+      theme-btn theme-btn-primary
       bg-[#007AFF] hover:bg-[#0066DD] text-white
       shadow-[0_1px_2px_rgba(0,0,0,0.1),0_4px_12px_rgba(0,122,255,0.25)]
       hover:shadow-[0_2px_4px_rgba(0,0,0,0.1),0_8px_20px_rgba(0,122,255,0.35)]
-      rounded-full
     `,
     secondary: `
+      theme-btn theme-btn-secondary
       bg-gray-100 dark:bg-gray-800 
       text-gray-900 dark:text-white
       hover:bg-gray-200 dark:hover:bg-gray-700
-      rounded-full
     `,
     ghost: `
+      theme-btn theme-btn-ghost
       bg-transparent 
       text-gray-600 dark:text-gray-300
       hover:bg-gray-100 dark:hover:bg-gray-800
-      rounded-xl
     `,
     outline: `
+      theme-btn theme-btn-outline
       bg-transparent 
       border border-gray-300 dark:border-gray-600
       text-gray-900 dark:text-white
       hover:bg-gray-50 dark:hover:bg-gray-800
-      rounded-full
     `,
     destructive: `
+      theme-btn theme-btn-destructive
       bg-red-500 hover:bg-red-600 text-white
       shadow-[0_1px_2px_rgba(0,0,0,0.1),0_4px_12px_rgba(239,68,68,0.25)]
-      rounded-full
     `,
   };
 

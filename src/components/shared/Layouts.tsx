@@ -73,7 +73,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <div className="min-h-screen text-gray-900 font-sans relative">
+    <div className="theme-page theme-marketing min-h-screen text-gray-900 font-sans relative">
       {/* Fixed Background Layer - z-index 0 */}
       <div
         className={`fixed inset-0 z-0 ${
@@ -145,12 +145,12 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
             {/* CTA Buttons */}
             <div className="hidden md:flex items-center gap-3">
               <Link to="/login">
-                <button className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5">
+                <button className="theme-btn theme-btn-ghost text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5">
                   Sign In
                 </button>
               </Link>
               <Link to="/signup">
-                <button className="text-xs font-medium bg-[#007AFF] hover:bg-[#0066DD] text-white px-4 py-1.5 rounded-full transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-95">
+                <button className="theme-btn theme-btn-primary text-xs font-medium bg-[#007AFF] hover:bg-[#0066DD] text-white px-4 py-1.5 transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-95">
                   Get Started
                 </button>
               </Link>
@@ -212,12 +212,12 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
               </button>
               <div className="pt-4 flex gap-3">
                 <Link to="/login" className="flex-1">
-                  <button className="w-full py-2.5 text-sm font-medium border border-gray-300 rounded-full">
+                  <button className="theme-btn theme-btn-outline w-full py-2.5 text-sm font-medium border border-gray-300">
                     Sign In
                   </button>
                 </Link>
                 <Link to="/signup" className="flex-1">
-                  <button className="w-full py-2.5 text-sm font-medium bg-[#007AFF] text-white rounded-full">
+                  <button className="theme-btn theme-btn-primary w-full py-2.5 text-sm font-medium bg-[#007AFF] text-white">
                     Get Started
                   </button>
                 </Link>
@@ -446,7 +446,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         isGlassTheme
           ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"
           : "bg-[#F5F5F7] dark:bg-[#000000]"
-      }`}
+      } theme-page theme-dashboard`}
     >
       {/* Ambient Background */}
       <div className="fixed inset-0 pointer-events-none z-0">
@@ -462,6 +462,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
       {/* ========== SIDEBAR ========== */}
       <aside
         className={`
+          theme-sidebar
           fixed inset-y-0 left-0 z-30
           bg-white/80 dark:bg-[#1C1C1E]/80
           backdrop-blur-xl backdrop-saturate-150
@@ -492,7 +493,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                 className="w-8 h-8 hover:scale-105 transition-transform"
               />
               {!sidebarCollapsed && (
-                <span className="text-base font-semibold text-gray-900 dark:text-white">
+                <span className="theme-title text-base font-semibold text-gray-900 dark:text-white">
                   ResearchMate
                 </span>
               )}
@@ -510,19 +511,20 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                       to={item.path}
                       onClick={() => setMobileSidebarOpen(false)}
                       className={`
+                        theme-sidebar-item
                         flex items-center gap-3 px-3 py-2.5 rounded-xl
                         transition-all duration-300 group relative
                         hover:scale-[1.02] active:scale-[0.98]
                         ${
                           isActive
-                            ? "bg-[#007AFF] text-white shadow-lg shadow-blue-500/25"
+                            ? "theme-sidebar-item-active bg-[#007AFF] text-white shadow-lg shadow-blue-500/25"
                             : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50"
                         }
                         ${sidebarCollapsed ? "justify-center" : ""}
                       `}
                     >
                       <item.icon
-                        className={`w-5 h-5 flex-shrink-0 ${
+                        className={`theme-nav-icon w-5 h-5 flex-shrink-0 ${
                           isActive
                             ? "text-white"
                             : "text-gray-500 dark:text-gray-400"
@@ -560,17 +562,18 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   to="/app/settings"
                   onClick={() => setMobileSidebarOpen(false)}
                   className={`
+                    theme-sidebar-item
                     flex items-center gap-3 px-3 py-2.5 rounded-xl
                     transition-all duration-200 group relative
                     ${
                       location.pathname === "/app/settings"
-                        ? "bg-[#007AFF] text-white shadow-lg shadow-blue-500/25"
+                        ? "theme-sidebar-item-active bg-[#007AFF] text-white shadow-lg shadow-blue-500/25"
                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50"
                     }
                     ${sidebarCollapsed ? "justify-center" : ""}
                   `}
                 >
-                  <Settings className="w-5 h-5 flex-shrink-0" />
+                  <Settings className="theme-nav-icon w-5 h-5 flex-shrink-0" />
                   {!sidebarCollapsed && (
                     <span className="text-sm font-medium">Settings</span>
                   )}
@@ -668,7 +671,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
       >
         {/* Header */}
         <header
-          className={`sticky top-0 z-20 backdrop-blur-xl backdrop-saturate-150 border-b border-gray-200/50 dark:border-gray-800/50 ${
+          className={`theme-headerbar sticky top-0 z-20 backdrop-blur-xl backdrop-saturate-150 border-b border-gray-200/50 dark:border-gray-800/50 ${
             isGlassTheme
               ? "bg-white/55 dark:bg-[#0f172a]/55"
               : "bg-[#F5F5F7]/80 dark:bg-[#000000]/80"
@@ -697,7 +700,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   <input
                     type="text"
                     placeholder="Search..."
-                    className="w-full pl-11 pr-4 py-2 bg-gray-100 dark:bg-[#2C2C2E] border-0 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 transition-all"
+                    className="theme-search theme-input w-full pl-11 pr-4 py-2 bg-gray-100 dark:bg-[#2C2C2E] border-0 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 transition-all"
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setSearchFocused(false)}
                   />
@@ -730,7 +733,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
                 {/* Notifications Dropdown */}
                 {notificationsOpen && (
-                  <div className="notifications-dropdown absolute right-0 mt-2 w-80 bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50 overflow-hidden animate-slide-down">
+                  <div className="theme-surface notifications-dropdown absolute right-0 mt-2 w-80 bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50 overflow-hidden animate-slide-down">
                     <div className="px-4 py-3 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center justify-between">
                       <h3 className="font-semibold text-gray-900 dark:text-white">
                         Notifications
@@ -803,7 +806,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
                 {/* Profile Dropdown */}
                 {profileOpen && (
-                  <div className="profile-dropdown absolute right-0 mt-2 w-64 bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50 overflow-hidden animate-slide-down">
+                  <div className="theme-surface profile-dropdown absolute right-0 mt-2 w-64 bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50 overflow-hidden animate-slide-down">
                     <div className="px-4 py-4 border-b border-gray-200/50 dark:border-gray-800/50">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-white flex items-center justify-center text-lg font-bold overflow-hidden">
