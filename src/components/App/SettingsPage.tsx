@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../services/supabaseClient";
 import { useTheme } from "../../context/ThemeContext";
-import { Button, Card, Input, Toggle } from "../shared/UIComponents";
+import { Button, Card, Input, Toggle, Select } from "../shared/UIComponents";
 import {
   User,
   Lock,
@@ -105,7 +105,7 @@ const SettingsPage: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   // Theme state from context
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, visualTheme, setVisualTheme } = useTheme();
 
   // Notification settings
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -687,7 +687,29 @@ const SettingsPage: React.FC = () => {
             <p className="text-gray-500 text-sm mb-6">
               Choose how ResearchMate looks to you
             </p>
+            <div className="mb-6">
+              <Select
+                label="Visual Theme"
+                value={visualTheme}
+                onChange={(value) =>
+                  setVisualTheme(
+                    value as "minimalist" | "bubble" | "glass",
+                  )
+                }
+                options={[
+                  { value: "minimalist", label: "Minimalist (Default)" },
+                  { value: "bubble", label: "Bubble" },
+                  { value: "glass", label: "Glass" },
+                ]}
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Applies across dashboard, auth pages, and shared layouts.
+              </p>
+            </div>
 
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
+              Color Mode
+            </h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[
                 {

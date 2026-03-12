@@ -128,7 +128,7 @@ export const Card: React.FC<CardProps> = ({
 
   return (
     <div
-      className={`rounded-2xl ${variants[variant]} ${hoverStyles} ${className}`}
+      className={`theme-surface rounded-2xl ${variants[variant]} ${hoverStyles} ${className}`}
       {...props}
     >
       {children}
@@ -168,6 +168,7 @@ export const Input: React.FC<InputProps> = ({
       <input
         className={`
           w-full px-4 py-3 
+          theme-input
           bg-gray-100 dark:bg-[#2C2C2E]
           border-0
           rounded-xl
@@ -355,6 +356,7 @@ export const Select: React.FC<SelectProps> = ({
         onChange={(e) => onChange(e.target.value)}
         className={`
           w-full px-4 py-3 pr-10
+          theme-input
           bg-gray-100 dark:bg-[#2C2C2E]
           border-0
           rounded-xl
@@ -417,6 +419,7 @@ export const Textarea: React.FC<TextareaProps> = ({
     <textarea
       className={`
         w-full px-4 py-3
+        theme-input
         bg-gray-100 dark:bg-[#2C2C2E]
         border-0
         rounded-xl
@@ -564,6 +567,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
       value={value}
       className={`
         w-full pl-12 pr-10 py-3
+        theme-input
         bg-gray-100 dark:bg-[#2C2C2E]
         border-0
         rounded-xl

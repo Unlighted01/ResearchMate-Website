@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Button, Card, Input } from "../shared/UIComponents";
 import BubbleBackground from "../shared/BubbleBackground";
+import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
 
 import { Mail, Lock, ArrowLeft } from "lucide-react";
@@ -53,6 +54,12 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(
     null
   );
+  const { visualTheme } = useTheme();
+  const isBubbleTheme = visualTheme === "bubble";
+  const authBackgroundClass =
+    visualTheme === "glass"
+      ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"
+      : "bg-[#F5F5F7] dark:bg-black";
 
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -218,7 +225,9 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
 
   if (checkingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-black">
+      <div
+        className={`min-h-screen flex items-center justify-center ${authBackgroundClass}`}
+      >
         <div className="w-8 h-8 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -228,8 +237,8 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
   if (showForgotPassword) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 relative">
-        <div className="fixed inset-0 bg-[#F5F5F7] dark:bg-black z-0" />
-        <BubbleBackground bubbleCount={10} />
+        <div className={`fixed inset-0 z-0 ${authBackgroundClass}`} />
+        <BubbleBackground bubbleCount={10} enabled={isBubbleTheme} />
         <div className="w-full max-w-sm content-above-bubbles">
           <div className="text-center mb-8">
             <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
@@ -301,8 +310,8 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
           </div>
         </div>
       )}
-      <div className="fixed inset-0 bg-[#F5F5F7] dark:bg-black z-0" />
-      <BubbleBackground bubbleCount={10} />
+      <div className={`fixed inset-0 z-0 ${authBackgroundClass}`} />
+      <BubbleBackground bubbleCount={10} enabled={isBubbleTheme} />
       <div className="w-full max-w-sm content-above-bubbles">
         {/* Header */}
         <div className="text-center mb-8">

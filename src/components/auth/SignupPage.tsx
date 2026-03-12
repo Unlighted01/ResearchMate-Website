@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Input } from "../shared/UIComponents";
 import BubbleBackground from "../shared/BubbleBackground";
+import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
 import { Mail, Lock, Check, X } from "lucide-react";
 
@@ -49,6 +50,12 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(
     null,
   );
+  const { visualTheme } = useTheme();
+  const isBubbleTheme = visualTheme === "bubble";
+  const authBackgroundClass =
+    visualTheme === "glass"
+      ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"
+      : "bg-[#F5F5F7] dark:bg-black";
 
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -213,8 +220,8 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
           </div>
         </div>
       )}
-      <div className="fixed inset-0 bg-[#F5F5F7] dark:bg-black z-0" />
-      <BubbleBackground bubbleCount={10} />
+      <div className={`fixed inset-0 z-0 ${authBackgroundClass}`} />
+      <BubbleBackground bubbleCount={10} enabled={isBubbleTheme} />
       <div className="w-full max-w-sm content-above-bubbles">
         <div className="text-center mb-8">
           <Link to="/" className="inline-block mb-6">

@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Button } from "./UIComponents";
 import BubbleBackground from "../shared/BubbleBackground";
+import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import CommandPalette from "./CommandPalette";
 import ClockWidget from "./ClockWidget";
@@ -38,8 +39,11 @@ import { User as SupabaseUser } from "@supabase/supabase-js";
 export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const { visualTheme } = useTheme();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const isBubbleTheme = visualTheme === "bubble";
+  const isGlassTheme = visualTheme === "glass";
 
   // Force light mode for marketing pages
   useEffect(() => {
@@ -71,10 +75,16 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
   return (
     <div className="min-h-screen text-gray-900 font-sans relative">
       {/* Fixed Background Layer - z-index 0 */}
-      <div className="fixed inset-0 bg-[#F5F5F7] z-0" />
+      <div
+        className={`fixed inset-0 z-0 ${
+          isGlassTheme
+            ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"
+            : "bg-[#F5F5F7]"
+        }`}
+      />
 
       {/* Interactive Bubble Background - z-index 5 */}
-      <BubbleBackground bubbleCount={12} />
+      <BubbleBackground bubbleCount={12} enabled={isBubbleTheme} />
 
       {/* Navigation */}
       <nav
@@ -299,6 +309,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
 export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const { visualTheme } = useTheme();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -319,6 +330,8 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
   const navigate = useNavigate();
   const location = useLocation();
+  const isBubbleTheme = visualTheme === "bubble";
+  const isGlassTheme = visualTheme === "glass";
 
   // Load user and sidebar state
   useEffect(() => {
@@ -428,10 +441,16 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-[#000000] flex font-sans relative overflow-hidden">
+    <div
+      className={`min-h-screen flex font-sans relative overflow-hidden ${
+        isGlassTheme
+          ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"
+          : "bg-[#F5F5F7] dark:bg-[#000000]"
+      }`}
+    >
       {/* Ambient Background */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        <BubbleBackground bubbleCount={3} />
+        <BubbleBackground bubbleCount={3} enabled={isBubbleTheme} />
       </div>
 
       {/* Command Palette */}
@@ -648,7 +667,13 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         `}
       >
         {/* Header */}
-        <header className="sticky top-0 z-20 bg-[#F5F5F7]/80 dark:bg-[#000000]/80 backdrop-blur-xl backdrop-saturate-150 border-b border-gray-200/50 dark:border-gray-800/50">
+        <header
+          className={`sticky top-0 z-20 backdrop-blur-xl backdrop-saturate-150 border-b border-gray-200/50 dark:border-gray-800/50 ${
+            isGlassTheme
+              ? "bg-white/55 dark:bg-[#0f172a]/55"
+              : "bg-[#F5F5F7]/80 dark:bg-[#000000]/80"
+          }`}
+        >
           <div className="h-14 px-4 lg:px-8 flex items-center justify-between gap-4">
             {/* Left: Mobile Menu + Search */}
             <div className="flex items-center gap-4 flex-1">

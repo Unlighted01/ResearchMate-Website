@@ -17,10 +17,12 @@ interface Bubble {
 
 interface BubbleBackgroundProps {
   bubbleCount?: number;
+  enabled?: boolean;
 }
 
 const BubbleBackground: React.FC<BubbleBackgroundProps> = ({
   bubbleCount = 15,
+  enabled = true,
 }) => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
 
@@ -42,11 +44,16 @@ const BubbleBackground: React.FC<BubbleBackgroundProps> = ({
 
   // Initialize bubbles
   useEffect(() => {
+    if (!enabled) {
+      setBubbles([]);
+      return;
+    }
+
     const initialBubbles = Array.from({ length: bubbleCount }, (_, i) =>
       createBubble(i)
     );
     setBubbles(initialBubbles);
-  }, [bubbleCount, createBubble]);
+  }, [enabled, bubbleCount, createBubble]);
 
   // Cleanup all timeouts on unmount
   useEffect(() => {
@@ -56,8 +63,18 @@ const BubbleBackground: React.FC<BubbleBackgroundProps> = ({
     };
   }, []);
 
+  // Clear queued respawn timers when the background is disabled.
+  useEffect(() => {
+    if (!enabled) {
+      timeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+      timeoutsRef.current.clear();
+    }
+  }, [enabled]);
+
   // Handle bubble pop
   const handleBubblePop = (bubbleId: number) => {
+    if (!enabled) return;
+
     // Set popping state
     setBubbles((prev) =>
       prev.map((b) => (b.id === bubbleId ? { ...b, popping: true } : b))
@@ -82,6 +99,8 @@ const BubbleBackground: React.FC<BubbleBackgroundProps> = ({
     // Track timeout for cleanup
     timeoutsRef.current.add(timeoutId);
   };
+
+  if (!enabled) return null;
 
   return (
     <div className="bubble-container">
