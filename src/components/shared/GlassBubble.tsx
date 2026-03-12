@@ -122,17 +122,17 @@ const GlassBubble: React.FC = () => {
 
     // ── GLASS MATERIAL WITH NOISE VERTEX SHADER ──────
     const material = new THREE.MeshPhysicalMaterial({
-      transmission: 0.6,         // Less see-through — sphere is more physically present
-      roughness: 0.05,
+      transmission: 0.95,        // Very glassy — mostly shows environment reflections
+      roughness: 0.0,
       metalness: 0.0,
-      thickness: 1.2,
-      ior: 1.45,
-      envMapIntensity: 2.5,
-      clearcoat: 0.8,
-      clearcoatRoughness: 0.1,
-      color: new THREE.Color(0x7ab8ff), // Soft blue tint — more visible
-      attenuationColor: new THREE.Color(0x88aaff),
-      attenuationDistance: 0.5,
+      thickness: 0.5,
+      ior: 1.4,
+      envMapIntensity: 3.0,      // Strong environment reflections = visible shimmer
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.0,
+      color: new THREE.Color(0xadd8ff), // Very light blue tint
+      attenuationColor: new THREE.Color(0xaaccff),
+      attenuationDistance: 1.5,
       side: THREE.FrontSide,
     });
 
@@ -160,7 +160,8 @@ const GlassBubble: React.FC = () => {
     };
 
     // ── SPHERE ───────────────────────────────────────
-    const geometry = new THREE.SphereGeometry(1.3, 128, 128);
+    // Slightly smaller so it reads as ambient, not a focal element
+    const geometry = new THREE.SphereGeometry(1.0, 128, 128);
     const sphere = new THREE.Mesh(geometry, material);
     // Place off-screen until mouse enters
     sphere.position.set(9999, 9999, 0);
@@ -287,8 +288,9 @@ const GlassBubble: React.FC = () => {
         width: "100%",
         height: "100%",
         pointerEvents: "none",
-        zIndex: 2,         // Behind UI (sidebar, cards, modals) but above base background
+        zIndex: 0,           // Background layer — behind all UI content
         opacity: 0,
+        mixBlendMode: "screen", // Blends with background instead of covering content
       }}
     />
   );

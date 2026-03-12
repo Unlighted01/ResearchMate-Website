@@ -213,37 +213,9 @@ html[data-ui-theme="bubble"] body {
 }
 
 
-/* === CURSOR — Bubble Theme (Three.js handles the visual bubble) === */
-
-/* Hide system cursor; Three.js canvas is the replacement */
-html[data-ui-theme="bubble"],
-html[data-ui-theme="bubble"] * {
-  cursor: none !important;
-}
-
-/* Small precision dot — so users can see exactly where they're clicking */
-.cursor-dot {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 10000;
-  background: rgba(99, 102, 241, 0.95);
-  transform: translate(-50%, -50%);
-  will-change: transform;
-}
-
-html[data-ui-theme="bubble"] .cursor-dot {
-  display: block;
-}
-
-html.dark[data-ui-theme="bubble"] .cursor-dot {
-  background: rgba(167, 139, 250, 0.95);
-}
+/* === CURSOR — Bubble Theme === */
+/* Cursor is NOT hidden — the glass sphere is ambient background decoration,
+   not a cursor replacement. System cursor remains visible. */
 
 
 
