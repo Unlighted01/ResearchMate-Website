@@ -209,7 +209,6 @@ html[data-ui-theme="bubble"] body {
     radial-gradient(circle at 88% 85%, rgba(167, 139, 250, 0.16) 0%,
       transparent 42%),
     var(--bg-secondary);
-  cursor: none; /* Hide default cursor when bubble is active */
 }
 
 
