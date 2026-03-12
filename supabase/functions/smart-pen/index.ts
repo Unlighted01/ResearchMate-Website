@@ -141,7 +141,15 @@ serve(async (req) => {
       const penId = body.pen_id || `pen_${Date.now()}`;
       const code = String(Math.floor(100000 + Math.random() * 900000));
 
-      await supabase.from("pairing_codes").upsert({
+      // First, delete any existing unused codes for this pen to ensure 
+      // a fresh code is generated, especially after a factory reset!
+      await supabase
+        .from("pairing_codes")
+        .delete()
+        .eq("pen_id", penId)
+        .eq("used", false);
+
+      await supabase.from("pairing_codes").insert({
         code,
         pen_id: penId,
         expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
