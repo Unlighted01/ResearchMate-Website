@@ -212,81 +212,28 @@ html[data-ui-theme="bubble"] body {
   cursor: none; /* Hide default cursor when bubble is active */
 }
 
-/* === CURSOR BUBBLE — Bubble Theme === */
 
-/* Only show the custom cursor in bubble theme */
+/* === CURSOR — Bubble Theme (Three.js handles the visual bubble) === */
+
+/* Hide system cursor; Three.js canvas is the replacement */
+html[data-ui-theme="bubble"],
 html[data-ui-theme="bubble"] * {
   cursor: none !important;
 }
 
-.cursor-bubble {
-  display: none; /* Hidden by default — only shown in bubble theme */
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 600px;
-  height: 600px;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0;
-  will-change: transform, opacity;
-  transition: opacity 0.4s ease;
-
-  /* Frosted glass orb with gradient shimmer */
-  background: radial-gradient(
-    circle at 38% 38%,
-    rgba(255, 255, 255, 0.22) 0%,
-    rgba(147, 197, 253, 0.14) 35%,
-    rgba(167, 139, 250, 0.10) 60%,
-    transparent 75%
-  );
-  backdrop-filter: blur(1px);
-  -webkit-backdrop-filter: blur(1px);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-
-  /* Subtle inner highlight to suggest a glass sphere */
-  box-shadow:
-    inset 8px 8px 32px rgba(255, 255, 255, 0.18),
-    inset -4px -4px 16px rgba(147, 197, 253, 0.1),
-    0 0 60px rgba(147, 197, 253, 0.08);
-}
-
-/* Only visible when bubble theme is active */
-html[data-ui-theme="bubble"] .cursor-bubble {
-  display: block;
-}
-
-/* Dark mode bubble orb — more vivid, deeper tones */
-html.dark[data-ui-theme="bubble"] .cursor-bubble {
-  background: radial-gradient(
-    circle at 38% 38%,
-    rgba(255, 255, 255, 0.10) 0%,
-    rgba(99, 102, 241, 0.12) 35%,
-    rgba(167, 139, 250, 0.08) 60%,
-    transparent 75%
-  );
-  border-color: rgba(255, 255, 255, 0.14);
-  box-shadow:
-    inset 8px 8px 32px rgba(255, 255, 255, 0.07),
-    inset -4px -4px 16px rgba(99, 102, 241, 0.1),
-    0 0 80px rgba(99, 102, 241, 0.1);
-}
-
-/* Small dot cursor so users still know where they're clicking */
+/* Small precision dot — so users can see exactly where they're clicking */
 .cursor-dot {
   display: none;
   position: fixed;
   top: 0;
   left: 0;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   pointer-events: none;
   z-index: 10000;
-  background: rgba(99, 102, 241, 0.9);
+  background: rgba(99, 102, 241, 0.95);
   transform: translate(-50%, -50%);
-  transition: transform 0.05s ease, background 0.2s ease;
   will-change: transform;
 }
 
@@ -295,8 +242,10 @@ html[data-ui-theme="bubble"] .cursor-dot {
 }
 
 html.dark[data-ui-theme="bubble"] .cursor-dot {
-  background: rgba(167, 139, 250, 0.9);
+  background: rgba(167, 139, 250, 0.95);
 }
+
+
 
 html[data-ui-theme="glass"] {
   --ui-radius-md: 14px;

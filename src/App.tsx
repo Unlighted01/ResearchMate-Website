@@ -22,7 +22,7 @@ import OfflineDetector from "./components/shared/OfflineDetector";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import { motion } from "motion/react";
 import { CheckCircle2, Bell, X } from "lucide-react";
-import CursorBubble from "./components/shared/CursorBubble";
+import CursorBubble from "./components/shared/GlassBubble";
 import { useTheme } from "./context/ThemeContext";
 
 // App Pages (Authenticated)

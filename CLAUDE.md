@@ -212,6 +212,50 @@ Light: #F5F5F7, #FFFFFF
 Dark: #000000, #1C1C1E, #2C2C2E
 ```
 
+### UI Themes (Visual Theme System)
+
+The app has three swappable visual themes, toggled via Settings → Appearance.
+The active theme is stored in `localStorage` as `visualTheme` and applied as a `data-ui-theme` attribute on `<html>`.
+All theme CSS lives in `index.css` under clearly labelled blocks.
+
+| Theme | `data-ui-theme` | Aesthetic |
+|---|---|---|
+| **Minimalist** | `minimalist` | Clean black/white, no blur, sharp edges |
+| **Bubble** | `bubble` | Soft blue/violet gradients, rounded corners, Three.js glass cursor orb |
+| **Glass** | `glass` | Editorial dark glassmorphism (light: frosted white; dark: near-black with cyan/violet glow orbs) |
+
+```css
+/* Theme CSS variables — all in index.css */
+html[data-ui-theme="glass"] { ... }          /* light mode vars */
+html.dark[data-ui-theme="glass"] { ... }     /* dark mode overrides */
+html[data-ui-theme="bubble"] { ... }
+html[data-ui-theme="minimalist"] { ... }
+```
+
+#### Glass Theme (Henning Tillmann inspired)
+- **Light mode:** `#F0F4F8` background, frosted white surfaces (`rgba(255,255,255,0.72)`), depth via soft shadows (no hard borders), muted cyan accents (`#0891b2`)
+- **Dark mode:** `#0a0a0f` background, near-invisible surfaces (`rgba(255,255,255,0.04)`), hairline ring borders (`rgba(255,255,255,0.09)`), vivid cyan + violet glow orbs, cyan glow rings on hover
+- `backdrop-filter: blur(18px) saturate(1.6)` on all glass surfaces
+
+#### Bubble Theme — Three.js Glass Cursor (GlassBubble.tsx)
+- A full-screen fixed WebGL canvas (`pointer-events: none`, `z-index: 9999`) renders a 3D glass sphere
+- Uses `THREE.MeshPhysicalMaterial` with `transmission: 1.0`, `ior: 1.45`, `clearcoat: 1.0`
+- Simplex 3D noise injected into the vertex shader via `onBeforeCompile` → organic liquid wobble
+- Two orbiting colored point lights (cyan `#60a5fa` + violet `#a78bfa`) create dynamic reflections
+- `RoomEnvironment` provides realistic glass surface reflections
+- Mouse tracking uses lerp (`LERP = 0.09`) via `requestAnimationFrame`
+- **System cursor is hidden** (`cursor: none !important`) — replaced by the glass sphere + a 6px precision dot
+- `ThemedCursorBubble` component in `App.tsx` renders this only when `visualTheme === 'bubble'`
+- **Dependency:** `three` + `@types/three`
+
+### FloatingOrbs (Background Atmosphere)
+
+`src/components/marketing/FloatingOrbs.tsx` renders ambient background orbs used throughout the app:
+- **Palette:** Cyan `rgba(34,211,238)`, Violet `rgba(167,139,250)`, Indigo `rgba(99,102,241)`
+- Orbs are 420–700px radius, opacity 0.55–0.75, slow drift animation (30–50s)
+- Has mouse parallax (throttled 60ms)
+- Used by both glass and bubble theme body backgrounds
+
 ### Glassmorphism Effects
 
 ```css
@@ -223,10 +267,13 @@ Dark: #000000, #1C1C1E, #2C2C2E
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-/* Semi-transparent for bubble backgrounds */
-.transparent-section {
-  background: rgba(255, 255, 255, 0.5); /* bg-white/50 */
-  backdrop-filter: blur(4px);
+/* Theme-aware surface: use .theme-surface class */
+.theme-surface {
+  background: var(--ui-surface-bg);
+  border-color: var(--ui-surface-border);
+  box-shadow: var(--ui-surface-shadow);
+  border-radius: var(--ui-radius-lg);
+  backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.6);
 }
 ```
 
@@ -260,6 +307,7 @@ shadow-apple-lg: 0 8px 16px rgba(0,0,0,0.06), 0 20px 40px rgba(0,0,0,0.12)
 ```
 ResearchMate Website/
 ├── CLAUDE.md                    # You are here!
+├── index.css                    # Global styles, design tokens, all 3 UI themes
 ├── api/                         # Vercel Serverless Functions (AI brain)
 │   ├── _utils/auth.ts           # Auth + credit system
 │   ├── summarize.ts             # Full-text summarization
@@ -274,8 +322,10 @@ ResearchMate Website/
 │
 ├── src/
 │   ├── index.tsx                # App entry
-│   ├── index.css                # Global styles + animations
-│   ├── App.tsx                  # Router setup
+│   ├── App.tsx                  # Router + OAuthPopupHandler + ThemedCursorBubble
+│   │
+│   ├── context/
+│   │   └── ThemeContext.tsx     # theme (light/dark/system) + visualTheme (minimalist/bubble/glass)
 │   │
 │   ├── components/
 │   │   ├── auth/
@@ -283,11 +333,14 @@ ResearchMate Website/
 │   │   │   └── SignupPage.tsx
 │   │   │
 │   │   ├── marketing/
+│   │   │   ├── MarketingHome.tsx
+│   │   │   ├── FloatingOrbs.tsx  # Ambient background orbs (cyan/violet/indigo palette)
 │   │   │   ├── LandingPage.tsx
 │   │   │   ├── ProductsPage.tsx
-│   │   │   └── TeamPage.tsx
+│   │   │   ├── TeamPage.tsx
+│   │   │   └── SupportPage.tsx
 │   │   │
-│   │   ├── dashboard/
+│   │   ├── App/
 │   │   │   ├── Dashboard.tsx
 │   │   │   ├── AIAssistant.tsx
 │   │   │   ├── Statistics.tsx
@@ -296,13 +349,15 @@ ResearchMate Website/
 │   │   │   └── SettingsPage.tsx
 │   │   │
 │   │   └── shared/
-│   │       ├── Layouts.tsx       # MarketingLayout, DashboardLayout
-│   │       ├── UIComponents.tsx  # Button, Input, Card, etc.
-│   │       └── BubbleBackground.tsx
+│   │       ├── Layouts.tsx          # MarketingLayout, DashboardLayout
+│   │       ├── UIComponents.tsx     # Button, Input, Card, etc.
+│   │       ├── BubbleBackground.tsx
+│   │       ├── GlassBubble.tsx      # Three.js glass cursor orb (bubble theme)
+│   │       └── CursorBubble.tsx     # (legacy CSS cursor — superseded by GlassBubble)
 │   │
 │   └── services/
 │       ├── supabaseClient.ts
-│       ├── geminiService.ts     # Extension calls production API
+│       ├── geminiService.ts
 │       ├── storageService.ts
 │       └── collectionsService.ts
 │
@@ -427,4 +482,4 @@ const filteredItems = useMemo(() =>
 
 ---
 
-*Last Updated: March 2026*
+*Last Updated: March 2026 — Glass theme redesign (Henning Tillmann style), Three.js bubble cursor (GlassBubble.tsx), OAuthPopupHandler fix, FloatingOrbs recolor, project structure updated*
