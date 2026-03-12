@@ -22,6 +22,8 @@ import OfflineDetector from "./components/shared/OfflineDetector";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import { motion } from "motion/react";
 import { CheckCircle2, Bell, X } from "lucide-react";
+import CursorBubble from "./components/shared/CursorBubble";
+import { useTheme } from "./context/ThemeContext";
 
 // App Pages (Authenticated)
 import MarketingHome from "./components/marketing/MarketingHome";
@@ -297,12 +299,85 @@ import SupportPage from "./components/marketing/SupportPage";
 // PART 5: MAIN APP COMPONENT
 // ============================================
 
+// Renders cursor bubble only when bubble theme is active
+const ThemedCursorBubble: React.FC = () => {
+  const { visualTheme } = useTheme();
+  return visualTheme === "bubble" ? <CursorBubble /> : null;
+};
+
+// Handles OAuth popup flow regardless of which HashRouter route matched.
+// Google strips the hash fragment from redirect URIs, so the popup often
+// lands on "/" (MarketingHome) instead of "/auth/callback". This component
+// detects the OAuth `code` param in the URL and the `window.opener` to
+// close the popup correctly after Supabase exchanges the code.
+const OAuthPopupHandler: React.FC = () => {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const isPopup = !!(window.opener && window.opener !== window);
+
+    if (!code || !isPopup) return;
+
+    // Show a minimal loading UI in the popup
+    document.body.innerHTML = `
+      <div style="
+        min-height:100vh;display:flex;align-items:center;
+        justify-content:center;font-family:system-ui,sans-serif;
+        background:#000;color:#fff;flex-direction:column;gap:16px
+      ">
+        <div style="width:40px;height:40px;border:3px solid #333;
+          border-top-color:#22d3ee;border-radius:50%;
+          animation:spin 0.8s linear infinite"></div>
+        <p style="color:#94a3b8;font-size:14px">Completing sign in...</p>
+        <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+      </div>`;
+
+    // Wait for Supabase to exchange the code and fire SIGNED_IN
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+          subscription.unsubscribe();
+          try {
+            window.opener.postMessage(
+              { type: "AUTH_SUCCESS", session },
+              window.location.origin
+            );
+          } catch (_) {
+            // opener may have navigated away — that's okay
+          }
+          window.close();
+        }
+      }
+    );
+
+    // Fallback: if session is already established (race condition)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        subscription.unsubscribe();
+        try {
+          window.opener.postMessage(
+            { type: "AUTH_SUCCESS", session },
+            window.location.origin
+          );
+        } catch (_) {}
+        window.close();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return null;
+};
+
 export default function App() {
   const { showToast, ToastComponent } = useToast();
 
   return (
     <ErrorBoundary>
       <ThemeProvider>
+        <OAuthPopupHandler />
+        <ThemedCursorBubble />
         {ToastComponent}
         <OfflineDetector />
         <NotificationProvider>

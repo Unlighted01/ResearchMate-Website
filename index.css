@@ -209,70 +209,202 @@ html[data-ui-theme="bubble"] body {
     radial-gradient(circle at 88% 85%, rgba(167, 139, 250, 0.16) 0%,
       transparent 42%),
     var(--bg-secondary);
+  cursor: none; /* Hide default cursor when bubble is active */
+}
+
+/* === CURSOR BUBBLE — Bubble Theme === */
+
+/* Only show the custom cursor in bubble theme */
+html[data-ui-theme="bubble"] * {
+  cursor: none !important;
+}
+
+.cursor-bubble {
+  display: none; /* Hidden by default — only shown in bubble theme */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  will-change: transform, opacity;
+  transition: opacity 0.4s ease;
+
+  /* Frosted glass orb with gradient shimmer */
+  background: radial-gradient(
+    circle at 38% 38%,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(147, 197, 253, 0.14) 35%,
+    rgba(167, 139, 250, 0.10) 60%,
+    transparent 75%
+  );
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+
+  /* Subtle inner highlight to suggest a glass sphere */
+  box-shadow:
+    inset 8px 8px 32px rgba(255, 255, 255, 0.18),
+    inset -4px -4px 16px rgba(147, 197, 253, 0.1),
+    0 0 60px rgba(147, 197, 253, 0.08);
+}
+
+/* Only visible when bubble theme is active */
+html[data-ui-theme="bubble"] .cursor-bubble {
+  display: block;
+}
+
+/* Dark mode bubble orb — more vivid, deeper tones */
+html.dark[data-ui-theme="bubble"] .cursor-bubble {
+  background: radial-gradient(
+    circle at 38% 38%,
+    rgba(255, 255, 255, 0.10) 0%,
+    rgba(99, 102, 241, 0.12) 35%,
+    rgba(167, 139, 250, 0.08) 60%,
+    transparent 75%
+  );
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 8px 8px 32px rgba(255, 255, 255, 0.07),
+    inset -4px -4px 16px rgba(99, 102, 241, 0.1),
+    0 0 80px rgba(99, 102, 241, 0.1);
+}
+
+/* Small dot cursor so users still know where they're clicking */
+.cursor-dot {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 10000;
+  background: rgba(99, 102, 241, 0.9);
+  transform: translate(-50%, -50%);
+  transition: transform 0.05s ease, background 0.2s ease;
+  will-change: transform;
+}
+
+html[data-ui-theme="bubble"] .cursor-dot {
+  display: block;
+}
+
+html.dark[data-ui-theme="bubble"] .cursor-dot {
+  background: rgba(167, 139, 250, 0.9);
 }
 
 html[data-ui-theme="glass"] {
   --ui-radius-md: 14px;
-  --ui-radius-lg: 18px;
-  --ui-surface-bg: rgba(255, 255, 255, 0.62);
-  --ui-surface-border: rgba(255, 255, 255, 0.45);
-  --ui-surface-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
-  --ui-input-bg: rgba(255, 255, 255, 0.75);
-  --ui-input-border: rgba(255, 255, 255, 0.6);
-  --ui-search-bg: rgba(255, 255, 255, 0.72);
-  --ui-search-border: rgba(255, 255, 255, 0.58);
+  --ui-radius-lg: 20px;
+
+  /* === LIGHT MODE GLASS — frosted soft-white, depth via shadows === */
+  --ui-surface-bg: rgba(255, 255, 255, 0.72);
+  --ui-surface-border: rgba(0, 0, 0, 0.05);
+  --ui-surface-shadow: 0 4px 24px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --ui-input-bg: rgba(255, 255, 255, 0.85);
+  --ui-input-border: rgba(0, 0, 0, 0.1);
+  --ui-search-bg: rgba(255, 255, 255, 0.8);
+  --ui-search-border: rgba(0, 0, 0, 0.08);
   --ui-title-weight: 700;
-  --ui-title-color: #0f172a;
-  --ui-stat-accent: #0369a1;
+  --ui-title-color: #1a1a2e;
+  --ui-stat-accent: #0891b2;
   --ui-btn-radius: 999px;
-  --ui-btn-fill: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
-  --ui-btn-fill-hover: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%);
+  --ui-btn-fill: rgba(8, 145, 178, 0.9);
+  --ui-btn-fill-hover: rgba(6, 120, 150, 0.95);
   --ui-btn-text: #ffffff;
-  --ui-btn-shadow: 0 10px 22px rgba(37, 99, 235, 0.3);
-  --ui-sidebar-bg: rgba(255, 255, 255, 0.55);
-  --ui-sidebar-border: rgba(255, 255, 255, 0.55);
-  --ui-sidebar-text: #1e3a8a;
-  --ui-sidebar-icon: #1d4ed8;
-  --ui-sidebar-active-bg: rgba(37, 99, 235, 0.88);
-  --ui-sidebar-active-text: #ffffff;
-  --ui-sidebar-active-icon: #ffffff;
-  --ui-sidebar-active-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
-  --ui-header-bg: rgba(255, 255, 255, 0.52);
-  --ui-glass-blur: 16px;
+  --ui-btn-border: transparent;
+  --ui-btn-shadow: 0 4px 16px rgba(8, 145, 178, 0.25);
+  --ui-sidebar-bg: rgba(255, 255, 255, 0.65);
+  --ui-sidebar-border: rgba(0, 0, 0, 0.06);
+  --ui-sidebar-text: #334155;
+  --ui-sidebar-icon: #0891b2;
+  --ui-sidebar-active-bg: rgba(8, 145, 178, 0.14);
+  --ui-sidebar-active-text: #0c4a6e;
+  --ui-sidebar-active-icon: #0891b2;
+  --ui-sidebar-active-shadow: 0 4px 16px rgba(8, 145, 178, 0.15);
+  --ui-header-bg: rgba(255, 255, 255, 0.72);
+  --ui-glass-blur: 18px;
 }
 
 html.dark[data-ui-theme="glass"] {
-  --ui-surface-bg: rgba(17, 24, 39, 0.6);
-  --ui-surface-border: rgba(148, 163, 184, 0.32);
-  --ui-input-bg: rgba(30, 41, 59, 0.75);
-  --ui-input-border: rgba(148, 163, 184, 0.34);
-  --ui-search-bg: rgba(15, 23, 42, 0.76);
-  --ui-search-border: rgba(148, 163, 184, 0.3);
-  --ui-title-color: #e2e8f0;
-  --ui-stat-accent: #38bdf8;
-  --ui-sidebar-bg: rgba(15, 23, 42, 0.58);
-  --ui-sidebar-border: rgba(148, 163, 184, 0.3);
-  --ui-sidebar-text: #cbd5e1;
-  --ui-sidebar-icon: #93c5fd;
-  --ui-header-bg: rgba(15, 23, 42, 0.56);
+  /* === DARK MODE GLASS — near-invisible surfaces, vivid glow orbs, hairline ring borders === */
+  --ui-surface-bg: rgba(255, 255, 255, 0.04);
+  --ui-surface-border: rgba(255, 255, 255, 0.09);
+  --ui-surface-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 24px 48px rgba(0, 0, 0, 0.6);
+  --ui-input-bg: rgba(255, 255, 255, 0.07);
+  --ui-input-border: rgba(255, 255, 255, 0.12);
+  --ui-search-bg: rgba(255, 255, 255, 0.06);
+  --ui-search-border: rgba(255, 255, 255, 0.1);
+  --ui-title-color: #f1f5f9;
+  --ui-stat-accent: #22d3ee;
+  --ui-btn-fill: rgba(255, 255, 255, 0.07);
+  --ui-btn-fill-hover: rgba(34, 211, 238, 0.15);
+  --ui-btn-text: #e2e8f0;
+  --ui-btn-shadow: 0 0 24px rgba(34, 211, 238, 0.2);
+  --ui-sidebar-bg: rgba(0, 0, 0, 0.35);
+  --ui-sidebar-border: rgba(255, 255, 255, 0.07);
+  --ui-sidebar-text: #94a3b8;
+  --ui-sidebar-icon: #7dd3fc;
+  --ui-sidebar-active-bg: rgba(34, 211, 238, 0.12);
+  --ui-sidebar-active-text: #e2e8f0;
+  --ui-sidebar-active-icon: #22d3ee;
+  --ui-sidebar-active-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+  --ui-header-bg: rgba(0, 0, 0, 0.45);
+  --ui-glass-blur: 16px;
 }
 
 html[data-ui-theme="glass"] body {
+  /* Light glass: cool gray-blue base with soft desaturated orbs */
   background:
-    radial-gradient(circle at 15% 15%, rgba(14, 165, 233, 0.18) 0%, transparent
-          40%),
-    radial-gradient(circle at 85% 75%, rgba(59, 130, 246, 0.16) 0%, transparent
-          45%),
-    linear-gradient(135deg, #f8fbff 0%, #eef5ff 100%);
+    radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.07) 0%, transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(167, 139, 250, 0.07) 0%, transparent 45%),
+    #f0f4f8;
 }
 
 html.dark[data-ui-theme="glass"] body {
+  /* Dark glass: near-black with vivid glowing orbs */
   background:
-    radial-gradient(circle at 15% 15%, rgba(14, 165, 233, 0.12) 0%, transparent
-          40%),
-    radial-gradient(circle at 85% 75%, rgba(59, 130, 246, 0.1) 0%, transparent
-          45%),
-    linear-gradient(135deg, #020617 0%, #0f172a 100%);
+    radial-gradient(circle at 15% 20%, rgba(34, 211, 238, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 85% 75%, rgba(167, 139, 250, 0.10) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
+    #0a0a0f;
+}
+
+/* === GLASS THEME UTILITY CLASSES === */
+
+/* Saturate backdrop-blur so colors behind glass "pop" */
+html[data-ui-theme="glass"] .theme-surface,
+html[data-ui-theme="glass"] .theme-sidebar,
+html[data-ui-theme="glass"] .theme-headerbar {
+  backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.6);
+  -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.6);
+}
+
+/* Dark glass: cyan glow ring on hover instead of heavy box-shadow */
+html.dark[data-ui-theme="glass"] .hover-lift:hover {
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35), 0 0 32px rgba(34, 211, 238, 0.1);
+  border-color: rgba(34, 211, 238, 0.2) !important;
+  transform: translateY(-4px);
+}
+
+/* Dark glass: subtle headline text glow */
+html.dark[data-ui-theme="glass"] .theme-title {
+  text-shadow: 0 0 30px rgba(34, 211, 238, 0.18);
+}
+
+/* Dark glass: ghost button ring style */
+html.dark[data-ui-theme="glass"] .theme-btn-primary {
+  border: 1px solid rgba(34, 211, 238, 0.3) !important;
+}
+
+html.dark[data-ui-theme="glass"] .theme-btn-primary:hover {
+  border-color: rgba(34, 211, 238, 0.5) !important;
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.2) !important;
 }
 
 .theme-page .theme-title {

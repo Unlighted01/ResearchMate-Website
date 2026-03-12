@@ -29,43 +29,49 @@ const FloatingOrbs: React.FC<FloatingOrbsProps> = ({
 }) => {
   const [mousePosition, setMousePosition] = useState({ x: 50, y: 50 });
 
-  // Apple-inspired color palette - soft radial gradients that fade to transparent
+  // Henning-style editorial glass palette — cyan, violet, indigo atmospheric washes
   const colors = useMemo(
     () => [
-      "radial-gradient(circle, rgba(0, 122, 255, 0.4) 0%, rgba(0, 122, 255, 0) 70%)",
-      "radial-gradient(circle, rgba(88, 86, 214, 0.35) 0%, rgba(88, 86, 214, 0) 70%)",
-      "radial-gradient(circle, rgba(175, 82, 222, 0.3) 0%, rgba(175, 82, 222, 0) 70%)",
-      "radial-gradient(circle, rgba(52, 199, 89, 0.25) 0%, rgba(52, 199, 89, 0) 70%)",
-      "radial-gradient(circle, rgba(255, 149, 0, 0.25) 0%, rgba(255, 149, 0, 0) 70%)",
-      "radial-gradient(circle, rgba(90, 200, 250, 0.3) 0%, rgba(90, 200, 250, 0) 70%)",
+      // Cyan — top-left anchor, the primary glow
+      "radial-gradient(circle, rgba(34, 211, 238, 0.38) 0%, rgba(34, 211, 238, 0) 70%)",
+      // Violet — bottom-right anchor, warm contrast to cyan
+      "radial-gradient(circle, rgba(167, 139, 250, 0.32) 0%, rgba(167, 139, 250, 0) 70%)",
+      // Indigo — center depth layer
+      "radial-gradient(circle, rgba(99, 102, 241, 0.22) 0%, rgba(99, 102, 241, 0) 70%)",
+      // Soft blue — mid fill
+      "radial-gradient(circle, rgba(59, 130, 246, 0.20) 0%, rgba(59, 130, 246, 0) 70%)",
+      // Cyan secondary — bottom fade
+      "radial-gradient(circle, rgba(34, 211, 238, 0.18) 0%, rgba(34, 211, 238, 0) 70%)",
+      // Violet secondary — mid-left soft wash
+      "radial-gradient(circle, rgba(167, 139, 250, 0.18) 0%, rgba(167, 139, 250, 0) 70%)",
     ],
     []
   );
 
-  // Strategic orb positions for visual balance
+  // Strategic orb positions — larger and more atmospheric
   const orbConfigs = useMemo(
     () => [
-      { x: 20, y: 25, sizeBase: 500 }, // Top-left
-      { x: 75, y: 15, sizeBase: 450 }, // Top-right
-      { x: 10, y: 60, sizeBase: 400 }, // Mid-left
-      { x: 85, y: 55, sizeBase: 550 }, // Mid-right
-      { x: 50, y: 80, sizeBase: 480 }, // Bottom-center
-      { x: 35, y: 45, sizeBase: 350 }, // Center-left
+      { x: 15, y: 20, sizeBase: 700 }, // Top-left (primary cyan anchor)
+      { x: 82, y: 78, sizeBase: 650 }, // Bottom-right (violet anchor)
+      { x: 50, y: 45, sizeBase: 550 }, // Center (indigo depth layer)
+      { x: 80, y: 18, sizeBase: 500 }, // Top-right (blue fill)
+      { x: 12, y: 72, sizeBase: 480 }, // Bottom-left (cyan fade)
+      { x: 40, y: 60, sizeBase: 420 }, // Mid-center-left (violet wash)
     ],
     []
   );
 
-  // Generate orbs with varied properties
+  // Generate orbs with varied properties — lower opacity for ambient atmospheric feel
   const orbs = useMemo<Orb[]>(() => {
     return Array.from({ length: Math.min(orbCount, 6) }, (_, i) => ({
       id: i,
-      x: orbConfigs[i].x + (Math.random() * 10 - 5),
-      y: orbConfigs[i].y + (Math.random() * 10 - 5),
-      size: orbConfigs[i].sizeBase + Math.random() * 150,
+      x: orbConfigs[i].x + (Math.random() * 8 - 4),
+      y: orbConfigs[i].y + (Math.random() * 8 - 4),
+      size: orbConfigs[i].sizeBase + Math.random() * 200,
       color: colors[i % colors.length],
-      duration: 25 + Math.random() * 15, // 25-40s (very slow)
-      delay: i * -5, // Stagger start times
-      opacity: 0.7 + Math.random() * 0.3,
+      duration: 30 + Math.random() * 20, // 30-50s (very slow drift)
+      delay: i * -6, // Stagger start times
+      opacity: 0.55 + Math.random() * 0.2, // Lower opacity — ambient, not spotlight
     }));
   }, [orbCount, colors, orbConfigs]);
 
@@ -118,12 +124,12 @@ const FloatingOrbs: React.FC<FloatingOrbsProps> = ({
 
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-      {/* Subtle top gradient wash */}
+      {/* Subtle top gradient wash — cyan tint matching glass theme */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(180deg, rgba(0, 122, 255, 0.03) 0%, transparent 50%)",
+            "linear-gradient(180deg, rgba(34, 211, 238, 0.03) 0%, transparent 50%)",
         }}
       />
 
