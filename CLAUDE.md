@@ -220,8 +220,8 @@ All theme CSS lives in `index.css` under clearly labelled blocks.
 
 | Theme | `data-ui-theme` | Aesthetic |
 |---|---|---|
-| **Minimalist** | `minimalist` | Clean black/white, no blur, sharp edges |
-| **Bubble** | `bubble` | Soft blue/violet gradients, rounded corners, Three.js glass cursor orb |
+| **Minimalist** | `minimalist` | Editorial — blue `#2563eb` accent, hairline borders, true black/white, `letter-spacing: -0.025em` headings |
+| **Bubble** | `bubble` | Playful premium — rose/lavender `#f472b6→#a78bfa`, warm cream `#fdf9ff` light, deep violet-black `#0d0814` dark |
 | **Glass** | `glass` | Editorial dark glassmorphism (light: frosted white; dark: near-black with cyan/violet glow orbs) |
 
 ```css
@@ -482,4 +482,4 @@ const filteredItems = useMemo(() =>
 
 ---
 
-*Last Updated: March 2026 — Glass theme redesign (Henning Tillmann style), Three.js bubble cursor (GlassBubble.tsx), OAuthPopupHandler fix, FloatingOrbs recolor, project structure updated*
+*Last Updated: March 2026 — Glass theme redesign, minimalist editorial redesign (blue accent, hairline borders), bubble playful-premium redesign (rose/lavender palette), Three.js bubble cursor (removed), OAuthPopupHandler fix, FloatingOrbs recolor, project structure updated*

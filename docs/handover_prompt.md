@@ -30,9 +30,39 @@ The theme context is `src/context/ThemeContext.tsx` — exposes `visualTheme` + 
 
 | Theme | `data-ui-theme` | Aesthetic |
 |---|---|---|
-| **Minimalist** | `minimalist` | Clean black/white, no blur, sharp edges |
-| **Bubble** | `bubble` | Blue/violet gradients, pill buttons, Three.js glass cursor orb |
-| **Glass** | `glass` | Editorial dark glassmorphism — two distinct light/dark variants |
+| **Minimalist** | `minimalist` | Editorial precision — electric blue accent, hairline borders, true black/white, no blur |
+| **Bubble** | `bubble` | Playful premium — rose/lavender palette, warm cream light bg, deep violet dark bg, pill buttons |
+| **Glass** | `glass` | Editorial dark glassmorphism — two distinct light/dark variants (Henning Tillmann inspired) |
+
+### Minimalist Theme — Editorial Precision (March 2026)
+
+**Light mode** (`html[data-ui-theme="minimalist"]`):
+- Background: `#fafafa` — warm off-white, not harsh pure white
+- Surfaces: solid `#ffffff`, `1px solid #e5e7eb` borders — no shadows, no blur
+- Accent: electric blue `#2563eb` — buttons, sidebar active state, stat numbers
+- Corners: tight `6px/8px` border-radius
+- Typography: `letter-spacing: -0.025em` on all headings (editorial feel)
+
+**Dark mode** (`html.dark[data-ui-theme="minimalist"]`):
+- Background: true `#000000`, surfaces `#111111`, borders `#1f1f1f` (near-invisible)
+- Accent: `#2563eb` / `#3b82f6` — pops against pure black
+- Sidebar: `#000000` bg, `#1a1a1a` borders
+
+### Bubble Theme — Playful Premium (March 2026)
+
+**Light mode** (`html[data-ui-theme="bubble"]`):
+- Background: warm cream `#fdf9ff` + rose/lavender/foam radial gradients
+- Surfaces: `rgba(255,255,255,0.88)` with rose-violet tint border `rgba(232,121,249,0.22)`
+- Buttons: rose→lavender gradient `#f472b6 → #a78bfa`, pill shape (border-radius: 999px)
+- Title: deep violet `#4c1d95`, stat accent `#9333ea`
+- Corners: generous `18px/24px`
+
+**Dark mode** (`html.dark[data-ui-theme="bubble"]`):
+- Background: deep violet-black `#0d0814` + soft magenta/lavender/rose orb gradients
+- Surfaces: `rgba(24,12,38,0.82)` — dark violet-black frosted
+- Title: soft lavender `#e9d5ff`
+- Sidebar: near-black `rgba(13,8,20,0.92)`, lavender `#d8b4fe` text
+- Buttons: magenta→lavender gradient `#e879f9 → #a78bfa`
 
 ### Glass Theme (Henning Tillmann inspired — March 2026)
 Both modes use `backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.6)` on all surfaces via `.theme-surface`.
