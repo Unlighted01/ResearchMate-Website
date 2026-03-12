@@ -22,8 +22,7 @@ import OfflineDetector from "./components/shared/OfflineDetector";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import { motion } from "motion/react";
 import { CheckCircle2, Bell, X } from "lucide-react";
-import CursorBubble from "./components/shared/GlassBubble";
-import { useTheme } from "./context/ThemeContext";
+
 
 // App Pages (Authenticated)
 import MarketingHome from "./components/marketing/MarketingHome";
@@ -299,12 +298,6 @@ import SupportPage from "./components/marketing/SupportPage";
 // PART 5: MAIN APP COMPONENT
 // ============================================
 
-// Renders cursor bubble only when bubble theme is active
-const ThemedCursorBubble: React.FC = () => {
-  const { visualTheme } = useTheme();
-  return visualTheme === "bubble" ? <CursorBubble /> : null;
-};
-
 // Handles OAuth popup flow regardless of which HashRouter route matched.
 // Google strips the hash fragment from redirect URIs, so the popup often
 // lands on "/" (MarketingHome) instead of "/auth/callback". This component
@@ -377,7 +370,6 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <OAuthPopupHandler />
-        <ThemedCursorBubble />
         {ToastComponent}
         <OfflineDetector />
         <NotificationProvider>
