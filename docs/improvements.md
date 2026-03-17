@@ -302,7 +302,7 @@ Do not split proactively — only when you're already editing one of these files
 
 | # | Priority | Issue | Files |
 |---|---|---|---|
-| 1 | 🔴 Critical | Hardcoded Supabase key | `SmartPenGallery.tsx` |
+| 1 | ✅ Fixed | Hardcoded Supabase key | `SmartPenGallery.tsx` |
 | 2 | 🔴 Critical | Credits lost on API failure | `api/_utils/auth.ts` |
 | 3 | 🔴 Critical | Time range filter does nothing | `Statistics.tsx` |
 | 4 | 🔴 Critical | Fake hardcoded stat changes | `Statistics.tsx` |
@@ -358,6 +358,22 @@ Do not split proactively — only when you're already editing one of these files
 | Tag search ignored `item.tags` | `src/SidePanel.tsx` (extension) | Filter only checked `text`, `note`, `sourceTitle` | Added `.tags.some(...)` to `filteredItems` — skips internal `color:` and `ocr:` tags |
 | Note field not editable in detail view | `src/components/ItemDetail.tsx` (extension) | `item.note` was displayed as read-only text | Added `itemNote` state + Edit/Save/Cancel inline editor wired to `updateItem({ note })` |
 | Citation only returned bibliography, no in-text form | `src/services/geminiService.ts` + `ItemDetail.tsx` (extension) | `CitationResult` had only `citation: string` | Added `inTextCitation?: string` to interface; `formatInTextCitation()` generates style-correct short form from CrossRef data; citation card now shows both with separate copy buttons |
+
+---
+
+## ✅ Failed Test Fixes (From Test Suite — Tables 8.3, 8.5, 9.1, 9.3, 9.4) — RESOLVED March 2026
+
+| Test ID | Issue | Files | Fix |
+|---------|-------|-------|-----|
+| 8.3-7 | Citation — non-standard date formats (`"2025/12"`, `"December 2025"` → `NaN`) | `CitationGenerator.tsx`, `api/extract-citation.ts` | `extractYear()` uses `/\d{4}/` regex instead of broken `new Date(x).getFullYear()` |
+| T-1 (8.5-10, 8.5-11, 9.1-5) | OCR edit UI missing | `SmartPenScanModal.tsx` | Inline Edit/Save/Cancel textarea added; "Edited" badge shown when `tags` includes `"ocr:edited"` |
+| T-2 (8.5-11, 9.1-5) | OCR confidence not saved or displayed | `storageService.ts`, `SettingsPage.tsx`, `SmartPenScanModal.tsx`, `SmartPenGallery.tsx` | `ocrConfidence` added to all interfaces + DB mappings; saved on bulk import and re-run OCR; colored badge rendered in modal (≥80% green, ≥60% yellow, <60% red) |
+| T-3 (9.3-4) | Citation not regenerated after OCR edit | `SmartPenScanModal.tsx` | After OCR save, inline "Text updated — Re-link citation?" prompt appears when a citation already exists; triggers book re-search |
+| T-4 (9.1-6) | No Retry OCR button | `SmartPenScanModal.tsx` | Already present via `onRunOCR` prop + Re-run OCR button on image panel |
+| 9.4-1 | Bulk import only accepted PDF, not jpg/png | `SettingsPage.tsx` | `multiple` attribute added; `Array.from(files)` iterates all; image types routed through `/api/ocr` |
+
+**Also fixed in this pass:**
+- **#1 (Critical)** — Hardcoded Supabase anon key removed from `SmartPenGallery.tsx`; replaced with `supabase.functions.invoke()`.
 
 ---
 

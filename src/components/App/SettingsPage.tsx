@@ -407,6 +407,7 @@ const SettingsPage: React.FC = () => {
       text: data.ocrText.trim(),
       source_title: file.name,
       device_source: "smart_pen",
+      ocr_confidence: data.ocrConfidence ?? null,
     });
     if (error) throw error;
   };

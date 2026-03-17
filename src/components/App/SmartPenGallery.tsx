@@ -38,11 +38,6 @@ import CameraCapture from "./CameraCapture"; // TO BE REMOVED WHEN SMART PEN HAR
 import { getCurrentUser, supabase } from "../../services/supabaseClient";
 import { LibrarySearch, BookDocument } from "./LibrarySearch";
 
-// Supabase config
-const SUPABASE_URL = "https://jxevjkzojfbywxvtcwtl.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4ZXZqa3pvamZieXd4dnRjd3RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MDc4MzEsImV4cCI6MjA3NTQ4MzgzMX0.hZL-wGTcmD9H0bsmj_jqzZ2iw1GZyJM5X14meIRKgNQ";
-
 // Toast component
 interface ToastProps {
   message: string;
@@ -179,17 +174,10 @@ const SmartPenGallery = () => {
 
   const loadPairedPens = async (uid: string) => {
     try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/smart-pen`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ action: "list", user_id: uid }),
+      const { data, error } = await supabase.functions.invoke("smart-pen", {
+        body: { action: "list", user_id: uid },
       });
-      const data = await response.json();
-      if (data.success) {
+      if (!error && data?.success) {
         setPairedPens(data.pens || []);
       }
     } catch (err) {
@@ -201,17 +189,10 @@ const SmartPenGallery = () => {
     if (!confirm(`Disconnect pen ${penId.substring(0, 15)}...?`)) return;
 
     try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/smart-pen`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ action: "unpair", pen_id: penId }),
+      const { data, error } = await supabase.functions.invoke("smart-pen", {
+        body: { action: "unpair", pen_id: penId },
       });
-      const data = await response.json();
-      if (data.success) {
+      if (!error && data?.success) {
         setPairedPens(pairedPens.filter((p) => p.pen_id !== penId));
         showToast("Device disconnected", "info");
       } else {
@@ -328,6 +309,7 @@ const SmartPenGallery = () => {
       await updateItem(scan.id, {
         text: result.ocrText,
         ocrText: result.ocrText,
+        ocrConfidence: result.ocrConfidence ?? undefined,
         aiSummary: result.aiSummary || undefined,
       });
 
@@ -790,6 +772,7 @@ const SmartPenGallery = () => {
             await updateScanItem(scan, {
               text: result.ocrText,
               ocrText: result.ocrText,
+              ocrConfidence: result.ocrConfidence ?? undefined,
               aiSummary: result.aiSummary || undefined,
             });
             showToast("Text extracted!", "success");

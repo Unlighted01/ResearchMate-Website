@@ -21,6 +21,8 @@ import {
   RotateCcw,
   Calendar,
   Maximize2,
+  Pencil,
+  Save,
 } from "lucide-react";
 import { StorageItem, updateItem } from "../../services/storageService";
 import { LibrarySearch, BookDocument } from "./LibrarySearch";
@@ -58,10 +60,18 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
   const [noteValue, setNoteValue] = useState(scan?.note || "");
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
-  // Sync note when scan changes
+  // OCR edit state (T-1)
+  const [isEditingOCR, setIsEditingOCR] = useState(false);
+  const [editedOCRText, setEditedOCRText] = useState("");
+  const [isSavingOCR, setIsSavingOCR] = useState(false);
+  const [showCitationRegen, setShowCitationRegen] = useState(false);
+
+  // Sync note + reset OCR edit when scan changes
   useEffect(() => {
     setNoteValue(scan?.note || "");
     setIsLinkingBook(false);
+    setIsEditingOCR(false);
+    setShowCitationRegen(false);
   }, [scan?.id]);
 
   // Lock body scroll while modal is open
@@ -91,6 +101,26 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
     if (noteValue === (scan.note || "")) return;
     await updateItem(scan.id, { note: noteValue });
     onUpdate(scan.id, { note: noteValue });
+  };
+
+  const handleSaveOCR = async () => {
+    if (editedOCRText === ocrText) {
+      setIsEditingOCR(false);
+      return;
+    }
+    setIsSavingOCR(true);
+    try {
+      // Encode ocrEdited flag as "ocr:edited" tag (same pattern as color:*)
+      const cleanTags = (scan.tags || []).filter((t) => t !== "ocr:edited");
+      const newTags = [...cleanTags, "ocr:edited"];
+      await updateItem(scan.id, { text: editedOCRText, ocrText: editedOCRText, tags: newTags });
+      onUpdate(scan.id, { text: editedOCRText, ocrText: editedOCRText, tags: newTags });
+      setIsEditingOCR(false);
+      // T-3: prompt to re-link citation if one exists
+      if (scan.citation) setShowCitationRegen(true);
+    } finally {
+      setIsSavingOCR(false);
+    }
   };
 
   const handleLinkBook = async (book: BookDocument) => {
@@ -226,33 +256,98 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
                 {/* -- OCR TEXT -- */}
                 <div className="bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <FileText className="w-4 h-4 text-[#FF9500]" />
                       <h4 className="font-semibold text-sm text-gray-900 dark:text-white">
                         OCR Text
                       </h4>
+                      {/* Confidence badge (T-2) */}
+                      {scan.ocrConfidence !== undefined && (
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            scan.ocrConfidence >= 80
+                              ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                              : scan.ocrConfidence >= 60
+                              ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                              : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                          }`}
+                        >
+                          {scan.ocrConfidence}% confidence
+                        </span>
+                      )}
+                      {/* Edited badge (T-1) */}
+                      {scan.tags?.includes("ocr:edited") && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                          Edited
+                        </span>
+                      )}
                     </div>
-                    {ocrText && (
-                      <button
-                        onClick={handleCopyOCR}
-                        aria-label="Copy OCR text"
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-[#FF9500]/50 transition-colors"
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-green-500" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            Copy
-                          </>
-                        )}
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {ocrText && !isEditingOCR && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditedOCRText(ocrText);
+                              setIsEditingOCR(true);
+                            }}
+                            aria-label="Edit OCR text"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-[#FF9500]/50 transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={handleCopyOCR}
+                            aria-label="Copy OCR text"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-[#FF9500]/50 transition-colors"
+                          >
+                            {copied ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-green-500" />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                Copy
+                              </>
+                            )}
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  {ocrText ? (
+                  {isEditingOCR ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={editedOCRText}
+                        onChange={(e) => setEditedOCRText(e.target.value)}
+                        rows={6}
+                        className="w-full text-sm bg-white dark:bg-gray-800 border border-[#FF9500]/40 rounded-lg p-3 text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF9500]/30 resize-none font-mono"
+                        autoFocus
+                      />
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => setIsEditingOCR(false)}
+                          className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSaveOCR}
+                          disabled={isSavingOCR}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF9500] hover:bg-[#E68600] text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {isSavingOCR ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Save className="w-3.5 h-3.5" />
+                          )}
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : ocrText ? (
                     <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-[120px] overflow-y-auto font-mono">
                       {ocrText}
                     </p>
@@ -260,6 +355,30 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
                     <p className="text-sm text-gray-400 italic text-center py-4">
                       No text extracted yet. Use "Extract Text" on the left.
                     </p>
+                  )}
+                  {/* T-3: Citation regen prompt after OCR edit */}
+                  {showCitationRegen && (
+                    <div className="mt-3 flex items-center gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <span className="text-xs text-blue-700 dark:text-blue-300 flex-1">
+                        Text updated — re-link the book citation to reflect the corrected content.
+                      </span>
+                      <button
+                        onClick={() => {
+                          setIsLinkingBook(true);
+                          setShowCitationRegen(false);
+                        }}
+                        className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap"
+                      >
+                        Re-link →
+                      </button>
+                      <button
+                        onClick={() => setShowCitationRegen(false)}
+                        aria-label="Dismiss"
+                        className="text-blue-400 hover:text-blue-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   )}
                 </div>
 
