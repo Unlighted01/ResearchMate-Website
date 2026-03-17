@@ -354,5 +354,38 @@ Do not split proactively — only when you're already editing one of these files
 | `ocrConfidence` / `ocrEdited` missing from StorageItem | `src/services/storageService.ts` (extension) | Fields not declared; `updateItem()` didn't persist `text` edits to Supabase | Fields added to interface; `text` mapping added in DB update branch |
 | Book year parsed with `new Date()` (NaN on partial dates) | `src/components/ItemDetail.tsx` (extension) | `"2024-12"` → `NaN` | Replaced with `/\d{4}/` regex |
 | Smart pen scans opened without `ocrConfidence` | `src/components/SmartPenView.tsx` (extension) | `handleScanClick` never mapped `scan.ocr_confidence` | Added `ocrConfidence: scan.ocr_confidence` to the built item |
+| `ocrEdited` flag not persisted to DB | `src/services/storageService.ts` + `ItemDetail.tsx` (extension) | No DB column; flag lost on page refresh | Encoded as `"ocr:edited"` tag in the `tags` array (same pattern as `color:*`) |
+| Tag search ignored `item.tags` | `src/SidePanel.tsx` (extension) | Filter only checked `text`, `note`, `sourceTitle` | Added `.tags.some(...)` to `filteredItems` — skips internal `color:` and `ocr:` tags |
+| Note field not editable in detail view | `src/components/ItemDetail.tsx` (extension) | `item.note` was displayed as read-only text | Added `itemNote` state + Edit/Save/Cancel inline editor wired to `updateItem({ note })` |
+| Citation only returned bibliography, no in-text form | `src/services/geminiService.ts` + `ItemDetail.tsx` (extension) | `CitationResult` had only `citation: string` | Added `inTextCitation?: string` to interface; `formatInTextCitation()` generates style-correct short form from CrossRef data; citation card now shows both with separate copy buttons |
+
+---
+
+## 🔧 Needs External Setup (Cannot Fix in Code Alone)
+
+These gaps require infrastructure changes — Supabase dashboard config, schema migrations, or third-party service setup — before the code can be written.
+
+---
+
+### 🔴 [EXT] Realtime Cross-Device Sync — `NEEDS SUPABASE REPLICATION`
+
+- **Affects:** Extension `src/SidePanel.tsx`
+- **Tests blocked:** 9.5 #1 (Device A → B sync), #2 (offline reconnect), #3 (delete propagation)
+- **Problem:** No `supabase.channel().on().subscribe()` exists. Changes on Device A only appear on Device B after a manual sync button press or reload.
+- **Step 1 — Supabase Dashboard:** Go to your project → Table Editor → `items` → Replication tab → enable `INSERT`, `UPDATE`, `DELETE`.
+- **Step 2 — Code** (add inside `SidePanel.tsx` main `useEffect`, scoped to authenticated users):
+  ```ts
+  const channel = supabase
+    .channel("items-realtime")
+    .on("postgres_changes", {
+      event: "*", schema: "public", table: "items",
+      filter: `user_id=eq.${user.id}`
+    }, () => fetchItems())
+    .subscribe();
+  // add to cleanup: return () => { supabase.removeChannel(channel); subscription.unsubscribe(); }
+  ```
+- **Also see:** `ResearchMate Extension/docs/CLAUDE.md` → Known Gaps section for the exact implementation template.
+
+---
 
 *Generated March 2026 via full codebase audit. Do not start any item without reading `CLAUDE.md` first.*
