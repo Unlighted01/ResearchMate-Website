@@ -10,6 +10,7 @@ The full-stack web platform for ResearchMate - part of the ResearchMate ecosyste
 - **Real-time Sync** - See updates from extension/mobile/smart pen instantly
 - **Statistics** - Track your research habits and patterns
 - **Smart Pen Gallery** - View and manage handwritten note scans
+- **Bulk Image Import** - Import multiple JPG/PNG captures at once from Settings → Import; each image is run through the OCR pipeline (`api/ocr.ts`) and saved as a `smart_pen` item
 
 ## 📋 Prerequisites
 
@@ -126,6 +127,7 @@ The website uses these Supabase tables (shared with extension):
 | tags          | text[]    | Array of tags                             |
 | note          | text      | User notes                                |
 | ai_summary    | text      | AI-generated summary                      |
+| ocr_confidence| integer   | Heuristic OCR quality score (0–100)       |
 | device_source | text      | 'extension', 'mobile', 'smart_pen', 'web' |
 | collection_id | uuid      | Optional collection reference             |
 | created_at    | timestamp | Creation timestamp                        |

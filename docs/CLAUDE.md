@@ -39,7 +39,9 @@
 - Detects `?code=` + `window.opener` → posts `AUTH_SUCCESS` to parent → closes popup.
 
 ### 3-Tier OCR Fallback (`api/ocr.ts`)
-- OpenRouter (gpt-4o) → Gemini 1.5 Pro → Claude 3.5 Sonnet
+- OpenRouter (gemini-2.0-flash) → Gemini 2.5 Flash → Claude 3.5 Sonnet
+- Response includes `ocrConfidence` (integer 0–100): heuristic based on word count — `min(98, 65 + min(33, wordCount/300))`.
+- `SettingsPage.tsx` bulk import accepts multiple JPG/PNG files simultaneously (via `multiple` attribute on the file input) and routes each through `POST /api/ocr` with `{ image: base64DataUrl }`. Results are saved as `device_source: "smart_pen"` items in Supabase.
 
 ### Smart Pen Hardware
 - `/supabase/functions/smart-pen/` Edge Function

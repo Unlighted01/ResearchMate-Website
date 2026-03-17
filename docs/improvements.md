@@ -342,4 +342,17 @@ Do not split proactively — only when you're already editing one of these files
 
 ---
 
+---
+
+## ✅ Fixed (March 2026 — Test Suite Pass)
+
+| Issue | File | What was wrong | Fix |
+|---|---|---|---|
+| SettingsPage OCR import called wrong endpoint | `src/components/App/SettingsPage.tsx` | Sent `{ imageBase64, mimeType }` to `/api/extract-image` (non-existent route) | Now sends `{ image: base64DataUrl }` to `/api/ocr` |
+| SettingsPage import only handled one file | `src/components/App/SettingsPage.tsx` | `e.target.files?.[0]` discarded all but the first file | `multiple` attribute added; iterates `Array.from(files)` with per-file try/catch |
+| OCR confidence score never returned | `api/ocr.ts` | Response had no confidence field | Added heuristic word-count score, returned as `ocrConfidence` (0–100 integer) |
+| `ocrConfidence` / `ocrEdited` missing from StorageItem | `src/services/storageService.ts` (extension) | Fields not declared; `updateItem()` didn't persist `text` edits to Supabase | Fields added to interface; `text` mapping added in DB update branch |
+| Book year parsed with `new Date()` (NaN on partial dates) | `src/components/ItemDetail.tsx` (extension) | `"2024-12"` → `NaN` | Replaced with `/\d{4}/` regex |
+| Smart pen scans opened without `ocrConfidence` | `src/components/SmartPenView.tsx` (extension) | `handleScanClick` never mapped `scan.ocr_confidence` | Added `ocrConfidence: scan.ocr_confidence` to the built item |
+
 *Generated March 2026 via full codebase audit. Do not start any item without reading `CLAUDE.md` first.*
