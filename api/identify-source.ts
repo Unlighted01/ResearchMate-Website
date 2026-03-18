@@ -6,6 +6,12 @@ const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models
 
 const PROMPT = `You are a source identification expert. Analyze the following text (OCR output from a physical document) and identify what book, academic paper, journal article, movie, or other source it is from.
 
+IMPORTANT RULES:
+- Look for the TITLE of the source, not the abstract or body content. For research papers, the title is usually the first prominent line before "Abstract:".
+- Do NOT use the abstract text as the title.
+- For well-known literary works (e.g. Harry Potter opening paragraph), identify the book title and author directly.
+- The searchQuery should be "Title Author" format for best results (e.g. "Harry Potter Philosopher's Stone J.K. Rowling").
+
 Return ONLY a JSON object with this structure (no markdown, no explanation):
 {
   "title": "exact title of the source",
@@ -16,11 +22,11 @@ Return ONLY a JSON object with this structure (no markdown, no explanation):
   "isbn": "ISBN if identifiable or null",
   "doi": "DOI if identifiable or null",
   "confidence": 0-100,
-  "reasoning": "brief explanation of how you identified this",
-  "searchQuery": "the best search query to find this source (title + author is usually best)"
+  "reasoning": "brief one-line explanation",
+  "searchQuery": "Title AuthorLastName (best search query to find this)"
 }
 
-If you cannot identify the source with reasonable confidence (below 30), still return your best guess but set confidence accordingly.`;
+If you cannot identify with confidence below 30, still return your best guess with that confidence.`;
 
 async function identifyWithGemini(text: string, apiKey: string): Promise<any> {
   const res = await fetch(
