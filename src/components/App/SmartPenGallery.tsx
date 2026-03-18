@@ -327,6 +327,7 @@ const SmartPenGallery = () => {
       await updateItem(scan.id, {
         text: result.ocrText,
         ocrText: result.ocrText,
+        ocrConfidence: result.ocrConfidence ?? undefined,
         aiSummary: result.aiSummary || undefined,
       });
 
@@ -789,6 +790,7 @@ const SmartPenGallery = () => {
             await updateScanItem(scan, {
               text: result.ocrText,
               ocrText: result.ocrText,
+              ocrConfidence: result.ocrConfidence ?? undefined,
               aiSummary: result.aiSummary || undefined,
             });
             showToast("Text extracted!", "success");

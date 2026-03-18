@@ -27,6 +27,7 @@ export interface StorageItem {
   collectionId?: string;
   imageUrl?: string;
   ocrText?: string;
+  ocrConfidence?: number;
 }
 
 export interface AddItemInput {
@@ -44,6 +45,7 @@ export interface AddItemInput {
   collectionId?: string;
   imageUrl?: string;
   ocrText?: string;
+  ocrConfidence?: number;
 }
 
 export interface UpdateItemInput {
@@ -60,6 +62,7 @@ export interface UpdateItemInput {
   imageUrl?: string;
   sourceTitle?: string;
   sourceUrl?: string;
+  ocrConfidence?: number;
 }
 
 export interface MigrationResult {
@@ -140,6 +143,7 @@ function transformDatabaseItem(item: any): StorageItem {
     collectionId: item.collection_id,
     imageUrl: item.image_url,
     ocrText: item.ocr_text,
+    ocrConfidence: item.ocr_confidence,
     color: colorMatch as any,
   };
 }
@@ -178,6 +182,7 @@ function transformToDatabase(
     collection_id: item.collectionId,
     image_url: item.imageUrl,
     ocr_text: item.ocrText,
+    ocr_confidence: item.ocrConfidence,
   };
 }
 
@@ -320,6 +325,7 @@ export async function updateItem(
     if (updates.text !== undefined) updateData.text = updates.text;
     if (updates.ocrText !== undefined) updateData.ocr_text = updates.ocrText;
     if (updates.imageUrl !== undefined) updateData.image_url = updates.imageUrl;
+    if (updates.ocrConfidence !== undefined) updateData.ocr_confidence = updates.ocrConfidence;
     // @ts-ignore
     if (updates.sourceTitle !== undefined)
       updateData.source_title = updates.sourceTitle;

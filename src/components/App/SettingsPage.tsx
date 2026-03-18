@@ -381,125 +381,116 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  // Handle data import
+  // Helper: process a single image file via OCR API
+  const importImageFile = async (file: File): Promise<void> => {
+    const base64DataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Failed to read image file"));
+      reader.readAsDataURL(file);
+    });
+
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    const response = await fetch("/api/ocr", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ image: base64DataUrl, includeSummary: false }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.error || "Failed to extract text from image");
+    }
+
+    const data = await response.json();
+    if (!data.ocrText || !data.ocrText.trim()) {
+      throw new Error("No readable text found in image.");
+    }
+
+    const { error } = await supabase.from("items").insert({
+      user_id: user?.id,
+      text: data.ocrText.trim(),
+      source_title: file.name,
+      device_source: "smart_pen",
+      ocr_confidence: data.ocrConfidence ?? null,
+    });
+    if (error) throw error;
+  };
+
+  // Handle data import — supports multiple files and mixed formats (json, pdf, jpg, png)
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     setImportLoading(true);
-    try {
-      if (file.name.toLowerCase().endsWith(".pdf")) {
-        // PDF Import Logic
-        showToast("Extracting text from PDF...", "info");
+    let successCount = 0;
+    const errors: string[] = [];
 
-        // Dynamically import pdfjs to avoid bloating initial load
-        const pdfjsLib = await import("pdfjs-dist");
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    for (const file of files) {
+      try {
+        if (file.name.toLowerCase().endsWith(".pdf")) {
+          // PDF Import Logic
+          showToast(`Extracting text from "${file.name}"...`, "info");
+          const pdfjsLib = await import("pdfjs-dist");
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-        let fullText = "";
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items
-            .map((item: any) => item.str)
-            .join(" ");
-          fullText += pageText + "\n\n";
-        }
+          let fullText = "";
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            fullText += textContent.items.map((item: any) => item.str).join(" ") + "\n\n";
+          }
 
-        const cleanText = fullText.trim();
-        if (!cleanText) {
-          throw new Error("No readable text found in PDF.");
-        }
+          const cleanText = fullText.trim();
+          if (!cleanText) throw new Error("No readable text found in PDF.");
 
-        const { error } = await supabase.from("items").insert({
-          user_id: user?.id,
-          text: cleanText,
-          source_title: file.name.replace(/\.pdf$/i, ""),
-          device_source: "web",
-        });
-
-        if (error) throw error;
-        showToast(`Imported PDF "${file.name}" successfully!`, "success");
-      } else if (file.type.startsWith('image/')) {
-        // Image Import Logic using our backend Gemini endpoint
-        showToast("Extracting text via AI OCR...", "info");
-        
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        
-        await new Promise<void>((resolve, reject) => {
-          reader.onload = async () => {
-             try {
-                const base64Data = (reader.result as string).split(',')[1];
-                const mimeType = file.type;
-
-                const response = await fetch('/api/extract-image', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-                  },
-                  body: JSON.stringify({ imageBase64: base64Data, mimeType })
-                });
-
-                if (!response.ok) {
-                   const errData = await response.json();
-                   throw new Error(errData.error || 'Failed to extract text from image');
-                }
-
-                const data = await response.json();
-                
-                if (!data.text || !data.text.trim()) {
-                   throw new Error("No readable text found in image.");
-                }
-
-                const { error } = await supabase.from("items").insert({
-                  user_id: user?.id,
-                  text: data.text.trim(),
-                  source_title: file.name,
-                  device_source: "web",
-                });
-        
-                if (error) throw error;
-                showToast(`Imported Image "${file.name}" successfully!`, "success");
-                resolve();
-             } catch (err: any) {
-                reject(err);
-             }
-          };
-          reader.onerror = () => reject(new Error("Failed to read image file"));
-        });
-      } else {
-        // Standard JSON Import Logic
-        const text = await file.text();
-        const items = JSON.parse(text);
-
-        if (!Array.isArray(items)) {
-          throw new Error("Invalid format");
-        }
-
-        let imported = 0;
-        for (const item of items) {
           const { error } = await supabase.from("items").insert({
             user_id: user?.id,
-            text: item.text,
-            source_url: item.source_url,
-            source_title: item.source_title,
-            tags: item.tags,
-            ai_summary: item.ai_summary,
+            text: cleanText,
+            source_title: file.name.replace(/\.pdf$/i, ""),
             device_source: "web",
           });
-          if (!error) imported++;
-        }
+          if (error) throw error;
+          successCount++;
+        } else if (file.type.startsWith("image/")) {
+          // Image OCR Import
+          showToast(`Running OCR on "${file.name}"...`, "info");
+          await importImageFile(file);
+          successCount++;
+        } else if (file.name.toLowerCase().endsWith(".json")) {
+          // JSON Import
+          const text = await file.text();
+          const items = JSON.parse(text);
+          if (!Array.isArray(items)) throw new Error("Invalid JSON format.");
 
-        showToast(`Imported ${imported} items successfully!`, "success");
+          for (const item of items) {
+            const { error } = await supabase.from("items").insert({
+              user_id: user?.id,
+              text: item.text,
+              source_url: item.source_url,
+              source_title: item.source_title,
+              tags: item.tags,
+              ai_summary: item.ai_summary,
+              device_source: "web",
+            });
+            if (!error) successCount++;
+          }
+        } else {
+          errors.push(`"${file.name}": unsupported format`);
+        }
+      } catch (err: any) {
+        errors.push(`"${file.name}": ${err.message}`);
       }
-    } catch (error) {
-      showToast(`Import failed: ${(error as Error).message}`, "error");
     }
+
+    if (successCount > 0) showToast(`Imported ${successCount} item(s) successfully!`, "success");
+    if (errors.length > 0) showToast(`${errors.length} file(s) failed to import.`, "error");
     setImportLoading(false);
     e.target.value = "";
   };
@@ -1146,6 +1137,7 @@ const SettingsPage: React.FC = () => {
               <input
                 type="file"
                 accept=".json,.pdf,.png,.jpg,.jpeg"
+                multiple
                 title="Import Data"
                 aria-label="Import Data"
                 onChange={handleImport}

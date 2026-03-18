@@ -39,11 +39,21 @@
 - Detects `?code=` + `window.opener` → posts `AUTH_SUCCESS` to parent → closes popup.
 
 ### 3-Tier OCR Fallback (`api/ocr.ts`)
-- OpenRouter (gpt-4o) → Gemini 1.5 Pro → Claude 3.5 Sonnet
+- OpenRouter (gemini-2.0-flash) → Gemini 2.5 Flash → Claude 3.5 Sonnet
+- Response includes `ocrConfidence` (integer 0–100): heuristic based on word count — `min(98, 65 + min(33, wordCount/300))`.
+- `SettingsPage.tsx` bulk import accepts multiple JPG/PNG files simultaneously (via `multiple` attribute on the file input) and routes each through `POST /api/ocr` with `{ image: base64DataUrl }`. Results are saved as `device_source: "smart_pen"` items in Supabase.
 
 ### Smart Pen Hardware
 - `/supabase/functions/smart-pen/` Edge Function
 - `list`, `unpair`, `confirm` actions added to manage devices without RLS restrictions.
+
+### OCR Edit UI + Confidence (SmartPenScanModal)
+- Inline Edit/Save/Cancel textarea in scan detail modal — saves corrected text + adds `"ocr:edited"` tag.
+- Confidence badge rendered from `ocrConfidence` field (≥80% green, ≥60% yellow, <60% red).
+- After OCR save, inline "Re-link citation?" prompt appears when a citation already exists.
+- `ocrConfidence` field added to `StorageItem`, `AddItemInput`, `UpdateItemInput` and mapped to `ocr_confidence` DB column in `storageService.ts`.
+- `SettingsPage.tsx` bulk import now persists `ocr_confidence` to Supabase.
+- Hardcoded Supabase anon key removed from `SmartPenGallery.tsx` — replaced with `supabase.functions.invoke()`.
 
 ### Color Metadata System
 - Colors stored as `color:x` entries in the `tags` array — no separate DB column.
@@ -104,6 +114,17 @@ Returns: title[], author[]{given,family}, published.date-parts[][], container-ti
 - Cosmetic buttons (non-`<button>` elements): add `role="button"` + `tabIndex={0}` + `onKeyDown`
 - Color swatches: `aria-pressed` + `aria-label` with `"(selected)"` state
 
+### Priority 2B — Failed Test Fixes ✅ RESOLVED March 2026
+
+| # | Test ID | Issue | Status |
+|---|---------|-------|--------|
+| — | 8.3-7 | Citation — non-standard date formats | ✅ `extractYear()` regex fix in `CitationGenerator.tsx` + `api/extract-citation.ts` |
+| T-1 | 8.5-10, 8.5-11, 9.1-5 | OCR edit UI | ✅ Inline Edit/Save/Cancel textarea + "Edited" badge in `SmartPenScanModal.tsx` |
+| T-2 | 8.5-11, 9.1-5 | OCR confidence not saved or displayed | ✅ Saved on import + re-run; colored badge in modal; `ocrConfidence` in `storageService.ts` |
+| T-3 | 9.3-4 | Citation not regenerated after OCR edit | ✅ "Re-link citation?" inline prompt after OCR save in `SmartPenScanModal.tsx` |
+| T-4 | 9.1-6 | No Retry OCR button | ✅ Already existed via `onRunOCR` + Re-run OCR button |
+| — | 9.4-1 | Bulk import rejected jpg/png | ✅ `SettingsPage.tsx` now accepts all image types via `/api/ocr` |
+
 ### Priority 3 — Sync Status Announcements (Low Impact)
 
 Wrap loading/status messages in `aria-live="polite"` so screen readers announce sync results and save confirmations.
@@ -140,4 +161,4 @@ Wrap loading/status messages in `aria-live="polite"` so screen readers announce 
 
 ---
 
-*Last updated: March 2026 — Created from handover_prompt.md + extension-mirror-prompt.md context*
+*Last updated: March 2026 — T-1/T-2/T-3/T-4 test fixes resolved; hardcoded Supabase key removed; `ocrConfidence` added to storageService*

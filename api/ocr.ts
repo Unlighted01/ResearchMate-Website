@@ -466,9 +466,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await deductCredit(authResult.user.id);
     }
 
+    // Calculate heuristic confidence based on extracted text quality
+    const wordCount = ocrResult.text.split(/\s+/).filter(Boolean).length;
+    const ocrConfidence = Math.min(0.98, 0.65 + Math.min(0.33, wordCount / 300));
+
     return res.status(200).json({
       success: true,
       ocrText: ocrResult.text,
+      ocrConfidence: Math.round(ocrConfidence * 100),
       aiSummary: summary,
     });
   } catch (error) {

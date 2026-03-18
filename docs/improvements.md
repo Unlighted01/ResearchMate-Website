@@ -302,7 +302,7 @@ Do not split proactively — only when you're already editing one of these files
 
 | # | Priority | Issue | Files |
 |---|---|---|---|
-| 1 | 🔴 Critical | Hardcoded Supabase key | `SmartPenGallery.tsx` |
+| 1 | ✅ Fixed | Hardcoded Supabase key | `SmartPenGallery.tsx` |
 | 2 | 🔴 Critical | Credits lost on API failure | `api/_utils/auth.ts` |
 | 3 | 🔴 Critical | Time range filter does nothing | `Statistics.tsx` |
 | 4 | 🔴 Critical | Fake hardcoded stat changes | `Statistics.tsx` |
@@ -339,6 +339,68 @@ Do not split proactively — only when you're already editing one of these files
 | 35 | 🔵 Refactor | Missing null guards | `Dashboard.tsx`, `SmartPenGallery.tsx`, `AIAssistant.tsx` |
 | 36 | 🔵 Refactor | No tests | Whole codebase |
 | 37 | 🔵 Refactor | Env var validation weak | `supabaseClient.ts` |
+
+---
+
+---
+
+## ✅ Fixed (March 2026 — Test Suite Pass)
+
+| Issue | File | What was wrong | Fix |
+|---|---|---|---|
+| SettingsPage OCR import called wrong endpoint | `src/components/App/SettingsPage.tsx` | Sent `{ imageBase64, mimeType }` to `/api/extract-image` (non-existent route) | Now sends `{ image: base64DataUrl }` to `/api/ocr` |
+| SettingsPage import only handled one file | `src/components/App/SettingsPage.tsx` | `e.target.files?.[0]` discarded all but the first file | `multiple` attribute added; iterates `Array.from(files)` with per-file try/catch |
+| OCR confidence score never returned | `api/ocr.ts` | Response had no confidence field | Added heuristic word-count score, returned as `ocrConfidence` (0–100 integer) |
+| `ocrConfidence` / `ocrEdited` missing from StorageItem | `src/services/storageService.ts` (extension) | Fields not declared; `updateItem()` didn't persist `text` edits to Supabase | Fields added to interface; `text` mapping added in DB update branch |
+| Book year parsed with `new Date()` (NaN on partial dates) | `src/components/ItemDetail.tsx` (extension) | `"2024-12"` → `NaN` | Replaced with `/\d{4}/` regex |
+| Smart pen scans opened without `ocrConfidence` | `src/components/SmartPenView.tsx` (extension) | `handleScanClick` never mapped `scan.ocr_confidence` | Added `ocrConfidence: scan.ocr_confidence` to the built item |
+| `ocrEdited` flag not persisted to DB | `src/services/storageService.ts` + `ItemDetail.tsx` (extension) | No DB column; flag lost on page refresh | Encoded as `"ocr:edited"` tag in the `tags` array (same pattern as `color:*`) |
+| Tag search ignored `item.tags` | `src/SidePanel.tsx` (extension) | Filter only checked `text`, `note`, `sourceTitle` | Added `.tags.some(...)` to `filteredItems` — skips internal `color:` and `ocr:` tags |
+| Note field not editable in detail view | `src/components/ItemDetail.tsx` (extension) | `item.note` was displayed as read-only text | Added `itemNote` state + Edit/Save/Cancel inline editor wired to `updateItem({ note })` |
+| Citation only returned bibliography, no in-text form | `src/services/geminiService.ts` + `ItemDetail.tsx` (extension) | `CitationResult` had only `citation: string` | Added `inTextCitation?: string` to interface; `formatInTextCitation()` generates style-correct short form from CrossRef data; citation card now shows both with separate copy buttons |
+
+---
+
+## ✅ Failed Test Fixes (From Test Suite — Tables 8.3, 8.5, 9.1, 9.3, 9.4) — RESOLVED March 2026
+
+| Test ID | Issue | Files | Fix |
+|---------|-------|-------|-----|
+| 8.3-7 | Citation — non-standard date formats (`"2025/12"`, `"December 2025"` → `NaN`) | `CitationGenerator.tsx`, `api/extract-citation.ts` | `extractYear()` uses `/\d{4}/` regex instead of broken `new Date(x).getFullYear()` |
+| T-1 (8.5-10, 8.5-11, 9.1-5) | OCR edit UI missing | `SmartPenScanModal.tsx` | Inline Edit/Save/Cancel textarea added; "Edited" badge shown when `tags` includes `"ocr:edited"` |
+| T-2 (8.5-11, 9.1-5) | OCR confidence not saved or displayed | `storageService.ts`, `SettingsPage.tsx`, `SmartPenScanModal.tsx`, `SmartPenGallery.tsx` | `ocrConfidence` added to all interfaces + DB mappings; saved on bulk import and re-run OCR; colored badge rendered in modal (≥80% green, ≥60% yellow, <60% red) |
+| T-3 (9.3-4) | Citation not regenerated after OCR edit | `SmartPenScanModal.tsx` | After OCR save, inline "Text updated — Re-link citation?" prompt appears when a citation already exists; triggers book re-search |
+| T-4 (9.1-6) | No Retry OCR button | `SmartPenScanModal.tsx` | Already present via `onRunOCR` prop + Re-run OCR button on image panel |
+| 9.4-1 | Bulk import only accepted PDF, not jpg/png | `SettingsPage.tsx` | `multiple` attribute added; `Array.from(files)` iterates all; image types routed through `/api/ocr` |
+
+**Also fixed in this pass:**
+- **#1 (Critical)** — Hardcoded Supabase anon key removed from `SmartPenGallery.tsx`; replaced with `supabase.functions.invoke()`.
+
+---
+
+## 🔧 Needs External Setup (Cannot Fix in Code Alone)
+
+These gaps require infrastructure changes — Supabase dashboard config, schema migrations, or third-party service setup — before the code can be written.
+
+---
+
+### 🔴 [EXT] Realtime Cross-Device Sync — `NEEDS SUPABASE REPLICATION`
+
+- **Affects:** Extension `src/SidePanel.tsx`
+- **Tests blocked:** 9.5 #1 (Device A → B sync), #2 (offline reconnect), #3 (delete propagation)
+- **Problem:** No `supabase.channel().on().subscribe()` exists. Changes on Device A only appear on Device B after a manual sync button press or reload.
+- **Step 1 — Supabase Dashboard:** Go to your project → Table Editor → `items` → Replication tab → enable `INSERT`, `UPDATE`, `DELETE`.
+- **Step 2 — Code** (add inside `SidePanel.tsx` main `useEffect`, scoped to authenticated users):
+  ```ts
+  const channel = supabase
+    .channel("items-realtime")
+    .on("postgres_changes", {
+      event: "*", schema: "public", table: "items",
+      filter: `user_id=eq.${user.id}`
+    }, () => fetchItems())
+    .subscribe();
+  // add to cleanup: return () => { supabase.removeChannel(channel); subscription.unsubscribe(); }
+  ```
+- **Also see:** `ResearchMate Extension/docs/CLAUDE.md` → Known Gaps section for the exact implementation template.
 
 ---
 
