@@ -40,11 +40,31 @@ async function identifyWithGemini(text: string, apiKey: string): Promise<any> {
       }),
     }
   );
-  if (!res.ok) throw new Error(`Gemini error ${res.status}`);
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("Gemini HTTP error:", res.status, errText.slice(0, 300));
+    throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 100)}`);
+  }
+
   const data = await res.json();
+
+  // Log any safety/block issues
+  if (data.promptFeedback?.blockReason) {
+    console.error("Gemini blocked:", data.promptFeedback.blockReason);
+    throw new Error(`Gemini blocked: ${data.promptFeedback.blockReason}`);
+  }
+
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("No JSON in response");
+  console.log("Gemini raw response:", raw.slice(0, 200));
+
+  // Strip markdown code fences if present
+  const cleaned = raw.replace(/```(?:json)?\n?/g, "").replace(/```/g, "").trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    console.error("No JSON found in Gemini response:", raw.slice(0, 300));
+    throw new Error("No JSON in response");
+  }
   return JSON.parse(jsonMatch[0]);
 }
 
@@ -76,6 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const result = await identifyWithGemini(text, apiKey);
     return res.status(200).json(result);
   } catch (err: any) {
+    console.error("identify-source failed:", err?.message || err);
     if (auth.isFreeTier) await refundCredit(auth.user.id);
     return res.status(500).json({ error: err.message });
   }
