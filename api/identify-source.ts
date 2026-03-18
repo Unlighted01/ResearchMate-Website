@@ -51,8 +51,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { text } = req.body || {};
   if (!text?.trim()) return res.status(400).json({ error: "Text is required" });
 
-  const apiKey = auth.customKey || process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "AI not configured" });
+  // Match the key rotation pattern used by other endpoints
+  const multipleKeys = process.env.GEMINI_API_KEYS;
+  let apiKey: string | undefined = auth.customKey;
+  if (!apiKey) {
+    if (multipleKeys) {
+      const keys = multipleKeys.split(",").map((k) => k.trim()).filter(Boolean);
+      apiKey = keys[Math.floor(Math.random() * keys.length)];
+    } else {
+      apiKey = process.env.GEMINI_API_KEY;
+    }
+  }
+  if (!apiKey) return res.status(503).json({ error: "AI not configured" });
 
   try {
     if (auth.isFreeTier) await deductCredit(auth.user.id);
