@@ -74,6 +74,22 @@ import { exportItems } from "../../utils/export";
 import { generateMarkdownTemplate } from "../../utils/markdownGenerator";
 import { useRef } from "react";
 import { useNotifications } from "../../context/NotificationContext";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+const stripMarkdown = (text: string) =>
+  text
+    .replace(/^#{1,6} /gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/`(.*?)`/g, "$1")
+    .replace(/\|.*\|/g, "")
+    .replace(/^[-*+] /gm, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^\s*[-]{3,}\s*$/gm, "")
+    .trim();
+
+const isMarkdown = (text: string) => /^#{1,3} |\n#{1,3} |\|.+\|/.test(text);
 
 // Helper for source icons
 const getSourceIcon = (source: string) => {
@@ -863,7 +879,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   {item.sourceTitle || "Untitled Research"}
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed">
-                  {item.aiSummary || item.text || item.ocrText}
+                  {(() => { const t = item.aiSummary || item.text || item.ocrText || ""; return isMarkdown(t) ? stripMarkdown(t) : t; })()}
                 </p>
               </div>
 
@@ -975,7 +991,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   {item.sourceTitle || "Untitled Research"}
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                  {item.aiSummary || item.text || item.ocrText}
+                  {(() => { const t = item.aiSummary || item.text || item.ocrText || ""; return isMarkdown(t) ? stripMarkdown(t) : t; })()}
                 </p>
               </div>
 
@@ -1070,7 +1086,34 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   </div>
                 </div>
                 <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed max-h-[300px] overflow-y-auto">
-                  {selectedItem.text || selectedItem.ocrText}
+                  {(() => {
+                    const t = selectedItem.text || selectedItem.ocrText || "";
+                    return isMarkdown(t) ? (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          h1: ({ children }) => <h1 className="text-base font-bold text-gray-900 dark:text-white mt-3 mb-1 border-b border-gray-200 dark:border-gray-700 pb-1">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-sm font-bold text-blue-900 dark:text-blue-300 mt-2 mb-1">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-2 mb-0.5">{children}</h3>,
+                          p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+                          strong: ({ children }) => <strong className="font-bold text-gray-900 dark:text-white">{children}</strong>,
+                          em: ({ children }) => <em className="italic text-gray-500 dark:text-gray-400">{children}</em>,
+                          ul: ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
+                          blockquote: ({ children }) => <blockquote className="border-l-2 border-gray-300 dark:border-gray-600 pl-3 italic text-gray-500 dark:text-gray-400 text-xs my-1">{children}</blockquote>,
+                          hr: () => <hr className="border-gray-200 dark:border-gray-700 my-2" />,
+                          table: ({ children }) => <div className="overflow-x-auto my-2"><table className="w-full text-xs border-collapse">{children}</table></div>,
+                          thead: ({ children }) => <thead className="bg-blue-50 dark:bg-blue-900/30">{children}</thead>,
+                          th: ({ children }) => <th className="border border-gray-200 dark:border-gray-700 px-2 py-1 font-semibold text-gray-900 dark:text-white text-left">{children}</th>,
+                          td: ({ children }) => <td className="border border-gray-200 dark:border-gray-700 px-2 py-1 align-top">{children}</td>,
+                        }}
+                      >
+                        {t}
+                      </ReactMarkdown>
+                    ) : (
+                      <span className="whitespace-pre-wrap">{t}</span>
+                    );
+                  })()}
                 </div>
               </div>
 

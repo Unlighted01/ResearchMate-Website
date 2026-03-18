@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { StorageItem, updateItem } from "../../services/storageService";
 import { LibrarySearch, BookDocument } from "./LibrarySearch";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // ----------------------------------------
 // Props
@@ -348,9 +350,30 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
                       </div>
                     </div>
                   ) : ocrText ? (
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-[120px] overflow-y-auto font-mono">
-                      {ocrText}
-                    </p>
+                    <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed max-h-[120px] overflow-y-auto">
+                      {/^#{1,3} |\n#{1,3} |\|.+\|/.test(ocrText) ? (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            h1: ({ children }) => <h1 className="text-sm font-bold text-gray-900 dark:text-white mt-2 mb-0.5">{children}</h1>,
+                            h2: ({ children }) => <h2 className="text-xs font-bold text-blue-900 dark:text-blue-300 mt-1.5 mb-0.5">{children}</h2>,
+                            h3: ({ children }) => <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mt-1">{children}</h3>,
+                            p: ({ children }) => <p className="mb-1 leading-relaxed">{children}</p>,
+                            strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                            em: ({ children }) => <em className="italic text-gray-500">{children}</em>,
+                            ul: ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-1">{children}</ul>,
+                            table: ({ children }) => <div className="overflow-x-auto my-1"><table className="w-full text-xs border-collapse">{children}</table></div>,
+                            thead: ({ children }) => <thead className="bg-blue-50 dark:bg-blue-900/30">{children}</thead>,
+                            th: ({ children }) => <th className="border border-gray-200 dark:border-gray-700 px-1.5 py-1 font-semibold text-left">{children}</th>,
+                            td: ({ children }) => <td className="border border-gray-200 dark:border-gray-700 px-1.5 py-1 align-top">{children}</td>,
+                          }}
+                        >
+                          {ocrText}
+                        </ReactMarkdown>
+                      ) : (
+                        <span className="whitespace-pre-wrap font-mono">{ocrText}</span>
+                      )}
+                    </div>
                   ) : (
                     <p className="text-sm text-gray-400 italic text-center py-4">
                       No text extracted yet. Use "Extract Text" on the left.
