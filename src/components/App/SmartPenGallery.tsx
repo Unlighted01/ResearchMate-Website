@@ -38,11 +38,6 @@ import CameraCapture from "./CameraCapture"; // TO BE REMOVED WHEN SMART PEN HAR
 import { getCurrentUser, supabase } from "../../services/supabaseClient";
 import { LibrarySearch, BookDocument } from "./LibrarySearch";
 
-// Supabase config
-const SUPABASE_URL = "https://jxevjkzojfbywxvtcwtl.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4ZXZqa3pvamZieXd4dnRjd3RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MDc4MzEsImV4cCI6MjA3NTQ4MzgzMX0.hZL-wGTcmD9H0bsmj_jqzZ2iw1GZyJM5X14meIRKgNQ";
-
 // Toast component
 interface ToastProps {
   message: string;
@@ -179,17 +174,10 @@ const SmartPenGallery = () => {
 
   const loadPairedPens = async (uid: string) => {
     try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/smart-pen`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ action: "list", user_id: uid }),
+      const { data, error } = await supabase.functions.invoke("smart-pen", {
+        body: { action: "list", user_id: uid },
       });
-      const data = await response.json();
-      if (data.success) {
+      if (!error && data?.success) {
         setPairedPens(data.pens || []);
       }
     } catch (err) {
@@ -201,17 +189,10 @@ const SmartPenGallery = () => {
     if (!confirm(`Disconnect pen ${penId.substring(0, 15)}...?`)) return;
 
     try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/smart-pen`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ action: "unpair", pen_id: penId }),
+      const { data, error } = await supabase.functions.invoke("smart-pen", {
+        body: { action: "unpair", pen_id: penId },
       });
-      const data = await response.json();
-      if (data.success) {
+      if (!error && data?.success) {
         setPairedPens(pairedPens.filter((p) => p.pen_id !== penId));
         showToast("Device disconnected", "info");
       } else {
@@ -280,8 +261,24 @@ const SmartPenGallery = () => {
   // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
   // Handle camera capture and save image
   const handleCameraCapture = async (imageData: string) => {
+    // Optimistically prepend the item so the gallery updates instantly
+    const tempId = `temp-${Date.now()}`;
+    const optimisticItem: StorageItem = {
+      id: tempId,
+      text: "",
+      imageUrl: imageData,
+      sourceTitle: `Phone Capture - ${new Date().toLocaleDateString()}`,
+      sourceUrl: "",
+      tags: ["phone-capture", "ocr"],
+      note: "",
+      deviceSource: "smart_pen",
+      createdAt: new Date().toISOString(),
+    } as StorageItem;
+
+    setScans((prev) => [optimisticItem, ...prev]);
+    setShowCamera(false);
+
     try {
-      // Save just the image to storage first
       await addItem({
         text: "",
         imageUrl: imageData,
@@ -289,13 +286,15 @@ const SmartPenGallery = () => {
         sourceUrl: "",
         tags: ["phone-capture", "ocr"],
         note: "",
-        deviceSource: "smart_pen", // Show in this gallery
+        deviceSource: "smart_pen",
       });
 
       showToast("Photo captured and saved to gallery!", "success");
-      setShowCamera(false);
-      loadScans(); // Refresh gallery
+      // Reconcile optimistic item with the real persisted one
+      loadScans();
     } catch (err) {
+      // Roll back the optimistic item
+      setScans((prev) => prev.filter((s) => s.id !== tempId));
       showToast(
         err instanceof Error ? err.message : "Failed to save image",
         "error",

@@ -20,6 +20,7 @@ import {
   User,
   AlertCircle,
   Coins,
+  X,
 } from "lucide-react";
 import { Button, Card, Badge, Modal } from "../shared/UIComponents";
 import {
@@ -27,6 +28,7 @@ import {
   updateItem,
   StorageItem,
 } from "../../services/storageService";
+import { supabase } from "../../services/supabaseClient";
 import {
   generateSummary,
   generateChatResponse,
@@ -75,7 +77,25 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
   // Credit State
   const [credits, setCredits] = useState<number | string>("...");
 
+  // Abort controller ref for cancellable chat requests
+  const chatAbortRef = useRef<AbortController | null>(null);
+
   const { showToast } = useToast();
+
+  // Fetch real credit count on mount
+  useEffect(() => {
+    const fetchCredits = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("ai_credits")
+        .eq("id", session.user.id)
+        .single();
+      if (profile) setCredits(profile.ai_credits ?? 0);
+    };
+    fetchCredits();
+  }, []);
 
   // Debounce search query (300ms delay)
   useEffect(() => {
@@ -293,11 +313,6 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
     const itemsToUse =
       mentionedItems.length > 0 ? mentionedItems : items.slice(0, 5);
 
-    console.log(
-      "Using Context Items:",
-      itemsToUse.map((i) => i.sourceTitle),
-    );
-
     const contextItems = itemsToUse
       .map(
         (item) => `
@@ -314,8 +329,13 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
     ${contextItems}
     `;
 
+    const controller = new AbortController();
+    chatAbortRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
     try {
-      const result = await generateChatResponse(userMsg.text, context);
+      const result = await generateChatResponse(userMsg.text, context, controller.signal);
+      clearTimeout(timeoutId);
 
       if (result.ok) {
         // CHECK FOR REDIRECT ACTION
@@ -350,6 +370,8 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
           text:
             result.reason === "no_credits"
               ? "⚠️ **Out of AI Credits**. Please wait for your monthly refill or add your own API Key in Settings."
+              : result.reason === "aborted"
+              ? "Request was cancelled."
               : `Error: ${result.error}`,
           timestamp: Date.now(),
         };
@@ -357,14 +379,19 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
         if (result.reason === "no_credits") setCredits(0);
       }
     } catch (error) {
+      clearTimeout(timeoutId);
+      const isAbort = (error as Error).name === "AbortError";
       const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "ai",
-        text: "Sorry, I encountered a network error. Please try again.",
+        text: isAbort
+          ? "Request timed out or was cancelled. Please try again."
+          : "Sorry, I encountered a network error. Please try again.",
         timestamp: Date.now(),
       };
       setChatHistory((prev) => [...prev, errorMsg]);
     } finally {
+      chatAbortRef.current = null;
       setIsChatting(false);
     }
   };
@@ -688,17 +715,23 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
                   ))}
                 </div>
               )}
-              <button
-                onClick={handleSendMessage}
-                disabled={!chatInput.trim() || isChatting}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-[#007AFF] hover:bg-[#0066DD] text-white rounded-lg transition-colors disabled:opacity-50 disabled:bg-gray-400"
-              >
-                {isChatting ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
+              {isChatting ? (
+                <button
+                  onClick={() => chatAbortRef.current?.abort()}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-[#FF3B30] hover:bg-[#D93025] text-white rounded-lg transition-colors"
+                  title="Cancel request"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!chatInput.trim()}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-[#007AFF] hover:bg-[#0066DD] text-white rounded-lg transition-colors disabled:opacity-50 disabled:bg-gray-400"
+                >
                   <Send className="w-4 h-4" />
-                )}
-              </button>
+                </button>
+              )}
             </div>
             <p className="text-xs text-center text-gray-400 mt-2 flex items-center justify-center gap-1">
               <Sparkles className="w-3 h-3" />

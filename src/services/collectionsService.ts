@@ -91,20 +91,21 @@ export async function getAllCollections(): Promise<Collection[]> {
 
     if (!cols || cols.length === 0) return [];
 
-    // Manually fetch item counts to avoid relationship errors
-    const { data: items } = await supabase
-      .from("items")
-      .select("collection_id")
-      .not("collection_id", "is", null);
+    // Fetch item counts per collection using parallel HEAD queries (zero rows transferred)
+    const countResults = await Promise.all(
+      cols.map((col) =>
+        supabase
+          .from("items")
+          .select("id", { count: "exact", head: true })
+          .eq("collection_id", col.id)
+          .then(({ count }) => ({ id: col.id, count: count ?? 0 })),
+      ),
+    );
 
     const counts: Record<string, number> = {};
-    if (items) {
-      items.forEach((i) => {
-        if (i.collection_id) {
-          counts[i.collection_id] = (counts[i.collection_id] || 0) + 1;
-        }
-      });
-    }
+    countResults.forEach(({ id, count }) => {
+      counts[id] = count;
+    });
 
     return cols.map((row) => ({
       ...transformCollection(row),

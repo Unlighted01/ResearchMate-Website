@@ -252,6 +252,14 @@ const SettingsPage: React.FC = () => {
 
   // Save API Key via Secure Cookie
   const handleSaveApiKey = async () => {
+    // Validate Gemini key format: must start with "AIz" and be 35+ chars
+    if (!customApiKey.startsWith("AIz") || customApiKey.length < 35) {
+      showToast(
+        "Invalid key format. Gemini keys start with 'AIz' and are 39+ characters.",
+        "error",
+      );
+      return;
+    }
     try {
       const response = await fetch("/api/set-custom-key", {
         method: "POST",

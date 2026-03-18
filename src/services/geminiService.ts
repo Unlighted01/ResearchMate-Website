@@ -73,18 +73,8 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
-  // DEBUG LOGGING (Temporary)
-  console.log("🔍 [GeminiService] Auth Check:");
-  console.log("   - Supabase URL Set:", !!import.meta.env.VITE_SUPABASE_URL);
-  console.log("   - Session Found:", !!data.session);
-  console.log("   - Token Present:", !!token);
-
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
-  } else {
-    console.warn(
-      "⚠️ [GeminiService] No Auth Token found! Request will likely fail 401.",
-    );
   }
 
   return headers;
@@ -251,6 +241,7 @@ export async function extractInsights(text: string): Promise<InsightsResult> {
 export async function generateChatResponse(
   userMessage: string,
   context: string,
+  signal?: AbortSignal,
 ): Promise<ChatResult> {
   const message = (userMessage || "").trim();
   if (!message) return { ok: false, response: "", reason: "empty" };
@@ -261,6 +252,7 @@ export async function generateChatResponse(
       method: "POST",
       headers,
       body: JSON.stringify({ message, context }),
+      signal,
     });
 
     const data = await response.json();
@@ -283,6 +275,9 @@ export async function generateChatResponse(
       credits_remaining: data.credits_remaining,
     };
   } catch (error) {
+    if ((error as Error).name === "AbortError") {
+      return { ok: false, response: "", reason: "aborted", error: "Request cancelled" };
+    }
     console.error("❌ Chat response failed:", error);
     return { ok: false, response: "", error: (error as Error).message };
   }

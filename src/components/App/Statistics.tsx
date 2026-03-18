@@ -3,7 +3,7 @@
 // ============================================
 
 import React, { useState, useEffect, useMemo } from "react";
-import { getAllItems } from "../../services/storageService";
+import { getAllItems, StorageItem } from "../../services/storageService";
 import {
   BarChart,
   Bar,
@@ -31,130 +31,164 @@ import {
 } from "lucide-react";
 
 const Statistics = () => {
-  const [stats, setStats] = useState({
-    total: 0,
-    withSummary: 0,
-    bySource: [] as any[],
-    weekly: [] as any[],
-    daily: [] as any[],
-  });
+  // ============================================
+  // PART 5A: STATE
+  // ============================================
+  const [allItems, setAllItems] = useState<StorageItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<"week" | "month" | "all">("week");
 
+  // ============================================
+  // PART 5B: FETCH — runs once on mount
+  // ============================================
   useEffect(() => {
-    // For stats, we might want all items, but let's use a reasonable limit for performance
     getAllItems(1000).then((items) => {
-      const sourceCount = { extension: 0, mobile: 0, web: 0, smart_pen: 0 };
-      const now = new Date();
-      const oneDay = 24 * 60 * 60 * 1000;
-
-      // Initialize maps with 0 for the required ranges
-      const last7DaysMap: Record<string, number> = {};
-      const last14DaysMap: Record<string, number> = {};
-
-      // Initialize keys for chart continuity
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * oneDay);
-        last7DaysMap[d.toLocaleDateString("en-US", { weekday: "short" })] = 0;
-      }
-      for (let i = 13; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * oneDay);
-        last14DaysMap[
-          d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-        ] = 0;
-      }
-
-      let withSummary = 0;
-
-      items.forEach((item) => {
-        // Source Stats
-        const src = (item.deviceSource || "web") as keyof typeof sourceCount;
-        if (sourceCount[src] !== undefined) sourceCount[src]++;
-
-        // Summary Stats
-        if (item.aiSummary) withSummary++;
-
-        // Date Stats
-        const itemDate = new Date(item.createdAt);
-        const timeDiff = now.getTime() - itemDate.getTime();
-        const daysAgo = Math.floor(timeDiff / oneDay);
-
-        // Weekly (Last 7 Days)
-        if (daysAgo <= 6 && daysAgo >= 0) {
-          const dayName = itemDate.toLocaleDateString("en-US", {
-            weekday: "short",
-          });
-          last7DaysMap[dayName] = (last7DaysMap[dayName] || 0) + 1;
-        }
-
-        // Daily Trend (Last 14 Days)
-        if (daysAgo <= 13 && daysAgo >= 0) {
-          const dateStr = itemDate.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          });
-          last14DaysMap[dateStr] = (last14DaysMap[dateStr] || 0) + 1;
-        }
-      });
-
-      const pieColors = {
-        extension: "#007AFF",
-        mobile: "#5856D6",
-        web: "#34C759",
-        smart_pen: "#FF9500",
-      };
-
-      const pieData = Object.entries(sourceCount)
-        .map(([name, value]) => ({
-          name: name.replace("_", " "),
-          value,
-          color: pieColors[name as keyof typeof pieColors],
-        }))
-        .filter((d) => d.value > 0);
-
-      // Convert maps to arrays, preserving order
-      // Weekly: Order by day of week is tricky if we want "Last 7 Days" rolling.
-      // Current implementation in chart uses "name" (Mon, Tue).
-      // To show "last 7 days" in order, we regenerate keys based on the loop order.
-      const weeklyData = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * oneDay);
-        const name = d.toLocaleDateString("en-US", { weekday: "short" });
-        weeklyData.push({ name, count: last7DaysMap[name] || 0 });
-      }
-
-      const dailyData = [];
-      for (let i = 13; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * oneDay);
-        const date = d.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        });
-        dailyData.push({ date, count: last14DaysMap[date] || 0 });
-      }
-
-      setStats({
-        total: items.length,
-        withSummary,
-        bySource: pieData,
-        weekly: weeklyData,
-        daily: dailyData,
-      });
+      setAllItems(items);
       setLoading(false);
     });
   }, []);
 
-  // Memoize computed values from stats
-  const computedStats = useMemo(() => {
-    const weekTotal = stats.weekly.reduce((a, b) => a + b.count, 0);
-    // Average over the last 7 days (or total days if < 7)
-    // Here we strictly show last 7 days so avg is total / 7
-    const avgPerDay = Math.round(weekTotal / 7) || 0;
+  // ============================================
+  // PART 5C: COMPUTED STATS — re-runs on timeRange change
+  // ============================================
+  const { stats, computedStats, statCards } = useMemo(() => {
+    const now = new Date();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    const periodDays = timeRange === "week" ? 7 : timeRange === "month" ? 30 : null;
 
-    // Find most active day in the weekly set
+    // Period date boundaries
+    const cutoff = periodDays ? new Date(now.getTime() - periodDays * ONE_DAY) : null;
+    const prevCutoff = periodDays
+      ? new Date(now.getTime() - 2 * periodDays * ONE_DAY)
+      : null;
+
+    const currentItems = cutoff
+      ? allItems.filter((i) => new Date(i.createdAt) >= cutoff)
+      : allItems;
+    const prevItems =
+      prevCutoff && cutoff
+        ? allItems.filter((i) => {
+            const d = new Date(i.createdAt);
+            return d >= prevCutoff && d < cutoff;
+          })
+        : [];
+
+    // Source counts + summary count
+    const sourceCount = { extension: 0, mobile: 0, web: 0, smart_pen: 0 };
+    let withSummary = 0;
+    currentItems.forEach((item) => {
+      const src = (item.deviceSource || "web") as keyof typeof sourceCount;
+      if (src in sourceCount) sourceCount[src]++;
+      if (item.aiSummary) withSummary++;
+    });
+    const prevWithSummary = prevItems.filter((i) => i.aiSummary).length;
+
+    // Chart data — shape depends on timeRange
+    let weekly: { name: string; count: number }[] = [];
+    let daily: { date: string; count: number }[] = [];
+
+    if (timeRange === "week") {
+      const map: Record<string, number> = {};
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * ONE_DAY);
+        map[d.toLocaleDateString("en-US", { weekday: "short" })] = 0;
+      }
+      currentItems.forEach((item) => {
+        const daysAgo = Math.floor(
+          (now.getTime() - new Date(item.createdAt).getTime()) / ONE_DAY
+        );
+        if (daysAgo >= 0 && daysAgo <= 6) {
+          const key = new Date(item.createdAt).toLocaleDateString("en-US", {
+            weekday: "short",
+          });
+          if (key in map) map[key]++;
+        }
+      });
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * ONE_DAY);
+        const name = d.toLocaleDateString("en-US", { weekday: "short" });
+        weekly.push({ name, count: map[name] || 0 });
+      }
+      daily = weekly.map((d) => ({ date: d.name, count: d.count }));
+    } else if (timeRange === "month") {
+      const map: Record<string, number> = {};
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * ONE_DAY);
+        map[d.toLocaleDateString("en-US", { month: "short", day: "numeric" })] = 0;
+      }
+      currentItems.forEach((item) => {
+        const key = new Date(item.createdAt).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+        if (key in map) map[key]++;
+      });
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * ONE_DAY);
+        const name = d.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+        weekly.push({ name, count: map[name] || 0 });
+      }
+      daily = weekly.map((d) => ({ date: d.name, count: d.count }));
+    } else {
+      // All time: group by YYYY-MM for reliable sorting
+      const map: Record<string, number> = {};
+      allItems.forEach((item) => {
+        const d = new Date(item.createdAt);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        map[key] = (map[key] || 0) + 1;
+      });
+      const sorted = Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+      weekly = sorted.map(([key, count]) => {
+        const [yr, mo] = key.split("-");
+        const d = new Date(Number(yr), Number(mo) - 1, 1);
+        return {
+          name: d.toLocaleDateString("en-US", { year: "numeric", month: "short" }),
+          count,
+        };
+      });
+      daily = weekly.map((d) => ({ date: d.name, count: d.count }));
+    }
+
+    // Pie chart data
+    const pieColors = {
+      extension: "#007AFF",
+      mobile: "#5856D6",
+      web: "#34C759",
+      smart_pen: "#FF9500",
+    };
+    const bySource = Object.entries(sourceCount)
+      .map(([name, value]) => ({
+        name: name.replace("_", " "),
+        value,
+        color: pieColors[name as keyof typeof pieColors],
+      }))
+      .filter((d) => d.value > 0);
+
+    // This-week vs prev-week counts (always fixed regardless of timeRange)
+    const thisWeekItems = allItems.filter(
+      (i) => (now.getTime() - new Date(i.createdAt).getTime()) / ONE_DAY < 7
+    ).length;
+    const prevWeekItems = allItems.filter((i) => {
+      const daysAgo = (now.getTime() - new Date(i.createdAt).getTime()) / ONE_DAY;
+      return daysAgo >= 7 && daysAgo < 14;
+    }).length;
+
+    // Avg/day
+    const avgPerDay = periodDays
+      ? Math.round(currentItems.length / periodDays) || 0
+      : Math.round(currentItems.length / 365) || 0;
+    const prevAvgPerDay =
+      prevItems.length > 0 && periodDays
+        ? Math.round(prevItems.length / periodDays)
+        : 0;
+
+    // Most active period label
     let maxCount = -1;
     let mostActiveDay = "—";
-    stats.weekly.forEach((d) => {
+    weekly.forEach((d) => {
       if (d.count > maxCount) {
         maxCount = d.count;
         mostActiveDay = d.name;
@@ -163,47 +197,57 @@ const Statistics = () => {
     if (maxCount === 0) mostActiveDay = "—";
 
     const aiCoverage =
-      stats.total > 0
-        ? `${Math.round((stats.withSummary / stats.total) * 100)}%`
+      currentItems.length > 0
+        ? `${Math.round((withSummary / currentItems.length) * 100)}%`
         : "0%";
 
-    return { weekTotal, avgPerDay, mostActiveDay, aiCoverage };
-  }, [stats]);
+    const weekTotal = weekly.reduce((a, b) => a + b.count, 0);
 
-  // Memoize stat cards - only recalculate when stats change
-  const statCards = useMemo(
-    () => [
+    // Real percentage change — empty string when timeRange is "all" (no comparison)
+    const calcChange = (curr: number, prev: number): string => {
+      if (!periodDays) return "";
+      if (prev === 0) return curr > 0 ? "New" : "—";
+      const pct = Math.round(((curr - prev) / prev) * 100);
+      return (pct >= 0 ? "+" : "") + pct + "%";
+    };
+
+    const computedStatCards = [
       {
         label: "Total Items",
-        value: stats.total,
+        value: currentItems.length,
         icon: Layers,
         color: "#007AFF",
-        change: "+12%",
+        change: calcChange(currentItems.length, prevItems.length),
       },
       {
         label: "AI Summaries",
-        value: stats.withSummary,
+        value: withSummary,
         icon: Zap,
         color: "#5856D6",
-        change: "+8%",
+        change: calcChange(withSummary, prevWithSummary),
       },
       {
         label: "This Week",
-        value: computedStats.weekTotal,
+        value: thisWeekItems,
         icon: Calendar,
         color: "#34C759",
-        change: "+24%",
+        change: calcChange(thisWeekItems, prevWeekItems),
       },
       {
-        label: "Avg/Day (Last 7d)",
-        value: computedStats.avgPerDay,
+        label: "Avg/Day",
+        value: avgPerDay,
         icon: Activity,
         color: "#FF9500",
-        change: "+5%",
+        change: calcChange(avgPerDay, prevAvgPerDay),
       },
-    ],
-    [stats, computedStats]
-  );
+    ];
+
+    return {
+      stats: { total: currentItems.length, withSummary, bySource, weekly, daily },
+      computedStats: { weekTotal, avgPerDay, mostActiveDay, aiCoverage },
+      statCards: computedStatCards,
+    };
+  }, [allItems, timeRange]);
 
   if (loading) {
     return (
@@ -273,9 +317,19 @@ const Statistics = () => {
               >
                 <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
               </div>
-              <span className="text-xs font-medium text-[#34C759] bg-[#34C759]/10 px-2 py-1 rounded-full">
-                {stat.change}
-              </span>
+              {stat.change && (
+                <span
+                  className={`text-xs font-medium px-2 py-1 rounded-full ${
+                    stat.change.startsWith("+") || stat.change === "New"
+                      ? "text-[#34C759] bg-[#34C759]/10"
+                      : stat.change === "—"
+                      ? "text-gray-400 bg-gray-100 dark:bg-gray-800"
+                      : "text-[#FF3B30] bg-[#FF3B30]/10"
+                  }`}
+                >
+                  {stat.change}
+                </span>
+              )}
             </div>
             <p className="theme-stat text-2xl font-bold text-gray-900 dark:text-white">
               {stat.value}

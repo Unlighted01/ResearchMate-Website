@@ -116,7 +116,10 @@ function transformDatabaseItem(item: any): StorageItem {
   
   const extractedColorStr = rawTags.find((t: string) => t.startsWith("color:"));
   if (extractedColorStr) {
-    colorMatch = extractedColorStr.split(":")[1];
+    const match = /^color:([a-z]+)$/.exec(extractedColorStr);
+    const extracted = match?.[1];
+    const validColors = ["yellow", "green", "blue", "red", "purple"];
+    colorMatch = extracted && validColors.includes(extracted) ? extracted : null;
     rawTags = rawTags.filter((t: string) => !t.startsWith("color:"));
   }
 

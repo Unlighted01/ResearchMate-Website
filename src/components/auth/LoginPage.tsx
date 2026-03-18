@@ -72,7 +72,15 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
         const {
           data: { session },
         } = await supabase.auth.getSession();
-        if (session) navigate(from, { replace: true });
+        if (session) {
+          const remember = localStorage.getItem("researchmate_remember");
+          if (remember === "false") {
+            // User opted out of "Keep me signed in" — sign them out on next visit
+            await supabase.auth.signOut();
+          } else {
+            navigate(from, { replace: true });
+          }
+        }
       } finally {
         setCheckingAuth(false);
       }

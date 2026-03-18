@@ -2,6 +2,27 @@ import { createClient } from "@supabase/supabase-js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // ============================================
+// IN-MEMORY RATE LIMITER
+// ============================================
+// 20 requests per 60 seconds per user.
+// Resets on function cold start (serverless limitation) — good enough as a
+// first-pass guard. Replace with Upstash Redis for persistent limiting.
+const RATE_LIMIT_MAX = 20;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const rateLimitMap = new Map<string, number[]>();
+
+export function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const timestamps = (rateLimitMap.get(userId) ?? []).filter(
+    (t) => now - t < RATE_LIMIT_WINDOW_MS,
+  );
+  if (timestamps.length >= RATE_LIMIT_MAX) return false;
+  timestamps.push(now);
+  rateLimitMap.set(userId, timestamps);
+  return true;
+}
+
+// ============================================
 // SUPABASE ADMIN CLIENT
 // ============================================
 // Needed to verify JWTs and deduct credits efficiently
@@ -133,6 +154,15 @@ export async function authenticateUser(
       };
     }
 
+    if (!checkRateLimit(user.id)) {
+      return {
+        error: "Too many requests. Please wait a moment before trying again.",
+        statusCode: 429,
+        user: null,
+        isFreeTier: true,
+      };
+    }
+
     return { user: { id: user.id, email: user.email }, isFreeTier: true };
   } catch (error) {
     console.error("Auth Error:", error);
@@ -169,4 +199,28 @@ export async function deductCredit(userId: string): Promise<number | string> {
   }
 
   return newCredits;
+}
+
+// ============================================
+// CREDIT REFUND HELPER
+// ============================================
+// Call this in the catch block of any AI endpoint to restore
+// a credit when the provider call fails after deduction.
+export async function refundCredit(userId: string): Promise<void> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("ai_credits")
+    .eq("id", userId)
+    .single();
+
+  if (!profile) return;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ ai_credits: profile.ai_credits + 1 })
+    .eq("id", userId);
+
+  if (error) {
+    console.error(`Failed to refund credit for user ${userId}:`, error);
+  }
 }

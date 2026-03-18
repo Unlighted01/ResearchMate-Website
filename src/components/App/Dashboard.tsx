@@ -110,6 +110,11 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSmartPenScan, setSelectedSmartPenScan] = useState<StorageItem | null>(null);
   const [isSummarizingSmartPen, setIsSummarizingSmartPen] = useState(false);
+  const [isSummarizingItem, setIsSummarizingItem] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [fetchOffset, setFetchOffset] = useState(0);
+  const PAGE_SIZE = 100;
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
@@ -195,8 +200,10 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getAllItems();
+      const data = await getAllItems(PAGE_SIZE, 0);
       setItems(data);
+      setFetchOffset(PAGE_SIZE);
+      setHasMore(data.length === PAGE_SIZE);
       setLastSyncTime(new Date());
     } catch (error) {
       console.error("Failed to fetch items:", error);
@@ -204,7 +211,22 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, PAGE_SIZE]);
+
+  const loadMoreItems = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const data = await getAllItems(PAGE_SIZE, fetchOffset);
+      setItems((prev) => [...prev, ...data]);
+      setFetchOffset((prev) => prev + PAGE_SIZE);
+      setHasMore(data.length === PAGE_SIZE);
+    } catch (error) {
+      showToast("Failed to load more items", "error");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, fetchOffset, PAGE_SIZE, showToast]);
 
   useEffect(() => {
     fetchItems();
@@ -270,6 +292,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   }, [fetchCollections]);
 
   const handleGenerateSummary = async (item: StorageItem) => {
+    if (isSummarizingItem) return;
+    setIsSummarizingItem(true);
     showToast("Generating AI summary...", "info");
     try {
       const result = await generateItemSummary(item.id, item.text || item.ocrText || "");
@@ -287,6 +311,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
       }
     } catch (error) {
       showToast("Failed to generate summary", "error");
+    } finally {
+      setIsSummarizingItem(false);
     }
   };
 
@@ -980,6 +1006,29 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         </div>
       )}
 
+      {/* ========== LOAD MORE ========== */}
+      {hasMore && !loading && (
+        <div className="flex justify-center pt-2 pb-4">
+          <button
+            onClick={loadMoreItems}
+            disabled={loadingMore}
+            className="flex items-center gap-2 px-6 py-2.5 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+          >
+            {loadingMore ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                Loading...
+              </>
+            ) : (
+              "Load More"
+            )}
+          </button>
+        </div>
+      )}
+
       {/* ========== DETAIL MODAL ========== */}
       <Modal
         isOpen={isModalOpen}
@@ -1113,9 +1162,20 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                     </p>
                     <button
                       onClick={() => handleGenerateSummary(selectedItem)}
-                      className="w-full py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-medium rounded-xl transition-all active:scale-[0.98]"
+                      disabled={isSummarizingItem}
+                      className="w-full py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-medium rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                      Generate Summary
+                      {isSummarizingItem ? (
+                        <>
+                          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                          </svg>
+                          Generating...
+                        </>
+                      ) : (
+                        "Generate Summary"
+                      )}
                     </button>
                   </div>
                 )}
