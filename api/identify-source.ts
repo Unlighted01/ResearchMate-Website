@@ -36,7 +36,7 @@ async function identifyWithGemini(text: string, apiKey: string): Promise<any> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: `${PROMPT}\n\nTEXT TO ANALYZE:\n${text.slice(0, 3000)}` }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
       }),
     }
   );
@@ -60,8 +60,18 @@ async function identifyWithGemini(text: string, apiKey: string): Promise<any> {
 
   // Strip markdown code fences if present
   const cleaned = raw.replace(/```(?:json)?\n?/g, "").replace(/```/g, "").trim();
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  let jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+
+  // If no complete JSON found (response truncated), try to close it
   if (!jsonMatch) {
+    const partial = cleaned.match(/\{[\s\S]*/);
+    if (partial) {
+      try {
+        return JSON.parse(partial[0] + "}");
+      } catch {
+        // ignore, fall through
+      }
+    }
     console.error("No JSON found in Gemini response:", raw.slice(0, 300));
     throw new Error("No JSON in response");
   }
