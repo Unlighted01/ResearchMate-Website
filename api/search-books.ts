@@ -1,20 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
+import { authenticateUser } from "./_utils/auth.js";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
-
-async function verifyUser(req: VercelRequest): Promise<boolean> {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith("Bearer ")) return false;
-  const token = auth.slice(7);
-  const { data, error } = await supabase.auth.getUser(token);
-  return !error && !!data.user;
-}
-
-// ── Google Books ────────────────────────────────────────────────────────────
+// ── Google Books ─────────────────────────────────────────────────────────────
 async function searchGoogleBooks(query: string): Promise<any[]> {
   const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=10&printType=all&langRestrict=en`;
   const res = await fetch(url);
@@ -40,27 +27,7 @@ async function searchGoogleBooks(query: string): Promise<any[]> {
   });
 }
 
-// ── OMDB (Movies & TV Series) ───────────────────────────────────────────────
-async function searchOMDB(query: string): Promise<any[]> {
-  const apiKey = process.env.OMDB_API_KEY;
-  if (!apiKey) return [];
-  const url = `https://www.omdbapi.com/?s=${encodeURIComponent(query)}&apikey=${apiKey}`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = await res.json();
-  if (data.Response === "False" || !data.Search) return [];
-  return data.Search.map((item: any) => ({
-    sourceType: item.Type === "series" ? "tv" : "movie",
-    title: item.Title,
-    authors: [],
-    publishedDate: item.Year ? `${item.Year.replace(/[^0-9]/g, "").slice(0, 4)}-01-01` : undefined,
-    imageLinks: item.Poster && item.Poster !== "N/A" ? { thumbnail: item.Poster } : undefined,
-    previewLink: `https://www.imdb.com/title/${item.imdbID}`,
-    imdbId: item.imdbID,
-  }));
-}
-
-// ── CrossRef (academic journals, conference papers) ─────────────────────────
+// ── CrossRef (academic journals, conference papers) ──────────────────────────
 async function searchCrossRef(query: string): Promise<any[]> {
   const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=8&select=title,author,publisher,published-print,published-online,type,DOI,URL,container-title,ISSN&mailto=researchmate@app.com`;
   const res = await fetch(url);
@@ -92,17 +59,36 @@ async function searchCrossRef(query: string): Promise<any[]> {
   });
 }
 
+// ── OMDB (Movies & TV Series) ────────────────────────────────────────────────
+async function searchOMDB(query: string): Promise<any[]> {
+  const apiKey = process.env.OMDB_API_KEY;
+  if (!apiKey) return [];
+  const url = `https://www.omdbapi.com/?s=${encodeURIComponent(query)}&apikey=${apiKey}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  if (data.Response === "False" || !data.Search) return [];
+  return data.Search.map((item: any) => ({
+    sourceType: item.Type === "series" ? "tv" : "movie",
+    title: item.Title,
+    authors: [],
+    publishedDate: item.Year ? `${item.Year.replace(/[^0-9]/g, "").slice(0, 4)}-01-01` : undefined,
+    imageLinks: item.Poster && item.Poster !== "N/A" ? { thumbnail: item.Poster } : undefined,
+    previewLink: `https://www.imdb.com/title/${item.imdbID}`,
+    imdbId: item.imdbID,
+  }));
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const ok = await verifyUser(req);
-  if (!ok) return res.status(401).json({ error: "Unauthorized" });
+  const auth = await authenticateUser(req);
+  if (!auth.user) return res.status(auth.statusCode || 401).json({ error: auth.error });
 
   const { query } = req.body || {};
   if (!query?.trim()) return res.status(400).json({ error: "Query is required" });
 
   try {
-    // Run all three sources in parallel
     const [books, articles, movies] = await Promise.allSettled([
       searchGoogleBooks(query),
       searchCrossRef(query),
@@ -113,7 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const articleResults = articles.status === "fulfilled" ? articles.value : [];
     const movieResults = movies.status === "fulfilled" ? movies.value : [];
 
-    // Deduplicate by title and interleave: academic first, then books, then movies
+    // Deduplicate by title, interleave: academic first, then books, then movies
     const seen = new Set<string>();
     const items: any[] = [];
 
