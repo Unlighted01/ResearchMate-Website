@@ -25,6 +25,7 @@
     "react-router-dom": "^7.10.0",
     "recharts": "^3.5.1",
     "remark-gfm": "^4.0.1",
+    "supabase": "^2.83.0",
     "three": "^0.183.2"
   },
   "devDependencies": {
