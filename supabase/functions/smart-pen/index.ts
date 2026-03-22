@@ -12,6 +12,35 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+// ============================================
+// CONSTANTS & CONFIGURATION
+// ============================================
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB
+const JPEG_MAGIC = [0xff, 0xd8, 0xff];   // JPEG magic bytes
+
+// Configurable via Supabase secret; falls back to known URL
+const VERCEL_OCR_URL =
+  Deno.env.get("VERCEL_OCR_URL") ||
+  "https://research-mate-website.vercel.app/api/ocr";
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+function isValidJpeg(bytes: Uint8Array): boolean {
+  return (
+    bytes.length > 3 &&
+    bytes[0] === JPEG_MAGIC[0] &&
+    bytes[1] === JPEG_MAGIC[1] &&
+    bytes[2] === JPEG_MAGIC[2]
+  );
+}
+
+// ============================================
+// MAIN HANDLER
+// ============================================
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -42,15 +71,33 @@ serve(async (req) => {
 
       const imageBuffer = await req.arrayBuffer();
       const imageBytes = new Uint8Array(imageBuffer);
-      const imageBase64 = encodeBase64(imageBytes);
 
       console.log("Received image:", imageBytes.length, "bytes");
 
-      // Save to Storage
-      const filename = `smart-pen/scan_${crypto.randomUUID()}.bmp`;
+      // Validate image size
+      if (imageBytes.length > MAX_IMAGE_BYTES) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Image too large (max 10MB)" }),
+          { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // Validate JPEG magic bytes
+      if (!isValidJpeg(imageBytes)) {
+        console.error("❌ Rejected upload: not a valid JPEG");
+        return new Response(
+          JSON.stringify({ success: false, error: "Invalid image format. Expected JPEG." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const imageBase64 = encodeBase64(imageBytes);
+
+      // Save to Storage as JPEG (not BMP — avoids unnecessary re-encoding)
+      const filename = `smart-pen/scan_${crypto.randomUUID()}.jpg`;
       await supabase.storage
         .from("scans")
-        .upload(filename, imageBuffer, { contentType: "image/bmp" });
+        .upload(filename, imageBuffer, { contentType: "image/jpeg" });
 
       const { data: urlData } = supabase.storage
         .from("scans")
@@ -59,47 +106,49 @@ serve(async (req) => {
 
       // Forward to Vercel OCR API
       let ocrText = "";
-      let summary = "";
+      let ocrFailed = false;
+      let ocrError = "";
 
-      const VERCEL_OCR_URL = "https://research-mate-website.vercel.app/api/ocr";
-
-      console.log(
-        `Routing image payload to centralized OCR: ${VERCEL_OCR_URL}`,
-      );
+      console.log(`Routing image payload to centralized OCR: ${VERCEL_OCR_URL}`);
 
       try {
         const ocrResponse = await fetch(VERCEL_OCR_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             image: `data:image/jpeg;base64,${imageBase64}`,
-            includeSummary: false, // Explicitly tell the server NOT to generate a summary yet to save upload time
+            includeSummary: false,
           }),
         });
 
         const ocrData = await ocrResponse.json();
 
         if (ocrResponse.ok && ocrData.success) {
-          console.log("✅ Vercel OCR processing succeeded.");
+          console.log(
+            `✅ OCR succeeded — provider: ${ocrData.ocrProvider}, confidence: ${ocrData.ocrConfidence}%`,
+          );
           ocrText = ocrData.ocrText;
-          summary = ""; // Explicitly disable auto-summarization on capture
         } else {
-          console.error("❌ Vercel OCR route failed:", ocrData.error);
+          ocrFailed = true;
+          ocrError = ocrData.error || `HTTP ${ocrResponse.status}`;
+          console.error("❌ Vercel OCR route failed:", ocrError);
         }
-      } catch (ocrError) {
-        console.error("Failed to route to Vercel OCR:", ocrError);
+      } catch (err) {
+        ocrFailed = true;
+        ocrError = (err as Error).message;
+        console.error("❌ Failed to reach Vercel OCR:", ocrError);
       }
 
-      // Save to items table
-      const itemData: Record<string, any> = {
-        text: ocrText || "Smart Pen Scan",
+      // Save to items table — flag failed OCR so the UI can show an error state
+      const itemData: Record<string, unknown> = {
+        text: ocrText || "",
         source_title: `Scan ${new Date().toLocaleString()}`,
         device_source: "smart_pen",
         image_url: imageUrl,
         ocr_text: ocrText,
-        ai_summary: summary,
+        ocr_failed: ocrFailed,
+        ocr_error: ocrFailed ? ocrError : null,
+        ai_summary: null,
         tags: [],
         note: "",
       };
@@ -116,17 +165,30 @@ serve(async (req) => {
 
       if (dbError) console.error("DB Error:", dbError);
 
+      // Return error status if OCR failed so the pen/client knows
+      if (ocrFailed) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `OCR failed: ${ocrError}`,
+            image_url: imageUrl,
+            item_id: item?.id,
+          }),
+          {
+            status: 422,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
           image_url: imageUrl,
           ocr_text: ocrText,
-          summary: summary,
           item_id: item?.id,
         }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -141,8 +203,7 @@ serve(async (req) => {
       const penId = body.pen_id || `pen_${Date.now()}`;
       const code = String(Math.floor(100000 + Math.random() * 900000));
 
-      // First, delete any existing unused codes for this pen to ensure 
-      // a fresh code is generated, especially after a factory reset!
+      // Delete any existing unused codes for this pen (e.g. after factory reset)
       await supabase
         .from("pairing_codes")
         .delete()
@@ -171,10 +232,7 @@ serve(async (req) => {
       if (!code || !user_id) {
         return new Response(
           JSON.stringify({ success: false, error: "Missing code or user_id" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
@@ -185,17 +243,10 @@ serve(async (req) => {
         .eq("used", false)
         .single();
 
-      if (
-        codeError ||
-        !codeData ||
-        new Date(codeData.expires_at) < new Date()
-      ) {
+      if (codeError || !codeData || new Date(codeData.expires_at) < new Date()) {
         return new Response(
           JSON.stringify({ success: false, error: "Invalid or expired code" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
@@ -208,10 +259,7 @@ serve(async (req) => {
         paired_at: new Date().toISOString(),
       });
 
-      await supabase
-        .from("pairing_codes")
-        .update({ used: true })
-        .eq("code", code);
+      await supabase.from("pairing_codes").update({ used: true }).eq("code", code);
 
       console.log(`Paired pen ${codeData.pen_id} to user ${user_id}`);
 
@@ -230,10 +278,10 @@ serve(async (req) => {
     if (action === "list") {
       const { user_id } = body;
       if (!user_id) {
-        return new Response(JSON.stringify({ success: false, error: "Missing user_id" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing user_id" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
 
       const { data: pens, error } = await supabase
@@ -241,9 +289,10 @@ serve(async (req) => {
         .select("*")
         .eq("user_id", user_id);
 
-      return new Response(JSON.stringify({ success: !error, pens, error: error?.message }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ success: !error, pens, error: error?.message }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // Unpair pen (from website/extension)
@@ -254,9 +303,10 @@ serve(async (req) => {
         .delete()
         .eq("pen_id", pen_id);
 
-      return new Response(JSON.stringify({ success: !error, error: error?.message }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ success: !error, error: error?.message }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // Check pairing status (from pen)
@@ -278,19 +328,16 @@ serve(async (req) => {
 
         if (pairData) {
           return new Response(
-            JSON.stringify({
-              success: true,
-              paired: true,
-              auth_token: pairData.auth_token,
-            }),
+            JSON.stringify({ success: true, paired: true, auth_token: pairData.auth_token }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
       }
 
-      return new Response(JSON.stringify({ success: true, paired: false }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ success: true, paired: false }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     return new Response(JSON.stringify({ error: "Unknown action" }), {

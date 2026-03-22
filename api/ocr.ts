@@ -1,4 +1,3 @@
-// TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING.
 // ============================================
 // OCR - Gemini Vision Text Extraction
 // Vercel Serverless Function
@@ -8,11 +7,67 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticateUser, deductCredit } from "./_utils/auth.js";
 
 // ============================================
-// API KEY ROTATION HELPER
+// PART 1: IMPORTS & DEPENDENCIES
+// ============================================
+// (all imports above)
+
+// ============================================
+// PART 2: TYPE DEFINITIONS
+// ============================================
+
+type OcrResult = {
+  success: boolean;
+  text: string;
+  provider?: string;
+  error?: string;
+};
+
+// ============================================
+// PART 3: CONSTANTS & CONFIGURATION
+// ============================================
+
+// Shared prompt used across all three OCR providers
+const OCR_EXTRACTION_PROMPT = `Extract ALL relevant text from this image and format it using beautifully structured Markdown.
+
+CRITICAL INSTRUCTIONS:
+- Extract all core content but IGNORE these irrelevant page artifacts entirely:
+  * Standalone page numbers — any line containing only a number (e.g. "47", "Page 3 of 10")
+  * Repeating running headers or footers (journal name, author names, URL repeated at top/bottom)
+  * Watermarks, scan noise, or background artifacts
+- For ACADEMIC PAPERS:
+  * Detect and label these sections using standard Markdown headers: Abstract, Introduction, Literature Review, Methodology, Results, Discussion, Conclusion, References, Acknowledgements
+  * Preserve section numbers as part of the header (e.g. ## 2.1 Related Work)
+  * Multi-column layouts: read the LEFT column completely first, then the RIGHT column
+  * Figure/table captions (e.g. "Figure 1:", "Table 2."): italicize them — *Figure 1: caption text*
+  * Footnote markers in body text: render as [1], [2] etc.
+  * Footnote text at page bottom: render at end of section as > [1] footnote content
+- Use Markdown headers (#, ##, ###) to match the visual hierarchy of titles and sections
+- Bold (**text**) any key terms, form field labels, or emphasized text
+- Checkboxes: indicate state as [x] checked or [ ] unchecked
+- Tables: format as Markdown tables with | separators, header row, and separator row (|---|---|)
+- Lists: use - for bullet points, 1. 2. 3. for numbered lists
+- Clean up excessive blank spacing from scan artifacts — output cleanly and cohesively
+- If handwriting is messy or text is dense, make your best absolute guess
+- DO NOT output any conversational text. Just the raw formatted Markdown.
+
+PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`;
+
+const OCR_SUMMARY_PROMPT = `Summarize the following scanned content in 2-4 concise, information-dense sentences.
+
+Rules:
+- Auto-detect content type: if it appears to be from a research paper, extract the key finding and methodology. If handwritten notes, organize the key actionable points. If a form or document, describe its purpose and key data.
+- Lead with the core point — not filler like "This document contains" or "The scanned text shows".
+- Preserve critical specifics: names, numbers, dates, key terms.
+- NEVER hallucinate or add information not in the text.
+
+Content:
+`;
+
+// ============================================
+// PART 4: HELPER FUNCTIONS
 // ============================================
 
 function getRandomGeminiKey(): string | undefined {
-  // Try multiple keys first (comma-separated)
   const multipleKeys = process.env.GEMINI_API_KEYS;
   if (multipleKeys) {
     const keys = multipleKeys
@@ -27,30 +82,47 @@ function getRandomGeminiKey(): string | undefined {
       return randomKey;
     }
   }
-  // Fallback to single key
   return process.env.GEMINI_API_KEY;
 }
 
+function calculateOcrConfidence(text: string, provider: string): number {
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+
+  // Provider base scores reflect typical accuracy
+  const providerBase: Record<string, number> = {
+    openrouter: 0.82,
+    gemini: 0.80,
+    claude: 0.78,
+  };
+  const base = providerBase[provider] ?? 0.70;
+
+  // Word count bonus: more content = higher confidence (up to +0.15 at 200+ words)
+  const lengthBonus = Math.min(0.15, wordCount / 1500);
+
+  // Noise penalty: high ratio of non-standard characters suggests garbled OCR
+  const noiseRatio =
+    (text.match(/[^\w\s.,;:!?'"()\-–—]/g) || []).length /
+    Math.max(1, text.length);
+  const noisePenalty = Math.min(0.15, noiseRatio * 5);
+
+  return Math.min(0.98, Math.max(0.50, base + lengthBonus - noisePenalty));
+}
+
 // ============================================
-// GEMINI VISION OCR
+// PART 5: OCR PROVIDERS
 // ============================================
 
-async function extractTextFromImage(
-  imageBase64: string,
-): Promise<{ success: boolean; text: string; error?: string }> {
+// ---------- PART 5A: TEXT EXTRACTION ----------
+
+async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   const claudeKey = process.env.OCR_API_KEY;
   const geminiKey = getRandomGeminiKey();
 
   if (!openRouterKey && !claudeKey && !geminiKey) {
-    return {
-      success: false,
-      text: "",
-      error: "No API keys configured for OCR",
-    };
+    return { success: false, text: "", error: "No API keys configured for OCR" };
   }
 
-  // Extract base64 and mime type
   const match = imageBase64.match(/^data:(image\/\w+);base64,/);
   const mimeType = match ? match[1] : "image/jpeg";
   const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
@@ -59,9 +131,7 @@ async function extractTextFromImage(
   let geminiErrorMsg = "Skipped (No Key)";
   let claudeErrorMsg = "Skipped (No Key)";
 
-  // ==========================================
-  // 1. PRIMARY: OpenRouter (Gemini EXP Free)
-  // ==========================================
+  // 1. PRIMARY: OpenRouter (Gemini 2.0 Flash)
   if (openRouterKey) {
     try {
       console.log("🔍 Processing image with OpenRouter...");
@@ -79,38 +149,10 @@ async function extractTextFromImage(
               {
                 role: "user",
                 content: [
-                  {
-                    type: "text",
-                    text: `Extract ALL relevant text from this image and format it using beautifully structured Markdown.
-
-CRITICAL INSTRUCTIONS:
-- Extract all core content but IGNORE these irrelevant page artifacts entirely:
-  * Standalone page numbers — any line containing only a number (e.g. "47", "Page 3 of 10")
-  * Repeating running headers or footers (journal name, author names, URL repeated at top/bottom)
-  * Watermarks, scan noise, or background artifacts
-- For ACADEMIC PAPERS:
-  * Detect and label these sections using standard Markdown headers: Abstract, Introduction, Literature Review, Methodology, Results, Discussion, Conclusion, References, Acknowledgements
-  * Preserve section numbers as part of the header (e.g. ## 2.1 Related Work)
-  * Multi-column layouts: read the LEFT column completely first, then the RIGHT column
-  * Figure/table captions (e.g. "Figure 1:", "Table 2."): italicize them — *Figure 1: caption text*
-  * Footnote markers in body text: render as [1], [2] etc.
-  * Footnote text at page bottom: render at end of section as > [1] footnote content
-- Use Markdown headers (#, ##, ###) to match the visual hierarchy of titles and sections
-- Bold (**text**) any key terms, form field labels, or emphasized text
-- Checkboxes: indicate state as [x] checked or [ ] unchecked
-- Tables: format as Markdown tables with | separators, header row, and separator row (|---|---|)
-- Lists: use - for bullet points, 1. 2. 3. for numbered lists
-- Clean up excessive blank spacing from scan artifacts — output cleanly and cohesively
-- If handwriting is messy or text is dense, make your best absolute guess
-- DO NOT output any conversational text. Just the raw formatted Markdown.
-
-PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
-                  },
+                  { type: "text", text: OCR_EXTRACTION_PROMPT },
                   {
                     type: "image_url",
-                    image_url: {
-                      url: `data:${mimeType};base64,${base64Data}`,
-                    },
+                    image_url: { url: `data:${mimeType};base64,${base64Data}` },
                   },
                 ],
               },
@@ -124,15 +166,13 @@ PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
       if (response.ok) {
         const data = await response.json();
         const extractedText = data.choices?.[0]?.message?.content || "";
-
         if (extractedText.trim()) {
           console.log("✅ OpenRouter OCR completed successfully");
-          return { success: true, text: extractedText.trim() };
+          return { success: true, text: extractedText.trim(), provider: "openrouter" };
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        openRouterErrorMsg =
-          errorData.error?.message || `HTTP ${response.status}`;
+        openRouterErrorMsg = errorData.error?.message || `HTTP ${response.status}`;
         console.error("OpenRouter OCR failed:", openRouterErrorMsg);
       }
     } catch (error) {
@@ -142,9 +182,7 @@ PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
     console.log("⚠️ OpenRouter failed, falling back to Gemini Vision API...");
   }
 
-  // ==========================================
-  // 2. SECONDARY: Gemini API (-exp suffix)
-  // ==========================================
+  // 2. SECONDARY: Gemini API
   if (geminiKey) {
     try {
       console.log("🔍 Processing image with Gemini Vision...");
@@ -157,32 +195,7 @@ PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
             contents: [
               {
                 parts: [
-                  {
-                    text: `Extract ALL relevant text from this image and format it using beautifully structured Markdown.
-
-CRITICAL INSTRUCTIONS:
-- Extract all core content but IGNORE these irrelevant page artifacts entirely:
-  * Standalone page numbers — any line containing only a number (e.g. "47", "Page 3 of 10")
-  * Repeating running headers or footers (journal name, author names, URL repeated at top/bottom)
-  * Watermarks, scan noise, or background artifacts
-- For ACADEMIC PAPERS:
-  * Detect and label these sections using standard Markdown headers: Abstract, Introduction, Literature Review, Methodology, Results, Discussion, Conclusion, References, Acknowledgements
-  * Preserve section numbers as part of the header (e.g. ## 2.1 Related Work)
-  * Multi-column layouts: read the LEFT column completely first, then the RIGHT column
-  * Figure/table captions (e.g. "Figure 1:", "Table 2."): italicize them — *Figure 1: caption text*
-  * Footnote markers in body text: render as [1], [2] etc.
-  * Footnote text at page bottom: render at end of section as > [1] footnote content
-- Use Markdown headers (#, ##, ###) to match the visual hierarchy of titles and sections
-- Bold (**text**) any key terms, form field labels, or emphasized text
-- Checkboxes: indicate state as [x] checked or [ ] unchecked
-- Tables: format as Markdown tables with | separators, header row, and separator row (|---|---|)
-- Lists: use - for bullet points, 1. 2. 3. for numbered lists
-- Clean up excessive blank spacing from scan artifacts — output cleanly and cohesively
-- If handwriting is messy or text is dense, make your best absolute guess
-- DO NOT output any conversational text. Just the raw formatted Markdown.
-
-PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
-                  },
+                  { text: OCR_EXTRACTION_PROMPT },
                   {
                     inlineData: {
                       mimeType:
@@ -197,22 +210,17 @@ PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
                 ],
               },
             ],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 8192,
-            },
+            generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
           }),
         },
       );
 
       if (response.ok) {
         const data = await response.json();
-        const extractedText =
-          data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
+        const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
         if (extractedText.trim()) {
           console.log("✅ Gemini OCR completed successfully");
-          return { success: true, text: extractedText.trim() };
+          return { success: true, text: extractedText.trim(), provider: "gemini" };
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -226,9 +234,7 @@ PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
     console.log("⚠️ Gemini API failed, falling back to Claude...");
   }
 
-  // ==========================================
   // 3. TERTIARY: Claude
-  // ==========================================
   if (claudeKey) {
     try {
       console.log("🔍 Processing image with Claude AI Server...");
@@ -249,39 +255,9 @@ PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
               content: [
                 {
                   type: "image",
-                  source: {
-                    type: "base64",
-                    media_type: mimeType,
-                    data: base64Data,
-                  },
+                  source: { type: "base64", media_type: mimeType, data: base64Data },
                 },
-                {
-                  type: "text",
-                  text: `Extract ALL relevant text from this image and format it using beautifully structured Markdown.
-
-CRITICAL INSTRUCTIONS:
-- Extract all core content but IGNORE these irrelevant page artifacts entirely:
-  * Standalone page numbers — any line containing only a number (e.g. "47", "Page 3 of 10")
-  * Repeating running headers or footers (journal name, author names, URL repeated at top/bottom)
-  * Watermarks, scan noise, or background artifacts
-- For ACADEMIC PAPERS:
-  * Detect and label these sections using standard Markdown headers: Abstract, Introduction, Literature Review, Methodology, Results, Discussion, Conclusion, References, Acknowledgements
-  * Preserve section numbers as part of the header (e.g. ## 2.1 Related Work)
-  * Multi-column layouts: read the LEFT column completely first, then the RIGHT column
-  * Figure/table captions (e.g. "Figure 1:", "Table 2."): italicize them — *Figure 1: caption text*
-  * Footnote markers in body text: render as [1], [2] etc.
-  * Footnote text at page bottom: render at end of section as > [1] footnote content
-- Use Markdown headers (#, ##, ###) to match the visual hierarchy of titles and sections
-- Bold (**text**) any key terms, form field labels, or emphasized text
-- Checkboxes: indicate state as [x] checked or [ ] unchecked
-- Tables: format as Markdown tables with | separators, header row, and separator row (|---|---|)
-- Lists: use - for bullet points, 1. 2. 3. for numbered lists
-- Clean up excessive blank spacing from scan artifacts — output cleanly and cohesively
-- If handwriting is messy or text is dense, make your best absolute guess
-- DO NOT output any conversational text. Just the raw formatted Markdown.
-
-PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
-                },
+                { type: "text", text: OCR_EXTRACTION_PROMPT },
               ],
             },
           ],
@@ -291,10 +267,9 @@ PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
       if (response.ok) {
         const data = await response.json();
         const extractedText = data.content?.[0]?.text || "";
-
         if (extractedText.trim()) {
           console.log("✅ Claude OCR completed successfully");
-          return { success: true, text: extractedText.trim() };
+          return { success: true, text: extractedText.trim(), provider: "claude" };
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -307,7 +282,6 @@ PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
     }
   }
 
-  // IF ALL FALLBACKS FAIL, RETURN THE CHAINED ERROR
   console.log("❌ All OCR endpoints failed in the fallback chain.");
   return {
     success: false,
@@ -316,20 +290,7 @@ PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`,
   };
 }
 
-// ============================================
-// OPTIONAL: GENERATE SUMMARY OF EXTRACTED TEXT
-// ============================================
-
-const OCR_SUMMARY_PROMPT = `Summarize the following scanned content in 2-4 concise, information-dense sentences.
-
-Rules:
-- Auto-detect content type: if it appears to be from a research paper, extract the key finding and methodology. If handwritten notes, organize the key actionable points. If a form or document, describe its purpose and key data.
-- Lead with the core point — not filler like "This document contains" or "The scanned text shows".
-- Preserve critical specifics: names, numbers, dates, key terms.
-- NEVER hallucinate or add information not in the text.
-
-Content:
-`;
+// ---------- PART 5B: SUMMARY GENERATION ----------
 
 async function generateSummary(text: string): Promise<string | null> {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
@@ -352,18 +313,12 @@ async function generateSummary(text: string): Promise<string | null> {
           },
           body: JSON.stringify({
             model: "google/gemini-2.0-flash-001",
-            messages: [
-              {
-                role: "user",
-                content: `${OCR_SUMMARY_PROMPT}${text}`,
-              },
-            ],
+            messages: [{ role: "user", content: `${OCR_SUMMARY_PROMPT}${text}` }],
             temperature: 0.3,
             max_tokens: 300,
           }),
         },
       );
-
       if (response.ok) {
         const data = await response.json();
         const summary = data.choices?.[0]?.message?.content || null;
@@ -374,7 +329,7 @@ async function generateSummary(text: string): Promise<string | null> {
     }
   }
 
-  // 2. SECONDARY: Gemini (-exp)
+  // 2. SECONDARY: Gemini
   if (geminiKey) {
     try {
       const response = await fetch(
@@ -383,20 +338,11 @@ async function generateSummary(text: string): Promise<string | null> {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `${OCR_SUMMARY_PROMPT}${text}`,
-                  },
-                ],
-              },
-            ],
+            contents: [{ parts: [{ text: `${OCR_SUMMARY_PROMPT}${text}` }] }],
             generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
           }),
         },
       );
-
       if (response.ok) {
         const data = await response.json();
         const summary = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
@@ -421,15 +367,9 @@ async function generateSummary(text: string): Promise<string | null> {
           model: "claude-3-5-sonnet-20241022",
           max_tokens: 300,
           temperature: 0.3,
-          messages: [
-            {
-              role: "user",
-              content: `${OCR_SUMMARY_PROMPT}${text}`,
-            },
-          ],
+          messages: [{ role: "user", content: `${OCR_SUMMARY_PROMPT}${text}` }],
         }),
       });
-
       if (response.ok) {
         const data = await response.json();
         const summary = data.content?.[0]?.text || null;
@@ -444,11 +384,10 @@ async function generateSummary(text: string): Promise<string | null> {
 }
 
 // ============================================
-// MAIN HANDLER
+// PART 6: MAIN HANDLER
 // ============================================
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -468,7 +407,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Image data is required" });
     }
 
-    // 1. Authenticate Request
+    // Validate image format: must be a base64 data URI
+    if (typeof image !== "string" || !image.startsWith("data:image/")) {
+      return res.status(400).json({ error: "Invalid image format. Expected base64 data URI." });
+    }
+
+    // Validate image size: base64 string represents ~75% of actual bytes
+    const estimatedBytes = (image.length * 3) / 4;
+    const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB
+    if (estimatedBytes > MAX_IMAGE_BYTES) {
+      return res.status(413).json({ error: "Image too large. Maximum size is 10MB." });
+    }
+
+    // Authenticate request
     const authResult = await authenticateUser(req);
     if (authResult.error) {
       return res.status(authResult.statusCode || 401).json({
@@ -481,6 +432,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ocrResult = await extractTextFromImage(image);
 
     if (!ocrResult.success) {
+      console.error("OCR failed:", ocrResult.error);
       return res.status(422).json({
         error: ocrResult.error || "Failed to extract text from image",
       });
@@ -497,14 +449,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await deductCredit(authResult.user.id);
     }
 
-    // Calculate heuristic confidence based on extracted text quality
-    const wordCount = ocrResult.text.split(/\s+/).filter(Boolean).length;
-    const ocrConfidence = Math.min(0.98, 0.65 + Math.min(0.33, wordCount / 300));
+    // Calculate confidence using provider + text quality
+    const ocrConfidence = calculateOcrConfidence(ocrResult.text, ocrResult.provider ?? "");
+
+    console.log(
+      `📊 OCR metrics — provider: ${ocrResult.provider}, words: ${ocrResult.text.split(/\s+/).filter(Boolean).length}, confidence: ${Math.round(ocrConfidence * 100)}%`,
+    );
 
     return res.status(200).json({
       success: true,
       ocrText: ocrResult.text,
       ocrConfidence: Math.round(ocrConfidence * 100),
+      ocrProvider: ocrResult.provider,
       aiSummary: summary,
     });
   } catch (error) {

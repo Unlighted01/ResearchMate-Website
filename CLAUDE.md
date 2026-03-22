@@ -24,7 +24,7 @@ All AI features are centralized in `api/` (Vercel Serverless Functions). Enhanci
 | `api/chat.ts` | Academic chat assistant | `gemini-2.5-flash` | Gemini → OpenRouter → Groq |
 | `api/insights.ts` | Key insights extraction | `gemini-2.5-flash` | Gemini → OpenRouter → Groq |
 | `api/generate-tags.ts` | Auto-tagging | `gemini-2.5-flash` | Gemini → OpenRouter → Groq |
-| `api/ocr.ts` | Image text extraction | `gemini-2.5-flash` | OpenRouter → Gemini → Claude |
+| `api/ocr.ts` | Image text extraction | `gemini-2.5-flash` | OpenRouter → Gemini → Claude | Returns `ocrProvider` + confidence via `calculateOcrConfidence()` (provider-weighted + noise penalty) |
 | `api/extract-citation.ts` | URL → citation metadata | `gemini-2.5-flash` | DOI/Crossref/Semantic Scholar + AI enhancement |
 | `api/cite.ts` | ISBN/DOI/YouTube lookup | N/A (data lookup only) | OpenLibrary → Google Books / CrossRef / oEmbed |
 | `supabase/functions/smart-pen/` | Hardware pairing & listing | N/A | Added `list`, `unpair`, and `confirm` actions |
@@ -483,3 +483,21 @@ const filteredItems = useMemo(() =>
 ---
 
 *Last Updated: March 2026 — Glass theme redesign, minimalist editorial redesign (blue accent, hairline borders), bubble playful-premium redesign (rose/lavender palette), Three.js bubble cursor (removed), OAuthPopupHandler fix, FloatingOrbs recolor, project structure updated*
+
+---
+
+## OCR Pipeline Changes (March 2026)
+
+### `api/ocr.ts`
+- **Shared prompt constant:** `OCR_EXTRACTION_PROMPT` — single source of truth used by all three providers (no more 3 duplicate copies)
+- **Provider-weighted confidence:** `calculateOcrConfidence(text, provider)` — base score per provider (OpenRouter 82%, Gemini 80%, Claude 78%) + word-length bonus + noise penalty based on non-standard character ratio
+- **`ocrProvider` in response:** API now returns which provider handled the request for observability
+- **Image validation:** Rejects non-data-URI images and payloads over 10MB before hitting any AI provider
+- **OCR metrics log line:** Every successful scan logs provider, word count, and confidence
+
+### `supabase/functions/smart-pen/index.ts`
+- **No more silent failures:** OCR failure returns HTTP 422 and saves `ocr_failed: true` + `ocr_error` to the DB item — UI can now show a real error state
+- **Configurable Vercel URL:** Reads `VERCEL_OCR_URL` from `Deno.env` — set via `supabase secrets set VERCEL_OCR_URL=<url>`; falls back to hardcoded URL
+- **JPEG validation:** Checks magic bytes `0xFF 0xD8 0xFF` before processing; rejects corrupt/non-JPEG uploads with HTTP 400
+- **Size guard:** Rejects uploads over 10MB before touching storage or OCR
+- **Storage format fixed:** Saves scans as `image/jpeg` (was incorrectly `image/bmp`)
