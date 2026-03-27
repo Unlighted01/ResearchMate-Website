@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { authenticateUser, deductCredit } from "./_utils/auth.js";
+import { authenticateUser, deductCredit, refundCredit } from "./_utils/auth.js";
 
 // ============================================
 // CONFIGURATION
@@ -178,6 +178,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST")
     return res.status(405).json({ error: "Method not allowed" });
 
+  let creditDeducted = false;
+  let deductedUserId: string | null = null;
+
   try {
     // 1. Authenticate
     const authResult = await authenticateUser(req);
@@ -259,6 +262,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let creditsRemaining: number | string = "Unlimited";
     if (isFreeTier && userId) {
       creditsRemaining = await deductCredit(userId);
+      creditDeducted = true;
+      deductedUserId = userId;
     }
 
     return res.status(200).json({
@@ -267,6 +272,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     console.error("Insights API Error:", error);
+    if (creditDeducted && deductedUserId) await refundCredit(deductedUserId);
     return res.status(500).json({ error: (error as Error).message });
   }
 }

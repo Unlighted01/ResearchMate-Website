@@ -4,7 +4,7 @@
 // ============================================
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { authenticateUser, deductCredit } from "./_utils/auth.js";
+import { authenticateUser, deductCredit, refundCredit } from "./_utils/auth.js";
 
 // ============================================
 // PART 1: IMPORTS & DEPENDENCIES
@@ -400,6 +400,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  let creditDeducted = false;
+  let deductedUserId: string | null = null;
+
   try {
     const { image, includeSummary = true } = req.body;
 
@@ -464,6 +467,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Charge credit if on free tier
     if (authResult.isFreeTier && authResult.user?.id) {
       await deductCredit(authResult.user.id);
+      creditDeducted = true;
+      deductedUserId = authResult.user.id;
     }
 
     // Calculate confidence using provider + text quality
@@ -482,6 +487,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     console.error("OCR handler error:", error);
+    if (creditDeducted && deductedUserId) await refundCredit(deductedUserId);
     return res.status(500).json({ error: (error as Error).message });
   }
 }
