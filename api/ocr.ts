@@ -419,6 +419,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(413).json({ error: "Image too large. Maximum size is 10MB." });
     }
 
+    // Service-to-service bypass for Smart Pen (no user session, no credit deduction)
+    const serviceKey = req.headers["x-smart-pen-key"];
+    if (serviceKey && serviceKey === process.env.SMART_PEN_SERVICE_KEY) {
+      const ocrResult = await extractTextFromImage(image);
+      if (!ocrResult.success) {
+        return res.status(422).json({ success: false, error: ocrResult.error });
+      }
+      const confidence = calculateOcrConfidence(ocrResult.text, ocrResult.provider ?? "");
+      return res.status(200).json({
+        success: true,
+        ocrText: ocrResult.text,
+        ocrConfidence: Math.round(confidence * 100),
+        ocrProvider: ocrResult.provider,
+        aiSummary: null,
+      });
+    }
+
     // Authenticate request
     const authResult = await authenticateUser(req);
     if (authResult.error) {

@@ -24,6 +24,9 @@ const VERCEL_OCR_URL =
   Deno.env.get("VERCEL_OCR_URL") ||
   "https://research-mate-website.vercel.app/api/ocr";
 
+// Service key for pen→Vercel calls (bypasses user auth on the OCR endpoint)
+const SMART_PEN_SERVICE_KEY = Deno.env.get("SMART_PEN_SERVICE_KEY") || "";
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -114,7 +117,10 @@ serve(async (req) => {
       try {
         const ocrResponse = await fetch(VERCEL_OCR_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-smart-pen-key": SMART_PEN_SERVICE_KEY,
+          },
           body: JSON.stringify({
             image: `data:image/jpeg;base64,${imageBase64}`,
             includeSummary: false,
