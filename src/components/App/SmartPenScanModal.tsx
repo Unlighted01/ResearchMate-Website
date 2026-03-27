@@ -538,7 +538,6 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
               </div>
             </div>
           </div>
-        </div>
       </Modal>
 
       {/* ===== LIGHTBOX (separate portal so it renders above the modal) ===== */}

@@ -482,7 +482,7 @@ const filteredItems = useMemo(() =>
 
 ---
 
-*Last Updated: March 2026 — Glass theme redesign, minimalist editorial redesign (blue accent, hairline borders), bubble playful-premium redesign (rose/lavender palette), Three.js bubble cursor (removed), OAuthPopupHandler fix, FloatingOrbs recolor, project structure updated*
+*Last Updated: March 2026 — Glass theme redesign, minimalist editorial redesign (blue accent, hairline borders), bubble playful-premium redesign (rose/lavender palette), Three.js bubble cursor (removed), OAuthPopupHandler fix, FloatingOrbs recolor, project structure updated, OCR integration tests added, SmartPenScanModal build fix*
 
 ---
 
@@ -501,3 +501,44 @@ const filteredItems = useMemo(() =>
 - **JPEG validation:** Checks magic bytes `0xFF 0xD8 0xFF` before processing; rejects corrupt/non-JPEG uploads with HTTP 400
 - **Size guard:** Rejects uploads over 10MB before touching storage or OCR
 - **Storage format fixed:** Saves scans as `image/jpeg` (was incorrectly `image/bmp`)
+
+### `src/components/App/SmartPenScanModal.tsx`
+- **Build fix (March 2026):** Removed a stray `</div>` at line 541 that had no matching opener — caused Vercel SWC build failure: *"Unexpected closing 'div' tag does not match opening 'Modal' tag"*. Modal has exactly two direct children (HEADER + BODY); the extra close tag pushed the parser out of sync with the fragment wrapper.
+
+---
+
+## OCR Integration Tests (March 2026)
+
+### `api/ocr.integration.test.ts`
+
+Full Vitest integration test suite for the OCR pipeline. Run with:
+```bash
+npm i -D vitest        # one-time setup
+npx vitest run api/ocr.integration.test.ts
+```
+
+| Part | Coverage |
+|------|----------|
+| **4** | `calculateOcrConfidence()` unit tests — Times New Roman/Arial/Courier base scores, noise penalty, word-count bonus, provider ranking (openrouter ≥ gemini ≥ claude), clamping to [0.50, 0.98] |
+| **5** | HTTP handler validation — 405 non-POST, 200 OPTIONS preflight, 400 missing image, 400 invalid data-URI, 413 oversized (>10MB) |
+| **6** | Font capture via Smart Pen bypass — JPEG/PNG/WebP; Times New Roman, Arial, Courier, handwriting, multi-column layout, Markdown table (≥3 rows), all-providers-fail → 422 |
+| **7** | Provider fallback chain — OpenRouter→Gemini, OpenRouter+Gemini→Claude, missing key skips provider |
+| **8** | Content quality — academic Markdown structure (headings/bold/tables), confidence ≥80 for long clean text, lower confidence for short handwriting |
+| **9** | Summary — `includeSummary: false` returns `aiSummary: null` |
+
+#### Critical test design decisions
+
+- **`vi.mock("./_utils/auth.js")`** hoisted at file top — `auth.ts` calls `createClient(url, key)` at **module load time**; both env vars are undefined in tests → supabase-js v2 throws `"supabaseUrl is required"` synchronously before any handler runs. The mock prevents this.
+- **`OVERSIZED_IMAGE = "A".repeat(14 * 1024 * 1024)`** — the handler guard is `image.length * 3/4 > 10MB`. An 11MB payload only estimates to ~8.6MB (under the limit). 14MB payload estimates to ~10.5MB and correctly triggers 413.
+- **`vi.unstubAllGlobals()` in every `afterEach`** — `vi.restoreAllMocks()` does NOT undo `vi.stubGlobal("fetch", ...)`. Without explicit cleanup, the mocked `fetch` leaks into subsequent tests.
+
+#### Font capture notes (from manuscript scope)
+
+The OCR is **optimized for printed standard typefaces** (Times New Roman, Arial) per the thesis scope. Expected accuracy tiers:
+
+| Source Type | Approx. Accuracy | Notes |
+|-------------|-----------------|-------|
+| Times New Roman / Arial (300 DPI) | ~95–97% | Primary optimized target |
+| Monospace / Courier (code blocks) | ~90–94% | Structured, consistent spacing |
+| Handwritten cursive | ~68% | Drops ~30% vs printed; post-correction layer recommended |
+| Degraded / low-res scan (72 DPI) | ~52% | Noise penalty applied by `calculateOcrConfidence()` |
