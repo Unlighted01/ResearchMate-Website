@@ -3,7 +3,7 @@
 // ============================================
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { supabase } from "../../services/supabaseClient";
 import {
@@ -162,6 +162,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   // Filters
   const [advancedFilters, setAdvancedFilters] = useState<SearchFilters>({});
@@ -576,6 +578,111 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     };
   }, [items]);
 
+  // ── Import handlers ──────────────────────────────────────────────────
+  const importImageFile = async (file: File): Promise<void> => {
+    const base64DataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Failed to read image file"));
+      reader.readAsDataURL(file);
+    });
+
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    const response = await fetch("/api/ocr", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ image: base64DataUrl, includeSummary: false }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.error || "Failed to extract text from image");
+    }
+
+    const data = await response.json();
+    if (!data.ocrText?.trim()) throw new Error("No readable text found in image.");
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("items").insert({
+      user_id: user?.id,
+      text: data.ocrText.trim(),
+      source_title: file.name,
+      device_source: "smart_pen",
+      ocr_confidence: data.ocrConfidence ?? null,
+    });
+    if (error) throw error;
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setIsImporting(true);
+    let successCount = 0;
+    const errors: string[] = [];
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    for (const file of files) {
+      try {
+        if (file.name.toLowerCase().endsWith(".pdf")) {
+          showToast(`Extracting text from "${file.name}"...`, "info");
+          const pdfjsLib = await import("pdfjs-dist");
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+          const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+          let fullText = "";
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            fullText += content.items.map((item: any) => item.str).join(" ") + "\n\n";
+          }
+          const cleanText = fullText.trim();
+          if (!cleanText) throw new Error("No readable text found in PDF.");
+          const { error } = await supabase.from("items").insert({
+            user_id: user?.id,
+            text: cleanText,
+            source_title: file.name.replace(/\.pdf$/i, ""),
+            device_source: "web",
+          });
+          if (error) throw error;
+          successCount++;
+        } else if (file.type.startsWith("image/")) {
+          showToast(`Running OCR on "${file.name}"...`, "info");
+          await importImageFile(file);
+          successCount++;
+        } else if (file.name.toLowerCase().endsWith(".json")) {
+          const parsed = JSON.parse(await file.text());
+          if (!Array.isArray(parsed)) throw new Error("Invalid JSON format.");
+          for (const item of parsed) {
+            const { error } = await supabase.from("items").insert({
+              user_id: user?.id,
+              text: item.text,
+              source_url: item.source_url,
+              source_title: item.source_title,
+              tags: item.tags,
+              ai_summary: item.ai_summary,
+              device_source: "web",
+            });
+            if (!error) successCount++;
+          }
+        } else {
+          errors.push(`"${file.name}": unsupported format`);
+        }
+      } catch (err: any) {
+        errors.push(`"${file.name}": ${err.message}`);
+      }
+    }
+
+    if (successCount > 0) showToast(`Imported ${successCount} item(s)!`, "success");
+    if (errors.length > 0) showToast(`${errors.length} file(s) failed.`, "error");
+    setIsImporting(false);
+    e.target.value = "";
+  };
+  // ─────────────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* ========== HEADER ========== */}
@@ -623,12 +730,26 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           >
             <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
           </button>
-          <Link to="/app/settings">
-            <button className="theme-btn theme-btn-primary flex items-center gap-2 px-4 py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 active:scale-95">
+          <button
+            onClick={() => importFileRef.current?.click()}
+            disabled={isImporting}
+            className="theme-btn theme-btn-primary flex items-center gap-2 px-4 py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isImporting ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
               <Plus className="w-4 h-4" />
-              Import
-            </button>
-          </Link>
+            )}
+            {isImporting ? "Importing..." : "Import"}
+          </button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".json,.pdf,image/*"
+            multiple
+            className="hidden"
+            onChange={handleImport}
+          />
         </div>
       </div>
 

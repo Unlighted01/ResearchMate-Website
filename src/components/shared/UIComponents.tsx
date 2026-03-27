@@ -241,6 +241,7 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl" | "full";
+  contentClassName?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -249,6 +250,7 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   children,
   size = "md",
+  contentClassName,
 }) => {
   const sizes = {
     sm: "max-w-sm",
@@ -307,7 +309,7 @@ export const Modal: React.FC<ModalProps> = ({
             )}
 
             {/* Content - with proper padding */}
-            <div className="flex-1 overflow-y-auto overscroll-contain p-6">
+            <div className={contentClassName ?? "flex-1 overflow-y-auto overscroll-contain p-6"}>
               {children}
             </div>
           </motion.div>

@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Modal } from "../shared/UIComponents";
 import {
   X,
   PenTool,
@@ -157,51 +158,38 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
   // ----------------------------------------
   // Render
   // ----------------------------------------
-  return createPortal(
+  return (
     <>
-      {/* ===== BACKDROP ===== */}
-      <div
-        className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px] animate-fade-in"
-        onClick={onClose}
-      />
-
-      {/* ===== MODAL PANEL ===== */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div
-          className="pointer-events-auto w-full max-w-4xl h-[90vh] bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* ---- HEADER ---- */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 bg-gradient-to-br from-[#FF9500] to-[#FF6B00] rounded-xl flex items-center justify-center flex-shrink-0">
-                <PenTool className="w-4 h-4 text-white" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="font-bold text-gray-900 dark:text-white truncate text-base">
-                  {scan.sourceTitle || "Untitled Scan"}
-                </h2>
-                <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                  <Calendar className="w-3 h-3" />
-                  <span>{formatDate(scan.createdAt)}</span>
-                  <span className="px-1.5 py-0.5 bg-[#FF9500]/10 text-[#FF9500] rounded-full font-medium">
-                    Smart Pen
-                  </span>
-                </div>
+      <Modal
+        isOpen={!!scan}
+        onClose={onClose}
+        size="xl"
+        contentClassName="flex flex-col overflow-hidden p-0"
+      >
+        {/* ---- HEADER ---- */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 bg-gradient-to-br from-[#FF9500] to-[#FF6B00] rounded-xl flex items-center justify-center flex-shrink-0">
+              <PenTool className="w-4 h-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-bold text-gray-900 dark:text-white truncate text-base">
+                {scan.sourceTitle || "Untitled Scan"}
+              </h2>
+              <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                <Calendar className="w-3 h-3" />
+                <span>{formatDate(scan.createdAt)}</span>
+                <span className="px-1.5 py-0.5 bg-[#FF9500]/10 text-[#FF9500] rounded-full font-medium">
+                  Smart Pen
+                </span>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
+        </div>
 
-          {/* ---- BODY ---- */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <div className="grid grid-cols-1 lg:grid-cols-2 h-full lg:divide-x divide-gray-100 dark:divide-gray-800">
+        {/* ---- BODY ---- */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-2 h-full lg:divide-x divide-gray-100 dark:divide-gray-800">
 
               {/* ==== LEFT: IMAGE ==== */}
               <div className="p-6 flex flex-col gap-4 overflow-y-auto">
@@ -551,12 +539,12 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
+      </Modal>
 
-      {/* ===== LIGHTBOX ===== */}
-      {isLightboxOpen && scan.imageUrl && (
+      {/* ===== LIGHTBOX (separate portal so it renders above the modal) ===== */}
+      {isLightboxOpen && scan.imageUrl && createPortal(
         <div
-          className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center p-4"
           onClick={() => setIsLightboxOpen(false)}
         >
           <button
@@ -572,10 +560,10 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
             className="max-w-full max-h-full object-contain rounded-lg"
             onClick={(e) => e.stopPropagation()}
           />
-        </div>
+        </div>,
+        document.body
       )}
-    </>,
-    document.body
+    </>
   );
 };
 
