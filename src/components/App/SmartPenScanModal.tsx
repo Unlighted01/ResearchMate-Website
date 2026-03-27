@@ -6,6 +6,7 @@
 // ============================================
 
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   PenTool,
@@ -156,7 +157,7 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
   // ----------------------------------------
   // Render
   // ----------------------------------------
-  return (
+  return createPortal(
     <>
       {/* ===== BACKDROP ===== */}
       <div
@@ -573,7 +574,8 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
           />
         </div>
       )}
-    </>
+    </>,
+    document.body
   );
 };
 
