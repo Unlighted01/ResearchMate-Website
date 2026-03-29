@@ -339,8 +339,102 @@ Do not split proactively — only when you're already editing one of these files
 | 35 | 🔵 Refactor | Missing null guards | `Dashboard.tsx`, `SmartPenGallery.tsx`, `AIAssistant.tsx` |
 | 36 | 🔵 Refactor | No tests | Whole codebase |
 | 37 | 🔵 Refactor | Env var validation weak | `supabaseClient.ts` |
+| 38 | 🆕 TODO | Document Editor panel | `DocumentEditor.tsx`, `Layouts.tsx`, `App.tsx`, `documentsService.ts` |
 
 ---
+
+---
+
+## 🆕 #38 — TODO: Document Editor Panel
+
+**Status:** TODO — not started
+
+### Overview
+Add an 8th panel to the dashboard: a Notion-quality rich text editor where users can open saved research items and expand them into full documents (notes, drafts, papers).
+
+### Nav + Route
+- Add `{ icon: FileText, label: "Editor", path: "/app/editor" }` to `navItems` in `src/components/shared/Layouts.tsx`
+- Add `/app/editor` route in `App.tsx` pointing to new `src/components/App/DocumentEditor.tsx`
+
+### Data Model
+New Supabase table `documents`:
+```
+id           uuid PK
+user_id      uuid FK → auth.users
+title        text
+content      jsonb     ← TipTap JSON format
+source_item_id  uuid FK → items (nullable) ← links back to original saved item
+created_at   timestamptz
+updated_at   timestamptz
+```
+
+### How Item → Document Works
+When user clicks **"Open in Editor"** on any Dashboard/Collections item, the editor scaffolds a pre-filled document from the item's fields:
+
+```
+## [sourceTitle]
+Source: [sourceUrl]
+──────────────────────────────
+## Highlighted Text
+"[item.text]"
+
+## AI Summary          ← only if aiSummary exists
+"[item.aiSummary]"
+
+## Notes               ← only if item.note exists
+"[item.note]"
+
+## Citation            ← only if item.citation exists
+[item.citation]
+
+## Tags
+#tag1 #tag2 ...
+```
+
+Smart Pen items additionally embed the scanned image + OCR text block.
+
+The original item in Dashboard is **never modified** — the editor is a separate write workspace. Changes save to the `documents` table.
+
+### Phase 1 — Core Editor (Tier 1)
+Install: `npm install @tiptap/react @tiptap/starter-kit @tiptap/extension-placeholder @tiptap/extension-character-count @tiptap/extension-task-list @tiptap/extension-task-item @tiptap/extension-table @tiptap/extension-table-row @tiptap/extension-table-cell @tiptap/extension-table-header @tiptap/extension-image @tiptap/extension-code-block-lowlight`
+
+| Feature | How |
+|---------|-----|
+| Rich toolbar — bold, italic, underline, strikethrough, highlight | TipTap StarterKit + marks |
+| Headings H1–H6, paragraph styles | TipTap Heading extension |
+| Bullet / numbered / task lists | TipTap List extensions |
+| Tables (basic) | TipTap Table extension |
+| Code blocks | TipTap CodeBlock extension |
+| Image upload (into doc) | TipTap Image + Supabase Storage |
+| Slash commands `/` | TipTap suggestion extension |
+| Keyboard shortcuts (Ctrl+B etc.) | TipTap built-in |
+| Auto-save to Supabase (debounced 1.5s) | Custom `useEffect` on editor content change |
+| Multiple documents — left sidebar list | Custom doc list panel inside editor layout |
+| Word count | TipTap CharacterCount extension |
+| Dark mode | Existing design system — `theme-surface`, apple vars |
+
+### Phase 2 — Stretch Goals (Tier 2)
+| Feature | How | Effort |
+|---------|-----|--------|
+| Export to PDF | CSS `@media print` + `window.print()` | Low |
+| Export to .docx | `docx` npm library | Medium |
+| Basic revision history | Save content snapshots to `document_versions` table, max 20 per doc | Medium |
+| Find & replace | TipTap search extension | Low |
+| Read-only share link | Supabase RLS public policy + `/share/:docId` route | Medium |
+
+### What NOT to build (too complex)
+- Real-time collaboration (needs Yjs + CRDT — its own project)
+- Comments / suggestion mode (TipTap Pro / build from scratch)
+- True page pagination (TipTap is scroll-doc, not paginated)
+
+### Files to create/touch
+| File | Action |
+|------|--------|
+| `src/components/App/DocumentEditor.tsx` | Create — main editor component |
+| `src/components/shared/Layouts.tsx` | Add nav item |
+| `src/App.tsx` | Add `/app/editor` + `/app/editor/:docId` routes |
+| `src/services/documentsService.ts` | Create — CRUD for `documents` table |
+| Supabase `documents` table | Create via migration |
 
 ---
 

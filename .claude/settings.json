@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import sys,json,subprocess,os; d=json.load(sys.stdin); fp=d.get('tool_input',{}).get('file_path',''); ext=os.path.splitext(fp)[1] if fp else ''; (subprocess.run(['npx','prettier','--write',fp],cwd=os.environ.get('CLAUDE_PROJECT_DIR','.'),capture_output=True), print('Prettier: ' + os.path.basename(fp))) if ext in ['.ts','.tsx','.css','.json'] else None\""
+          }
+        ]
+      }
+    ]
+  }
+}
