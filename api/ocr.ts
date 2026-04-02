@@ -27,28 +27,18 @@ type OcrResult = {
 // ============================================
 
 // Shared prompt used across all three OCR providers
-const OCR_EXTRACTION_PROMPT = `Extract ALL relevant text from this image and format it using beautifully structured Markdown.
+const OCR_EXTRACTION_PROMPT = `Extract ALL text from this image exactly as it appears. Output raw text only.
 
 CRITICAL INSTRUCTIONS:
-- Extract all core content but IGNORE these irrelevant page artifacts entirely:
-  * Standalone page numbers — any line containing only a number (e.g. "47", "Page 3 of 10")
-  * Repeating running headers or footers (journal name, author names, URL repeated at top/bottom)
-  * Watermarks, scan noise, or background artifacts
-- For ACADEMIC PAPERS:
-  * Detect and label these sections using standard Markdown headers: Abstract, Introduction, Literature Review, Methodology, Results, Discussion, Conclusion, References, Acknowledgements
-  * Preserve section numbers as part of the header (e.g. ## 2.1 Related Work)
-  * Multi-column layouts: read the LEFT column completely first, then the RIGHT column
-  * Figure/table captions (e.g. "Figure 1:", "Table 2."): italicize them — *Figure 1: caption text*
-  * Footnote markers in body text: render as [1], [2] etc.
-  * Footnote text at page bottom: render at end of section as > [1] footnote content
-- Use Markdown headers (#, ##, ###) to match the visual hierarchy of titles and sections
-- Bold (**text**) any key terms, form field labels, or emphasized text
-- Checkboxes: indicate state as [x] checked or [ ] unchecked
-- Tables: format as Markdown tables with | separators, header row, and separator row (|---|---|)
-- Lists: use - for bullet points, 1. 2. 3. for numbered lists
-- Clean up excessive blank spacing from scan artifacts — output cleanly and cohesively
-- If handwriting is messy or text is dense, make your best absolute guess
-- DO NOT output any conversational text. Just the raw formatted Markdown.
+- Transcribe every word exactly as printed or written — do NOT paraphrase, summarize, or restructure
+- Preserve the original paragraph structure and line breaks
+- Do NOT add any formatting: no Markdown, no bullet points, no dashes, no headers, no bold, no italics
+- Do NOT add symbols or characters that are not in the original text
+- IGNORE these page artifacts: standalone page numbers, repeating headers/footers, watermarks, scan noise
+- Multi-column layouts: read the LEFT column completely first, then the RIGHT column
+- Tables: preserve the content in reading order, separate columns with spaces
+- If handwriting is messy or text is unclear, make your best guess at the actual words
+- Do NOT output any conversational text, commentary, or labels — just the text from the image
 
 PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`;
 
