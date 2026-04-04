@@ -19,7 +19,6 @@ import {
   Wifi,
   WifiOff,
   Trash2,
-  Camera, // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
   Loader2,
   X,
   BookOpen,
@@ -34,7 +33,6 @@ import {
 import { generateItemSummary } from "../../services/geminiService";
 import SmartPenPairing from "./SmartPenPairing";
 import SmartPenScanModal from "./SmartPenScanModal";
-import CameraCapture from "./CameraCapture"; // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
 import { getCurrentUser, supabase } from "../../services/supabaseClient";
 import { LibrarySearch, BookDocument } from "./LibrarySearch";
 
@@ -99,7 +97,6 @@ const SmartPenGallery = () => {
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [isLinkingBook, setIsLinkingBook] = useState(false);
   // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
-  const [showCamera, setShowCamera] = useState(false);
 
   useEffect(() => {
     // Get current user
@@ -258,50 +255,6 @@ const SmartPenGallery = () => {
     if (userId) loadPairedPens(userId);
   };
 
-  // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
-  // Handle camera capture and save image
-  const handleCameraCapture = async (imageData: string) => {
-    // Optimistically prepend the item so the gallery updates instantly
-    const tempId = `temp-${Date.now()}`;
-    const optimisticItem: StorageItem = {
-      id: tempId,
-      text: "",
-      imageUrl: imageData,
-      sourceTitle: `Phone Capture - ${new Date().toLocaleDateString()}`,
-      sourceUrl: "",
-      tags: ["phone-capture", "ocr"],
-      note: "",
-      deviceSource: "smart_pen",
-      createdAt: new Date().toISOString(),
-    } as StorageItem;
-
-    setScans((prev) => [optimisticItem, ...prev]);
-    setShowCamera(false);
-
-    try {
-      await addItem({
-        text: "",
-        imageUrl: imageData,
-        sourceTitle: `Phone Capture - ${new Date().toLocaleDateString()}`,
-        sourceUrl: "",
-        tags: ["phone-capture", "ocr"],
-        note: "",
-        deviceSource: "smart_pen",
-      });
-
-      showToast("Photo captured and saved to gallery!", "success");
-      // Reconcile optimistic item with the real persisted one
-      loadScans();
-    } catch (err) {
-      // Roll back the optimistic item
-      setScans((prev) => prev.filter((s) => s.id !== tempId));
-      showToast(
-        err instanceof Error ? err.message : "Failed to save image",
-        "error",
-      );
-      throw err; // Re-throw so CameraCapture shows error state
-    }
-  };
 
   const handleExtractText = async (e: React.MouseEvent, scan: StorageItem) => {
     e.stopPropagation();
@@ -425,14 +378,6 @@ const SmartPenGallery = () => {
 
         {/* Actions & Stats */}
         <div className="flex items-center gap-3">
-          {/* TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING */}
-          <button
-            onClick={() => setShowCamera(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all"
-          >
-            <Camera className="w-4 h-4" />
-            Capture Photo
-          </button>
           <button
             onClick={() => setShowPairing(true)}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#FF9500] to-[#FF6B00] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-orange-500/25 transition-all"
@@ -813,13 +758,6 @@ const SmartPenGallery = () => {
         userId={userId}
       />
 
-      {/* TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING */}
-      {/* ========== CAMERA CAPTURE MODAL ========== */}
-      <CameraCapture
-        isOpen={showCamera}
-        onClose={() => setShowCamera(false)}
-        onCapture={handleCameraCapture}
-      />
     </div>
   );
 };
