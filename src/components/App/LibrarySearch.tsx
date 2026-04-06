@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, Card, SearchInput } from "../shared/UIComponents";
+import { Button, Card, SearchInput } from "../shared/ui";
 import { Search, Book, Image as ImageIcon, Loader2, Plus } from "lucide-react";
 import { addItem } from "../../services/storageService";
 

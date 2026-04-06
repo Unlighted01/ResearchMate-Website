@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Modal } from "../shared/UIComponents";
+import { Modal } from "../shared/ui";
 import {
   X,
   PenTool,

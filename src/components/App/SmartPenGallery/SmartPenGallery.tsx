@@ -15,7 +15,6 @@ import {
   Calendar,
   Plus,
   RefreshCw,
-  Check,
   Wifi,
   WifiOff,
   Trash2,
@@ -29,50 +28,13 @@ import {
   deleteItem,
   updateItem,
   StorageItem,
-} from "../../services/storageService";
-import { generateItemSummary } from "../../services/geminiService";
-import SmartPenPairing from "./SmartPenPairing";
-import SmartPenScanModal from "./SmartPenScanModal";
-import { getCurrentUser, supabase } from "../../services/supabaseClient";
-import { LibrarySearch, BookDocument } from "./LibrarySearch";
-
-// Toast component
-interface ToastProps {
-  message: string;
-  type: "success" | "error" | "info";
-  onClose: () => void;
-}
-
-const Toast: React.FC<ToastProps> = ({ message, type, onClose }) => {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 4000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-
-  const bgColor = {
-    success: "bg-gradient-to-r from-green-500 to-green-600",
-    error: "bg-gradient-to-r from-red-500 to-red-600",
-    info: "bg-gradient-to-r from-blue-500 to-blue-600",
-  }[type];
-
-  const Icon = type === "success" ? Check : type === "error" ? X : Zap;
-
-  return (
-    <div
-      className={`fixed bottom-6 right-6 z-50 ${bgColor} text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-slide-up`}
-    >
-      <Icon className="w-5 h-5" />
-      <span className="font-medium">{message}</span>
-      <button
-        onClick={onClose}
-        aria-label="Close toast"
-        className="ml-2 hover:opacity-70"
-      >
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  );
-};
+} from "../../../services/storageService";
+import { generateItemSummary } from "../../../services/geminiService";
+import SmartPenPairing from "../SmartPenPairing";
+import SmartPenScanModal from "../SmartPenScanModal";
+import { getCurrentUser, supabase } from "../../../services/supabaseClient";
+import { runOcr } from "../../../services/importService";
+import { LibrarySearch, BookDocument } from "../LibrarySearch";
 
 // Paired device type
 interface PairedPen {
@@ -80,7 +42,14 @@ interface PairedPen {
   paired_at: string;
 }
 
-const SmartPenGallery = () => {
+interface SmartPenGalleryProps {
+  useToast: () => {
+    showToast: (msg: string, type: "success" | "error" | "info") => void;
+  };
+}
+
+const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
+  const { showToast } = useToast();
   const [scans, setScans] = useState<StorageItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedScan, setSelectedScan] = useState<StorageItem | null>(null);
@@ -89,15 +58,9 @@ const SmartPenGallery = () => {
   const [showPairing, setShowPairing] = useState(false);
   const [userId, setUserId] = useState<string>("");
   const [pairedPens, setPairedPens] = useState<PairedPen[]>([]);
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error" | "info";
-  } | null>(null);
   const [extractingId, setExtractingId] = useState<string | null>(null);
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [isLinkingBook, setIsLinkingBook] = useState(false);
-  // TO BE REMOVED WHEN SMART PEN HARDWARE IS ACTUALLY CREATED AND FUNCTIONALLY RUNNING
-
   useEffect(() => {
     // Get current user
     getCurrentUser().then((user) => {
@@ -245,16 +208,11 @@ const SmartPenGallery = () => {
     showToast(`Linked "${title}" to this capture!`, "success");
   };
 
-  const showToast = (message: string, type: "success" | "error" | "info") => {
-    setToast({ message, type });
-  };
-
   const handlePairingSuccess = () => {
     setShowPairing(false);
     showToast("Smart Pen connected successfully!", "success");
     if (userId) loadPairedPens(userId);
   };
-
 
   const handleExtractText = async (e: React.MouseEvent, scan: StorageItem) => {
     e.stopPropagation();
@@ -262,21 +220,8 @@ const SmartPenGallery = () => {
 
     setExtractingId(scan.id);
     try {
-      // Call OCR API
-      const response = await fetch("/api/ocr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: scan.imageUrl, includeSummary: true }),
-      });
+      const result = await runOcr(scan.imageUrl, true);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "OCR failed");
-      }
-
-      const result = await response.json();
-
-      // Update the item in storage with the extracted text
       await updateItem(scan.id, {
         text: result.ocrText,
         ocrText: result.ocrText,
@@ -285,7 +230,7 @@ const SmartPenGallery = () => {
       });
 
       showToast("Text extracted successfully!", "success");
-      loadScans(); // Refresh gallery
+      loadScans();
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Failed to extract text",
@@ -353,15 +298,6 @@ const SmartPenGallery = () => {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      {/* Toast */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-
       {/* ========== HEADER ========== */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
@@ -725,13 +661,7 @@ const SmartPenGallery = () => {
           if (!scan.imageUrl) return;
           setExtractingId(scan.id);
           try {
-            const response = await fetch("/api/ocr", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ image: scan.imageUrl, includeSummary: true }),
-            });
-            if (!response.ok) throw new Error((await response.json()).error || "OCR failed");
-            const result = await response.json();
+            const result = await runOcr(scan.imageUrl, true);
             await updateScanItem(scan, {
               text: result.ocrText,
               ocrText: result.ocrText,

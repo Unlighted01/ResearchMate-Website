@@ -121,10 +121,13 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
   let geminiErrorMsg = "Skipped (No Key)";
   let claudeErrorMsg = "Skipped (No Key)";
 
-  // 1. PRIMARY: OpenRouter (Gemini 2.0 Flash)
+  // 1. PRIMARY: OpenRouter (Gemini 2.5 Flash)
   if (openRouterKey) {
+    const orStart = Date.now();
     try {
       console.log("🔍 Processing image with OpenRouter...");
+      const orAbort = AbortController ? new AbortController() : null;
+      const orTimeout = orAbort ? setTimeout(() => orAbort.abort(), 15000) : null;
       const response = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",
         {
@@ -134,7 +137,7 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.0-flash-001",
+            model: "google/gemini-2.5-flash",
             messages: [
               {
                 role: "user",
@@ -150,8 +153,10 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
             temperature: 0.1,
             max_tokens: 8192,
           }),
+          ...(orAbort ? { signal: orAbort.signal } : {}),
         },
       );
+      if (orTimeout) clearTimeout(orTimeout);
 
       if (response.ok) {
         const data = await response.json();
@@ -159,6 +164,9 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
         if (extractedText.trim()) {
           console.log("✅ OpenRouter OCR completed successfully");
           return { success: true, text: extractedText.trim(), provider: "openrouter" };
+        } else {
+          openRouterErrorMsg = "Empty response from provider";
+          console.error("OpenRouter OCR returned empty text");
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -169,13 +177,16 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
       openRouterErrorMsg = (error as Error).message;
       console.error("OpenRouter OCR error:", openRouterErrorMsg);
     }
-    console.log("⚠️ OpenRouter failed, falling back to Gemini Vision API...");
+    console.log(`⚠️ OpenRouter failed after ${Date.now() - orStart}ms, falling back to Gemini Vision API...`);
   }
 
   // 2. SECONDARY: Gemini API
   if (geminiKey) {
+    const gemStart = Date.now();
     try {
       console.log("🔍 Processing image with Gemini Vision...");
+      const gemAbort = AbortController ? new AbortController() : null;
+      const gemTimeout = gemAbort ? setTimeout(() => gemAbort.abort(), 15000) : null;
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
         {
@@ -202,8 +213,10 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
             ],
             generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
           }),
+          ...(gemAbort ? { signal: gemAbort.signal } : {}),
         },
       );
+      if (gemTimeout) clearTimeout(gemTimeout);
 
       if (response.ok) {
         const data = await response.json();
@@ -211,6 +224,9 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
         if (extractedText.trim()) {
           console.log("✅ Gemini OCR completed successfully");
           return { success: true, text: extractedText.trim(), provider: "gemini" };
+        } else {
+          geminiErrorMsg = "Empty response from provider";
+          console.error("Gemini OCR returned empty text");
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -221,13 +237,15 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
       geminiErrorMsg = (error as Error).message;
       console.error("Gemini OCR error:", geminiErrorMsg);
     }
-    console.log("⚠️ Gemini API failed, falling back to Claude...");
+    console.log(`⚠️ Gemini API failed after ${Date.now() - gemStart}ms, falling back to Claude...`);
   }
 
   // 3. TERTIARY: Claude
   if (claudeKey) {
     try {
       console.log("🔍 Processing image with Claude AI Server...");
+      const clAbort = AbortController ? new AbortController() : null;
+      const clTimeout = clAbort ? setTimeout(() => clAbort.abort(), 20000) : null;
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -236,7 +254,7 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          model: "claude-3-5-sonnet-20241022",
+          model: "claude-sonnet-4-20250514",
           max_tokens: 4096,
           temperature: 0.1,
           messages: [
@@ -252,7 +270,9 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
             },
           ],
         }),
+        ...(clAbort ? { signal: clAbort.signal } : {}),
       });
+      if (clTimeout) clearTimeout(clTimeout);
 
       if (response.ok) {
         const data = await response.json();
@@ -260,6 +280,9 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
         if (extractedText.trim()) {
           console.log("✅ Claude OCR completed successfully");
           return { success: true, text: extractedText.trim(), provider: "claude" };
+        } else {
+          claudeErrorMsg = "Empty response from provider";
+          console.error("Claude OCR returned empty text");
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -302,7 +325,7 @@ async function generateSummary(text: string): Promise<string | null> {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.0-flash-001",
+            model: "google/gemini-2.5-flash",
             messages: [{ role: "user", content: `${OCR_SUMMARY_PROMPT}${text}` }],
             temperature: 0.3,
             max_tokens: 300,
@@ -354,7 +377,7 @@ async function generateSummary(text: string): Promise<string | null> {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          model: "claude-3-5-sonnet-20241022",
+          model: "claude-sonnet-4-20250514",
           max_tokens: 300,
           temperature: 0.3,
           messages: [{ role: "user", content: `${OCR_SUMMARY_PROMPT}${text}` }],

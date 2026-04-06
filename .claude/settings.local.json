@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(cd:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(grep -n \"import.*supabase\\\\|from.*supabaseClient\" src/components/App/*.tsx)",
+      "Bash(grep -r \"useContext\\\\|useNotification\" src/components/App/*.tsx)",
+      "Bash(grep -r \"import.*Context\\\\|useTheme\\\\|useNotifications\" src/components/App/*.tsx)",
+      "Bash(grep -r \"import.*Dashboard\\\\|import.*SettingsPage\\\\|import.*SmartPenGallery\" src/components/App/*.tsx)",
+      "Bash(npm run:*)",
+      "Bash(npx vite:*)",
+      "Bash(wc -l src/components/App/Dashboard/*.ts src/components/App/Dashboard/*.tsx)"
     ]
   }
 }

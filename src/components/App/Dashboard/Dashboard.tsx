@@ -5,14 +5,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { supabase } from "../../services/supabaseClient";
+import { supabase } from "../../../services/supabaseClient";
 import {
   Button,
   Card,
   Badge,
   Modal,
   SearchInput,
-} from "../shared/UIComponents";
+} from "../../shared/ui";
 import {
   Search,
   RefreshCw,
@@ -40,40 +40,40 @@ import {
   Check,
   BookOpen,
 } from "lucide-react";
-import { TrashIcon, CopyIcon, ExternalLinkIcon, DownloadIcon } from "../icons";
+import { TrashIcon, CopyIcon, ExternalLinkIcon, DownloadIcon } from "../../icons";
 import {
   getAllItems,
   deleteItem,
   updateItem,
   subscribeToItems,
   StorageItem,
-} from "../../services/storageService";
+} from "../../../services/storageService";
 import {
   getAllCollections,
   addItemToCollection,
   moveItemsToCollection,
   Collection,
-} from "../../services/collectionsService";
-import { generateItemSummary } from "../../services/geminiService";
-import SmartPenScanModal from "./SmartPenScanModal";
-import ConfirmDialog from "../shared/ConfirmDialog";
+} from "../../../services/collectionsService";
+import { generateItemSummary } from "../../../services/geminiService";
+import SmartPenScanModal from "../SmartPenScanModal";
+import ConfirmDialog from "../../shared/ConfirmDialog";
 import {
   SkeletonDashboardGrid,
   SkeletonDashboardList,
-} from "../shared/SkeletonLoader";
+} from "../../shared/SkeletonLoader";
 import {
   useKeyboardShortcuts,
   COMMON_SHORTCUTS,
-} from "../../hooks/useKeyboardShortcuts";
-import KeyboardShortcutsModal from "../shared/KeyboardShortcutsModal";
-import BulkActions from "../shared/BulkActions";
+} from "../../../hooks/useKeyboardShortcuts";
+import KeyboardShortcutsModal from "../../shared/KeyboardShortcutsModal";
+import BulkActions from "../../shared/BulkActions";
 import AdvancedSearchFilter, {
   SearchFilters,
-} from "../shared/AdvancedSearchFilter";
-import { exportItems } from "../../utils/export";
-import { generateMarkdownTemplate } from "../../utils/markdownGenerator";
+} from "../../shared/AdvancedSearchFilter";
+import { exportItems } from "../../../utils/export";
+import { generateMarkdownTemplate } from "../../../utils/markdownGenerator";
 import { useRef } from "react";
-import { useNotifications } from "../../context/NotificationContext";
+import { useNotifications } from "../../../context/NotificationContext";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 

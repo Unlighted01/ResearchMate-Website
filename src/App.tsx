@@ -17,7 +17,8 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { NotificationProvider } from "./context/NotificationContext";
 
 // Components & Layouts
-import { MarketingLayout, DashboardLayout } from "./components/shared/Layouts";
+import { MarketingLayout } from "./components/shared/MarketingLayout";
+import { DashboardLayout } from "./components/shared/DashboardLayout";
 import OfflineDetector from "./components/shared/OfflineDetector";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import { motion } from "motion/react";
@@ -26,11 +27,10 @@ import { CheckCircle2, Bell, X } from "lucide-react";
 
 // App Pages (Authenticated)
 import MarketingHome from "./components/marketing/MarketingHome";
-import SettingsPage from "./components/App/SettingsPage";
+import SettingsPage from "./components/App/Settings";
 import Dashboard from "./components/App/Dashboard";
 import CollectionsPage from "./components/App/CollectionsPage";
-// Ideally these would be in their own files too:
-import CitationGenerator from "./components/App/CitationGenerator";
+import { CitationGenerator } from "./components/App/Citations";
 
 // ============================================
 // PART 2: TOAST NOTIFICATION COMPONENT
@@ -443,10 +443,24 @@ export default function App() {
                           path="citations"
                           element={<CitationGenerator />}
                         />
-                        <Route path="smart-pen" element={<SmartPenGallery />} />
+                        <Route
+                          path="smart-pen"
+                          element={
+                            <SmartPenGallery
+                              useToast={() => ({ showToast, ToastComponent })}
+                            />
+                          }
+                        />
                         <Route path="pair-pen" element={<PairSmartPen />} />
                         <Route path="statistics" element={<Statistics />} />
-                        <Route path="settings" element={<SettingsPage />} />
+                        <Route
+                          path="settings"
+                          element={
+                            <SettingsPage
+                              useToast={() => ({ showToast, ToastComponent })}
+                            />
+                          }
+                        />
                       </Routes>
                     </DashboardLayout>
                   </RequireAuth>

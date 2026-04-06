@@ -3,9 +3,9 @@
 // ============================================
 
 import React, { useState, useEffect, useCallback } from "react";
-import { supabase } from "../../services/supabaseClient";
-import { useTheme } from "../../context/ThemeContext";
-import { Button, Card, Input, Toggle, Select } from "../shared/UIComponents";
+import { supabase } from "../../../services/supabaseClient";
+import { useTheme } from "../../../context/ThemeContext";
+import { Button, Card, Input, Toggle, Select } from "../../shared/ui";
 import {
   User,
   Lock,
@@ -34,8 +34,8 @@ import {
   EyeOff,
   Library,
 } from "lucide-react";
-import { TrashIcon } from "../icons";
-import { LibrarySearch } from "./LibrarySearch";
+import { TrashIcon } from "../../icons";
+import { LibrarySearch } from "../LibrarySearch";
 
 // ============================================
 // PART 2: TOAST COMPONENT
