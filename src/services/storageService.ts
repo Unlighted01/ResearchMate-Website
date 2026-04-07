@@ -308,6 +308,31 @@ export async function updateItem(
     };
 
     if (updates.tags !== undefined) updateData.tags = updates.tags;
+
+    // Persist highlight color as a "color:X" tag in the tags array
+    // @ts-ignore
+    if (updates.color !== undefined) {
+      // Fetch current tags from DB if we don't already have them in this update
+      let currentTags: string[] = updateData.tags || [];
+      if (!updateData.tags) {
+        const { data: row } = await supabase
+          .from("items")
+          .select("tags")
+          .eq("id", itemId)
+          .single();
+        currentTags = Array.isArray(row?.tags) ? row.tags : [];
+      }
+      const cleanTags = currentTags.filter(
+        (t: string) => !t.startsWith("color:"),
+      );
+      // @ts-ignore
+      if (updates.color) {
+        // @ts-ignore
+        cleanTags.push(`color:${updates.color}`);
+      }
+      updateData.tags = cleanTags;
+    }
+
     if (updates.note !== undefined) updateData.note = updates.note;
     if (updates.aiSummary !== undefined)
       updateData.ai_summary = updates.aiSummary;
