@@ -164,7 +164,7 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
         isOpen={!!scan}
         onClose={onClose}
         size="xl"
-        contentClassName="flex flex-col overflow-hidden p-0"
+        contentClassName="flex flex-col overflow-y-auto overscroll-contain p-0"
       >
         {/* ---- HEADER ---- */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
@@ -188,8 +188,8 @@ const SmartPenScanModal: React.FC<SmartPenScanModalProps> = ({
         </div>
 
         {/* ---- BODY ---- */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2 h-full lg:divide-x divide-gray-100 dark:divide-gray-800">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          <div className="grid grid-cols-1 lg:grid-cols-2 lg:divide-x divide-gray-100 dark:divide-gray-800">
 
               {/* ==== LEFT: IMAGE ==== */}
               <div className="p-6 flex flex-col gap-4 overflow-y-auto">
