@@ -14,7 +14,7 @@ import {
   Quote,
   Sparkles,
 } from "lucide-react";
-import { Button } from "./UIComponents";
+import { Button } from "./ui";
 
 interface EmptyStateProps {
   type?:

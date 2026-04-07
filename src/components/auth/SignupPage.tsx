@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
-import { Input } from "../shared/UIComponents";
+import { Input } from "../shared/ui";
 import BubbleBackground from "../shared/BubbleBackground";
 import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";

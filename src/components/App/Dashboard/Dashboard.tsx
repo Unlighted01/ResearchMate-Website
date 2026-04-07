@@ -1,51 +1,38 @@
 // ============================================
-// Dashboard.tsx - Research Items Dashboard (compositor)
+// DASHBOARD PAGE - Apple Design
+// Orchestrates sub-components and hooks
 // ============================================
 
 // ============================================
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
 
-// React
 import React from "react";
-
-// Third-party
-import { motion } from "motion/react";
-
-// Sub-components
-import DashboardHeader from "./DashboardHeader";
-import SearchAndFilters from "./SearchAndFilters";
-import StatsBar from "./StatsBar";
-import ResearchItemCard from "./ResearchItemCard";
-import ResearchItemRow from "./ResearchItemRow";
-import ItemDetailModal from "./ItemDetailModal";
-import CollectionPickerModal from "./CollectionPickerModal";
-
-// Shared components
-import SmartPenScanModal from "../SmartPenScanModal";
-import ConfirmDialog from "../../shared/ConfirmDialog";
+import { Sparkles, Chrome, FolderPlus } from "lucide-react";
+import { Modal } from "../../shared/ui";
+import { StorageItem, updateItem } from "../../../services/storageService";
 import {
   SkeletonDashboardGrid,
   SkeletonDashboardList,
 } from "../../shared/SkeletonLoader";
-import KeyboardShortcutsModal from "../../shared/KeyboardShortcutsModal";
-import BulkActions from "../../shared/BulkActions";
-import AdvancedSearchFilter from "../../shared/AdvancedSearchFilter";
-
-// Icons
-import { Sparkles, Chrome } from "lucide-react";
-
-// Services
-import { updateItem } from "../../../services/storageService";
-import { runOcr } from "../../../services/importService";
-
-// Hooks
 import {
   useKeyboardShortcuts,
   COMMON_SHORTCUTS,
 } from "../../../hooks/useKeyboardShortcuts";
+import KeyboardShortcutsModal from "../../shared/KeyboardShortcutsModal";
+import BulkActions from "../../shared/BulkActions";
+import AdvancedSearchFilter from "../../shared/AdvancedSearchFilter";
+import SmartPenScanModal from "../SmartPenScanModal";
+import ConfirmDialog from "../../shared/ConfirmDialog";
+
 import { useDashboardData } from "./useDashboardData";
 import { useDashboardActions } from "./useDashboardActions";
+import DashboardHeader from "./DashboardHeader";
+import DashboardToolbar from "./DashboardToolbar";
+import DashboardStatsBar from "./DashboardStatsBar";
+import ItemGridCard from "./ItemGridCard";
+import ItemListRow from "./ItemListRow";
+import ItemDetailModal from "./ItemDetailModal";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -65,188 +52,129 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const { showToast } = useToast();
 
   // ---------- PART 3A: DATA HOOK ----------
-
-  const {
-    items,
-    setItems,
-    filteredItems,
-    loading,
-    hasMore,
-    loadingMore,
-    searchQuery,
-    setSearchQuery,
-    viewMode,
-    setViewMode,
-    stats,
-    allTags,
-    collections,
-    isRealTimeConnected,
-    lastSyncTime,
-    selectedItem,
-    setSelectedItem,
-    isModalOpen,
-    setIsModalOpen,
-    selectedSmartPenScan,
-    setSelectedSmartPenScan,
-    selectedItems,
-    setSelectedItems,
-    showKeyboardShortcuts,
-    setShowKeyboardShortcuts,
-    showAdvancedFilters,
-    setShowAdvancedFilters,
-    showCollectionModal,
-    setShowCollectionModal,
-    collectionActionType,
-    setCollectionActionType,
-    isImporting,
-    setIsImporting,
-    importFileRef,
-    isSummarizingSmartPen,
-    setIsSummarizingSmartPen,
-    isSummarizingItem,
-    setIsSummarizingItem,
-    isBulkDeleting,
-    setIsBulkDeleting,
-    confirmDialog,
-    setConfirmDialog,
-    advancedFilters,
-    setAdvancedFilters,
-    fetchItems,
-    loadMoreItems,
-    searchInputRef,
-  } = useDashboardData(showToast);
+  const data = useDashboardData(showToast);
 
   // ---------- PART 3B: ACTIONS HOOK ----------
-
-  const {
-    handleGenerateSummary,
-    handleDeleteItem,
-    handleColorChange,
-    confirmDeleteItem,
-    toggleItemSelection,
-    selectAllItems,
-    deselectAllItems,
-    handleBulkDelete,
-    handleBulkExport,
-    handleShare,
-    handleCopyMarkdown,
-    handleAddToCollection,
-    handleImport,
-  } = useDashboardActions({
-    items,
-    setItems,
-    selectedItem,
-    setSelectedItem,
-    setIsModalOpen,
-    selectedItems,
-    setSelectedItems,
-    setIsBulkDeleting,
-    confirmDialog,
-    setConfirmDialog,
-    isSummarizingItem,
-    setIsSummarizingItem,
-    showCollectionModal,
-    setShowCollectionModal,
-    collectionActionType,
-    setCollectionActionType,
-    setIsImporting,
+  const actions = useDashboardActions({
+    items: data.items,
+    setItems: data.setItems,
+    selectedItem: data.selectedItem,
+    setSelectedItem: data.setSelectedItem,
+    setIsModalOpen: data.setIsModalOpen,
+    selectedItems: data.selectedItems,
+    setSelectedItems: data.setSelectedItems,
+    setIsBulkDeleting: data.setIsBulkDeleting,
+    confirmDialog: data.confirmDialog,
+    setConfirmDialog: data.setConfirmDialog,
+    isSummarizingItem: data.isSummarizingItem,
+    setIsSummarizingItem: data.setIsSummarizingItem,
+    showCollectionModal: data.showCollectionModal,
+    setShowCollectionModal: data.setShowCollectionModal,
+    collectionActionType: data.collectionActionType,
+    setCollectionActionType: data.setCollectionActionType,
+    setIsImporting: data.setIsImporting,
     showToast,
-    filteredItems,
+    filteredItems: data.filteredItems,
   });
 
   // ---------- PART 3C: KEYBOARD SHORTCUTS ----------
-
   useKeyboardShortcuts([
     {
       ...COMMON_SHORTCUTS.SEARCH,
       description: "Focus search",
-      handler: () => searchInputRef.current?.focus(),
+      handler: () => data.searchInputRef.current?.focus(),
     },
     {
       ...COMMON_SHORTCUTS.REFRESH,
       description: "Refresh items",
       handler: () => {
-        if (!loading) fetchItems();
+        if (!data.loading) data.fetchItems();
       },
     },
     {
       key: "g",
       description: "Toggle grid/list view",
       handler: () => {
-        setViewMode((prev) => {
-          const next = prev === "grid" ? "list" : "grid";
-          localStorage.setItem("researchMate_viewMode", next);
-          return next;
-        });
+        data.setViewMode(data.viewMode === "grid" ? "list" : "grid");
+        localStorage.setItem(
+          "researchMate_viewMode",
+          data.viewMode === "grid" ? "list" : "grid",
+        );
       },
     },
     {
       key: "?",
       shiftKey: true,
       description: "Show keyboard shortcuts",
-      handler: () => setShowKeyboardShortcuts(true),
+      handler: () => data.setShowKeyboardShortcuts(true),
     },
   ]);
 
-  // ---------- PART 3D: LOCAL HANDLERS ----------
-
-  const handleApplyFilters = (
-    filters: Parameters<typeof setAdvancedFilters>[0]
-  ) => setAdvancedFilters(filters);
+  // ---------- PART 3D: ITEM CLICK HANDLER ----------
+  const handleItemClick = (item: StorageItem) => {
+    if (item.deviceSource === "smart_pen") {
+      data.setSelectedSmartPenScan(item);
+    } else {
+      data.setSelectedItem(item);
+      data.setIsModalOpen(true);
+    }
+  };
 
   // ---------- PART 3E: RENDER ----------
-
   return (
     <div className="space-y-6 animate-fade-in-up">
-      {/* Header */}
+      {/* ========== HEADER ========== */}
       <DashboardHeader
-        isRealTimeConnected={isRealTimeConnected}
-        lastSyncTime={lastSyncTime}
-        loading={loading}
-        isImporting={isImporting}
-        fetchItems={fetchItems}
-        importFileRef={importFileRef}
-        handleImport={handleImport}
-        setShowKeyboardShortcuts={setShowKeyboardShortcuts}
+        isRealTimeConnected={data.isRealTimeConnected}
+        lastSyncTime={data.lastSyncTime}
+        loading={data.loading}
+        isImporting={data.isImporting}
+        importFileRef={data.importFileRef}
+        onRefresh={() => {
+          if (!data.loading) data.fetchItems();
+        }}
+        onShowShortcuts={() => data.setShowKeyboardShortcuts(true)}
+        onImport={actions.handleImport}
       />
 
-      {/* Search & Filters */}
-      <SearchAndFilters
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        searchInputRef={searchInputRef}
-        showAdvancedFilters={showAdvancedFilters}
-        setShowAdvancedFilters={setShowAdvancedFilters}
-        advancedFilters={advancedFilters}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
+      {/* ========== SEARCH & FILTERS ========== */}
+      <DashboardToolbar
+        searchQuery={data.searchQuery}
+        onSearchChange={data.setSearchQuery}
+        searchInputRef={data.searchInputRef}
+        viewMode={data.viewMode}
+        onViewModeChange={data.setViewMode}
+        advancedFilters={data.advancedFilters}
+        onShowAdvancedFilters={() => data.setShowAdvancedFilters(true)}
       />
 
-      {/* Stats Bar */}
-      <StatsBar stats={stats} />
+      {/* ========== STATS BAR ========== */}
+      <DashboardStatsBar stats={data.stats} />
 
-      {/* Content */}
-      {loading ? (
-        viewMode === "grid" ? (
+      {/* ========== CONTENT ========== */}
+      {data.loading ? (
+        data.viewMode === "grid" ? (
           <SkeletonDashboardGrid count={8} />
         ) : (
           <SkeletonDashboardList count={8} />
         )
-      ) : filteredItems.length === 0 ? (
+      ) : data.filteredItems.length === 0 ? (
         /* Empty State */
         <div className="flex flex-col items-center justify-center py-20 px-4 animate-fade-up">
           <div className="w-20 h-20 bg-gradient-to-br from-[#007AFF]/10 to-[#5856D6]/10 rounded-3xl flex items-center justify-center mb-6">
             <Sparkles className="w-10 h-10 text-[#007AFF]" />
           </div>
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            {searchQuery ? "No results found" : "Start your research journey"}
+            {data.searchQuery
+              ? "No results found"
+              : "Start your research journey"}
           </h3>
           <p className="text-gray-500 dark:text-gray-400 text-center max-w-md mb-8">
-            {searchQuery
+            {data.searchQuery
               ? "Try adjusting your search terms"
               : "Install the browser extension to capture content from any website instantly."}
           </p>
-          {!searchQuery && (
+          {!data.searchQuery && (
             <a
               href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
               target="_blank"
@@ -259,50 +187,48 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
             </a>
           )}
         </div>
-      ) : viewMode === "grid" ? (
+      ) : data.viewMode === "grid" ? (
         /* Grid View */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-stagger">
-          {filteredItems.map((item, idx) => (
-            <ResearchItemCard
+          {data.filteredItems.map((item, idx) => (
+            <ItemGridCard
               key={item.id}
               item={item}
               index={idx}
-              selectedItems={selectedItems}
-              toggleItemSelection={toggleItemSelection}
-              setSelectedSmartPenScan={setSelectedSmartPenScan}
-              setSelectedItem={setSelectedItem}
-              setIsModalOpen={setIsModalOpen}
-              handleDeleteItem={handleDeleteItem}
+              isSelected={data.selectedItems.has(item.id)}
+              hasAnySelection={data.selectedItems.size > 0}
+              onSelect={actions.toggleItemSelection}
+              onClick={handleItemClick}
+              onDelete={actions.handleDeleteItem}
             />
           ))}
         </div>
       ) : (
         /* List View */
         <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800 flex flex-col w-full max-w-full overflow-hidden">
-          {filteredItems.map((item) => (
-            <ResearchItemRow
+          {data.filteredItems.map((item) => (
+            <ItemListRow
               key={item.id}
               item={item}
-              selectedItems={selectedItems}
-              toggleItemSelection={toggleItemSelection}
-              setSelectedSmartPenScan={setSelectedSmartPenScan}
-              setSelectedItem={setSelectedItem}
-              setIsModalOpen={setIsModalOpen}
-              handleDeleteItem={handleDeleteItem}
+              isSelected={data.selectedItems.has(item.id)}
+              hasAnySelection={data.selectedItems.size > 0}
+              onSelect={actions.toggleItemSelection}
+              onClick={handleItemClick}
+              onDelete={actions.handleDeleteItem}
             />
           ))}
         </div>
       )}
 
-      {/* Load More */}
-      {hasMore && !loading && (
+      {/* ========== LOAD MORE ========== */}
+      {data.hasMore && !data.loading && (
         <div className="flex justify-center pt-2 pb-4">
           <button
-            onClick={loadMoreItems}
-            disabled={loadingMore}
+            onClick={data.loadMoreItems}
+            disabled={data.loadingMore}
             className="flex items-center gap-2 px-6 py-2.5 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
           >
-            {loadingMore ? (
+            {data.loadingMore ? (
               <>
                 <svg
                   className="w-4 h-4 animate-spin"
@@ -332,121 +258,179 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         </div>
       )}
 
-      {/* Detail Modal */}
+      {/* ========== DETAIL MODAL ========== */}
       <ItemDetailModal
-        isModalOpen={isModalOpen}
-        setIsModalOpen={setIsModalOpen}
-        selectedItem={selectedItem}
-        handleCopyMarkdown={handleCopyMarkdown}
-        handleColorChange={handleColorChange}
-        handleGenerateSummary={handleGenerateSummary}
-        isSummarizingItem={isSummarizingItem}
-        handleShare={handleShare}
-        handleDeleteItem={handleDeleteItem}
-        setCollectionActionType={setCollectionActionType}
-        setShowCollectionModal={setShowCollectionModal}
-        showToast={showToast}
+        isOpen={data.isModalOpen}
+        onClose={() => data.setIsModalOpen(false)}
+        item={data.selectedItem}
+        isSummarizingItem={data.isSummarizingItem}
+        onGenerateSummary={actions.handleGenerateSummary}
+        onColorChange={actions.handleColorChange}
+        onCopyMarkdown={actions.handleCopyMarkdown}
+        onCopyText={(text) => {
+          navigator.clipboard.writeText(text);
+          showToast("Copied to clipboard!", "success");
+        }}
+        onShare={actions.handleShare}
+        onAddToCollection={() => {
+          data.setCollectionActionType("single");
+          data.setShowCollectionModal(true);
+        }}
+        onDelete={actions.handleDeleteItem}
       />
 
-      {/* Smart Pen Scan Modal */}
+      {/* ========== SMART PEN SCAN MODAL ========== */}
       <SmartPenScanModal
-        scan={selectedSmartPenScan}
-        onClose={() => setSelectedSmartPenScan(null)}
+        scan={data.selectedSmartPenScan}
+        onClose={() => data.setSelectedSmartPenScan(null)}
         onUpdate={(id, updates) => {
-          setItems((prev) =>
-            prev.map((i) => (i.id === id ? { ...i, ...updates } : i))
+          data.setItems((prev) =>
+            prev.map((i) => (i.id === id ? { ...i, ...updates } : i)),
           );
-          if (selectedSmartPenScan?.id === id) {
-            setSelectedSmartPenScan((prev) =>
-              prev ? { ...prev, ...updates } : null
+          if (data.selectedSmartPenScan?.id === id) {
+            data.setSelectedSmartPenScan((prev) =>
+              prev ? { ...prev, ...updates } : null,
             );
           }
         }}
-        onDelete={(id) => handleDeleteItem(id)}
+        onDelete={(id) => actions.handleDeleteItem(id)}
         onGenerateSummary={async (scan) => {
-          setIsSummarizingSmartPen(true);
-          await handleGenerateSummary(scan);
-          setIsSummarizingSmartPen(false);
+          data.setIsSummarizingSmartPen(true);
+          await actions.handleGenerateSummary(scan);
+          data.setIsSummarizingSmartPen(false);
         }}
         onRunOCR={async (scan) => {
           if (!scan.imageUrl) return;
           try {
-            const result = await runOcr(scan.imageUrl, true);
+            const response = await fetch("/api/ocr", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                image: scan.imageUrl,
+                includeSummary: true,
+              }),
+            });
+            if (!response.ok)
+              throw new Error(
+                (await response.json()).error || "OCR failed",
+              );
+            const result = await response.json();
             const updates = {
               text: result.ocrText,
               ocrText: result.ocrText,
               aiSummary: result.aiSummary || undefined,
             };
             await updateItem(scan.id, updates);
-            setItems((prev) =>
-              prev.map((i) => (i.id === scan.id ? { ...i, ...updates } : i))
+            data.setItems((prev) =>
+              prev.map((i) =>
+                i.id === scan.id ? { ...i, ...updates } : i,
+              ),
             );
-            setSelectedSmartPenScan((prev) =>
-              prev ? { ...prev, ...updates } : null
+            data.setSelectedSmartPenScan((prev) =>
+              prev ? { ...prev, ...updates } : null,
             );
             showToast("Text extracted!", "success");
           } catch (err) {
             showToast(
               err instanceof Error ? err.message : "OCR failed",
-              "error"
+              "error",
             );
           }
         }}
-        isSummarizing={isSummarizingSmartPen}
+        isSummarizing={data.isSummarizingSmartPen}
       />
 
       {/* Confirm Delete Dialog */}
       <ConfirmDialog
-        isOpen={confirmDialog.isOpen}
+        isOpen={data.confirmDialog.isOpen}
         onClose={() =>
-          setConfirmDialog({ isOpen: false, itemId: null, isDeleting: false })
+          data.setConfirmDialog({
+            isOpen: false,
+            itemId: null,
+            isDeleting: false,
+          })
         }
-        onConfirm={confirmDeleteItem}
+        onConfirm={actions.confirmDeleteItem}
         title="Delete Item"
         message="Are you sure you want to delete this research item? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
-        isLoading={confirmDialog.isDeleting}
+        isLoading={data.confirmDialog.isDeleting}
       />
 
       {/* Bulk Actions Bar */}
       <BulkActions
-        selectedCount={selectedItems.size}
-        totalCount={filteredItems.length}
-        onSelectAll={selectAllItems}
-        onDeselectAll={deselectAllItems}
-        onBulkDelete={handleBulkDelete}
-        onBulkExport={handleBulkExport}
+        selectedCount={data.selectedItems.size}
+        totalCount={data.filteredItems.length}
+        onSelectAll={actions.selectAllItems}
+        onDeselectAll={actions.deselectAllItems}
+        onBulkDelete={actions.handleBulkDelete}
+        onBulkExport={actions.handleBulkExport}
         onBulkAddToCollection={() => {
-          setCollectionActionType("bulk");
-          setShowCollectionModal(true);
+          data.setCollectionActionType("bulk");
+          data.setShowCollectionModal(true);
         }}
-        isDeleting={isBulkDeleting}
+        isDeleting={data.isBulkDeleting}
       />
 
-      {/* Collection Picker Modal */}
-      <CollectionPickerModal
-        showCollectionModal={showCollectionModal}
-        setShowCollectionModal={setShowCollectionModal}
-        collectionActionType={collectionActionType}
-        selectedItems={selectedItems}
-        collections={collections}
-        handleAddToCollection={handleAddToCollection}
-      />
+      {/* Select Collection Modal */}
+      <Modal
+        isOpen={data.showCollectionModal}
+        onClose={() => data.setShowCollectionModal(false)}
+        title={
+          data.collectionActionType === "bulk"
+            ? `Add ${data.selectedItems.size} items to Collection`
+            : "Add to Collection"
+        }
+      >
+        <div className="max-h-96 overflow-y-auto space-y-2">
+          {data.collections.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              No collections found. Create one in the Collections tab.
+            </div>
+          ) : (
+            data.collections.map((col) => (
+              <button
+                key={col.id}
+                onClick={() => actions.handleAddToCollection(col.id)}
+                className="w-full flex items-center gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl hover:shadow-md transition-all text-left group"
+              >
+                <div
+                  className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: `${col.color}20` }}
+                >
+                  <FolderPlus
+                    className="w-5 h-5 transition-transform group-hover:scale-110"
+                    style={{ color: col.color }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-gray-900 dark:text-white truncate">
+                    {col.name}
+                  </h4>
+                  <p className="text-xs text-gray-500 truncate">
+                    {col.description || "No description"}
+                  </p>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </Modal>
 
       {/* Keyboard Shortcuts Modal */}
       <KeyboardShortcutsModal
-        isOpen={showKeyboardShortcuts}
-        onClose={() => setShowKeyboardShortcuts(false)}
+        isOpen={data.showKeyboardShortcuts}
+        onClose={() => data.setShowKeyboardShortcuts(false)}
       />
 
       {/* Advanced Search Filters Modal */}
       <AdvancedSearchFilter
-        isOpen={showAdvancedFilters}
-        onClose={() => setShowAdvancedFilters(false)}
-        onApply={handleApplyFilters}
-        availableTags={allTags}
+        isOpen={data.showAdvancedFilters}
+        onClose={() => data.setShowAdvancedFilters(false)}
+        onApply={data.setAdvancedFilters}
+        availableTags={data.allTags}
       />
     </div>
   );

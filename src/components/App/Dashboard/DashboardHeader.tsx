@@ -1,5 +1,5 @@
 // ============================================
-// DashboardHeader.tsx - Dashboard title, sync status, refresh & import
+// DASHBOARD HEADER - Title, sync status, actions
 // ============================================
 
 // ============================================
@@ -7,7 +7,13 @@
 // ============================================
 
 import React from "react";
-import { RefreshCw, Plus, WifiOff, HelpCircle } from "lucide-react";
+import {
+  RefreshCw,
+  Plus,
+  HelpCircle,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -18,14 +24,14 @@ interface DashboardHeaderProps {
   lastSyncTime: Date | null;
   loading: boolean;
   isImporting: boolean;
-  fetchItems: () => void;
-  importFileRef: React.RefObject<HTMLInputElement>;
-  handleImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  setShowKeyboardShortcuts: (show: boolean) => void;
+  importFileRef: React.RefObject<HTMLInputElement | null>;
+  onRefresh: () => void;
+  onShowShortcuts: () => void;
+  onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 // ============================================
-// PART 3: MAIN COMPONENT
+// PART 3: COMPONENT
 // ============================================
 
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -33,10 +39,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   lastSyncTime,
   loading,
   isImporting,
-  fetchItems,
   importFileRef,
-  handleImport,
-  setShowKeyboardShortcuts,
+  onRefresh,
+  onShowShortcuts,
+  onImport,
 }) => {
   return (
     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -66,7 +72,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
       <div className="flex items-center gap-3">
         <button
-          onClick={() => setShowKeyboardShortcuts(true)}
+          onClick={onShowShortcuts}
           aria-label="Keyboard shortcuts"
           title="Keyboard shortcuts (?)"
           className="p-2.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all active:scale-95"
@@ -74,9 +80,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           <HelpCircle className="w-5 h-5" />
         </button>
         <button
-          onClick={() => {
-            if (!loading) fetchItems();
-          }}
+          onClick={onRefresh}
           disabled={loading}
           aria-label="Refresh items"
           className="p-2.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -101,7 +105,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           accept=".json,.pdf,image/*"
           multiple
           className="hidden"
-          onChange={handleImport}
+          onChange={onImport}
         />
       </div>
     </div>

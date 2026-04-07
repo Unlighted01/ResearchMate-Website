@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
-import { Button, Card, Input } from "../shared/UIComponents";
+import { Button, Card, Input } from "../shared/ui";
 import BubbleBackground from "../shared/BubbleBackground";
 import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
