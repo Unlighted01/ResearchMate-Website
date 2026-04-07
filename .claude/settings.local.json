@@ -9,7 +9,10 @@
       "Bash(grep -r \"import.*Dashboard\\\\|import.*SettingsPage\\\\|import.*SmartPenGallery\" src/components/App/*.tsx)",
       "Bash(npm run:*)",
       "Bash(npx vite:*)",
-      "Bash(wc -l src/components/App/Dashboard/*.ts src/components/App/Dashboard/*.tsx)"
+      "Bash(wc -l src/components/App/Dashboard/*.ts src/components/App/Dashboard/*.tsx)",
+      "Bash(find 'C:\\\\Users\\\\netne\\\\ReserachMate\\\\Researchmate Website\\\\src\\\\components\\\\App\\\\AIAssistant' -type f -name *.ts*)",
+      "Bash(grep -E \"\\\\.\\(env|json\\)$\")",
+      "Bash(xargs grep:*)"
     ]
   }
 }
