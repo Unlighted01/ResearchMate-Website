@@ -65,6 +65,39 @@ async function searchSemanticScholar(query: string): Promise<AcademicResult[]> {
   });
 }
 
+// Semantic Scholar title match — uses the /paper/search endpoint with
+// year filter to catch very recent papers that keyword search misses
+async function searchSemanticScholarByTitle(title: string): Promise<AcademicResult[]> {
+  const fields = "title,authors,year,abstract,url,externalIds,citationCount,venue";
+  const currentYear = new Date().getFullYear();
+  const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(title)}&limit=5&fields=${fields}&year=${currentYear - 1}-${currentYear}`;
+
+  const res = await fetch(url);
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  return (data.data || []).map((paper: Record<string, unknown>) => {
+    const authors = (paper.authors as Array<{ name: string }>) || [];
+    const externalIds = (paper.externalIds as Record<string, string>) || {};
+    return {
+      id: externalIds.DOI || externalIds.ArXiv || (paper.paperId as string) || "",
+      title: (paper.title as string) || "Untitled",
+      authors: authors.map((a) => a.name),
+      year: (paper.year as number) || null,
+      abstract: (paper.abstract as string) || "",
+      venue: (paper.venue as string) || "",
+      url: (paper.url as string) || "",
+      pdfUrl: externalIds.ArXiv
+        ? `https://arxiv.org/pdf/${externalIds.ArXiv}`
+        : undefined,
+      doi: externalIds.DOI || undefined,
+      arxivId: externalIds.ArXiv || undefined,
+      citationCount: (paper.citationCount as number) || 0,
+      source: "semanticscholar" as const,
+    };
+  });
+}
+
 // ============================================
 // PART 4: ARXIV
 // ============================================
@@ -134,13 +167,35 @@ function parseArxivXml(xml: string): AcademicResult[] {
 }
 
 async function searchArxiv(query: string): Promise<AcademicResult[]> {
-  const url = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&max_results=10&sortBy=relevance`;
+  // For longer queries (likely a title), search both title field AND all fields
+  // ArXiv title search is more precise for exact title lookups
+  const isLikelyTitle = query.split(/\s+/).length >= 5;
 
-  const res = await fetch(url);
-  if (!res.ok) return [];
+  const fetches: Promise<AcademicResult[]>[] = [
+    fetch(`https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&max_results=10&sortBy=relevance`)
+      .then((r) => (r.ok ? r.text() : ""))
+      .then(parseArxivXml),
+  ];
 
-  const xml = await res.text();
-  return parseArxivXml(xml);
+  if (isLikelyTitle) {
+    // Title-specific search + sort by recent to catch new papers
+    fetches.push(
+      fetch(`https://export.arxiv.org/api/query?search_query=ti:${encodeURIComponent(query)}&max_results=5&sortBy=submittedDate&sortOrder=descending`)
+        .then((r) => (r.ok ? r.text() : ""))
+        .then(parseArxivXml)
+    );
+  }
+
+  const settled = await Promise.allSettled(fetches);
+  const all = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+
+  // Deduplicate by arxivId
+  const seen = new Set<string>();
+  return all.filter((r) => {
+    if (seen.has(r.id)) return false;
+    seen.add(r.id);
+    return true;
+  });
 }
 
 // ============================================
@@ -273,9 +328,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const settled = await Promise.allSettled(fetchers);
-    const allResults = settled.flatMap((r) =>
+    let allResults = settled.flatMap((r) =>
       r.status === "fulfilled" ? r.value : []
     );
+
+    // If few results from main search and query looks like a title,
+    // try Semantic Scholar title match endpoint as a fallback
+    if (allResults.length < 3 && query.split(/\s+/).length >= 4) {
+      const titleMatch = await searchSemanticScholarByTitle(query);
+      allResults = [...titleMatch, ...allResults];
+    }
 
     // Deduplicate by DOI or normalized title
     const seen = new Set<string>();
