@@ -625,23 +625,21 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       </span>
 
       {/* ---- Insert Research ---- */}
-      <button
+      <ToolbarBtn
         onClick={onInsertItem}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#007AFF] hover:bg-[#007AFF]/10 rounded-lg transition-colors shrink-0"
+        title="Insert Research Item"
       >
         <FileText className="w-4 h-4" />
-        <span className="hidden sm:inline">Insert</span>
-      </button>
+      </ToolbarBtn>
 
       {/* ---- Bibliography dropdown ---- */}
       <div className="relative shrink-0" ref={bibRef}>
         <button
           onClick={() => setShowBib((p) => !p)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+          className="flex items-center gap-1 p-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
           title="Insert Bibliography"
         >
           <BookOpen className="w-4 h-4" />
-          <span className="hidden sm:inline">Bibliography</span>
           <ChevronDown className="w-3 h-3" />
         </button>
         {showBib && (
@@ -668,10 +666,10 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       <div className="relative shrink-0" ref={exportRef}>
         <button
           onClick={() => setShowExport((p) => !p)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-[#007AFF] text-white rounded-lg hover:bg-[#0066DD] transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium bg-[#007AFF] text-white rounded-lg hover:bg-[#0066DD] transition-colors"
         >
           Export
-          <ChevronDown className="w-3.5 h-3.5" />
+          <ChevronDown className="w-3 h-3" />
         </button>
         {showExport && (
           <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-[60]">
