@@ -17,6 +17,12 @@ import EditorCanvas from "./EditorCanvas";
 import ItemImportDrawer from "./ItemImportDrawer";
 import EditorSkeleton from "./EditorSkeleton";
 import { exportToDocx, exportToPdf } from "./exportUtils";
+import { exportToLatex } from "./latexExportUtils";
+import {
+  generateBibliographyNodes,
+  insertBibliography,
+} from "./bibliographyUtils";
+import type { CitationFormat } from "../Citations/citationUtils";
 
 // ============================================
 // PART 2: COMPONENT
@@ -37,16 +43,19 @@ const DocumentEditor: React.FC = () => {
     itemsLoading,
     showImportDrawer,
     setShowImportDrawer,
+    citedItemIds,
+    handleItemInserted,
   } = useDocumentEditor();
 
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [bibFormat, setBibFormat] = useState<CitationFormat>("apa");
 
   const onEditorReady = useCallback((ed: Editor) => {
     setEditor(ed);
   }, []);
 
   const handleExport = useCallback(
-    async (format: "docx" | "pdf") => {
+    async (format: "docx" | "pdf" | "tex") => {
       if (!currentDoc || !editor) return;
       try {
         if (format === "docx") {
@@ -54,14 +63,42 @@ const DocumentEditor: React.FC = () => {
             editor.getJSON() as Record<string, unknown>,
             currentDoc.title
           );
-        } else {
+        } else if (format === "pdf") {
           await exportToPdf("editor-canvas", currentDoc.title);
+        } else if (format === "tex") {
+          exportToLatex(
+            editor.getJSON() as Record<string, unknown>,
+            currentDoc.title,
+            citedItemIds,
+            dashboardItems,
+            bibFormat,
+          );
         }
       } catch (err) {
         console.error(`Export to ${format} failed:`, err);
       }
     },
-    [currentDoc, editor]
+    [currentDoc, editor, citedItemIds, dashboardItems, bibFormat]
+  );
+
+  const handleInsertBibliography = useCallback(
+    (format: CitationFormat) => {
+      if (!editor) return;
+      setBibFormat(format);
+
+      const bibNodes = generateBibliographyNodes({
+        format,
+        items: dashboardItems,
+        citedItemIds,
+      });
+
+      const currentJson = editor.getJSON() as Record<string, unknown>;
+      const newContent = insertBibliography(currentJson, bibNodes);
+
+      editor.commands.setContent(newContent);
+      handleContentChange(newContent);
+    },
+    [editor, dashboardItems, citedItemIds, handleContentChange]
   );
 
   // ---------- PART 2A: LOADING STATE ----------
@@ -80,7 +117,7 @@ const DocumentEditor: React.FC = () => {
           </h2>
           <p className="text-gray-500 mt-2 max-w-md">
             Write research documents, import items from your dashboard, and
-            export as Word or PDF.
+            export as Word, PDF, or LaTeX.
           </p>
         </div>
         <button
@@ -111,6 +148,7 @@ const DocumentEditor: React.FC = () => {
             editor={editor}
             onInsertItem={() => setShowImportDrawer(true)}
             onExport={handleExport}
+            onInsertBibliography={handleInsertBibliography}
             saving={saving}
           />
           <EditorCanvas
@@ -131,6 +169,7 @@ const DocumentEditor: React.FC = () => {
         items={dashboardItems}
         loading={itemsLoading}
         editor={editor}
+        onItemInserted={handleItemInserted}
       />
     </div>
   );

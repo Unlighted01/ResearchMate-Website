@@ -40,6 +40,10 @@ export interface UseDocumentEditorReturn {
   itemsLoading: boolean;
   showImportDrawer: boolean;
   setShowImportDrawer: (v: boolean) => void;
+
+  // Bibliography
+  citedItemIds: string[];
+  handleItemInserted: (itemId: string) => void;
 }
 
 // ============================================
@@ -64,6 +68,10 @@ const useDocumentEditor = (): UseDocumentEditorReturn => {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [showImportDrawer, setShowImportDrawer] = useState(false);
 
+  // Bibliography — cited item IDs stored in content JSON
+  const [citedItemIds, setCitedItemIds] = useState<string[]>([]);
+  const citedItemIdsRef = useRef<string[]>([]);
+
   // Autosave
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingContent = useRef<Record<string, unknown> | null>(null);
@@ -78,6 +86,10 @@ const useDocumentEditor = (): UseDocumentEditorReturn => {
         setDocuments(docs);
         if (docs.length > 0) {
           setCurrentDoc(docs[0]);
+          const ids = (docs[0].content as Record<string, unknown>)?.citedItemIds;
+          const parsed = Array.isArray(ids) ? (ids as string[]) : [];
+          setCitedItemIds(parsed);
+          citedItemIdsRef.current = parsed;
         }
       } catch (err) {
         console.error("Failed to load documents:", err);
@@ -110,10 +122,20 @@ const useDocumentEditor = (): UseDocumentEditorReturn => {
 
   // ---------- PART 4C: HANDLERS ----------
 
+  const handleItemInserted = useCallback((itemId: string) => {
+    setCitedItemIds((prev) => {
+      if (prev.includes(itemId)) return prev;
+      const updated = [...prev, itemId];
+      citedItemIdsRef.current = updated;
+      return updated;
+    });
+  }, []);
+
   const handleContentChange = useCallback(
     (content: Record<string, unknown>) => {
       if (!currentDoc) return;
-      pendingContent.current = content;
+      const contentWithCited = { ...content, citedItemIds: citedItemIdsRef.current };
+      pendingContent.current = contentWithCited;
 
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
       autosaveTimer.current = setTimeout(async () => {
@@ -167,7 +189,13 @@ const useDocumentEditor = (): UseDocumentEditorReturn => {
       }
 
       const doc = await getDocument(id);
-      if (doc) setCurrentDoc(doc);
+      if (doc) {
+        setCurrentDoc(doc);
+        const ids = (doc.content as Record<string, unknown>)?.citedItemIds;
+        const parsed = Array.isArray(ids) ? (ids as string[]) : [];
+        setCitedItemIds(parsed);
+        citedItemIdsRef.current = parsed;
+      }
     },
     [currentDoc]
   );
@@ -217,6 +245,8 @@ const useDocumentEditor = (): UseDocumentEditorReturn => {
     itemsLoading,
     showImportDrawer,
     setShowImportDrawer,
+    citedItemIds,
+    handleItemInserted,
   };
 };
 

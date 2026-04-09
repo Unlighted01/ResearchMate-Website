@@ -20,6 +20,7 @@ import Superscript from "@tiptap/extension-superscript";
 import FontFamily from "@tiptap/extension-font-family";
 import FontSize from "./extensions/fontSize";
 import Indent from "./extensions/indent";
+import Bibliography from "./extensions/bibliography";
 import { Editor } from "@tiptap/react";
 
 // ============================================
@@ -56,6 +57,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({
       FontFamily,
       FontSize,
       Indent,
+      Bibliography,
       Placeholder.configure({
         placeholder: "Start writing your research document...",
       }),

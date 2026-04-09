@@ -33,7 +33,9 @@ import {
   Type,
   Highlighter,
   Loader2,
+  BookOpen,
 } from "lucide-react";
+import type { CitationFormat } from "../Citations/citationUtils";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -42,9 +44,18 @@ import {
 interface EditorToolbarProps {
   editor: Editor | null;
   onInsertItem: () => void;
-  onExport: (format: "docx" | "pdf") => void;
+  onExport: (format: "docx" | "pdf" | "tex") => void;
+  onInsertBibliography: (format: CitationFormat) => void;
   saving: boolean;
 }
+
+const BIB_FORMATS: { id: CitationFormat; label: string }[] = [
+  { id: "apa", label: "APA 7th" },
+  { id: "mla", label: "MLA 9th" },
+  { id: "chicago", label: "Chicago" },
+  { id: "harvard", label: "Harvard" },
+  { id: "ieee", label: "IEEE" },
+];
 
 // ============================================
 // PART 3: CONSTANTS
@@ -149,10 +160,12 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   editor,
   onInsertItem,
   onExport,
+  onInsertBibliography,
   saving,
 }) => {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
+  const [showBib, setShowBib] = useState(false);
   const forceUpdate = useForceUpdate();
 
   // Re-render toolbar on every editor transaction so active states update
@@ -175,6 +188,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   const textColorRef = useRef<HTMLDivElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
+  const bibRef = useRef<HTMLDivElement>(null);
 
   useClickOutside(blockTypeRef, openDropdown === "blockType", () => setOpenDropdown(null));
   useClickOutside(fontFamilyRef, openDropdown === "fontFamily", () => setOpenDropdown(null));
@@ -182,6 +196,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   useClickOutside(textColorRef, openDropdown === "textColor", () => setOpenDropdown(null));
   useClickOutside(highlightRef, openDropdown === "highlight", () => setOpenDropdown(null));
   useClickOutside(exportRef, showExport, () => setShowExport(false));
+  useClickOutside(bibRef, showBib, () => setShowBib(false));
 
   if (!editor) return null;
 
@@ -618,6 +633,37 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         <span className="hidden sm:inline">Insert</span>
       </button>
 
+      {/* ---- Bibliography dropdown ---- */}
+      <div className="relative shrink-0" ref={bibRef}>
+        <button
+          onClick={() => setShowBib((p) => !p)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+          title="Insert Bibliography"
+        >
+          <BookOpen className="w-4 h-4" />
+          <span className="hidden sm:inline">Bibliography</span>
+          <ChevronDown className="w-3 h-3" />
+        </button>
+        {showBib && (
+          <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-[60] overflow-hidden">
+            {BIB_FORMATS.map((fmt, i) => (
+              <button
+                key={fmt.id}
+                onClick={() => {
+                  onInsertBibliography(fmt.id);
+                  setShowBib(false);
+                }}
+                className={`w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+                  i === 0 ? "rounded-t-xl" : ""
+                } ${i === BIB_FORMATS.length - 1 ? "rounded-b-xl" : ""}`}
+              >
+                {fmt.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* ---- Export dropdown ---- */}
       <div className="relative shrink-0" ref={exportRef}>
         <button
@@ -643,9 +689,18 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 onExport("pdf");
                 setShowExport(false);
               }}
-              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-b-xl transition-colors"
+              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Export as .pdf
+            </button>
+            <button
+              onClick={() => {
+                onExport("tex");
+                setShowExport(false);
+              }}
+              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-b-xl transition-colors"
+            >
+              Export as .tex (LaTeX)
             </button>
           </div>
         )}

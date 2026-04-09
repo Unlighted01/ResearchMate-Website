@@ -21,6 +21,7 @@ interface ItemImportDrawerProps {
   items: StorageItem[];
   loading: boolean;
   editor: Editor | null;
+  onItemInserted?: (itemId: string) => void;
 }
 
 // ============================================
@@ -115,6 +116,7 @@ const ItemImportDrawer: React.FC<ItemImportDrawerProps> = ({
   items,
   loading,
   editor,
+  onItemInserted,
 }) => {
   const [search, setSearch] = useState("");
 
@@ -133,6 +135,7 @@ const ItemImportDrawer: React.FC<ItemImportDrawerProps> = ({
     if (!editor) return;
     const nodes = buildInsertContent(item);
     editor.chain().focus().insertContent(nodes).run();
+    onItemInserted?.(item.id);
     onClose();
   };
 
