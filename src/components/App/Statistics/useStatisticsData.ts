@@ -27,6 +27,7 @@ export interface DailyPoint {
 }
 
 export interface SourceDatum {
+  [key: string]: string | number;
   name: string;
   value: number;
   color: string;

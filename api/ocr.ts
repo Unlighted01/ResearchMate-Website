@@ -39,6 +39,7 @@ CRITICAL INSTRUCTIONS:
 - Tables: preserve the content in reading order, separate columns with spaces
 - If handwriting is messy or text is unclear, make your best guess at the actual words
 - Do NOT output any conversational text, commentary, or labels — just the text from the image
+- If the image contains no visible text at all, return exactly: [NO TEXT DETECTED]
 
 PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`;
 
@@ -468,6 +469,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error("OCR failed:", ocrResult.error);
       return res.status(422).json({
         error: ocrResult.error || "Failed to extract text from image",
+      });
+    }
+
+    // Handle blank/empty image detection
+    if (ocrResult.text.trim() === "[NO TEXT DETECTED]") {
+      return res.status(200).json({
+        success: true,
+        ocrText: "",
+        ocrConfidence: 0,
+        ocrProvider: ocrResult.provider,
+        aiSummary: null,
       });
     }
 

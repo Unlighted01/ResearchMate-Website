@@ -1,4 +1,4 @@
-import { StorageItem } from "../types";
+import { StorageItem } from "../services/storageService";
 
 /**
  * Generates a comprehensive Markdown block representing a saved research item,

@@ -29,6 +29,7 @@ import {
   Laptop,
   Smartphone,
   Quote,
+  FileEdit,
   ChevronLeft,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
@@ -42,6 +43,7 @@ const NAV_ITEMS = [
   { icon: FolderOpen, label: "Collections", path: "/app/collections" },
   { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
   { icon: Quote, label: "Citations", path: "/app/citations" },
+  { icon: FileEdit, label: "Editor", path: "/app/editor" },
   { icon: PenTool, label: "Smart Pen", path: "/app/smart-pen" },
   { icon: BarChart2, label: "Statistics", path: "/app/statistics" },
 ];

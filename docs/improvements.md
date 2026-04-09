@@ -298,6 +298,15 @@ Do not split proactively — only when you're already editing one of these files
 
 ---
 
+**#38 — OCR hallucination on blank/empty images**
+- **File:** `api/ocr.ts`
+- **Problem:** When a blank white image (no text) is sent to the OCR pipeline, the AI model hallucinates and generates fake text instead of returning an empty result. During TABLE 5.8 integration testing (Row 4), a completely blank JPEG was submitted and the model returned 344 hallucinated words of unrelated content.
+- **Fix:** Add a post-processing check after OCR extraction. If the confidence score is below a threshold (e.g., <55%) or the extracted text has no meaningful overlap with visible content, return an empty result with a message like `"No text detected in image"`. Alternatively, add a lightweight image analysis step before OCR — check if the image has sufficient contrast/edge variation to contain text. A simple histogram check (std deviation of pixel values < threshold) can detect blank pages cheaply before wasting an API call.
+- **Discovered:** April 2026, TABLE 5.8 Row 4 integration test (blank page scan)
+- **Risk if ignored:** Users scanning blank pages or non-text images get nonsensical AI-generated text presented as real OCR output — misleading and erodes trust.
+
+---
+
 ## 📋 Master Summary
 
 | # | Priority | Issue | Files |
@@ -339,13 +348,14 @@ Do not split proactively — only when you're already editing one of these files
 | 35 | 🔵 Refactor | Missing null guards | `Dashboard.tsx`, `SmartPenGallery.tsx`, `AIAssistant.tsx` |
 | 36 | 🔵 Refactor | No tests | Whole codebase |
 | 37 | 🔵 Refactor | Env var validation weak | `supabaseClient.ts` |
-| 38 | 🆕 TODO | Document Editor panel | `DocumentEditor.tsx`, `Layouts.tsx`, `App.tsx`, `documentsService.ts` |
+| 38 | 🟠 High | OCR hallucinates on blank images | `api/ocr.ts` |
+| 39 | 🆕 TODO | Document Editor panel | `DocumentEditor.tsx`, `Layouts.tsx`, `App.tsx`, `documentsService.ts` |
 
 ---
 
 ---
 
-## 🆕 #38 — TODO: Document Editor Panel
+## 🆕 #39 — TODO: Document Editor Panel
 
 **Status:** TODO — not started
 

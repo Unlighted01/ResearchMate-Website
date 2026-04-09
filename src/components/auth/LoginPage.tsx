@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Button, Card, Input } from "../shared/ui";
@@ -54,6 +54,14 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(
     null
   );
+  const oauthCleanupRef = useRef<(() => void) | null>(null);
+
+  // Cleanup OAuth listeners on unmount
+  useEffect(() => {
+    return () => {
+      oauthCleanupRef.current?.();
+    };
+  }, []);
   const { visualTheme } = useTheme();
   const isBubbleTheme = visualTheme === "bubble";
   const authBackgroundClass =
@@ -203,9 +211,16 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
         if (popup.closed) {
           clearInterval(checkClosed);
           window.removeEventListener("message", handleMessage);
+          oauthCleanupRef.current = null;
           setOauthLoading(null);
         }
       }, 500);
+
+      // Store cleanup for unmount safety
+      oauthCleanupRef.current = () => {
+        clearInterval(checkClosed);
+        window.removeEventListener("message", handleMessage);
+      };
     }
   };
 

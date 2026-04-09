@@ -292,6 +292,7 @@ import AIAssistant from "./components/App/AIAssistant";
 import Statistics from "./components/App/Statistics";
 import SmartPenGallery from "./components/App/SmartPenGallery";
 import PairSmartPen from "./components/App/PairSmartPen";
+import DocumentEditor from "./components/App/DocumentEditor";
 import SupportPage from "./components/marketing/SupportPage";
 
 // ============================================
@@ -444,6 +445,10 @@ export default function App() {
                           element={<CitationGenerator />}
                         />
                         <Route
+                          path="editor"
+                          element={<DocumentEditor />}
+                        />
+                        <Route
                           path="smart-pen"
                           element={
                             <SmartPenGallery
@@ -456,9 +461,7 @@ export default function App() {
                         <Route
                           path="settings"
                           element={
-                            <SettingsPage
-                              useToast={() => ({ showToast, ToastComponent })}
-                            />
+                            <SettingsPage />
                           }
                         />
                       </Routes>

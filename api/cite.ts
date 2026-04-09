@@ -30,6 +30,23 @@ function extractYear(publishDate: string): string {
 function cleanISBN(isbn: string): string { return isbn.replace(/[-\s]/g, ""); }
 function isValidISBN(isbn: string): boolean { return /^(\d{10}|\d{13})$/.test(cleanISBN(isbn)); }
 
+async function resolveOLAuthors(authorRefs: any[]): Promise<string[]> {
+  if (!Array.isArray(authorRefs) || authorRefs.length === 0) return ["Unknown Author"];
+  const names: string[] = [];
+  for (const ref of authorRefs) {
+    const key = ref?.key || ref?.author?.key;
+    if (!key) continue;
+    try {
+      const res = await fetch(`https://openlibrary.org${key}.json`);
+      if (res.ok) {
+        const author = await res.json();
+        if (author.name) names.push(author.name);
+      }
+    } catch { /* skip failed author lookups */ }
+  }
+  return names.length > 0 ? names : ["Unknown Author"];
+}
+
 async function lookupISBNData(isbn: string) {
   const cleaned = cleanISBN(isbn);
   let bookData = null;
@@ -38,12 +55,14 @@ async function lookupISBNData(isbn: string) {
     const response = await fetch(`https://openlibrary.org/isbn/${cleaned}.json`);
     if (response.ok) {
       const book = await response.json();
+      const authors = await resolveOLAuthors(book.authors);
       bookData = {
         title: book.title || "Unknown Title",
-        authors: ["Unknown Author"], // Simplified for consolidation
+        authors,
         publisher: book.publishers?.[0] || "Unknown Publisher",
         publishYear: book.publish_date ? extractYear(book.publish_date) : "n.d.",
         isbn: cleaned,
+        coverUrl: book.covers?.[0] ? `https://covers.openlibrary.org/b/id/${book.covers[0]}-M.jpg` : undefined,
       };
     } else {
         // Fallback to Google Books
@@ -58,6 +77,7 @@ async function lookupISBNData(isbn: string) {
                   publisher: book.publisher || "Unknown Publisher",
                   publishYear: book.publishedDate ? extractYear(book.publishedDate) : "n.d.",
                   isbn: cleaned,
+                  coverUrl: book.imageLinks?.thumbnail || undefined,
               }
            }
         }

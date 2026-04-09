@@ -10,6 +10,6 @@ export interface AnimatedIconProps
 }
 
 export interface AnimatedIconHandle {
-  startAnimation: () => Promise<void>;
-  stopAnimation: () => Promise<void>;
+  startAnimation: () => void | Promise<void>;
+  stopAnimation: () => void | Promise<void>;
 }

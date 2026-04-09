@@ -34,7 +34,6 @@ import SmartPenPairing from "../SmartPenPairing";
 import SmartPenScanModal from "../SmartPenScanModal";
 import { getCurrentUser, supabase } from "../../../services/supabaseClient";
 import { runOcr } from "../../../services/importService";
-import { LibrarySearch, BookDocument } from "../LibrarySearch";
 
 // Paired device type
 interface PairedPen {
@@ -60,7 +59,6 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
   const [pairedPens, setPairedPens] = useState<PairedPen[]>([]);
   const [extractingId, setExtractingId] = useState<string | null>(null);
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
-  const [isLinkingBook, setIsLinkingBook] = useState(false);
   useEffect(() => {
     // Get current user
     getCurrentUser().then((user) => {
@@ -181,31 +179,6 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
       console.error("Failed to update item:", error);
       showToast("Failed to act on item.", "error");
     }
-  };
-
-  const handleLinkBook = async (book: BookDocument) => {
-    if (!selectedScan) return;
-
-    const title = book.title;
-    const author = book.author_name
-      ? book.author_name.join(", ")
-      : "Unknown Author";
-    const year = book.first_publish_year
-      ? String(book.first_publish_year)
-      : "n.d.";
-    const publisher = book.publisher ? book.publisher[0] : "Unknown Publisher";
-    const citation = `${author}. (${year}). ${title}. ${publisher}.`;
-    const imageUrl = book.cover_url || undefined;
-
-    await updateScanItem(selectedScan, {
-      sourceTitle: title,
-      sourceUrl: `https://books.google.com/books?id=${book.key}`,
-      citation: citation,
-      imageUrl: selectedScan.imageUrl || imageUrl, // preserve original capture if it exists
-    });
-
-    setIsLinkingBook(false);
-    showToast(`Linked "${title}" to this capture!`, "success");
   };
 
   const handlePairingSuccess = () => {
