@@ -293,6 +293,7 @@ import Statistics from "./components/App/Statistics";
 import SmartPenGallery from "./components/App/SmartPenGallery";
 import PairSmartPen from "./components/App/PairSmartPen";
 import DocumentEditor from "./components/App/DocumentEditor";
+import { DiscoverPage } from "./components/App/Discover";
 import SupportPage from "./components/marketing/SupportPage";
 
 // ============================================
@@ -420,6 +421,14 @@ export default function App() {
                           path="dashboard"
                           element={
                             <Dashboard
+                              useToast={() => ({ showToast, ToastComponent })}
+                            />
+                          }
+                        />
+                        <Route
+                          path="discover"
+                          element={
+                            <DiscoverPage
                               useToast={() => ({ showToast, ToastComponent })}
                             />
                           }
