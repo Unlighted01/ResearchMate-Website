@@ -231,7 +231,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   // ---------- PART 5C: RENDER ----------
 
   return (
-    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-sm overflow-x-auto relative z-10 scrollbar-hide">
+    <div className="flex items-center flex-nowrap gap-0.5 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-sm relative z-20">
       {/* ---- Undo / Redo / Print ---- */}
       <ToolbarBtn
         onClick={() => editor.chain().focus().undo().run()}
@@ -603,13 +603,11 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       {/* ---- Spacer ---- */}
       <div className="flex-1 min-w-[8px]" />
 
-      {/* ---- Save indicator ---- */}
-      {saving && (
-        <span className="flex items-center gap-1 text-xs text-gray-400 mr-2 shrink-0">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          Saving
-        </span>
-      )}
+      {/* ---- Save indicator (fixed width so layout doesn't shift) ---- */}
+      <span className={`flex items-center gap-1 text-xs mr-2 shrink-0 w-[60px] transition-opacity ${saving ? "text-gray-400 opacity-100" : "opacity-0"}`}>
+        <Loader2 className="w-3 h-3 animate-spin" />
+        Saving
+      </span>
 
       {/* ---- Insert Research ---- */}
       <button

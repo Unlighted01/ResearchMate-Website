@@ -99,7 +99,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({
   }, [editor, content]);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white dark:bg-[#1C1C1E]" id="editor-canvas">
+    <div className="flex-1 overflow-y-auto bg-white dark:bg-[#1C1C1E] relative z-0" id="editor-canvas">
       <EditorContent editor={editor} />
     </div>
   );
