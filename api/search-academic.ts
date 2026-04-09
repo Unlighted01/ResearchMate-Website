@@ -69,16 +69,20 @@ async function searchSemanticScholar(query: string): Promise<AcademicResult[]> {
 // PART 4: ARXIV
 // ============================================
 
-async function searchArxiv(query: string): Promise<AcademicResult[]> {
-  const url = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&max_results=10&sortBy=relevance`;
+// Detect ArXiv ID patterns: "2604.06234", "arXiv:2604.06234", "arxiv.org/abs/2604.06234v1"
+const ARXIV_ID_RE = /(?:arxiv[:\s]?|arxiv\.org\/abs\/)?([\d]{4}\.[\d]{4,5}(?:v\d+)?)/i;
 
+async function fetchArxivById(arxivId: string): Promise<AcademicResult[]> {
+  const url = `https://export.arxiv.org/api/query?id_list=${arxivId}&max_results=1`;
   const res = await fetch(url);
   if (!res.ok) return [];
-
   const xml = await res.text();
-  const results: AcademicResult[] = [];
+  // Reuse the same XML parsing as searchArxiv
+  return parseArxivXml(xml);
+}
 
-  // Parse entries with regex — ArXiv Atom XML is simple enough
+function parseArxivXml(xml: string): AcademicResult[] {
+  const results: AcademicResult[] = [];
   const entries = xml.split("<entry>").slice(1);
 
   for (const entry of entries) {
@@ -88,29 +92,26 @@ async function searchArxiv(query: string): Promise<AcademicResult[]> {
     };
 
     const title = extract("title").replace(/\s+/g, " ");
+    if (!title) continue;
+
     const abstract = extract("summary").replace(/\s+/g, " ");
     const published = extract("published");
     const year = published ? new Date(published).getFullYear() : null;
 
-    // Extract arxiv ID from the id URL
     const idUrl = extract("id");
     const arxivId = idUrl.replace("http://arxiv.org/abs/", "").replace(/v\d+$/, "");
 
-    // Extract authors
     const authorMatches = entry.match(/<author>\s*<name>([^<]+)<\/name>/g) || [];
     const authors = authorMatches.map((a) => {
       const nameMatch = a.match(/<name>([^<]+)<\/name>/);
       return nameMatch ? nameMatch[1] : "";
     });
 
-    // Extract DOI link if present
     const doiMatch = entry.match(/<arxiv:doi[^>]*>([^<]+)<\/arxiv:doi>/);
     const doi = doiMatch ? doiMatch[1] : undefined;
 
-    // Extract journal ref if present
     const journal = extract("arxiv:journal_ref");
 
-    // PDF link
     const pdfMatch = entry.match(/<link[^>]+title="pdf"[^>]+href="([^"]+)"/);
     const pdfUrl = pdfMatch ? pdfMatch[1] : `https://arxiv.org/pdf/${arxivId}`;
 
@@ -130,6 +131,16 @@ async function searchArxiv(query: string): Promise<AcademicResult[]> {
   }
 
   return results;
+}
+
+async function searchArxiv(query: string): Promise<AcademicResult[]> {
+  const url = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&max_results=10&sortBy=relevance`;
+
+  const res = await fetch(url);
+  if (!res.ok) return [];
+
+  const xml = await res.text();
+  return parseArxivXml(xml);
 }
 
 // ============================================
@@ -211,6 +222,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Direct ArXiv ID lookup — bypasses slow search index for new papers
+    const arxivMatch = query.match(ARXIV_ID_RE);
+    if (arxivMatch) {
+      const directResults = await fetchArxivById(arxivMatch[1].replace(/v\d+$/, ""));
+      if (directResults.length > 0) {
+        return res.status(200).json({ results: directResults });
+      }
+    }
+
+    // Direct DOI lookup via Semantic Scholar
+    const DOI_RE = /^10\.\d{4,9}\/[^\s]+$/i;
+    if (DOI_RE.test(query.trim())) {
+      const doiRes = await fetch(
+        `https://api.semanticscholar.org/graph/v1/paper/DOI:${encodeURIComponent(query.trim())}?fields=title,authors,year,abstract,url,externalIds,citationCount,venue`
+      );
+      if (doiRes.ok) {
+        const paper = await doiRes.json();
+        const externalIds = (paper.externalIds as Record<string, string>) || {};
+        const authors = ((paper.authors as Array<{ name: string }>) || []).map((a) => a.name);
+        return res.status(200).json({
+          results: [{
+            id: externalIds.DOI || paper.paperId || "",
+            title: paper.title || "Untitled",
+            authors,
+            year: paper.year || null,
+            abstract: paper.abstract || "",
+            venue: paper.venue || "",
+            url: paper.url || "",
+            pdfUrl: externalIds.ArXiv ? `https://arxiv.org/pdf/${externalIds.ArXiv}` : undefined,
+            doi: externalIds.DOI || undefined,
+            arxivId: externalIds.ArXiv || undefined,
+            citationCount: paper.citationCount || 0,
+            source: "semanticscholar" as const,
+          }],
+        });
+      }
+    }
+
     const fetchers: Promise<AcademicResult[]>[] = [];
 
     if (source === "all" || source === "semanticscholar") {
