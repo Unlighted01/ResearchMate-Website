@@ -32,7 +32,6 @@ import {
   ChevronDown,
   Type,
   Highlighter,
-  Palette,
   Loader2,
 } from "lucide-react";
 
@@ -71,7 +70,6 @@ const FONT_FAMILIES = [
   { label: "Monospace", value: "JetBrains Mono, monospace" },
   { label: "Arial", value: "Arial, sans-serif" },
   { label: "Times New Roman", value: "Times New Roman, serif" },
-  { label: "Georgia", value: "Georgia, serif" },
   { label: "Verdana", value: "Verdana, sans-serif" },
   { label: "Courier New", value: "Courier New, monospace" },
 ];
@@ -86,10 +84,34 @@ const BLOCK_TYPES = [
 ];
 
 // ============================================
-// PART 4: HELPER SUB-COMPONENTS
+// PART 4: HELPER HOOKS & SUB-COMPONENTS
 // ============================================
 
-// ---------- PART 4A: TOOLBAR BUTTON ----------
+// ---------- PART 4A: FORCE RE-RENDER ON EDITOR TRANSACTIONS ----------
+
+function useForceUpdate() {
+  const [, setTick] = useState(0);
+  return useCallback(() => setTick((t) => t + 1), []);
+}
+
+// ---------- PART 4B: CLICK-OUTSIDE HOOK ----------
+
+function useClickOutside(
+  ref: React.RefObject<HTMLElement | null>,
+  isOpen: boolean,
+  onClose: () => void,
+) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [isOpen, onClose, ref]);
+}
+
+// ---------- PART 4C: TOOLBAR BUTTON ----------
 
 const ToolbarBtn: React.FC<{
   onClick: () => void;
@@ -99,10 +121,11 @@ const ToolbarBtn: React.FC<{
   children: React.ReactNode;
 }> = ({ onClick, active, disabled, title, children }) => (
   <button
+    onMouseDown={(e) => e.preventDefault()}
     onClick={onClick}
     disabled={disabled}
     title={title}
-    className={`p-1.5 rounded-md transition-colors ${
+    className={`p-1.5 rounded-md transition-colors shrink-0 ${
       active
         ? "bg-[#007AFF]/15 text-[#007AFF]"
         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -112,285 +135,11 @@ const ToolbarBtn: React.FC<{
   </button>
 );
 
-// ---------- PART 4B: DIVIDER ----------
+// ---------- PART 4D: DIVIDER ----------
 
 const Divider = () => (
   <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-0.5 shrink-0" />
 );
-
-// ---------- PART 4C: COLOR PICKER DROPDOWN ----------
-
-const ColorPickerDropdown: React.FC<{
-  colors: string[];
-  activeColor: string | undefined;
-  onSelect: (color: string) => void;
-  isOpen: boolean;
-  onToggle: () => void;
-  icon: React.ReactNode;
-  title: string;
-}> = ({ colors, activeColor, onSelect, isOpen, onToggle, icon, title }) => {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onToggle();
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen, onToggle]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={onToggle}
-        title={title}
-        className="flex flex-col items-center p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-      >
-        {icon}
-        <div
-          className="w-4 h-0.5 rounded-full mt-0.5"
-          style={{ backgroundColor: activeColor || "#000000" }}
-        />
-      </button>
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 p-2 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 grid grid-cols-5 gap-1 w-[140px]">
-          {colors.map((color) => (
-            <button
-              key={color}
-              onClick={() => {
-                onSelect(color);
-                onToggle();
-              }}
-              className={`w-5 h-5 rounded-sm border transition-transform hover:scale-125 ${
-                activeColor === color
-                  ? "border-[#007AFF] ring-1 ring-[#007AFF]"
-                  : "border-gray-300 dark:border-gray-600"
-              }`}
-              style={{ backgroundColor: color }}
-              title={color}
-            />
-          ))}
-          <button
-            onClick={() => {
-              onSelect("");
-              onToggle();
-            }}
-            className="col-span-5 mt-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 py-1"
-          >
-            Remove
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ---------- PART 4D: BLOCK TYPE DROPDOWN ----------
-
-const BlockTypeDropdown: React.FC<{
-  editor: Editor;
-  isOpen: boolean;
-  onToggle: () => void;
-}> = ({ editor, isOpen, onToggle }) => {
-  const ref = useRef<HTMLDivElement>(null);
-
-  const currentType = editor.isActive("heading", { level: 1 })
-    ? "Heading 1"
-    : editor.isActive("heading", { level: 2 })
-    ? "Heading 2"
-    : editor.isActive("heading", { level: 3 })
-    ? "Heading 3"
-    : "Normal text";
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onToggle();
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen, onToggle]);
-
-  const handleSelect = (value: string) => {
-    if (value === "paragraph") {
-      editor.chain().focus().setParagraph().run();
-    } else {
-      const level = parseInt(value.split("-")[1]) as 1 | 2 | 3;
-      editor.chain().focus().toggleHeading({ level }).run();
-    }
-    onToggle();
-  };
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={onToggle}
-        className="flex items-center gap-1 px-2 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[110px]"
-      >
-        <span className="truncate">{currentType}</span>
-        <ChevronDown className="w-3.5 h-3.5 shrink-0" />
-      </button>
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden">
-          {BLOCK_TYPES.map((bt) => (
-            <button
-              key={bt.value}
-              onClick={() => handleSelect(bt.value)}
-              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                currentType === bt.label
-                  ? "bg-[#007AFF]/10 text-[#007AFF]"
-                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-              }`}
-            >
-              <span
-                className={
-                  bt.value === "heading-1"
-                    ? "text-xl font-bold"
-                    : bt.value === "heading-2"
-                    ? "text-lg font-semibold"
-                    : bt.value === "heading-3"
-                    ? "text-base font-medium"
-                    : "text-sm"
-                }
-              >
-                {bt.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ---------- PART 4E: FONT FAMILY DROPDOWN ----------
-
-const FontFamilyDropdown: React.FC<{
-  editor: Editor;
-  isOpen: boolean;
-  onToggle: () => void;
-}> = ({ editor, isOpen, onToggle }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const currentFont =
-    editor.getAttributes("textStyle").fontFamily || "Inter, system-ui, sans-serif";
-  const currentLabel =
-    FONT_FAMILIES.find((f) => f.value === currentFont)?.label || "Sans Serif";
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onToggle();
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen, onToggle]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={onToggle}
-        className="flex items-center gap-1 px-2 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[100px]"
-      >
-        <span className="truncate">{currentLabel}</span>
-        <ChevronDown className="w-3.5 h-3.5 shrink-0" />
-      </button>
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-52 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden max-h-64 overflow-y-auto">
-          {FONT_FAMILIES.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => {
-                editor.chain().focus().setFontFamily(f.value).run();
-                onToggle();
-              }}
-              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                currentFont === f.value
-                  ? "bg-[#007AFF]/10 text-[#007AFF]"
-                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-              }`}
-              style={{ fontFamily: f.value }}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ---------- PART 4F: FONT SIZE CONTROL ----------
-
-const FontSizeControl: React.FC<{
-  editor: Editor;
-  isOpen: boolean;
-  onToggle: () => void;
-}> = ({ editor, isOpen, onToggle }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const rawSize = editor.getAttributes("textStyle").fontSize;
-  const currentSize = rawSize ? parseInt(rawSize) : 16;
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onToggle();
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen, onToggle]);
-
-  const setSize = (size: number) => {
-    const clamped = Math.max(8, Math.min(72, size));
-    editor.chain().focus().setFontSize(`${clamped}px`).run();
-  };
-
-  return (
-    <div className="relative flex items-center" ref={ref}>
-      <button
-        onClick={() => setSize(currentSize - 1)}
-        className="p-1 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        title="Decrease font size"
-      >
-        <Minus className="w-3 h-3" />
-      </button>
-      <button
-        onClick={onToggle}
-        className="w-9 text-center text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md py-1 transition-colors"
-        title="Font size"
-      >
-        {currentSize}
-      </button>
-      <button
-        onClick={() => setSize(currentSize + 1)}
-        className="p-1 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        title="Increase font size"
-      >
-        <span className="text-sm font-bold leading-none">+</span>
-      </button>
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-20 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden max-h-52 overflow-y-auto">
-          {FONT_SIZES.map((size) => (
-            <button
-              key={size}
-              onClick={() => {
-                setSize(size);
-                onToggle();
-              }}
-              className={`w-full text-center px-2 py-1.5 text-sm transition-colors ${
-                currentSize === size
-                  ? "bg-[#007AFF]/10 text-[#007AFF]"
-                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-              }`}
-            >
-              {size}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
 
 // ============================================
 // PART 5: MAIN COMPONENT
@@ -403,19 +152,87 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   saving,
 }) => {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [showExport, setShowExport] = useState(false);
+  const forceUpdate = useForceUpdate();
 
-  const toggleDropdown = useCallback(
-    (name: string) => {
-      setOpenDropdown((prev) => (prev === name ? null : name));
-    },
-    [],
-  );
+  // Re-render toolbar on every editor transaction so active states update
+  useEffect(() => {
+    if (!editor) return;
+    editor.on("transaction", forceUpdate);
+    return () => {
+      editor.off("transaction", forceUpdate);
+    };
+  }, [editor, forceUpdate]);
+
+  const toggleDropdown = useCallback((name: string) => {
+    setOpenDropdown((prev) => (prev === name ? null : name));
+  }, []);
+
+  // Refs for click-outside
+  const blockTypeRef = useRef<HTMLDivElement>(null);
+  const fontFamilyRef = useRef<HTMLDivElement>(null);
+  const fontSizeRef = useRef<HTMLDivElement>(null);
+  const textColorRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside(blockTypeRef, openDropdown === "blockType", () => setOpenDropdown(null));
+  useClickOutside(fontFamilyRef, openDropdown === "fontFamily", () => setOpenDropdown(null));
+  useClickOutside(fontSizeRef, openDropdown === "fontSize", () => setOpenDropdown(null));
+  useClickOutside(textColorRef, openDropdown === "textColor", () => setOpenDropdown(null));
+  useClickOutside(highlightRef, openDropdown === "highlight", () => setOpenDropdown(null));
+  useClickOutside(exportRef, showExport, () => setShowExport(false));
 
   if (!editor) return null;
 
+  // ---------- PART 5A: DERIVED STATE ----------
+
+  const currentBlockType = editor.isActive("heading", { level: 1 })
+    ? "Heading 1"
+    : editor.isActive("heading", { level: 2 })
+    ? "Heading 2"
+    : editor.isActive("heading", { level: 3 })
+    ? "Heading 3"
+    : "Normal text";
+
+  const currentFont =
+    editor.getAttributes("textStyle").fontFamily || "";
+  const currentFontLabel =
+    FONT_FAMILIES.find((f) => f.value === currentFont)?.label || "Sans Serif";
+
+  const rawFontSize = editor.getAttributes("textStyle").fontSize;
+  const currentFontSize = rawFontSize ? parseInt(rawFontSize) : 16;
+
+  const currentTextColor = editor.getAttributes("textStyle").color || undefined;
+  const currentHighlight = editor.getAttributes("highlight").color || undefined;
+
+  // ---------- PART 5B: HANDLERS ----------
+
+  const handleBlockTypeSelect = (value: string) => {
+    if (value === "paragraph") {
+      editor.chain().focus().setParagraph().run();
+    } else {
+      const level = parseInt(value.split("-")[1]) as 1 | 2 | 3;
+      editor.chain().focus().toggleHeading({ level }).run();
+    }
+    setOpenDropdown(null);
+  };
+
+  const handleFontFamilySelect = (value: string) => {
+    editor.chain().focus().setFontFamily(value).run();
+    setOpenDropdown(null);
+  };
+
+  const setFontSize = (size: number) => {
+    const clamped = Math.max(8, Math.min(72, size));
+    editor.chain().focus().setFontSize(`${clamped}px`).run();
+  };
+
+  // ---------- PART 5C: RENDER ----------
+
   return (
-    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-sm flex-wrap">
-      {/* ---------- Undo / Redo / Print ---------- */}
+    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-sm overflow-x-auto relative z-10 scrollbar-hide">
+      {/* ---- Undo / Redo / Print ---- */}
       <ToolbarBtn
         onClick={() => editor.chain().focus().undo().run()}
         disabled={!editor.can().undo()}
@@ -436,32 +253,133 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
       <Divider />
 
-      {/* ---------- Block Type ---------- */}
-      <BlockTypeDropdown
-        editor={editor}
-        isOpen={openDropdown === "blockType"}
-        onToggle={() => toggleDropdown("blockType")}
-      />
+      {/* ---- Block Type Dropdown ---- */}
+      <div className="relative shrink-0" ref={blockTypeRef}>
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => toggleDropdown("blockType")}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[110px]"
+        >
+          <span className="truncate">{currentBlockType}</span>
+          <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+        </button>
+        {openDropdown === "blockType" && (
+          <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-[60] overflow-hidden">
+            {BLOCK_TYPES.map((bt) => (
+              <button
+                key={bt.value}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleBlockTypeSelect(bt.value)}
+                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                  currentBlockType === bt.label
+                    ? "bg-[#007AFF]/10 text-[#007AFF]"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                }`}
+              >
+                <span
+                  className={
+                    bt.value === "heading-1"
+                      ? "text-xl font-bold"
+                      : bt.value === "heading-2"
+                      ? "text-lg font-semibold"
+                      : bt.value === "heading-3"
+                      ? "text-base font-medium"
+                      : "text-sm"
+                  }
+                >
+                  {bt.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <Divider />
 
-      {/* ---------- Font Family ---------- */}
-      <FontFamilyDropdown
-        editor={editor}
-        isOpen={openDropdown === "fontFamily"}
-        onToggle={() => toggleDropdown("fontFamily")}
-      />
+      {/* ---- Font Family Dropdown ---- */}
+      <div className="relative shrink-0" ref={fontFamilyRef}>
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => toggleDropdown("fontFamily")}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-[100px]"
+        >
+          <span className="truncate">{currentFontLabel}</span>
+          <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+        </button>
+        {openDropdown === "fontFamily" && (
+          <div className="absolute top-full left-0 mt-1 w-52 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-[60] overflow-hidden max-h-64 overflow-y-auto">
+            {FONT_FAMILIES.map((f) => (
+              <button
+                key={f.value}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleFontFamilySelect(f.value)}
+                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                  currentFont === f.value
+                    ? "bg-[#007AFF]/10 text-[#007AFF]"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                }`}
+                style={{ fontFamily: f.value }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* ---------- Font Size ---------- */}
-      <FontSizeControl
-        editor={editor}
-        isOpen={openDropdown === "fontSize"}
-        onToggle={() => toggleDropdown("fontSize")}
-      />
+      {/* ---- Font Size ---- */}
+      <div className="relative flex items-center shrink-0" ref={fontSizeRef}>
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setFontSize(currentFontSize - 1)}
+          className="p-1 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          title="Decrease font size"
+        >
+          <Minus className="w-3 h-3" />
+        </button>
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => toggleDropdown("fontSize")}
+          className="w-9 text-center text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md py-1 transition-colors"
+          title="Font size"
+        >
+          {currentFontSize}
+        </button>
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setFontSize(currentFontSize + 1)}
+          className="p-1 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          title="Increase font size"
+        >
+          <span className="text-sm font-bold leading-none">+</span>
+        </button>
+        {openDropdown === "fontSize" && (
+          <div className="absolute top-full left-0 mt-1 w-20 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-[60] overflow-hidden max-h-52 overflow-y-auto">
+            {FONT_SIZES.map((size) => (
+              <button
+                key={size}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setFontSize(size);
+                  setOpenDropdown(null);
+                }}
+                className={`w-full text-center px-2 py-1.5 text-sm transition-colors ${
+                  currentFontSize === size
+                    ? "bg-[#007AFF]/10 text-[#007AFF]"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                }`}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <Divider />
 
-      {/* ---------- Bold / Italic / Underline / Strikethrough ---------- */}
+      {/* ---- Bold / Italic / Underline / Strikethrough ---- */}
       <ToolbarBtn
         onClick={() => editor.chain().focus().toggleBold().run()}
         active={editor.isActive("bold")}
@@ -491,45 +409,103 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         <Strikethrough className="w-4 h-4" />
       </ToolbarBtn>
 
-      {/* ---------- Text Color ---------- */}
-      <ColorPickerDropdown
-        colors={TEXT_COLORS}
-        activeColor={editor.getAttributes("textStyle").color}
-        onSelect={(color) => {
-          if (color) {
-            editor.chain().focus().setColor(color).run();
-          } else {
-            editor.chain().focus().unsetColor().run();
-          }
-        }}
-        isOpen={openDropdown === "textColor"}
-        onToggle={() => toggleDropdown("textColor")}
-        icon={<Type className="w-4 h-4" />}
-        title="Text color"
-      />
+      {/* ---- Text Color ---- */}
+      <div className="relative shrink-0" ref={textColorRef}>
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => toggleDropdown("textColor")}
+          title="Text color"
+          className="flex flex-col items-center p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        >
+          <Type className="w-4 h-4" />
+          <div
+            className="w-4 h-0.5 rounded-full mt-0.5"
+            style={{ backgroundColor: currentTextColor || "#000000" }}
+          />
+        </button>
+        {openDropdown === "textColor" && (
+          <div className="absolute top-full left-0 mt-1 p-2 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-[60] grid grid-cols-5 gap-1 w-[140px]">
+            {TEXT_COLORS.map((color) => (
+              <button
+                key={color}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  editor.chain().focus().setColor(color).run();
+                  setOpenDropdown(null);
+                }}
+                className={`w-5 h-5 rounded-sm border transition-transform hover:scale-125 ${
+                  currentTextColor === color
+                    ? "border-[#007AFF] ring-1 ring-[#007AFF]"
+                    : "border-gray-300 dark:border-gray-600"
+                }`}
+                style={{ backgroundColor: color }}
+                title={color}
+              />
+            ))}
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                editor.chain().focus().unsetColor().run();
+                setOpenDropdown(null);
+              }}
+              className="col-span-5 mt-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 py-1"
+            >
+              Remove
+            </button>
+          </div>
+        )}
+      </div>
 
-      {/* ---------- Highlight ---------- */}
-      <ColorPickerDropdown
-        colors={HIGHLIGHT_COLORS}
-        activeColor={
-          editor.getAttributes("highlight").color || undefined
-        }
-        onSelect={(color) => {
-          if (color) {
-            editor.chain().focus().toggleHighlight({ color }).run();
-          } else {
-            editor.chain().focus().unsetHighlight().run();
-          }
-        }}
-        isOpen={openDropdown === "highlight"}
-        onToggle={() => toggleDropdown("highlight")}
-        icon={<Highlighter className="w-4 h-4" />}
-        title="Highlight color"
-      />
+      {/* ---- Highlight ---- */}
+      <div className="relative shrink-0" ref={highlightRef}>
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => toggleDropdown("highlight")}
+          title="Highlight color"
+          className="flex flex-col items-center p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        >
+          <Highlighter className="w-4 h-4" />
+          <div
+            className="w-4 h-0.5 rounded-full mt-0.5"
+            style={{ backgroundColor: currentHighlight || "transparent" }}
+          />
+        </button>
+        {openDropdown === "highlight" && (
+          <div className="absolute top-full left-0 mt-1 p-2 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-[60] grid grid-cols-5 gap-1 w-[140px]">
+            {HIGHLIGHT_COLORS.map((color) => (
+              <button
+                key={color}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  editor.chain().focus().toggleHighlight({ color }).run();
+                  setOpenDropdown(null);
+                }}
+                className={`w-5 h-5 rounded-sm border transition-transform hover:scale-125 ${
+                  currentHighlight === color
+                    ? "border-[#007AFF] ring-1 ring-[#007AFF]"
+                    : "border-gray-300 dark:border-gray-600"
+                }`}
+                style={{ backgroundColor: color }}
+                title={color}
+              />
+            ))}
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                editor.chain().focus().unsetHighlight().run();
+                setOpenDropdown(null);
+              }}
+              className="col-span-5 mt-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 py-1"
+            >
+              Remove
+            </button>
+          </div>
+        )}
+      </div>
 
       <Divider />
 
-      {/* ---------- Subscript / Superscript ---------- */}
+      {/* ---- Subscript / Superscript ---- */}
       <ToolbarBtn
         onClick={() => editor.chain().focus().toggleSubscript().run()}
         active={editor.isActive("subscript")}
@@ -547,7 +523,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
       <Divider />
 
-      {/* ---------- Alignment ---------- */}
+      {/* ---- Alignment ---- */}
       <ToolbarBtn
         onClick={() => editor.chain().focus().setTextAlign("left").run()}
         active={editor.isActive({ textAlign: "left" })}
@@ -579,7 +555,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
       <Divider />
 
-      {/* ---------- Indent / Outdent ---------- */}
+      {/* ---- Indent / Outdent ---- */}
       <ToolbarBtn
         onClick={() => editor.chain().focus().decreaseIndent().run()}
         title="Decrease indent"
@@ -595,7 +571,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
       <Divider />
 
-      {/* ---------- Lists / Block Elements ---------- */}
+      {/* ---- Lists / Block Elements ---- */}
       <ToolbarBtn
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         active={editor.isActive("bulletList")}
@@ -624,46 +600,57 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         <Minus className="w-4 h-4" />
       </ToolbarBtn>
 
-      {/* ---------- Spacer ---------- */}
-      <div className="flex-1" />
+      {/* ---- Spacer ---- */}
+      <div className="flex-1 min-w-[8px]" />
 
-      {/* ---------- Save indicator ---------- */}
+      {/* ---- Save indicator ---- */}
       {saving && (
-        <span className="flex items-center gap-1 text-xs text-gray-400 mr-2">
+        <span className="flex items-center gap-1 text-xs text-gray-400 mr-2 shrink-0">
           <Loader2 className="w-3 h-3 animate-spin" />
           Saving
         </span>
       )}
 
-      {/* ---------- Insert Research ---------- */}
+      {/* ---- Insert Research ---- */}
       <button
         onClick={onInsertItem}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#007AFF] hover:bg-[#007AFF]/10 rounded-lg transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#007AFF] hover:bg-[#007AFF]/10 rounded-lg transition-colors shrink-0"
       >
         <FileText className="w-4 h-4" />
-        <span className="hidden sm:inline">Insert Research</span>
+        <span className="hidden sm:inline">Insert</span>
       </button>
 
-      {/* ---------- Export dropdown ---------- */}
-      <div className="relative group">
-        <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-[#007AFF] text-white rounded-lg hover:bg-[#0066DD] transition-colors">
+      {/* ---- Export dropdown ---- */}
+      <div className="relative shrink-0" ref={exportRef}>
+        <button
+          onClick={() => setShowExport((p) => !p)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-[#007AFF] text-white rounded-lg hover:bg-[#0066DD] transition-colors"
+        >
           Export
           <ChevronDown className="w-3.5 h-3.5" />
         </button>
-        <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-          <button
-            onClick={() => onExport("docx")}
-            className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-xl transition-colors"
-          >
-            Export as .docx
-          </button>
-          <button
-            onClick={() => onExport("pdf")}
-            className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-b-xl transition-colors"
-          >
-            Export as .pdf
-          </button>
-        </div>
+        {showExport && (
+          <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-[60]">
+            <button
+              onClick={() => {
+                onExport("docx");
+                setShowExport(false);
+              }}
+              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-xl transition-colors"
+            >
+              Export as .docx
+            </button>
+            <button
+              onClick={() => {
+                onExport("pdf");
+                setShowExport(false);
+              }}
+              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-b-xl transition-colors"
+            >
+              Export as .pdf
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

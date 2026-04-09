@@ -69,6 +69,16 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({
         class:
           "prose prose-sm sm:prose dark:prose-invert max-w-none focus:outline-none min-h-[60vh] px-8 py-6",
       },
+      handleDOMEvents: {
+        drop: (_view, event) => {
+          event.preventDefault();
+          return true;
+        },
+        dragstart: (_view, event) => {
+          event.preventDefault();
+          return true;
+        },
+      },
     },
   });
 
