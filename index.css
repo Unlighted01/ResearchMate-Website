@@ -1311,7 +1311,7 @@ h6 {
 .bubble {
   position: absolute;
   border-radius: 50%;
-  pointer-events: auto;
+  pointer-events: none;
   cursor: pointer;
   will-change: transform, opacity;
 

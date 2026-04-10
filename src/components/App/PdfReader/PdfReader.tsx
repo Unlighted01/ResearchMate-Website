@@ -736,11 +736,17 @@ const PdfReader: React.FC = () => {
             </div>
           </div>
 
-          {/* Scroll container — all pages stacked vertically, lazily rendered */}
+          {/* Scroll container — all pages stacked vertically, lazily rendered.
+              relative + z-20 + isolation:isolate forces a fresh stacking context
+              so background bubble/orb layers can't intercept clicks on the PDF. */}
           <div
             ref={containerRef}
-            className="pdf-viewport theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10 p-6 overflow-auto"
-            style={{ height: "calc(100vh - 220px)", minHeight: "60vh" }}
+            className="pdf-viewport theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10 p-6 overflow-auto relative z-20"
+            style={{
+              height: "calc(100vh - 220px)",
+              minHeight: "60vh",
+              isolation: "isolate",
+            }}
           >
             <div className="flex flex-col items-center gap-4">
               {basePageSizes.map((size, idx) => {
