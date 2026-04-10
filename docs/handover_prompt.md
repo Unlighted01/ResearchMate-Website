@@ -72,7 +72,7 @@ All phases were planned and approved by user (Kian) in April 2026.
 |-------|---------|--------|------------|
 | 1 | Dynamic Bibliography + LaTeX Export | DONE | No |
 | 2 | Academic Database Search (Discover) | DONE | Yes (search-academic.ts) |
-| 3 | PDF Reader & Annotator | NOT STARTED | No (client-side pdfjs-dist) |
+| 3 | PDF Reader & Annotator | DONE (⚠ text selection bug — see Known Issues) | No (client-side pdfjs-dist) |
 | 4 | RSS Feeds (ArXiv/PubMed new paper alerts) | NOT STARTED | Yes (needs 1 slot — CORS proxy) |
 | 5 | Media Transcription (audio/video -> text) | NOT STARTED | Yes (needs 1 slot — Whisper/Gemini) |
 | 6 | Knowledge Graph (concept maps) | NOT STARTED | No (client-side D3/force graph) |
@@ -270,10 +270,43 @@ const NAV_ITEMS = [
 
 ---
 
+## Known Issues
+
+### ⚠ PDF Reader — Text Selection Broken (Phase 3)
+
+**Status:** Deferred — Phase 3 shipped, but click+drag text selection inside the rendered PDF does not highlight anything. All other features work: continuous scroll, prev/next buttons, zoom, fit-to-width, upload, Discover-to-reader linking, 200+ page PDFs render fine.
+
+**What was tried (all committed, none fully solved it):**
+1. `pdfjs-dist` v5 `TextLayer` class with `streamTextContent` + manual fallback using `Util.transform` (commit `f0817f5`)
+2. Force `pointer-events: auto` / `user-select: text` on `.textLayer` + `pointer-events: none` on canvas (commit `f9be2bb`)
+3. Escape `.bubble-container` click trap — `.bubble { pointer-events: none }` + PDF viewport `relative z-20 isolation:isolate` (commit `bda6315`)
+4. Set pdfjs v5 required CSS vars `--scale-factor`, `--user-unit`, `--total-scale-factor` on wrapper + textLayer container (commit `50b18d7`)
+
+**Current theory (most likely):** `TextLayer.render()` builds divs whose dimensions come from CSS `calc(var(--total-scale-factor) * ...)`. The CSS vars ARE now being set, but possibly:
+- They need to be on `html` or `body`, not the per-page wrapper
+- Or the inlined `.textLayer` CSS in `index.css` is overriding dimensions that pdfjs wants to set via `style` attribute
+- Or the manual fallback is firing but the spans are invisible because the text layer's `::selection` rule has `color: transparent` and the spans have `color: transparent`, preventing selection from showing
+
+**Where to start debugging:**
+1. Open DevTools in the deployed PDF reader, inspect a rendered page's `.textLayer` div
+2. Check if it has any `<span>` children at all — if not, the TextLayer ctor is silently failing and the manual fallback is not running
+3. If spans exist, check their computed `width` / `height` — if zero, the CSS var chain is still broken
+4. Try: set `--scale-factor` on `document.documentElement` instead of the wrapper
+5. Consider: import `pdfjs-dist/web/pdf_viewer.css` directly instead of our hand-rolled minimal copy in `index.css`
+6. Consider: upgrade/downgrade `pdfjs-dist` — v5.4.624 is recent; maybe try v4.x which has more online examples
+
+**Relevant files:**
+- `src/components/App/PdfReader/PdfReader.tsx` — `renderPage()` function
+- `index.css` — `.textLayer` / `.pdf-page` CSS block (search for `PDF.js Text Layer`)
+
+**Not blocking other phases** — users can still read PDFs, just not highlight. Fix it when someone has time to actually step through the TextLayer source in `node_modules/pdfjs-dist`.
+
+---
+
 ## What To Do Next (In Order)
 
-1. **Phase 3: PDF Reader & Annotator** — client-side `pdfjs-dist`, no new API endpoint needed. Features: render PDF pages to canvas, zoom/page navigation, text selection, open PDFs from Discover page ArXiv links
-2. **Phase 4: RSS Feeds** — CORS proxy needed (1 API slot)
+1. ~~**Phase 3: PDF Reader & Annotator**~~ — DONE (see Known Issues above for deferred text-selection bug)
+2. **Phase 4: RSS Feeds** — CORS proxy needed (1 API slot) — NEXT
 3. **Phase 5: Media Transcription** — Whisper/Gemini server-side (1 API slot)
 4. **Phases 6-9** — all client-side (Knowledge Graph, Paper Graph, Kanban, Shared Collections)
 

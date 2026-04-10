@@ -18,10 +18,11 @@
 
 ## Quick Status (April 2026)
 
-- **Vercel functions:** 12/12 (AT THE LIMIT) — two merges planned to free 2 slots
+- **Vercel functions:** 10/12 (after summarize + search merges)
 - **Phase 1 (Bibliography + LaTeX):** Done
 - **Phase 2 (Academic Search / Discover):** Done
-- **Next:** Merge endpoints, then Phase 3 (PDF Reader)
+- **Phase 3 (PDF Reader):** Done ⚠ — text selection/highlight is broken (deferred). See `handover_prompt.md` Known Issues for full debug history. Users can read PDFs but can't highlight text.
+- **Next:** Phase 4 (RSS Feeds — needs 1 API slot for CORS proxy)
 - **User preference:** Never push without permission. Test on deployed Vercel URL, not localhost.
 
 ---
