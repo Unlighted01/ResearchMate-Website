@@ -104,15 +104,27 @@ const PdfReader: React.FC = () => {
   const [scale, setScale] = useState(DEFAULT_SCALE);
   const [documentTitle, setDocumentTitle] = useState<string>("");
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  // Base (scale=1) dimensions per page — computed once at doc load
+  const [basePageSizes, setBasePageSizes] = useState<
+    Array<{ width: number; height: number }>
+  >([]);
 
   // ---------- PART 5B: REFS ----------
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const textLayerRef = useRef<HTMLDivElement>(null);
-  const pageWrapperRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
   const pageInputRef = useRef<HTMLInputElement>(null);
+  // One wrapper div per page — populated via callback ref
+  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  // Track which pages have been rendered at the current scale
+  const renderedPagesRef = useRef<Set<number>>(new Set());
+  // Active pdfjs render tasks keyed by page number, so we can cancel
+  const renderTasksRef = useRef<Map<number, { cancel: () => void }>>(new Map());
+  // Loaded pdfjs module (lazy import, reused)
+  const pdfjsLibRef = useRef<any>(null);
+  // Observer for lazy page rendering
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  // Flag to suppress scroll-driven currentPage updates during programmatic scroll
+  const programmaticScrollRef = useRef(false);
 
   // Read ?url= from query string
   const urlParam = searchParams.get("url");
@@ -124,9 +136,15 @@ const PdfReader: React.FC = () => {
       setLoadState("loading");
       setError(null);
       setCurrentPage(1);
+      setBasePageSizes([]);
+      pageRefs.current.clear();
+      renderedPagesRef.current.clear();
+      renderTasksRef.current.forEach((t) => t.cancel());
+      renderTasksRef.current.clear();
 
       try {
         const pdfjsLib = await loadPdfJs();
+        pdfjsLibRef.current = pdfjsLib;
 
         // Clean up previous document if any
         if (pdfDoc) {
@@ -142,6 +160,16 @@ const PdfReader: React.FC = () => {
 
         const doc = (await loadingTask.promise) as unknown as PdfDocumentProxy;
 
+        // Precompute base (scale=1) viewport sizes so we can layout placeholders
+        // and scroll without rendering every page upfront.
+        const sizes: Array<{ width: number; height: number }> = [];
+        for (let i = 1; i <= doc.numPages; i++) {
+          const page = await doc.getPage(i);
+          const vp = page.getViewport({ scale: 1 });
+          sizes.push({ width: vp.width, height: vp.height });
+        }
+
+        setBasePageSizes(sizes);
         setPdfDoc(doc);
         setTotalPages(doc.numPages);
         setDocumentTitle(source.title);
@@ -172,31 +200,45 @@ const PdfReader: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlParam]);
 
-  // Render current page whenever doc/page/scale changes
-  useEffect(() => {
-    if (!pdfDoc || loadState !== "ready") return;
+  // ---------- Render a single page into its wrapper ----------
+  const renderPage = useCallback(
+    async (pageNum: number) => {
+      if (!pdfDoc) return;
+      if (renderedPagesRef.current.has(pageNum)) return;
+      const wrapper = pageRefs.current.get(pageNum);
+      if (!wrapper) return;
+      const pdfjsLib = pdfjsLibRef.current;
+      if (!pdfjsLib) return;
 
-    let cancelled = false;
+      renderedPagesRef.current.add(pageNum);
 
-    (async () => {
       try {
-        // Cancel any in-flight render
-        if (renderTaskRef.current) {
-          renderTaskRef.current.cancel();
-          renderTaskRef.current = null;
-        }
-
-        const page = await pdfDoc.getPage(currentPage);
-        if (cancelled) return;
-
+        const page = await pdfDoc.getPage(pageNum);
         const viewport = page.getViewport({ scale });
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+
+        // Guard: component may have unmounted / scale may have changed mid-await
+        if (!pageRefs.current.get(pageNum)) return;
+
+        let canvas = wrapper.querySelector(
+          "canvas",
+        ) as HTMLCanvasElement | null;
+        if (!canvas) {
+          canvas = document.createElement("canvas");
+          canvas.className = "block";
+          wrapper.appendChild(canvas);
+        }
+        let textLayerDiv = wrapper.querySelector(
+          ".textLayer",
+        ) as HTMLDivElement | null;
+        if (!textLayerDiv) {
+          textLayerDiv = document.createElement("div");
+          textLayerDiv.className = "textLayer";
+          wrapper.appendChild(textLayerDiv);
+        }
 
         const context = canvas.getContext("2d");
         if (!context) return;
 
-        // Use devicePixelRatio for crisp rendering on high-DPI screens
         const dpr = window.devicePixelRatio || 1;
         canvas.width = viewport.width * dpr;
         canvas.height = viewport.height * dpr;
@@ -204,31 +246,27 @@ const PdfReader: React.FC = () => {
         canvas.style.height = `${viewport.height}px`;
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        // Size the wrapper so the absolutely-positioned text layer overlays the canvas
-        const wrapper = pageWrapperRef.current;
-        if (wrapper) {
-          wrapper.style.width = `${viewport.width}px`;
-          wrapper.style.height = `${viewport.height}px`;
-        }
+        // Cancel any existing render task for this page
+        const prev = renderTasksRef.current.get(pageNum);
+        if (prev) prev.cancel();
 
         const renderTask = page.render({
           canvasContext: context,
           viewport,
         });
-        renderTaskRef.current = renderTask;
+        renderTasksRef.current.set(pageNum, renderTask);
 
         await renderTask.promise;
-        renderTaskRef.current = null;
+        renderTasksRef.current.delete(pageNum);
 
-        // Render selectable text layer over the canvas
-        const textLayerDiv = textLayerRef.current;
-        if (textLayerDiv && !cancelled) {
-          textLayerDiv.innerHTML = "";
-          textLayerDiv.style.width = `${viewport.width}px`;
-          textLayerDiv.style.height = `${viewport.height}px`;
-          // pdfjs v5 exposes a TextLayer class. Use `any` to avoid pulling heavy types.
-          const TextLayerCtor = (pdfjsLib as any).TextLayer;
-          if (TextLayerCtor) {
+        // --- Text layer ---
+        textLayerDiv.innerHTML = "";
+        textLayerDiv.style.width = `${viewport.width}px`;
+        textLayerDiv.style.height = `${viewport.height}px`;
+
+        const TextLayerCtor = (pdfjsLib as any).TextLayer;
+        if (TextLayerCtor) {
+          try {
             const textContentSource =
               typeof (page as any).streamTextContent === "function"
                 ? (page as any).streamTextContent({
@@ -242,25 +280,148 @@ const PdfReader: React.FC = () => {
               viewport,
             });
             await textLayer.render();
+          } catch {
+            // Fall through to manual rendering below
+            textLayerDiv.innerHTML = "";
           }
         }
+
+        // Manual fallback: if the text layer is still empty, build spans ourselves
+        if (textLayerDiv.childElementCount === 0) {
+          const textContent = await page.getTextContent();
+          const Util = (pdfjsLib as any).Util;
+          textContent.items.forEach((item: any) => {
+            if (!item.str) return;
+            const tx = Util.transform(
+              (viewport as any).transform,
+              item.transform,
+            );
+            const fontHeight = Math.hypot(tx[2], tx[3]);
+            if (fontHeight === 0) return;
+            const span = document.createElement("span");
+            span.textContent = item.str;
+            span.style.position = "absolute";
+            span.style.left = `${tx[4]}px`;
+            span.style.top = `${tx[5] - fontHeight}px`;
+            span.style.fontSize = `${fontHeight}px`;
+            span.style.fontFamily = "sans-serif";
+            span.style.transformOrigin = "0% 0%";
+            textLayerDiv!.appendChild(span);
+            const rect = span.getBoundingClientRect();
+            const expectedWidth = item.width * scale;
+            if (rect.width > 0 && expectedWidth > 0) {
+              span.style.transform = `scaleX(${expectedWidth / rect.width})`;
+            }
+          });
+        }
       } catch (err) {
-        // Ignore cancellation errors
         const msg = err instanceof Error ? err.message : "";
-        if (!msg.includes("cancelled") && !cancelled) {
-          console.error("PDF render error:", err);
+        if (!msg.toLowerCase().includes("cancel")) {
+          console.error(`PDF render error (page ${pageNum}):`, err);
+          renderedPagesRef.current.delete(pageNum);
         }
       }
-    })();
+    },
+    [pdfDoc, scale],
+  );
+
+  // ---------- Intersection observer: render pages as they enter the viewport ----------
+  useEffect(() => {
+    if (loadState !== "ready" || !containerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const pageNum = parseInt(
+              entry.target.getAttribute("data-page") || "0",
+              10,
+            );
+            if (pageNum > 0) renderPage(pageNum);
+          }
+        });
+      },
+      {
+        root: containerRef.current,
+        rootMargin: "400px 0px",
+        threshold: 0.01,
+      },
+    );
+
+    observerRef.current = observer;
+    pageRefs.current.forEach((el) => observer.observe(el));
 
     return () => {
-      cancelled = true;
-      if (renderTaskRef.current) {
-        renderTaskRef.current.cancel();
-        renderTaskRef.current = null;
-      }
+      observer.disconnect();
+      observerRef.current = null;
     };
-  }, [pdfDoc, currentPage, scale, loadState]);
+  }, [loadState, renderPage, basePageSizes]);
+
+  // ---------- Scale change: clear all renders so observer re-renders visible pages ----------
+  useEffect(() => {
+    if (loadState !== "ready") return;
+    // Cancel in-flight renders
+    renderTasksRef.current.forEach((t) => t.cancel());
+    renderTasksRef.current.clear();
+    renderedPagesRef.current.clear();
+    // Kick the observer so currently-visible pages re-render
+    const observer = observerRef.current;
+    if (observer) {
+      pageRefs.current.forEach((el) => {
+        observer.unobserve(el);
+        observer.observe(el);
+      });
+    }
+  }, [scale, loadState]);
+
+  // ---------- Scroll tracking: update currentPage based on which page is most visible ----------
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || loadState !== "ready") return;
+
+    let ticking = false;
+    const handleScroll = () => {
+      if (programmaticScrollRef.current) return;
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        const rect = container.getBoundingClientRect();
+        const centerY = rect.top + rect.height / 2;
+        let closest = 1;
+        let closestDist = Infinity;
+        pageRefs.current.forEach((el, num) => {
+          const r = el.getBoundingClientRect();
+          const pageCenter = r.top + r.height / 2;
+          const dist = Math.abs(pageCenter - centerY);
+          if (dist < closestDist) {
+            closestDist = dist;
+            closest = num;
+          }
+        });
+        setCurrentPage((prev) => (prev === closest ? prev : closest));
+      });
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [loadState]);
+
+  // ---------- Scroll a specific page into view ----------
+  const scrollToPage = useCallback((pageNum: number) => {
+    const el = pageRefs.current.get(pageNum);
+    const container = containerRef.current;
+    if (!el || !container) return;
+    programmaticScrollRef.current = true;
+    setCurrentPage(pageNum);
+    // Use offsetTop relative to the scroll container for reliable positioning
+    const top = el.offsetTop - 16;
+    container.scrollTo({ top, behavior: "smooth" });
+    // Release the scroll-tracking suppression after the smooth scroll settles
+    window.setTimeout(() => {
+      programmaticScrollRef.current = false;
+    }, 600);
+  }, []);
 
   // Cleanup document on unmount
   useEffect(() => {
@@ -281,10 +442,10 @@ const PdfReader: React.FC = () => {
 
       if (e.key === "ArrowLeft" || e.key === "PageUp") {
         e.preventDefault();
-        setCurrentPage((p) => Math.max(1, p - 1));
+        scrollToPage(Math.max(1, currentPage - 1));
       } else if (e.key === "ArrowRight" || e.key === "PageDown") {
         e.preventDefault();
-        setCurrentPage((p) => Math.min(totalPages, p + 1));
+        scrollToPage(Math.min(totalPages, currentPage + 1));
       } else if ((e.key === "+" || e.key === "=") && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         setScale((s) => Math.min(MAX_SCALE, s + SCALE_STEP));
@@ -333,36 +494,38 @@ const PdfReader: React.FC = () => {
   }, []);
 
   const handleFitWidth = useCallback(() => {
-    if (!pdfDoc || !containerRef.current) return;
-    (async () => {
-      const page = await pdfDoc.getPage(currentPage);
-      const baseViewport = page.getViewport({ scale: 1 });
-      const containerWidth = (containerRef.current?.clientWidth || 800) - 48;
-      const fitScale = containerWidth / baseViewport.width;
-      setScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, fitScale)));
-    })();
-  }, [pdfDoc, currentPage]);
+    if (!containerRef.current || basePageSizes.length === 0) return;
+    // Use the first page's base width as the reference
+    const baseWidth = basePageSizes[0].width;
+    const containerWidth = containerRef.current.clientWidth - 48;
+    const fitScale = containerWidth / baseWidth;
+    setScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, fitScale)));
+  }, [basePageSizes]);
 
   const handlePrevPage = useCallback(() => {
-    setCurrentPage((p) => Math.max(1, p - 1));
-  }, []);
+    scrollToPage(Math.max(1, currentPage - 1));
+  }, [currentPage, scrollToPage]);
 
   const handleNextPage = useCallback(() => {
-    setCurrentPage((p) => Math.min(totalPages, p + 1));
-  }, [totalPages]);
+    scrollToPage(Math.min(totalPages, currentPage + 1));
+  }, [currentPage, totalPages, scrollToPage]);
 
   const handlePageJump = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
       const value = parseInt(pageInputRef.current?.value || "", 10);
       if (!Number.isNaN(value) && value >= 1 && value <= totalPages) {
-        setCurrentPage(value);
+        scrollToPage(value);
       }
     },
-    [totalPages]
+    [totalPages, scrollToPage],
   );
 
   const handleClose = useCallback(() => {
+    renderTasksRef.current.forEach((t) => t.cancel());
+    renderTasksRef.current.clear();
+    renderedPagesRef.current.clear();
+    pageRefs.current.clear();
     if (pdfDoc) pdfDoc.destroy().catch(() => {});
     setPdfDoc(null);
     setLoadState("idle");
@@ -371,6 +534,7 @@ const PdfReader: React.FC = () => {
     setTotalPages(0);
     setDocumentTitle("");
     setSourceUrl(null);
+    setBasePageSizes([]);
     if (urlParam) setSearchParams({}, { replace: true });
   }, [pdfDoc, urlParam, setSearchParams]);
 
@@ -571,25 +735,36 @@ const PdfReader: React.FC = () => {
             </div>
           </div>
 
-          {/* Canvas Viewport — scrolls internally so toolbar stays pinned */}
+          {/* Scroll container — all pages stacked vertically, lazily rendered */}
           <div
             ref={containerRef}
-            className="pdf-viewport theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10 p-6 flex justify-center overflow-auto"
+            className="pdf-viewport theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10 p-6 overflow-auto"
             style={{ height: "calc(100vh - 220px)", minHeight: "60vh" }}
           >
-            <div
-              ref={pageWrapperRef}
-              className="relative shadow-lg rounded-sm"
-              style={{ flexShrink: 0 }}
-            >
-              <canvas
-                ref={canvasRef}
-                className="block rounded-sm"
-              />
-              <div
-                ref={textLayerRef}
-                className="textLayer absolute inset-0"
-              />
+            <div className="flex flex-col items-center gap-4">
+              {basePageSizes.map((size, idx) => {
+                const pageNum = idx + 1;
+                return (
+                  <div
+                    key={pageNum}
+                    data-page={pageNum}
+                    ref={(el) => {
+                      if (el) {
+                        pageRefs.current.set(pageNum, el);
+                        observerRef.current?.observe(el);
+                      } else {
+                        pageRefs.current.delete(pageNum);
+                      }
+                    }}
+                    className="pdf-page relative shadow-lg rounded-sm bg-white"
+                    style={{
+                      width: `${size.width * scale}px`,
+                      height: `${size.height * scale}px`,
+                      flexShrink: 0,
+                    }}
+                  />
+                );
+              })}
             </div>
           </div>
 
