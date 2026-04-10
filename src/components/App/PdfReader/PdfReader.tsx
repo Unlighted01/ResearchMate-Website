@@ -108,6 +108,8 @@ const PdfReader: React.FC = () => {
   // ---------- PART 5B: REFS ----------
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const textLayerRef = useRef<HTMLDivElement>(null);
+  const pageWrapperRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
   const pageInputRef = useRef<HTMLInputElement>(null);
@@ -202,6 +204,13 @@ const PdfReader: React.FC = () => {
         canvas.style.height = `${viewport.height}px`;
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+        // Size the wrapper so the absolutely-positioned text layer overlays the canvas
+        const wrapper = pageWrapperRef.current;
+        if (wrapper) {
+          wrapper.style.width = `${viewport.width}px`;
+          wrapper.style.height = `${viewport.height}px`;
+        }
+
         const renderTask = page.render({
           canvasContext: context,
           viewport,
@@ -210,6 +219,31 @@ const PdfReader: React.FC = () => {
 
         await renderTask.promise;
         renderTaskRef.current = null;
+
+        // Render selectable text layer over the canvas
+        const textLayerDiv = textLayerRef.current;
+        if (textLayerDiv && !cancelled) {
+          textLayerDiv.innerHTML = "";
+          textLayerDiv.style.width = `${viewport.width}px`;
+          textLayerDiv.style.height = `${viewport.height}px`;
+          // pdfjs v5 exposes a TextLayer class. Use `any` to avoid pulling heavy types.
+          const TextLayerCtor = (pdfjsLib as any).TextLayer;
+          if (TextLayerCtor) {
+            const textContentSource =
+              typeof (page as any).streamTextContent === "function"
+                ? (page as any).streamTextContent({
+                    includeMarkedContent: true,
+                    disableNormalization: true,
+                  })
+                : await page.getTextContent();
+            const textLayer = new TextLayerCtor({
+              textContentSource,
+              container: textLayerDiv,
+              viewport,
+            });
+            await textLayer.render();
+          }
+        }
       } catch (err) {
         // Ignore cancellation errors
         const msg = err instanceof Error ? err.message : "";
@@ -537,17 +571,26 @@ const PdfReader: React.FC = () => {
             </div>
           </div>
 
-          {/* Canvas Viewport */}
+          {/* Canvas Viewport — scrolls internally so toolbar stays pinned */}
           <div
             ref={containerRef}
-            className="theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10 p-6 flex justify-center overflow-auto"
-            style={{ minHeight: "60vh" }}
+            className="pdf-viewport theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10 p-6 flex justify-center overflow-auto"
+            style={{ height: "calc(100vh - 220px)", minHeight: "60vh" }}
           >
-            <canvas
-              ref={canvasRef}
-              className="shadow-lg rounded-sm"
-              style={{ maxWidth: "100%" }}
-            />
+            <div
+              ref={pageWrapperRef}
+              className="relative shadow-lg rounded-sm"
+              style={{ flexShrink: 0 }}
+            >
+              <canvas
+                ref={canvasRef}
+                className="block rounded-sm"
+              />
+              <div
+                ref={textLayerRef}
+                className="textLayer absolute inset-0"
+              />
+            </div>
           </div>
 
           {/* Hint */}
