@@ -286,8 +286,9 @@ const PdfReader: React.FC = () => {
           }
         }
 
-        // Manual fallback: if the text layer is still empty, build spans ourselves
-        if (textLayerDiv.childElementCount === 0) {
+        // Manual fallback: if no selectable spans were produced, build them ourselves
+        if (textLayerDiv.querySelectorAll("span").length === 0) {
+          textLayerDiv.innerHTML = "";
           const textContent = await page.getTextContent();
           const Util = (pdfjsLib as any).Util;
           textContent.items.forEach((item: any) => {
