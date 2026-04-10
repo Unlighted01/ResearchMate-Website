@@ -404,10 +404,9 @@ const DiscoverPage: React.FC<DiscoverPageProps> = ({ useToast }) => {
 
                   {paper.pdfUrl && (
                     <a
-                      href={paper.pdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href={`#/app/pdf-reader?url=${encodeURIComponent(paper.pdfUrl)}`}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-[#007AFF] hover:bg-[#007AFF]/5 rounded-lg transition-all"
+                      title="Open in PDF Reader"
                     >
                       <FileText className="w-3.5 h-3.5" />
                       PDF

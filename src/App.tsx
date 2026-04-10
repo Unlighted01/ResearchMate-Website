@@ -294,6 +294,7 @@ import SmartPenGallery from "./components/App/SmartPenGallery";
 import PairSmartPen from "./components/App/PairSmartPen";
 import DocumentEditor from "./components/App/DocumentEditor";
 import { DiscoverPage } from "./components/App/Discover";
+import PdfReader from "./components/App/PdfReader";
 import SupportPage from "./components/marketing/SupportPage";
 
 // ============================================
@@ -456,6 +457,10 @@ export default function App() {
                         <Route
                           path="editor"
                           element={<DocumentEditor />}
+                        />
+                        <Route
+                          path="pdf-reader"
+                          element={<PdfReader />}
                         />
                         <Route
                           path="smart-pen"

@@ -32,6 +32,7 @@ import {
   FileEdit,
   GraduationCap,
   ChevronLeft,
+  BookOpen,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -42,6 +43,7 @@ import { User as SupabaseUser } from "@supabase/supabase-js";
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
   { icon: GraduationCap, label: "Discover", path: "/app/discover" },
+  { icon: BookOpen, label: "PDF Reader", path: "/app/pdf-reader" },
   { icon: FolderOpen, label: "Collections", path: "/app/collections" },
   { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
   { icon: Quote, label: "Citations", path: "/app/citations" },
