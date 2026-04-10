@@ -127,13 +127,13 @@ const DiscoverPage: React.FC<DiscoverPageProps> = ({ useToast }) => {
           data: { session },
         } = await supabase.auth.getSession();
 
-        const res = await fetch("/api/search-academic", {
+        const res = await fetch("/api/search", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session?.access_token || ""}`,
           },
-          body: JSON.stringify({ query: trimmed, source }),
+          body: JSON.stringify({ query: trimmed, type: "academic", source }),
         });
 
         if (!res.ok) {

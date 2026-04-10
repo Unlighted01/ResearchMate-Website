@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createClient } from "@supabase/supabase-js";
 import { authenticateUser, deductCredit, refundCredit } from "./_utils/auth.js";
 
 // ============================================
@@ -226,6 +227,111 @@ async function callGroqAPI(prompt: string, mode: SummaryMode = "standard", optio
 }
 
 // ============================================
+// ITEM SUMMARY PROMPT (short 2-4 sentence summaries, used when itemId is provided)
+// ============================================
+
+const ITEM_SUMMARY_PROMPT = `Summarize the following document content in 2-4 concise, information-dense sentences.
+
+Rules:
+- Lead with the core finding, thesis, or main point — not filler like "This document discusses".
+- Preserve critical specifics: names, numbers, key terms, conclusions.
+- If it is academic/research content, mention the methodology and key result.
+- If it is handwritten notes, extract and organize the key actionable points.
+- NEVER hallucinate or add information not present in the text.
+
+Text to summarize:
+`;
+
+// ============================================
+// ITEM SUMMARY FALLBACK CHAIN (OpenRouter -> Gemini -> Claude)
+// ============================================
+
+async function callItemSummaryChain(text: string): Promise<string | null> {
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  const claudeKey = process.env.OCR_API_KEY;
+  const geminiKey = getRandomGeminiKey();
+
+  // Fallback 1: OpenRouter
+  if (openRouterKey) {
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openRouterKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [{ role: "user", content: `${ITEM_SUMMARY_PROMPT}${text}` }],
+          temperature: 0.3,
+          max_tokens: 300,
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const summary = data.choices?.[0]?.message?.content || null;
+        if (summary) return summary;
+      }
+    } catch (e) {
+      console.error("OpenRouter item summary error:", e);
+    }
+  }
+
+  // Fallback 2: Gemini
+  if (geminiKey) {
+    try {
+      const response = await fetch(
+        `${GEMINI_ENDPOINT}/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `${ITEM_SUMMARY_PROMPT}${text}` }] }],
+            generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
+          }),
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        const summary = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+        if (summary) return summary;
+      }
+    } catch (e) {
+      console.error("Gemini item summary error:", e);
+    }
+  }
+
+  // Fallback 3: Claude
+  if (claudeKey) {
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": claudeKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-3-5-sonnet-20241022",
+          max_tokens: 300,
+          temperature: 0.3,
+          messages: [{ role: "user", content: `${ITEM_SUMMARY_PROMPT}${text}` }],
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const summary = data.content?.[0]?.text || null;
+        if (summary) return summary;
+      }
+    } catch (e) {
+      console.error("Claude item summary error:", e);
+    }
+  }
+
+  return null;
+}
+
+// ============================================
 // MAIN HANDLER
 // ============================================
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -254,51 +360,89 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const { user, isFreeTier, customKey } = authResult;
+    const { user, isFreeTier } = authResult;
     const userId = user?.id;
 
-    // 2. Prepare Request
-    const { text, mode } = req.body;
+    // 2. Parse request — itemId presence determines the mode
+    const { text, mode, itemId } = req.body;
     if (!text) return res.status(400).json({ error: "Text is required" });
 
-    // Validate mode (default to "standard" if not provided or invalid)
+    // ============================================
+    // MODE A: Item Summary (short, writes to DB)
+    // Triggered when itemId is provided
+    // ============================================
+    if (itemId) {
+      const summary = await callItemSummaryChain(text);
+
+      if (!summary) {
+        return res.status(500).json({ error: "All AI providers failed to generate summary." });
+      }
+
+      // Write summary directly to DB using service role key
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (supabaseUrl && supabaseKey) {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        await supabase
+          .from("items")
+          .update({ ai_summary: summary })
+          .eq("id", itemId)
+          .eq("user_id", userId);
+      } else {
+        console.error("Supabase env vars not found for item summary DB write");
+      }
+
+      // Charge credit if on free tier
+      if (isFreeTier && userId) {
+        await deductCredit(userId);
+        creditDeducted = true;
+        deductedUserId = userId;
+      }
+
+      return res.status(200).json({ success: true, summary });
+    }
+
+    // ============================================
+    // MODE B: Full Summarization (configurable length)
+    // Default mode when no itemId
+    // ============================================
     const validModes: SummaryMode[] = ["ultra-short", "standard", "detailed"];
     const summaryMode: SummaryMode = validModes.includes(mode) ? mode : "standard";
 
-    const keyToUse = customKey || getRandomGeminiKey();
+    const keyToUse = authResult.customKey || getRandomGeminiKey();
     if (!keyToUse)
       return res
         .status(500)
         .json({ error: "Server misconfiguration: No API keys." });
 
-    // 3. Call AI (With 3-Layer Fallback)
     let summary = "";
     const errors: string[] = [];
 
     try {
       summary = await callGeminiAPI(text, keyToUse, summaryMode);
     } catch (geminiError) {
-      const msg = `Gemini Failed: ${(geminiError as Error).message}`;
-      console.warn(msg);
-      errors.push(msg);
+      const geminiMsg = `Gemini Failed: ${(geminiError as Error).message}`;
+      console.warn(geminiMsg);
+      errors.push(geminiMsg);
 
       // Fallback 1: OpenRouter
       if (process.env.OPENROUTER_API_KEY) {
         try {
           summary = await callOpenRouterAPI(text, summaryMode);
         } catch (orError) {
-          const msg = `OpenRouter Failed: ${(orError as Error).message}`;
-          console.warn(msg);
-          errors.push(msg);
+          const orMsg = `OpenRouter Failed: ${(orError as Error).message}`;
+          console.warn(orMsg);
+          errors.push(orMsg);
 
           // Fallback 2: Groq
           if (process.env.GROQ_API_KEY) {
             try {
               summary = await callGroqAPI(text, summaryMode);
             } catch (groqError) {
-              const msg = `Groq Failed: ${(groqError as Error).message}`;
-              console.error(msg);
-              errors.push(msg);
+              const groqMsg = `Groq Failed: ${(groqError as Error).message}`;
+              console.error(groqMsg);
+              errors.push(groqMsg);
               throw new Error(
                 `All providers failed. Logs: ${errors.join(" | ")}`,
               );
@@ -310,22 +454,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
       } else if (process.env.GROQ_API_KEY) {
-        // Try Groq if OpenRouter missing
         try {
           summary = await callGroqAPI(text, summaryMode);
         } catch (groqError) {
-          const msg = `Groq Failed: ${(groqError as Error).message}`;
-          errors.push(msg);
+          const groqMsg = `Groq Failed: ${(groqError as Error).message}`;
+          errors.push(groqMsg);
           throw new Error(`Gemini/Groq failed. Logs: ${errors.join(" | ")}`);
         }
       } else {
         throw new Error(
-          `Gemini failed and no fallbacks configured. Log: ${msg}`,
+          `Gemini failed and no fallbacks configured. Log: ${geminiMsg}`,
         );
       }
     }
 
-    // 4. Deduct Credit
+    // Deduct credit
     let creditsRemaining: number | string = "Unlimited";
     if (isFreeTier && userId) {
       creditsRemaining = await deductCredit(userId);

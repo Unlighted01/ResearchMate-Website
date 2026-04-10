@@ -1,144 +1,294 @@
-# 📦 AI Handover: ResearchMate Web Platform
+# ResearchMate — AI Handover Document
 
-## 🚀 Architectural Context
-The ResearchMate Web Platform serves as the centralized hub for research management. Built with **React** and **Vite**, it features a premium multi-theme Dashboard and integrates deeply with **Supabase** and **Vercel Serverless Functions**.
-
-### 🧠 Strategic "Magic" Logic (Read Carefully)
-1. **3-Tier OCR Fallback Chain:**
-   - Located in `api/ocr.ts` (Vercel API).
-   - Pipeline: **OpenRouter (gpt-4o) → Gemini 1.5 Pro → Claude 3.5 Sonnet**.
-   - If one fails or hits rate limits, it automatically falls back to the next.
-2. **Interactive Color Metadata:**
-   - The website uses the `tags` array to store `color:x` metadata.
-   - **Dashboard Interaction:** Users can change an item's color in the `Dashboard.tsx` detail modal. This triggers an `updateItem` call which correctly replaces the existing `color:` tag in the array.
-   - **Rendering:** List/Grid views dynamically extract this color to render sidebar accents and badges without a separate database column.
-3. **Decoupled Summarization:**
-   - Summaries are not generated automatically on upload (to save tokens/performance).
-   - Users must trigger them manually via the "Generate Summary" button in the item modal.
-4. **Hardware Ingestion (Smart Pen):**
-   - The `/supabase/functions/smart-pen/` Edge Function directs byte streams from the ESP32 directly to the OCR API.
-   - Added `list`, `unpair`, and `confirm` actions to manage devices without hitting RLS restrictions.
+> Last updated: April 9, 2026
+> Read root `CLAUDE.md` first for coding conventions, design system, and PART sectioning rules.
 
 ---
 
-## 🎨 Visual Theme System
+## Project Overview
 
-The app has **three swappable UI themes** selected via **Settings → Appearance**.
-Active theme is stored in `localStorage` as `visualTheme` and applied as `data-ui-theme` on `<html>`.
-All theme CSS lives in `index.css` under clearly labelled blocks.
-The theme context is `src/context/ThemeContext.tsx` — exposes `visualTheme` + `setVisualTheme`.
+**ResearchMate** — A multi-platform research management ecosystem.
+- **Web Dashboard** (React/TypeScript/Vite) — hosted on Vercel
+- **Chrome Extension** — calls the same Vercel API endpoints
+- **Smart Pen** (ESP32-S3 Hardware) — routes through Supabase Edge Function to Vercel API
 
-| Theme | `data-ui-theme` | Aesthetic |
-|---|---|---|
-| **Minimalist** | `minimalist` | Editorial precision — electric blue accent, hairline borders, true black/white, no blur |
-| **Bubble** | `bubble` | Playful premium — rose/lavender palette, warm cream light bg, deep violet dark bg, pill buttons |
-| **Glass** | `glass` | Editorial dark glassmorphism — two distinct light/dark variants (Henning Tillmann inspired) |
+**Tech Stack:** React 18, TypeScript, Vite, Supabase (auth + DB + storage + Edge Functions), Vanilla CSS with CSS custom properties, Vercel Serverless Functions, TipTap v3 (ProseMirror-based rich text editor).
 
-### Minimalist Theme — Editorial Precision (March 2026)
-
-**Light mode** (`html[data-ui-theme="minimalist"]`):
-- Background: `#fafafa` — warm off-white, not harsh pure white
-- Surfaces: solid `#ffffff`, `1px solid #e5e7eb` borders — no shadows, no blur
-- Accent: electric blue `#2563eb` — buttons, sidebar active state, stat numbers
-- Corners: tight `6px/8px` border-radius
-- Typography: `letter-spacing: -0.025em` on all headings (editorial feel)
-
-**Dark mode** (`html.dark[data-ui-theme="minimalist"]`):
-- Background: true `#000000`, surfaces `#111111`, borders `#1f1f1f` (near-invisible)
-- Accent: `#2563eb` / `#3b82f6` — pops against pure black
-- Sidebar: `#000000` bg, `#1a1a1a` borders
-
-### Bubble Theme — Playful Premium (March 2026)
-
-**Light mode** (`html[data-ui-theme="bubble"]`):
-- Background: warm cream `#fdf9ff` + rose/lavender/foam radial gradients
-- Surfaces: `rgba(255,255,255,0.88)` with rose-violet tint border `rgba(232,121,249,0.22)`
-- Buttons: rose→lavender gradient `#f472b6 → #a78bfa`, pill shape (border-radius: 999px)
-- Title: deep violet `#4c1d95`, stat accent `#9333ea`
-- Corners: generous `18px/24px`
-
-**Dark mode** (`html.dark[data-ui-theme="bubble"]`):
-- Background: deep violet-black `#0d0814` + soft magenta/lavender/rose orb gradients
-- Surfaces: `rgba(24,12,38,0.82)` — dark violet-black frosted
-- Title: soft lavender `#e9d5ff`
-- Sidebar: near-black `rgba(13,8,20,0.92)`, lavender `#d8b4fe` text
-- Buttons: magenta→lavender gradient `#e879f9 → #a78bfa`
-
-### Glass Theme (Henning Tillmann inspired — March 2026)
-Both modes use `backdrop-filter: blur(var(--ui-glass-blur)) saturate(1.6)` on all surfaces via `.theme-surface`.
-
-**Light mode** (`html[data-ui-theme="glass"]`):
-- Background: `#F0F4F8` + soft desaturated cyan/violet orbs
-- Surfaces: `rgba(255,255,255,0.72)` — more opaque, depth via soft shadows (no border)
-- Accents: muted cyan `#0891b2`
-
-**Dark mode** (`html.dark[data-ui-theme="glass"]`):
-- Background: `#0a0a0f` + vivid cyan/violet glow orbs
-- Surfaces: `rgba(255,255,255,0.04)` — near-invisible, defined by hairline ring border `rgba(255,255,255,0.09)`
-- Hover: cyan glow ring `0 0 0 1px rgba(34,211,238,0.35)` replaces box-shadow
-- Headlines: faint text-shadow glow `rgba(34,211,238,0.18)`
-
-### Bubble Theme — Three.js Glass Cursor (March 2026)
-**`src/components/shared/GlassBubble.tsx`** — full Three.js implementation, no additional libraries.
-
-- Full-screen fixed WebGL canvas (`pointer-events: none`, `z-index: 9999`)
-- `THREE.MeshPhysicalMaterial` with `transmission: 1.0`, `ior: 1.45`, `clearcoat: 1.0`
-- **Simplex 3D noise** injected into vertex shader via `onBeforeCompile` → organic liquid wobble
-- `RoomEnvironment` as environment map → realistic glass surface reflections
-- Two orbiting point lights (cyan `#60a5fa` + violet `#a78bfa`) create dynamic shifting reflections
-- Mouse tracking: lerp interpolation (`LERP = 0.09`) via `requestAnimationFrame`
-- System cursor hidden (`cursor: none !important`) and replaced by glass sphere + 6px precision dot (`.cursor-dot`)
-- `ThemedCursorBubble` in `App.tsx` renders this only when `visualTheme === 'bubble'`
-- **Dependency:** `three` + `@types/three`
-
-### FloatingOrbs Background (`src/components/marketing/FloatingOrbs.tsx`)
-Ambient orbs used in both glass and bubble theme backgrounds:
-- **Palette (updated March 2026):** Cyan `rgba(34,211,238)`, Violet `rgba(167,139,250)`, Indigo `rgba(99,102,241)`
-- Orbs 420–700px radius, opacity 0.55–0.75, slow drift (30–50s rAF animation)
-- Mouse parallax (throttled 60ms)
+**Repo:** `Unlighted01/ResearchMate-Website` on GitHub. Vercel auto-deploys from `main`.
 
 ---
 
-## 🛠️ Core Workflows
-- **Research Dashboard:** `Dashboard.tsx` implements a dual-view (List/Grid) interface with bulk selection, filtering (by tag, source, or color), and detailed modals.
-- **Bulk Operations:** `BulkActions.tsx` handles batch deletions, collection moves, and Bulk Markdown Export.
-- **Collection Management:** Aggregated counts handled client-side in `collectionsService.ts` for UI reactivity.
+## Vercel Serverless Functions (10/12 — 2 FREE SLOTS)
+
+Vercel Hobby plan allows **max 12 serverless functions**. We have 2 free slots after merging.
+
+| # | Endpoint | Purpose | Model | Fallback Chain |
+|---|----------|---------|-------|----------------|
+| 1 | `api/chat.ts` | Academic chat assistant | gemini-2.5-flash | Gemini -> OpenRouter -> Groq |
+| 2 | `api/cite.ts` | ISBN/DOI/YouTube lookup | N/A (data only) | OpenLibrary -> Google Books / CrossRef / oEmbed |
+| 3 | `api/extract-citation.ts` | URL -> citation metadata | gemini-2.5-flash | DOI/Crossref/Semantic Scholar + AI |
+| 4 | `api/generate-tags.ts` | Auto-tagging | gemini-2.5-flash | Gemini -> OpenRouter -> Groq |
+| 5 | `api/identify-source.ts` | Source identification | gemini-2.5-flash | — |
+| 6 | `api/insights.ts` | Key insights extraction | gemini-2.5-flash | Gemini -> OpenRouter -> Groq |
+| 7 | `api/ocr.ts` | Image text extraction | gemini-2.5-flash | OpenRouter -> Gemini -> Claude |
+| 8 | `api/search.ts` | Unified search (academic + books) | N/A (API calls) | `type:"academic"` -> S2+ArXiv+PubMed; `type:"books"` -> Google Books+CrossRef+OMDB |
+| 9 | `api/set-custom-key.ts` | BYOK key management | N/A | — |
+| 10 | `api/summarize.ts` | Unified summarization | gemini-2.5-flash | Full: Gemini->OpenRouter->Groq; Item (when `itemId` present): OpenRouter->Gemini->Claude + writes to DB |
+
+**Also:** `api/_utils/auth.ts` (shared auth + credit system — underscore prefix means Vercel ignores it).
+
+**Test file:** `tests/ocr.integration.test.ts` — moved OUT of `api/` to avoid counting as a function. Run with `npx vitest run tests/ocr.integration.test.ts`.
+
+**Merges completed (April 2026):**
+- `summarize.ts` + `summarize-item.ts` -> `summarize.ts` — if `itemId` is in the request body, uses short prompt + writes to DB; otherwise uses full summarization with mode selection
+- `search-academic.ts` + `search-books.ts` -> `search.ts` — `type: "academic"` (default) or `type: "books"` in request body
+- Frontend updated: `geminiService.ts` points both functions at `/api/summarize`; `DiscoverPage.tsx` calls `/api/search`
+- Chrome extension will need to update calls from `/api/search-books` to `/api/search` with `type: "books"`
 
 ---
 
-## 🔐 OAuth Popup Flow (Fixed March 2026)
+## Endpoint Merges (COMPLETED April 2026)
 
-Google OAuth opens a popup via `window.open()`. Google strips the `#/auth/callback` hash fragment from redirect URIs, so the popup lands on `/` instead of `/#/auth/callback`. 
+Both merges are done. We went from 12 -> 10 functions, freeing 2 slots.
 
-Fix: **`OAuthPopupHandler`** component in `App.tsx` (rendered outside the router, inside `ThemeProvider`):
-- Detects `?code=` in `window.location.search` + `window.opener` on any page load
-- Replaces the popup DOM with a "Completing sign in..." spinner
-- Listens for `supabase.auth.onAuthStateChange(SIGNED_IN)` → posts `AUTH_SUCCESS` to parent → `window.close()`
-- Handles the race condition where session is already established via `getSession()` fallback
+### Merge 1: `summarize.ts` absorbed `summarize-item.ts`
+- If `itemId` is in request body -> short 2-4 sentence summary, writes to DB via service role key, fallback: OpenRouter -> Gemini -> Claude
+- If no `itemId` -> full summarization with `mode` (ultra-short/standard/detailed), fallback: Gemini -> OpenRouter -> Groq
+- `geminiService.ts` updated: both `summarizeText()` and `generateItemSummary()` now call `/api/summarize`
 
----
-
-## 💅 Design Language
-- **Styling:** Vanilla CSS with CSS custom properties (`--ui-*` tokens per theme)
-- **Animations:** `framer-motion` (aliased as `motion/react`) + CSS keyframes
-- **Not Tailwind** — all theming via CSS variables + utility classes in `index.css`
+### Merge 2: `search.ts` absorbed `search-academic.ts` + `search-books.ts`
+- `type: "academic"` (default) -> Semantic Scholar + ArXiv + PubMed, with ArXiv ID and DOI direct lookup
+- `type: "books"` -> Google Books + CrossRef + OMDB
+- `DiscoverPage.tsx` calls `/api/search` with `type: "academic"`
+- **Chrome extension needs updating** to call `/api/search` with `type: "books"` instead of `/api/search-books`
 
 ---
 
-## ⚠️ Dev Notes
-- **CSS inline styles:** Used in `FloatingOrbs.tsx` and `GlassBubble.tsx` for dynamic animation values (rAF computed positions cannot be static CSS)
-- **Three.js:** Only loaded/rendered when bubble theme is active (`ThemedCursorBubble` returns null otherwise)
-- **Backdrop-filter order:** `-webkit-backdrop-filter` before `backdrop-filter` in all new CSS
-- **Real-time:** Supabase `subscribeToItems` is enabled in Dashboard for instant extension capture reflection
+## Feature Roadmap (9 Phases)
+
+All phases were planned and approved by user (Kian) in April 2026.
+
+| Phase | Feature | Status | Needs API? |
+|-------|---------|--------|------------|
+| 1 | Dynamic Bibliography + LaTeX Export | DONE | No |
+| 2 | Academic Database Search (Discover) | DONE | Yes (search-academic.ts) |
+| 3 | PDF Reader & Annotator | NOT STARTED | No (client-side pdfjs-dist) |
+| 4 | RSS Feeds (ArXiv/PubMed new paper alerts) | NOT STARTED | Yes (needs 1 slot — CORS proxy) |
+| 5 | Media Transcription (audio/video -> text) | NOT STARTED | Yes (needs 1 slot — Whisper/Gemini) |
+| 6 | Knowledge Graph (concept maps) | NOT STARTED | No (client-side D3/force graph) |
+| 7 | Paper Citation Graph | NOT STARTED | No (Semantic Scholar API from client) |
+| 8 | Kanban Board (project workflow) | NOT STARTED | No (direct Supabase) |
+| 9 | Shared Collections (collaboration) | NOT STARTED | No (Supabase RLS) |
+
+**Next up after merges:** Phase 3 (PDF Reader) — entirely client-side, no new serverless function needed.
 
 ---
 
-## ⏭️ Roadmap for the Next AI
-1. **Global Search (Command+K):** High-priority — search across all collections and OCR texts.
-2. **Shared Collections:** Supabase RLS policies for collaborative research folders.
-3. **AI Assistant Chat:** `AIAssistant.tsx` draft exists — implement RAG over research collection.
-4. **Condensed display font for Glass theme:** Add Barlow Condensed (Google Fonts) for headings under `html[data-ui-theme="glass"] .theme-title`.
+## What Was Built Recently (April 2026 Sessions)
+
+### Phase 1: Dynamic Bibliography + LaTeX Export
+
+Generates formatted reference sections from cited items in the Document Editor and exports documents as `.tex` files.
+
+**Files created/modified:**
+- `src/components/App/DocumentEditor/extensions/bibliography.ts` — TipTap extension adding `dataBibliography` attribute to heading nodes
+- `src/components/App/DocumentEditor/bibliographyUtils.ts` — Pure functions: `buildCitationDataFromItem()`, `generateBibliographyNodes()`, `removeBibliographyFromDoc()`, `insertBibliography()`
+- `src/components/App/DocumentEditor/latexExportUtils.ts` — Full TipTap JSON -> LaTeX conversion with `\begin{thebibliography}` section
+- `src/components/App/DocumentEditor/useDocumentEditor.ts` — Added `citedItemIds` state tracking (stored as sibling key in TipTap JSON content — TipTap ignores unknown keys)
+- `src/components/App/DocumentEditor/ItemImportDrawer.tsx` — Added `onItemInserted` callback
+- `src/components/App/DocumentEditor/DocumentEditor.tsx` — Orchestrates bibliography insertion + LaTeX export
+- `src/components/App/DocumentEditor/EditorToolbar.tsx` — Bibliography dropdown (5 formats: APA/MLA/Chicago/Harvard/IEEE) + Export dropdown (docx/pdf/tex)
+
+**How citedItemIds works:** When a user inserts a research item into the editor, its ID is tracked in `citedItemIds` array. This array is stored alongside TipTap content in the same Supabase jsonb column: `{ type: "doc", content: [...], citedItemIds: ["id1", "id2"] }`. TipTap ignores the extra key. No schema migration needed.
+
+### Phase 2: Academic Database Search (Discover Page)
+
+Search papers across Semantic Scholar, ArXiv, and PubMed. Save directly to library.
+
+**Files created/modified:**
+- `api/search-academic.ts` — Vercel serverless endpoint. Queries 3 sources in parallel via `Promise.allSettled`. Features:
+  - Direct ArXiv ID lookup (detects `2604.06234` or `arXiv:2604.06234` patterns) — bypasses slow ArXiv search index for brand new papers
+  - Direct DOI lookup via Semantic Scholar
+  - Title-specific ArXiv search (`ti:` field) for long queries, sorted by `submittedDate`
+  - Semantic Scholar title-match fallback (year-filtered) when main search returns few results
+  - Deduplication by DOI or normalized title
+- `src/components/App/Discover/DiscoverPage.tsx` — Search UI with source filter tabs (All/Semantic Scholar/ArXiv/PubMed), paper cards with title/authors/year/venue/abstract/citations, expandable abstracts, View/PDF/DOI links, Save to library button
+- `src/components/App/Discover/index.ts` — Barrel export
+- `src/App.tsx` — Added `/app/discover` route
+- `src/components/shared/DashboardLayout.tsx` — Added "Discover" nav item with `GraduationCap` icon (2nd position in sidebar)
+
+**Known limitation:** ArXiv's search API takes days/weeks to index new papers. That's why the direct ArXiv ID lookup was added — if you know the ID, it fetches instantly. Title search for very new papers (< 1 week old) may not return results from ArXiv.
+
+### Document Editor Toolbar (Earlier in April 2026)
+
+Full Google Docs-style toolbar for TipTap editor.
+
+**Files created:**
+- `src/components/App/DocumentEditor/extensions/fontSize.ts` — Custom TipTap extension for fontSize on textStyle mark
+- `src/components/App/DocumentEditor/extensions/indent.ts` — Custom TipTap extension for paragraph/heading indent (0-8 levels, Tab/Shift-Tab)
+
+**Files heavily modified:**
+- `EditorToolbar.tsx` — Complete rewrite with all formatting buttons. Key patterns:
+  - `useForceUpdate()` hook + `editor.on("transaction", forceUpdate)` for reactive toolbar state
+  - `useClickOutside()` hook for dropdown dismissal
+  - `onMouseDown={e => e.preventDefault()}` on ALL buttons to prevent editor blur
+  - Insert and Bibliography are icon-only buttons (compact) to prevent toolbar overflow
+- `EditorCanvas.tsx` — Registered 10 new TipTap extensions (TextStyle, Color, Highlight, TextAlign, Subscript, Superscript, FontFamily, FontSize, Indent, Bibliography). Disabled drag-and-drop via `handleDOMEvents`.
+- `exportUtils.ts` — Added DOCX export support for all new marks (color, fontFamily, fontSize, highlight, subscript, superscript, textAlign, indent)
+
+**Bugs fixed:**
+- Dropdowns not working (buttons stealing focus from editor)
+- Font size +/- not responsive (toolbar not re-rendering on selection changes)
+- Text draggable anywhere (ProseMirror default drag-and-drop disabled)
+- Export dropdown z-index issues
+- Toolbar wrapping / Export button cutoff
+- "Saving..." layout shift (fixed-width opacity toggle)
+- Dropdowns hidden behind editor (z-index layering)
 
 ---
 
-*Last Updated: March 2026 — Visual theme system documented; glass theme redesign, Three.js bubble cursor, FloatingOrbs recolor, OAuthPopupHandler fix*
+## Project Structure (Current)
+
+```
+ResearchMate Website/
++-- CLAUDE.md                        # Coding conventions, design system
++-- docs/
+|   +-- handover_prompt.md           # You are here
+|   +-- CLAUDE.md                    # Session context (needs updating too)
+|   +-- extension-mirror-prompt.md   # Chrome extension feature parity
++-- api/                             # Vercel Serverless Functions (10/12 — 2 free)
+|   +-- _utils/auth.ts              # Shared auth + credit system
+|   +-- chat.ts
+|   +-- cite.ts
+|   +-- extract-citation.ts
+|   +-- generate-tags.ts
+|   +-- identify-source.ts
+|   +-- insights.ts
+|   +-- ocr.ts
+|   +-- search.ts                   # MERGED: academic + books search
+|   +-- set-custom-key.ts
+|   +-- summarize.ts                # MERGED: full + item summaries
++-- tests/
+|   +-- ocr.integration.test.ts     # Moved from api/ to avoid function limit
++-- src/
+|   +-- App.tsx                      # Router + OAuthPopupHandler
+|   +-- context/
+|   |   +-- ThemeContext.tsx          # theme (light/dark/system) + visualTheme (minimalist/bubble/glass)
+|   |   +-- NotificationContext.tsx
+|   +-- services/
+|   |   +-- supabaseClient.ts
+|   |   +-- geminiService.ts         # Frontend AI service — calls /api/summarize and /api/summarize-item
+|   |   +-- storageService.ts        # CRUD for research items (StorageItem type)
+|   |   +-- collectionsService.ts
+|   +-- components/
+|       +-- App/
+|       |   +-- Dashboard/           # Refactored into sub-components
+|       |   +-- Discover/            # NEW (Phase 2)
+|       |   |   +-- DiscoverPage.tsx
+|       |   |   +-- index.ts
+|       |   +-- DocumentEditor/      # TipTap-based rich text editor
+|       |   |   +-- DocumentEditor.tsx
+|       |   |   +-- EditorToolbar.tsx
+|       |   |   +-- EditorCanvas.tsx
+|       |   |   +-- DocumentSidebar.tsx
+|       |   |   +-- ItemImportDrawer.tsx
+|       |   |   +-- useDocumentEditor.ts
+|       |   |   +-- exportUtils.ts
+|       |   |   +-- bibliographyUtils.ts   # NEW (Phase 1)
+|       |   |   +-- latexExportUtils.ts    # NEW (Phase 1)
+|       |   |   +-- extensions/
+|       |   |       +-- fontSize.ts
+|       |   |       +-- indent.ts
+|       |   |       +-- bibliography.ts    # NEW (Phase 1)
+|       |   +-- Citations/
+|       |   +-- Settings/
+|       |   +-- AIAssistant.tsx
+|       |   +-- Statistics.tsx
+|       |   +-- SmartPenGallery.tsx
+|       |   +-- PairSmartPen.tsx
+|       +-- shared/
+|       |   +-- DashboardLayout.tsx   # Sidebar nav + header
+|       |   +-- MarketingLayout.tsx
+|       |   +-- GlassBubble.tsx       # DO NOT TOUCH
+|       |   +-- BubbleBackground.tsx
+|       +-- marketing/
+|           +-- MarketingHome.tsx
+|           +-- FloatingOrbs.tsx      # DO NOT TOUCH
++-- supabase/
+|   +-- functions/
+|       +-- smart-pen/               # Edge Function for ESP32 hardware
++-- index.css                        # Global styles + all 3 UI theme CSS
+```
+
+---
+
+## Sidebar Navigation Order (DashboardLayout.tsx)
+
+```typescript
+const NAV_ITEMS = [
+  { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
+  { icon: GraduationCap, label: "Discover", path: "/app/discover" },      // NEW
+  { icon: FolderOpen, label: "Collections", path: "/app/collections" },
+  { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
+  { icon: Quote, label: "Citations", path: "/app/citations" },
+  { icon: FileEdit, label: "Editor", path: "/app/editor" },
+  { icon: PenTool, label: "Smart Pen", path: "/app/smart-pen" },
+  { icon: BarChart2, label: "Statistics", path: "/app/statistics" },
+];
+```
+
+---
+
+## Supabase Configuration
+
+- **Free tier** — 100 Edge Functions, 500K invocations/mo, 500MB DB, 1GB Storage, pg_cron available
+- Auth: email/password + Google OAuth (popup flow)
+- `items` table: stores all research items (text, tags, citations, OCR data, AI summaries)
+- `documents` table: stores TipTap editor documents as jsonb (includes `citedItemIds` array)
+- RLS enabled — all queries scoped to `auth.uid()`
+- Edge Function: `supabase/functions/smart-pen/` for ESP32 hardware pairing + OCR routing
+
+---
+
+## User Preferences (Kian)
+
+- Likes concise, actionable responses with tables
+- NEVER push to git without explicit permission
+- Uses the PART sectioning system — no exceptions
+- Apple-inspired design aesthetic with `#007AFF` blue accent
+- Currently testing on deployed Vercel URL (not localhost — local `vite dev` can't serve API routes)
+- Humor welcome when things go wrong
+
+---
+
+## Do Not Touch
+
+- `src/components/shared/GlassBubble.tsx` — Three.js cursor, working
+- `src/components/marketing/FloatingOrbs.tsx` — Ambient orbs, fine
+- `src/context/ThemeContext.tsx` + theme CSS in `index.css` — Theme system stable
+- `parse_pdf.cjs` / `parse_pdf.mjs` — Untracked utility scripts in repo root, not part of the app
+
+---
+
+## What To Do Next (In Order)
+
+1. **Phase 3: PDF Reader & Annotator** — client-side `pdfjs-dist`, no new API endpoint needed. Features: render PDF pages to canvas, zoom/page navigation, text selection, open PDFs from Discover page ArXiv links
+2. **Phase 4: RSS Feeds** — CORS proxy needed (1 API slot)
+3. **Phase 5: Media Transcription** — Whisper/Gemini server-side (1 API slot)
+4. **Phases 6-9** — all client-side (Knowledge Graph, Paper Graph, Kanban, Shared Collections)
+
+---
+
+## Git History (Recent)
+
+```
+7f71871 fix: improve title-based search with ArXiv ti: field and S2 fallback
+375f36e fix: add direct ArXiv ID and DOI lookup for new/exact papers
+9f32734 fix: move test file out of api/ to avoid Vercel 12-function limit
+c3eb3e4 feat: add Academic Paper Search (Discover page)
+63e01f1 fix: toolbar Export button cutoff — compact Insert/Bibliography to icons
+79e28e4 feat: add Dynamic Bibliography generation and LaTeX export
+72688aa fix: toolbar dropdowns hidden behind editor + saving layout shift
+7d2c5da fix: resolve critical Document Editor toolbar bugs
+5a5ec36 feat: add Document Editor with Google Docs-style toolbar
+```

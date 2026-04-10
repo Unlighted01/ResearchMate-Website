@@ -132,7 +132,7 @@ export async function generateItemSummary(itemId: string, text: string): Promise
 
   try {
     const headers = await getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/summarize-item`, {
+    const response = await fetch(`${API_BASE_URL}/summarize`, {
       method: "POST",
       headers,
       body: JSON.stringify({ itemId, text }),
