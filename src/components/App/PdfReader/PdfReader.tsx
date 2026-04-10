@@ -264,6 +264,19 @@ const PdfReader: React.FC = () => {
         textLayerDiv.style.width = `${viewport.width}px`;
         textLayerDiv.style.height = `${viewport.height}px`;
 
+        // CRITICAL: pdfjs v5 TextLayer's setLayerDimensions() uses
+        // calc(var(--total-scale-factor) * ...) to size its spans.
+        // Without these CSS vars, every span has zero width and
+        // nothing is selectable.
+        wrapper.style.setProperty("--scale-factor", String(scale));
+        wrapper.style.setProperty("--user-unit", "1");
+        wrapper.style.setProperty("--total-scale-factor", String(scale));
+        wrapper.style.setProperty("--scale-round-x", "1px");
+        wrapper.style.setProperty("--scale-round-y", "1px");
+        textLayerDiv.style.setProperty("--scale-factor", String(scale));
+        textLayerDiv.style.setProperty("--user-unit", "1");
+        textLayerDiv.style.setProperty("--total-scale-factor", String(scale));
+
         const TextLayerCtor = (pdfjsLib as any).TextLayer;
         if (TextLayerCtor) {
           try {
