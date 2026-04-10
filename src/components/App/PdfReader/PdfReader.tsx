@@ -70,9 +70,9 @@ const DEFAULT_SCALE = 1.2;
 
 async function loadPdfJs() {
   const pdfjsLib = await import("pdfjs-dist");
-  // Use CDN worker — matches the pattern in importService.ts
+  // unpkg mirrors npm exactly, so the version always resolves (cdnjs often lags)
   if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
   }
   return pdfjsLib;
 }
