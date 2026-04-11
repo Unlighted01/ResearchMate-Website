@@ -1,6 +1,9 @@
 # CLAUDE.md - ResearchMate Project Guidelines
 
-> This file teaches Claude how to work on this codebase. Read this first!
+> **STOP! Have you read `docs/AGENT_LOGS.md` yet?**
+> Read `docs/AGENT_LOGS.md` FIRST to understand the current context and what the previous AI agent has done!
+>
+> This file teaches Claude how to work on this codebase. Read this after you've checked the logs.
 
 ---
 
