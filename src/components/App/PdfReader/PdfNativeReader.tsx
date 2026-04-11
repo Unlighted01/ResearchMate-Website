@@ -127,7 +127,8 @@ const PdfNativeReader: React.FC = () => {
 
   const setMode = (mode: number) => {
     if (viewerRef.current) {
-      viewerRef.current.annotationEditorMode = mode;
+      // PDF.js v4+ setter expects an object with a 'mode' property
+      viewerRef.current.annotationEditorMode = { mode };
       setEditorMode(mode);
     }
   };
