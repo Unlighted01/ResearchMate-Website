@@ -597,6 +597,7 @@ export async function getItemStats(): Promise<{
     mobile: 0,
     smart_pen: 0,
     web: 0,
+    transcription: 0,
   };
 
   const byMonth: Record<string, number> = {};

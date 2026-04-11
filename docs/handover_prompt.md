@@ -18,9 +18,9 @@
 
 ---
 
-## Vercel Serverless Functions (11/12 — 1 FREE SLOT)
+## Vercel Serverless Functions (12/12 — FULL)
 
-Vercel Hobby plan allows **max 12 serverless functions**. We have 1 free slot left after Phase 4.
+Vercel Hobby plan allows **max 12 serverless functions**. We are now at the cap after Phase 5.
 
 | # | Endpoint | Purpose | Model | Fallback Chain |
 |---|----------|---------|-------|----------------|
@@ -35,6 +35,7 @@ Vercel Hobby plan allows **max 12 serverless functions**. We have 1 free slot le
 | 9 | `api/search.ts` | Unified search (academic + books) | N/A (API calls) | `type:"academic"` -> S2+ArXiv+PubMed; `type:"books"` -> Google Books+CrossRef+OMDB |
 | 10 | `api/set-custom-key.ts` | BYOK key management | N/A | — |
 | 11 | `api/summarize.ts` | Unified summarization | gemini-2.5-flash | Full: Gemini->OpenRouter->Groq; Item (when `itemId` present): OpenRouter->Gemini->Claude + writes to DB |
+| 12 | `api/transcribe.ts` | **Audio/Video/YouTube transcription** (Phase 5) | gemini-2.5-flash | Inline audio: Gemini -> Groq Whisper (whisper-large-v3); YouTube: Gemini only via `fileData.fileUri`. 3 credits/call, 18 MB cap |
 
 **Also:** `api/_utils/auth.ts` (shared auth + credit system — underscore prefix means Vercel ignores it).
 
@@ -75,17 +76,41 @@ All phases were planned and approved by user (Kian) in April 2026.
 | 2 | Academic Database Search (Discover) | DONE | Yes (search-academic.ts) |
 | 3 | PDF Reader & Annotator | DONE (⚠ text selection bug — see Known Issues) | No (client-side pdfjs-dist) |
 | 4 | RSS Feeds (ArXiv/PubMed new paper alerts) | DONE | Yes (api/rss.ts — CORS proxy, no credits) |
-| 5 | Media Transcription (audio/video -> text) | NOT STARTED | Yes (needs 1 slot — Whisper/Gemini) |
+| 5 | Media Transcription (audio/video -> text) | DONE | Yes (api/transcribe.ts — Gemini native + Groq Whisper fallback) |
 | 6 | Knowledge Graph (concept maps) | NOT STARTED | No (client-side D3/force graph) |
 | 7 | Paper Citation Graph | NOT STARTED | No (Semantic Scholar API from client) |
 | 8 | Kanban Board (project workflow) | NOT STARTED | No (direct Supabase) |
 | 9 | Shared Collections (collaboration) | NOT STARTED | No (Supabase RLS) |
 
-**Next up:** Phase 5 (Media Transcription) — needs the last remaining serverless slot.
+**Next up:** Phases 6–9 are all client-side — Knowledge Graph, Paper Citation Graph, Kanban Board, Shared Collections.
 
 ---
 
 ## What Was Built Recently (April 2026 Sessions)
+
+### Phase 5: Media Transcription (April 11, 2026)
+
+Upload audio/video files or paste a YouTube URL → get a full transcript, AI summary, and auto-tags. Optionally save the result as a regular research item. Costs 3 credits per transcription.
+
+**Files created:**
+- `api/transcribe.ts` — Vercel function #12 (fills the last slot). Accepts `{ audioBase64, mimeType, fileName? }` OR `{ youtubeUrl }`. Primary: Gemini 2.5 Flash (native audio/video + YouTube URLs via `fileData.fileUri`). Fallback: Groq `whisper-large-v3` (audio only — no video, no YouTube). Deducts 3 credits upfront, refunds on total failure. 18 MB inline cap. Returns strict JSON `{ transcript, summary, tags, provider, source }`.
+- `src/services/transcribeService.ts` — Client service. `transcribeFile(file)` and `transcribeYoutube(url)`, plus helpers `isYoutubeUrl`, `isAcceptedMedia`. Converts File → base64 via `FileReader.readAsDataURL`. Validates MIME + size client-side.
+- `src/components/App/Transcribe/TranscribePage.tsx` — Two-mode UI (File / YouTube tabs), drag-and-drop file zone, transcription result card with AI summary + auto-tags + word count + Copy / Save to Library / Clear actions. Saves as item with `deviceSource: "transcription"`.
+- `src/components/App/Transcribe/index.ts` — barrel.
+
+**Files modified:**
+- `src/types.ts` — Added `"transcription"` to `DeviceSource` union + `DEVICE_SOURCES` map (Mic icon).
+- `src/services/storageService.ts` — Added `transcription: 0` to the `bySource` stats record to keep TS happy.
+- `src/App.tsx` — Added `/app/transcribe` route + import.
+- `src/components/shared/DashboardLayout.tsx` — Added `Mic` icon + `{ icon: Mic, label: "Transcribe", path: "/app/transcribe" }` nav item (between PDF Reader and Collections).
+
+**No migration needed.** Transcriptions are saved as regular `items` rows using the existing schema — full transcript goes in `text`, AI summary in `ai_summary`, topical tags in `tags`, and `deviceSource = "transcription"` so they can be filtered out.
+
+**Key design decisions:**
+- **Inline base64 (not Supabase Storage).** Reliability over payload size. Vercel's 4.5 MB body limit is the real bottleneck — base64 inflates ~33%, so a 3 MB audio file sends as a ~4 MB payload. Cap is 18 MB decoded to match Gemini's 20 MB inline limit with safety margin. If users hit that wall, they'll trim the file (most podcasts/lectures compress to well under 18 MB as MP3).
+- **YouTube goes direct to Gemini via `fileData.fileUri`** — no download, no yt-dlp, no legal grey zone. Gemini 2.5 Flash handles YouTube URLs natively. This is why YouTube has no fallback: only Gemini knows how to read them.
+- **Groq Whisper fallback for inline audio only.** If Gemini is down / rate-limited, we retry with `whisper-large-v3` through Groq's free OpenAI-compatible endpoint. Whisper doesn't return a summary, so we synthesize a truncated first-20-words one and tag `["transcription", "audio"]`.
+- **3 credits per call** vs 1 for summarize/tags — transcription is the most expensive single operation we expose, and users are likely to run it once per artifact rather than per paragraph.
 
 ### Phase 4: RSS Feeds (April 10, 2026)
 
@@ -176,7 +201,7 @@ ResearchMate Website/
 |   +-- handover_prompt.md           # You are here
 |   +-- CLAUDE.md                    # Session context (needs updating too)
 |   +-- extension-mirror-prompt.md   # Chrome extension feature parity
-+-- api/                             # Vercel Serverless Functions (11/12 — 1 free)
++-- api/                             # Vercel Serverless Functions (12/12 — FULL)
 |   +-- _utils/auth.ts              # Shared auth + credit system
 |   +-- chat.ts
 |   +-- cite.ts
@@ -189,6 +214,7 @@ ResearchMate Website/
 |   +-- search.ts                   # MERGED: academic + books search
 |   +-- set-custom-key.ts
 |   +-- summarize.ts                # MERGED: full + item summaries
+|   +-- transcribe.ts               # NEW (Phase 5) — Gemini + Groq Whisper audio/video/YouTube
 +-- tests/
 |   +-- ocr.integration.test.ts     # Moved from api/ to avoid function limit
 +-- src/
@@ -207,8 +233,11 @@ ResearchMate Website/
 |       |   +-- Discover/            # Phase 2
 |       |   |   +-- DiscoverPage.tsx
 |       |   |   +-- index.ts
-|       |   +-- Feeds/               # NEW (Phase 4)
+|       |   +-- Feeds/               # Phase 4
 |       |   |   +-- FeedsPage.tsx
+|       |   |   +-- index.ts
+|       |   +-- Transcribe/          # NEW (Phase 5)
+|       |   |   +-- TranscribePage.tsx
 |       |   |   +-- index.ts
 |       |   +-- PdfReader/           # Phase 3
 |       |   |   +-- PdfReader.tsx
@@ -254,8 +283,9 @@ ResearchMate Website/
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
   { icon: GraduationCap, label: "Discover", path: "/app/discover" },
-  { icon: Rss, label: "Feeds", path: "/app/feeds" },                      // NEW (Phase 4)
+  { icon: Rss, label: "Feeds", path: "/app/feeds" },                      // Phase 4
   { icon: BookOpen, label: "PDF Reader", path: "/app/pdf-reader" },       // Phase 3
+  { icon: Mic, label: "Transcribe", path: "/app/transcribe" },            // NEW (Phase 5)
   { icon: FolderOpen, label: "Collections", path: "/app/collections" },
   { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
   { icon: Quote, label: "Citations", path: "/app/citations" },
@@ -334,9 +364,11 @@ const NAV_ITEMS = [
 ## What To Do Next (In Order)
 
 1. ~~**Phase 3: PDF Reader & Annotator**~~ — DONE (see Known Issues for deferred text-selection bug)
-2. ~~**Phase 4: RSS Feeds**~~ — DONE (api/rss.ts, 11/12 functions, migration applied)
-3. **Phase 5: Media Transcription** — Whisper/Gemini server-side (last 1 API slot) — NEXT
-4. **Phases 6-9** — all client-side (Knowledge Graph, Paper Graph, Kanban, Shared Collections)
+2. ~~**Phase 4: RSS Feeds**~~ — DONE (api/rss.ts, migration applied)
+3. ~~**Phase 5: Media Transcription**~~ — DONE (api/transcribe.ts — Gemini + Groq Whisper, full 12/12 slots)
+4. **Phases 6-9** — all client-side (Knowledge Graph, Paper Graph, Kanban, Shared Collections) — NEXT
+
+> **Note:** All 12 Vercel slots are full. Adding any new serverless endpoint now requires either upgrading to Pro, merging two existing endpoints, or moving one to a Supabase Edge Function.
 
 ---
 
