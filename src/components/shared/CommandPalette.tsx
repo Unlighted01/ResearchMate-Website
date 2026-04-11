@@ -230,6 +230,9 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
                           return (
                             <motion.button
                               key={action.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.3) }}
                               onClick={() =>
                                 handleSelect({ type: "action", data: action })
                               }
@@ -264,6 +267,9 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
                           return (
                             <motion.button
                               key={item.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ duration: 0.2, delay: Math.min(actualIdx * 0.03, 0.3) }}
                               onClick={() =>
                                 handleSelect({ type: "item", data: item })
                               }

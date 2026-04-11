@@ -16,6 +16,9 @@ import {
   RefreshCw,
   Chrome,
   Globe,
+  Mic,
+  Rss,
+  BookOpen,
 } from "lucide-react";
 import { AnimateOnScroll } from "../shared/AnimateOnScroll";
 
@@ -47,6 +50,24 @@ const FEATURES: FeatureItem[] = [
     title: "AI-Powered Summaries",
     desc: "Instantly distill lengthy research into key insights with advanced AI.",
     color: "#007AFF",
+  },
+  {
+    icon: Mic,
+    title: "Media Transcription",
+    desc: "Transcribe lectures, podcasts, and YouTube videos instantly with Gemini Flash.",
+    color: "#FF2D55",
+  },
+  {
+    icon: Rss,
+    title: "Live Paper Alerts",
+    desc: "Stay ahead of the curve with daily feeds from ArXiv, PubMed, and Nature.",
+    color: "#FF9500",
+  },
+  {
+    icon: BookOpen,
+    title: "Advanced PDF Reader",
+    desc: "Read, annotate, and summarize heavy academic papers from start to finish.",
+    color: "#5E5CE6",
   },
   {
     icon: RefreshCw,
@@ -106,6 +127,14 @@ const DEVICES: DeviceItem[] = [
 // ============================================
 
 const FeaturesSection: React.FC = () => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    e.currentTarget.style.setProperty('--pointer-x', `${x}px`);
+    e.currentTarget.style.setProperty('--pointer-y', `${y}px`);
+  };
+
   return (
     <>
       {/* Features */}
@@ -124,7 +153,9 @@ const FeaturesSection: React.FC = () => {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((feature, idx) => (
               <AnimateOnScroll key={idx} delay={idx * 100} className="h-full">
-                <div className="group h-full p-6 bg-white/50 backdrop-blur-md rounded-2xl border border-white/50 hover:bg-white/70 transition-all duration-300 hover-lift hover:shadow-xl">
+                <div 
+                  onMouseMove={handleMouseMove}
+                  className="spotlight-card group h-full p-6 bg-white/50 backdrop-blur-md rounded-2xl border border-white/50 hover:bg-white/70 transition-all duration-300 hover-lift hover:shadow-xl">
                   <div
                     className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110"
                     style={{ backgroundColor: `${feature.color}15` }}

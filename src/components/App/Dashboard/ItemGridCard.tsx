@@ -70,8 +70,17 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
     return isMarkdown(t) ? stripMarkdown(t) : t;
   })();
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    e.currentTarget.style.setProperty('--pointer-x', `${x}px`);
+    e.currentTarget.style.setProperty('--pointer-y', `${y}px`);
+  };
+
   return (
     <motion.div
+      onMouseMove={handleMouseMove}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
@@ -84,7 +93,7 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
         boxShadow: "0 16px 40px -8px rgba(0, 122, 255, 0.15)",
       }}
       onClick={() => onClick(item)}
-      className={`group relative glass-card rounded-2xl p-5 flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30
+      className={`spotlight-card group relative glass-card rounded-2xl p-5 flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30
         ${colorBorderClass}
         ${isSelected ? "ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/10" : ""}
         cursor-pointer`}

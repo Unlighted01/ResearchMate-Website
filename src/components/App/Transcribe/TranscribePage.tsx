@@ -78,6 +78,7 @@ const TranscribePage: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dragCounter = useRef(0);
 
   // ---------- PART 4B: DERIVED ----------
   const canSubmit = useMemo(() => {
@@ -125,6 +126,7 @@ const TranscribePage: React.FC = () => {
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
+      dragCounter.current = 0;
       setIsDragOver(false);
       const f = e.dataTransfer.files?.[0];
       if (f) handleFileSelected(f);
@@ -132,12 +134,21 @@ const TranscribePage: React.FC = () => {
     [handleFileSelected],
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    setIsDragOver(true);
+    dragCounter.current += 1;
+    if (dragCounter.current === 1) setIsDragOver(true);
   }, []);
 
-  const handleDragLeave = useCallback(() => setIsDragOver(false), []);
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    dragCounter.current = Math.max(0, dragCounter.current - 1);
+    if (dragCounter.current === 0) setIsDragOver(false);
+  }, []);
 
   const handleTranscribe = useCallback(async () => {
     setError(null);
@@ -232,7 +243,7 @@ const TranscribePage: React.FC = () => {
       </div>
 
       {/* Mode tabs */}
-      <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-gray-100 dark:bg-[#1C1C1E] mb-6">
+      <div className="inline-flex items-center gap-1 p-1 rounded-xl theme-panel-muted mb-6">
         <button
           onClick={() => {
             setMode("file");
@@ -240,8 +251,8 @@ const TranscribePage: React.FC = () => {
           }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             mode === "file"
-              ? "bg-white dark:bg-[#2C2C2E] text-gray-900 dark:text-white shadow-sm"
-              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              ? "theme-panel-elevated text-gray-900 dark:text-white shadow-sm"
+              : "theme-muted-text hover:text-gray-900 dark:hover:text-white"
           }`}
         >
           <FileAudio size={16} />
@@ -254,8 +265,8 @@ const TranscribePage: React.FC = () => {
           }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             mode === "youtube"
-              ? "bg-white dark:bg-[#2C2C2E] text-gray-900 dark:text-white shadow-sm"
-              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              ? "theme-panel-elevated text-gray-900 dark:text-white shadow-sm"
+              : "theme-muted-text hover:text-gray-900 dark:hover:text-white"
           }`}
         >
           <Youtube size={16} />
@@ -268,12 +279,13 @@ const TranscribePage: React.FC = () => {
         {mode === "file" ? (
           <div
             onDrop={handleDrop}
+            onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all ${
+            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
               isDragOver
-                ? "border-[#007AFF] bg-[#007AFF]/5"
+                ? "border-[#007AFF] bg-[#007AFF]/5 scale-[1.01] shadow-lg shadow-blue-500/10"
                 : "border-gray-300 dark:border-white/15 hover:border-[#007AFF]/70 hover:bg-gray-50 dark:hover:bg-white/5"
             }`}
           >
@@ -424,7 +436,7 @@ const TranscribePage: React.FC = () => {
               <button
                 onClick={handleSave}
                 disabled={saving || saved}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#007AFF] hover:bg-[#0066DD] disabled:bg-[#34C759] text-white rounded-lg transition-all"
+                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium bg-[#007AFF] hover:bg-[#0066DD] disabled:bg-[#34C759] text-white rounded-full shadow-sm shadow-blue-500/20 transition-all"
               >
                 {saved ? (
                   <>

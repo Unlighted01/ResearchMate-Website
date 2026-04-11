@@ -26,13 +26,25 @@ import {
 // ============================================
 
 const HeroSection: React.FC = () => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    btn.style.transform = `translate(${x * 0.2}px, ${y * 0.2}px)`;
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.transform = "translate(0px, 0px)";
+  };
+
   return (
     <div className="relative min-h-[90vh] flex items-center justify-center px-6 pt-20 pb-16 overflow-hidden">
       <div className="relative z-10 max-w-4xl mx-auto text-center">
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/60 backdrop-blur-md rounded-full border border-white/50 shadow-lg mb-8 animate-fade-in-up">
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/60 backdrop-blur-md rounded-full border border-white/50 shadow-lg mb-8 animate-fade-in-up hover:scale-105 transition-transform animate-float-slow cursor-default">
           <Sparkles className="w-4 h-4 text-[#007AFF]" />
           <span className="text-sm font-medium text-gray-700">
-            Now with Smart Pen Integration
+            Now with Audio & Video Transcription
           </span>
         </div>
 
@@ -42,7 +54,7 @@ const HeroSection: React.FC = () => {
         >
           <span className="text-gray-900">Your Research.</span>
           <br />
-          <span className="bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE] bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE] bg-clip-text text-transparent animate-gradient-flow">
             Everywhere.
           </span>
         </h1>
@@ -60,18 +72,23 @@ const HeroSection: React.FC = () => {
           style={{ animationDelay: "0.3s" }}
         >
           <Link to="/signup">
-            <button className="group flex items-center gap-2 px-8 py-4 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-full transition-all duration-300 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98]">
+            <button 
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+              className="magnetic-btn group flex items-center gap-2 px-8 py-4 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-full shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30">
               Get Started Free
               <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </button>
           </Link>
           <button
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
             onClick={() =>
               document
                 .getElementById("products")
                 ?.scrollIntoView({ behavior: "smooth" })
             }
-            className="flex items-center gap-2 px-8 py-4 bg-white/70 backdrop-blur-md text-gray-900 font-medium rounded-full border border-white/50 shadow-lg hover:bg-white/90 hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+            className="magnetic-btn flex items-center gap-2 px-8 py-4 bg-white/70 backdrop-blur-md text-gray-900 font-medium rounded-full border border-white/50 shadow-lg hover:bg-white/90 hover:shadow-xl"
           >
             <Chrome className="w-4 h-4" />
             Download Extension

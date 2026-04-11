@@ -598,8 +598,28 @@ html.dark[data-ui-theme="glass"] .theme-btn-primary:hover {
   box-shadow: var(--ui-sidebar-active-shadow) !important;
 }
 
+/* Bubble themes ship gradients in --ui-sidebar-active-bg; force them explicitly
+   so `background: var(...)` reliably applies the gradient across browsers. */
+html[data-ui-theme="bubble"] .theme-sidebar-item-active {
+  background: linear-gradient(135deg, #f472b6 0%, #a78bfa 100%) !important;
+}
+html.dark[data-ui-theme="bubble"] .theme-sidebar-item-active {
+  background: linear-gradient(135deg, #e879f9 0%, #a78bfa 100%) !important;
+}
+
 .theme-sidebar-item-active .theme-nav-icon {
   color: var(--ui-sidebar-active-icon) !important;
+}
+
+/* Sidebar group label — used between NAV_GROUPS */
+.theme-sidebar-section-label {
+  color: var(--ui-sidebar-muted-text, #8e8e93);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 14px 12px 6px 14px;
+  user-select: none;
 }
 
 .theme-headerbar {
@@ -1872,4 +1892,88 @@ h6 {
 }
 .textLayer.selecting .endOfContent {
   top: 0;
+}
+
+/* ============================================
+   PART 10: CUSTOM ANIMATIONS & UI FEEL
+   ============================================ */
+
+/* Flowing Gradient Hero Text */
+.animate-gradient-flow {
+  background-size: 200% auto;
+  animation: bg-pan-left 6s ease-in-out infinite alternate;
+}
+
+@keyframes bg-pan-left {
+  0% { background-position: 0% center; }
+  100% { background-position: 100% center; }
+}
+
+/* Floating animation */
+.animate-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+/* Seamless Page Transitions */
+.page-transition-enter {
+  animation: slide-up-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slide-up-fade {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Staggered entry classes based on index */
+.stagger-1 { animation: slide-up-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
+.stagger-2 { animation: slide-up-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
+.stagger-3 { animation: slide-up-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both; }
+.stagger-4 { animation: slide-up-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both; }
+.stagger-5 { animation: slide-up-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both; }
+
+/* Spotlight Glass Card Hover Effect */
+.spotlight-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+    600px circle at var(--pointer-x, 0px) var(--pointer-y, 0px),
+    rgba(255, 255, 255, 0.1),
+    transparent 40%
+  );
+  opacity: 0;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 10;
+}
+
+html.dark .spotlight-card::before {
+  background: radial-gradient(
+    600px circle at var(--pointer-x, 0px) var(--pointer-y, 0px),
+    rgba(255, 255, 255, 0.05),
+    transparent 40%
+  );
+}
+
+.spotlight-card:hover::before {
+  opacity: 1;
+}
+
+/* Magnetic Button (added logic inside JS but transition here) */
+.magnetic-btn {
+  transition: transform 0.1s cubic-bezier(0.33, 1, 0.68, 1), box-shadow 0.3s ease;
+  will-change: transform;
 }

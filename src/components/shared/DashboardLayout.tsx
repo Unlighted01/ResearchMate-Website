@@ -42,19 +42,51 @@ import { User as SupabaseUser } from "@supabase/supabase-js";
 // PART 2: CONSTANTS
 // ============================================
 
-const NAV_ITEMS = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
-  { icon: GraduationCap, label: "Discover", path: "/app/discover" },
-  { icon: Rss, label: "Feeds", path: "/app/feeds" },
-  { icon: BookOpen, label: "PDF Reader", path: "/app/pdf-reader" },
-  { icon: Mic, label: "Transcribe", path: "/app/transcribe" },
-  { icon: FolderOpen, label: "Collections", path: "/app/collections" },
-  { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
-  { icon: Quote, label: "Citations", path: "/app/citations" },
-  { icon: FileEdit, label: "Editor", path: "/app/editor" },
-  { icon: PenTool, label: "Smart Pen", path: "/app/smart-pen" },
-  { icon: BarChart2, label: "Statistics", path: "/app/statistics" },
+// Grouped sidebar nav. Flat list is derived below for legacy consumers.
+const NAV_GROUPS: {
+  label: string;
+  items: { icon: React.ComponentType<{ className?: string }>; label: string; path: string }[];
+}[] = [
+  {
+    label: "Library",
+    items: [
+      { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
+      { icon: FolderOpen, label: "Collections", path: "/app/collections" },
+    ],
+  },
+  {
+    label: "Discover",
+    items: [
+      { icon: GraduationCap, label: "Discover", path: "/app/discover" },
+      { icon: Rss, label: "Feeds", path: "/app/feeds" },
+    ],
+  },
+  {
+    label: "Capture",
+    items: [
+      { icon: BookOpen, label: "PDF Reader", path: "/app/pdf-reader" },
+      { icon: Mic, label: "Transcribe", path: "/app/transcribe" },
+      { icon: PenTool, label: "Smart Pen", path: "/app/smart-pen" },
+    ],
+  },
+  {
+    label: "Create",
+    items: [
+      { icon: FileEdit, label: "Editor", path: "/app/editor" },
+      { icon: Quote, label: "Citations", path: "/app/citations" },
+    ],
+  },
+  {
+    label: "Analyse",
+    items: [
+      { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
+      { icon: BarChart2, label: "Statistics", path: "/app/statistics" },
+    ],
+  },
 ];
+
+// Flat list for legacy usages (profile dropdown quick-links etc).
+const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
 
 // ============================================
 // PART 3: HELPER FUNCTIONS
@@ -252,56 +284,102 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3">
-            <ul className="space-y-1">
-              {NAV_ITEMS.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <li key={item.path}>
-                    <Link
-                      to={item.path}
-                      onClick={() => setMobileSidebarOpen(false)}
-                      className={`
-                        theme-sidebar-item
-                        flex items-center gap-3 px-3 py-2.5 rounded-xl
-                        transition-all duration-300 group relative
-                        hover:scale-[1.02] active:scale-[0.98]
-                        ${
-                          isActive
-                            ? "theme-sidebar-item-active"
-                            : "theme-hover-surface"
-                        }
-                        ${sidebarCollapsed ? "justify-center" : ""}
-                      `}
-                    >
-                      <item.icon className="theme-nav-icon w-5 h-5 flex-shrink-0" />
-                      {!sidebarCollapsed && (
-                        <span
-                          className={`text-sm font-medium ${
-                            isActive ? "" : "theme-muted-text"
-                          }`}
+          <nav
+            className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-3"
+            aria-label="Primary"
+          >
+            {NAV_GROUPS.map((group, groupIdx) => (
+              <div
+                key={group.label}
+                className={groupIdx === 0 ? "" : "mt-2"}
+              >
+                {!sidebarCollapsed && (
+                  <div className="theme-sidebar-section-label">
+                    {group.label}
+                  </div>
+                )}
+                {sidebarCollapsed && groupIdx > 0 && (
+                  <div className="theme-divider mx-2 my-2 h-px border-t" />
+                )}
+                <ul className="space-y-1">
+                  {group.items.map((item) => {
+                    const isActive = location.pathname === item.path;
+                    return (
+                      <li key={item.path}>
+                        <Link
+                          to={item.path}
+                          onClick={() => setMobileSidebarOpen(false)}
+                          className={`
+                            theme-sidebar-item
+                            flex items-center gap-3 px-3 py-2 rounded-xl
+                            transition-all duration-300 group relative
+                            hover:scale-[1.02] active:scale-[0.98]
+                            ${
+                              isActive
+                                ? "theme-sidebar-item-active"
+                                : "theme-hover-surface"
+                            }
+                            ${sidebarCollapsed ? "justify-center" : ""}
+                          `}
                         >
-                          {item.label}
-                        </span>
-                      )}
+                          <item.icon className="theme-nav-icon w-5 h-5 flex-shrink-0" />
+                          {!sidebarCollapsed && (
+                            <span
+                              className={`text-sm font-medium ${
+                                isActive ? "" : "theme-muted-text"
+                              }`}
+                            >
+                              {item.label}
+                            </span>
+                          )}
 
-                      {/* Tooltip */}
-                      {sidebarCollapsed && (
-                        <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none whitespace-nowrap z-50">
-                          {item.label}
-                        </div>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+                          {/* Tooltip */}
+                          {sidebarCollapsed && (
+                      <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
+                              {item.label}
+                            </div>
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
 
             {/* Divider */}
             <div className="theme-divider my-4 h-px border-t" />
 
             {/* Bottom Nav */}
             <ul className="space-y-1">
+              <li>
+                <button
+                  onClick={() => setCommandPaletteOpen(true)}
+                  className={`
+                    theme-sidebar-item theme-hover-surface
+                    flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
+                    transition-all duration-200 group relative
+                    ${sidebarCollapsed ? "justify-center" : ""}
+                  `}
+                >
+                  <Search className="theme-nav-icon w-5 h-5 flex-shrink-0" />
+                  {!sidebarCollapsed && (
+                    <div className="flex-1 flex justify-between items-center min-w-0">
+                      <span className="text-sm font-medium theme-muted-text">
+                        Search
+                      </span>
+                      <kbd className="theme-kbd px-1.5 py-0.5 rounded text-[10px]">
+                        ⌘K
+                      </kbd>
+                    </div>
+                  )}
+                  {sidebarCollapsed && (
+                    <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
+                      Search (⌘K)
+                    </div>
+                  )}
+                </button>
+              </li>
               <li>
                 <Link
                   to="/app/settings"
@@ -331,60 +409,60 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                     </span>
                   )}
                   {sidebarCollapsed && (
-                    <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none whitespace-nowrap z-50">
+                    <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
                       Settings
                     </div>
                   )}
                 </Link>
               </li>
             </ul>
-          </nav>
 
-          {/* Device Status (only when expanded) */}
-          {!sidebarCollapsed && (
-            <div className="px-4 pb-4">
-              <div className="theme-panel-muted rounded-xl p-4">
-                <h4 className="theme-muted-text text-xs font-semibold uppercase tracking-wider mb-3">
-                  Devices
-                </h4>
-                <div className="space-y-2.5">
-                  <div className="flex items-center gap-3">
-                    <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
-                      <Laptop className="w-4 h-4 text-[#007AFF]" />
+            {/* Device Status (only when expanded) */}
+            {!sidebarCollapsed && (
+              <div className="mt-6 mb-2 mx-1">
+                <div className="theme-panel-muted rounded-xl p-4">
+                  <h4 className="theme-muted-text text-xs font-semibold uppercase tracking-wider mb-3">
+                    Devices
+                  </h4>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center gap-3">
+                      <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
+                        <Laptop className="w-4 h-4 text-[#007AFF]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          Extension
+                        </p>
+                      </div>
+                      <div className="w-2 h-2 bg-[#34C759] rounded-full" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        Extension
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
+                        <Smartphone className="w-4 h-4 text-[#5856D6]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          Mobile
+                        </p>
+                      </div>
+                      <div className="w-2 h-2 bg-[#34C759] rounded-full" />
                     </div>
-                    <div className="w-2 h-2 bg-[#34C759] rounded-full" />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
-                      <Smartphone className="w-4 h-4 text-[#5856D6]" />
+                    <div className="flex items-center gap-3">
+                      <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
+                        <PenTool className="w-4 h-4 text-[#FF9500]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          Smart Pen
+                        </p>
+                      </div>
+                      <div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        Mobile
-                      </p>
-                    </div>
-                    <div className="w-2 h-2 bg-[#34C759] rounded-full" />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
-                      <PenTool className="w-4 h-4 text-[#FF9500]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        Smart Pen
-                      </p>
-                    </div>
-                    <div className="w-2 h-2 bg-[#FF3B30] rounded-full animate-pulse" />
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </nav>
 
           {/* Collapse Toggle */}
           <div className="theme-divider p-3 border-t">
@@ -613,7 +691,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
         {/* Main Content */}
         <main className="flex-1 p-4 lg:p-8 overflow-y-auto overflow-x-hidden w-full max-w-full">
-          {children}
+          <div key={location.pathname} className="page-transition-enter h-full">
+            {children}
+          </div>
         </main>
       </div>
 

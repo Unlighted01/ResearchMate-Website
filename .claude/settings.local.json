@@ -12,7 +12,18 @@
       "Bash(wc -l src/components/App/Dashboard/*.ts src/components/App/Dashboard/*.tsx)",
       "Bash(find 'C:\\\\Users\\\\netne\\\\ReserachMate\\\\Researchmate Website\\\\src\\\\components\\\\App\\\\AIAssistant' -type f -name *.ts*)",
       "Bash(grep -E \"\\\\.\\(env|json\\)$\")",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(find \"/c/Users/netne/ReserachMate/Researchmate Website/src/components/App\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) -exec wc -l {} +)",
+      "Bash(npm install:*)",
+      "WebSearch",
+      "WebFetch(domain:tiptap.dev)",
+      "Bash(xargs wc:*)",
+      "Bash(gh api:*)",
+      "Bash(npx vercel:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(find 'C:\\\\Users\\\\netne\\\\ReserachMate\\\\Researchmate Website\\\\node_modules\\\\pdfjs-dist' -name *text_layer* -o -name *textLayer*)"
     ]
   }
 }
