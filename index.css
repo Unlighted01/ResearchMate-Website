@@ -1977,3 +1977,30 @@ html.dark .spotlight-card::before {
   transition: transform 0.1s cubic-bezier(0.33, 1, 0.68, 1), box-shadow 0.3s ease;
   will-change: transform;
 }
+
+/* ============================================
+   PART 10: PDF READER TEXT HIGHLIGHT FIX
+   ============================================ */
+.textLayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1;
+}
+
+.textLayer span,
+.textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.textLayer span::selection {
+  background: rgba(0, 122, 255, 0.25);
+}
