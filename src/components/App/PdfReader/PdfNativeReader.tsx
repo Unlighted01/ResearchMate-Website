@@ -186,86 +186,88 @@ const PdfNativeReader: React.FC = () => {
         </div>
       )}
 
-      {loadState === "ready" && (
-        <>
-          <div className="theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10 p-3 flex items-center gap-2 flex-wrap sticky top-0 z-10 backdrop-blur-md">
-            
-            {/* Editor Modes */}
-            <div className="flex bg-gray-100 dark:bg-white/5 rounded-lg p-1">
-              <button
-                onClick={() => setMode(0)}
-                className={`p-2 rounded-md flex items-center gap-1 transition-all ${
-                  editorMode === 0 ? "bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                }`}
-                title="Select Tool"
-              >
-                <MousePointer2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setMode(15)} // Highlight mode
-                className={`p-2 rounded-md flex items-center gap-1 transition-all ${
-                  editorMode === 15 ? "bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                }`}
-                title="Highlight Tool"
-              >
-                <Highlighter className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setMode(13)} // Ink mode
-                className={`p-2 rounded-md flex items-center gap-1 transition-all ${
-                  editorMode === 13 ? "bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                }`}
-                title="Draw Tool"
-              >
-                <PenTool className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="w-px h-6 bg-gray-200 dark:bg-white/10 mx-1" />
-
-            {/* Zoom Controls */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => viewerRef.current && (viewerRef.current.currentScale -= 0.2)}
-                className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-              <span className="text-xs text-gray-500 min-w-[40px] text-center">{Math.round(scale * 100)}%</span>
-              <button
-                onClick={() => viewerRef.current && (viewerRef.current.currentScale += 0.2)}
-                className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1" />
-
-            {/* Actions */}
+      {/* 
+        CRITICAL FIX: The container MUST be in the DOM continuously so `useEffect` 
+        can initialize the PDFViewer into it. We hide it when not ready. 
+      */}
+      <div className={loadState === "ready" ? "block" : "hidden"}>
+        <div className="theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10 p-3 flex items-center gap-2 flex-wrap sticky top-0 z-10 backdrop-blur-md mb-4">
+          
+          {/* Editor Modes */}
+          <div className="flex bg-gray-100 dark:bg-white/5 rounded-lg p-1">
             <button
-              onClick={handleDownload}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 text-xs font-medium rounded-lg transition-all"
+              onClick={() => setMode(0)}
+              className={`p-2 rounded-md flex items-center gap-1 transition-all ${
+                editorMode === 0 ? "bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+              title="Select Tool"
             >
-              <Download className="w-3.5 h-3.5" />
-              Download Edited PDF
+              <MousePointer2 className="w-4 h-4" />
             </button>
             <button
-              onClick={() => { setLoadState("idle"); setPdfDoc(null); }}
-              className="p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded-lg"
+              onClick={() => setMode(15)} // Highlight mode
+              className={`p-2 rounded-md flex items-center gap-1 transition-all ${
+                editorMode === 15 ? "bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+              title="Highlight Tool"
             >
-              <X className="w-4 h-4" />
+              <Highlighter className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setMode(13)} // Ink mode
+              className={`p-2 rounded-md flex items-center gap-1 transition-all ${
+                editorMode === 13 ? "bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+              title="Draw Tool"
+            >
+              <PenTool className="w-4 h-4" />
             </button>
           </div>
 
-          <div 
-            ref={containerRef} 
-            className="absolute inset-x-0 bottom-0 top-[180px] overflow-auto bg-gray-100 dark:bg-[#151515] rounded-xl border border-gray-200 dark:border-white/10"
+          <div className="w-px h-6 bg-gray-200 dark:bg-white/10 mx-1" />
+
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => viewerRef.current && (viewerRef.current.currentScale -= 0.2)}
+              className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </button>
+            <span className="text-xs text-gray-500 min-w-[40px] text-center">{Math.round(scale * 100)}%</span>
+            <button
+              onClick={() => viewerRef.current && (viewerRef.current.currentScale += 0.2)}
+              className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex-1" />
+
+          {/* Actions */}
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 text-xs font-medium rounded-lg transition-all"
           >
-            <div className="pdfViewer" />
-          </div>
-        </>
-      )}
+            <Download className="w-3.5 h-3.5" />
+            Download Edited PDF
+          </button>
+          <button
+            onClick={() => { setLoadState("idle"); setPdfDoc(null); }}
+            className="p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded-lg"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div 
+          ref={containerRef} 
+          className="absolute inset-x-0 bottom-0 top-[180px] overflow-auto bg-gray-100 dark:bg-[#151515] rounded-xl border border-gray-200 dark:border-white/10"
+        >
+          <div className="pdfViewer" />
+        </div>
+      </div>
     </div>
   );
 };
