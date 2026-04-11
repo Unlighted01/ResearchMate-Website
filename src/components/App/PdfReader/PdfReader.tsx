@@ -13,6 +13,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import "pdfjs-dist/web/pdf_viewer.css";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   FileText,
@@ -269,11 +270,13 @@ const PdfReader: React.FC = () => {
         // Without these CSS vars, every span has zero width and
         // nothing is selectable.
         wrapper.style.setProperty("--scale-factor", String(scale));
+        wrapper.style.setProperty("--text-scale-factor", String(scale));
         wrapper.style.setProperty("--user-unit", "1");
         wrapper.style.setProperty("--total-scale-factor", String(scale));
         wrapper.style.setProperty("--scale-round-x", "1px");
         wrapper.style.setProperty("--scale-round-y", "1px");
         textLayerDiv.style.setProperty("--scale-factor", String(scale));
+        textLayerDiv.style.setProperty("--text-scale-factor", String(scale));
         textLayerDiv.style.setProperty("--user-unit", "1");
         textLayerDiv.style.setProperty("--total-scale-factor", String(scale));
 
