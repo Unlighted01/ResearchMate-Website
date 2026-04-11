@@ -1,6 +1,6 @@
 # ResearchMate — AI Handover Document
 
-> Last updated: April 9, 2026
+> Last updated: April 10, 2026
 > Read root `CLAUDE.md` first for coding conventions, design system, and PART sectioning rules.
 
 ---
@@ -18,9 +18,9 @@
 
 ---
 
-## Vercel Serverless Functions (10/12 — 2 FREE SLOTS)
+## Vercel Serverless Functions (11/12 — 1 FREE SLOT)
 
-Vercel Hobby plan allows **max 12 serverless functions**. We have 2 free slots after merging.
+Vercel Hobby plan allows **max 12 serverless functions**. We have 1 free slot left after Phase 4.
 
 | # | Endpoint | Purpose | Model | Fallback Chain |
 |---|----------|---------|-------|----------------|
@@ -31,9 +31,10 @@ Vercel Hobby plan allows **max 12 serverless functions**. We have 2 free slots a
 | 5 | `api/identify-source.ts` | Source identification | gemini-2.5-flash | — |
 | 6 | `api/insights.ts` | Key insights extraction | gemini-2.5-flash | Gemini -> OpenRouter -> Groq |
 | 7 | `api/ocr.ts` | Image text extraction | gemini-2.5-flash | OpenRouter -> Gemini -> Claude |
-| 8 | `api/search.ts` | Unified search (academic + books) | N/A (API calls) | `type:"academic"` -> S2+ArXiv+PubMed; `type:"books"` -> Google Books+CrossRef+OMDB |
-| 9 | `api/set-custom-key.ts` | BYOK key management | N/A | — |
-| 10 | `api/summarize.ts` | Unified summarization | gemini-2.5-flash | Full: Gemini->OpenRouter->Groq; Item (when `itemId` present): OpenRouter->Gemini->Claude + writes to DB |
+| 8 | `api/rss.ts` | **RSS/Atom feed proxy** (Phase 4) | N/A | SSRF-guarded fetch + regex XML parser |
+| 9 | `api/search.ts` | Unified search (academic + books) | N/A (API calls) | `type:"academic"` -> S2+ArXiv+PubMed; `type:"books"` -> Google Books+CrossRef+OMDB |
+| 10 | `api/set-custom-key.ts` | BYOK key management | N/A | — |
+| 11 | `api/summarize.ts` | Unified summarization | gemini-2.5-flash | Full: Gemini->OpenRouter->Groq; Item (when `itemId` present): OpenRouter->Gemini->Claude + writes to DB |
 
 **Also:** `api/_utils/auth.ts` (shared auth + credit system — underscore prefix means Vercel ignores it).
 
@@ -73,18 +74,37 @@ All phases were planned and approved by user (Kian) in April 2026.
 | 1 | Dynamic Bibliography + LaTeX Export | DONE | No |
 | 2 | Academic Database Search (Discover) | DONE | Yes (search-academic.ts) |
 | 3 | PDF Reader & Annotator | DONE (⚠ text selection bug — see Known Issues) | No (client-side pdfjs-dist) |
-| 4 | RSS Feeds (ArXiv/PubMed new paper alerts) | NOT STARTED | Yes (needs 1 slot — CORS proxy) |
+| 4 | RSS Feeds (ArXiv/PubMed new paper alerts) | DONE | Yes (api/rss.ts — CORS proxy, no credits) |
 | 5 | Media Transcription (audio/video -> text) | NOT STARTED | Yes (needs 1 slot — Whisper/Gemini) |
 | 6 | Knowledge Graph (concept maps) | NOT STARTED | No (client-side D3/force graph) |
 | 7 | Paper Citation Graph | NOT STARTED | No (Semantic Scholar API from client) |
 | 8 | Kanban Board (project workflow) | NOT STARTED | No (direct Supabase) |
 | 9 | Shared Collections (collaboration) | NOT STARTED | No (Supabase RLS) |
 
-**Next up after merges:** Phase 3 (PDF Reader) — entirely client-side, no new serverless function needed.
+**Next up:** Phase 5 (Media Transcription) — needs the last remaining serverless slot.
 
 ---
 
 ## What Was Built Recently (April 2026 Sessions)
+
+### Phase 4: RSS Feeds (April 10, 2026)
+
+On-demand RSS/Atom feed subscriptions. Items open externally (no reader view), per-user cap of 20 feeds, no credit cost.
+
+**Files created:**
+- `api/rss.ts` — CORS proxy + parser. Auth via `authenticateUser()` (no credit deduction). Content-sniffs RSS 2.0 vs Atom, regex-based XML parse (no new deps). SSRF guard blocks `localhost`/private IP ranges. Limits: 5 MB feed size, 10 s timeout, max 50 items per feed. Returns normalized `RssFeedResponse { title, description, link, items, fetchedAt, source }`.
+- `supabase/migrations/20260410_rss_feeds.sql` — `rss_feeds` table (id, user_id, title, url, category, last_fetched_at, last_item_date, timestamps), `UNIQUE(user_id, url)`, RLS policies (view/insert/update/delete own), auto-bump `updated_at` trigger.
+- `src/services/rssFeedsService.ts` — CRUD + `MAX_FEEDS_PER_USER = 20` + `CURATED_FEEDS` array (8 presets: arXiv cs.AI, cs.LG, cs.CL, stat.ML, cs.CV, Nature, Science, PubMed). Exposes `getAllRssFeeds`, `createRssFeed` (enforces cap + URL validation), `deleteRssFeed`, `touchRssFeed`, `fetchRssFeed(url)` (calls `/api/rss` with auth header).
+- `src/components/App/Feeds/FeedsPage.tsx` — Two-column UI (subscribed list + items panel). Curated starter grid when empty, "More suggestions" strip when feeds exist. Add Custom Feed modal (URL/Title/Category), per-feed refresh, search within feed, item cards with title/authors/pubDate/summary/categories, delete with confirm.
+- `src/components/App/Feeds/index.ts` — barrel export.
+
+**Files modified:**
+- `src/App.tsx` — added `/app/feeds` route.
+- `src/components/shared/DashboardLayout.tsx` — added `Rss` icon + `{ icon: Rss, label: "Feeds", path: "/app/feeds" }` between Discover and PDF Reader.
+
+**Deployment steps:**
+1. Run `supabase/migrations/20260410_rss_feeds.sql` in Supabase SQL Editor — creates `rss_feeds` table + RLS. No secrets, no Edge Function changes. (Completed April 10, 2026.)
+2. Push to `main` → Vercel auto-deploys `api/rss.ts` (function #8).
 
 ### Phase 1: Dynamic Bibliography + LaTeX Export
 
@@ -156,7 +176,7 @@ ResearchMate Website/
 |   +-- handover_prompt.md           # You are here
 |   +-- CLAUDE.md                    # Session context (needs updating too)
 |   +-- extension-mirror-prompt.md   # Chrome extension feature parity
-+-- api/                             # Vercel Serverless Functions (10/12 — 2 free)
++-- api/                             # Vercel Serverless Functions (11/12 — 1 free)
 |   +-- _utils/auth.ts              # Shared auth + credit system
 |   +-- chat.ts
 |   +-- cite.ts
@@ -165,6 +185,7 @@ ResearchMate Website/
 |   +-- identify-source.ts
 |   +-- insights.ts
 |   +-- ocr.ts
+|   +-- rss.ts                      # NEW (Phase 4) — RSS/Atom proxy, SSRF-guarded
 |   +-- search.ts                   # MERGED: academic + books search
 |   +-- set-custom-key.ts
 |   +-- summarize.ts                # MERGED: full + item summaries
@@ -183,9 +204,14 @@ ResearchMate Website/
 |   +-- components/
 |       +-- App/
 |       |   +-- Dashboard/           # Refactored into sub-components
-|       |   +-- Discover/            # NEW (Phase 2)
+|       |   +-- Discover/            # Phase 2
 |       |   |   +-- DiscoverPage.tsx
 |       |   |   +-- index.ts
+|       |   +-- Feeds/               # NEW (Phase 4)
+|       |   |   +-- FeedsPage.tsx
+|       |   |   +-- index.ts
+|       |   +-- PdfReader/           # Phase 3
+|       |   |   +-- PdfReader.tsx
 |       |   +-- DocumentEditor/      # TipTap-based rich text editor
 |       |   |   +-- DocumentEditor.tsx
 |       |   |   +-- EditorToolbar.tsx
@@ -227,7 +253,9 @@ ResearchMate Website/
 ```typescript
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
-  { icon: GraduationCap, label: "Discover", path: "/app/discover" },      // NEW
+  { icon: GraduationCap, label: "Discover", path: "/app/discover" },
+  { icon: Rss, label: "Feeds", path: "/app/feeds" },                      // NEW (Phase 4)
+  { icon: BookOpen, label: "PDF Reader", path: "/app/pdf-reader" },       // Phase 3
   { icon: FolderOpen, label: "Collections", path: "/app/collections" },
   { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
   { icon: Quote, label: "Citations", path: "/app/citations" },
@@ -305,9 +333,9 @@ const NAV_ITEMS = [
 
 ## What To Do Next (In Order)
 
-1. ~~**Phase 3: PDF Reader & Annotator**~~ — DONE (see Known Issues above for deferred text-selection bug)
-2. **Phase 4: RSS Feeds** — CORS proxy needed (1 API slot) — NEXT
-3. **Phase 5: Media Transcription** — Whisper/Gemini server-side (1 API slot)
+1. ~~**Phase 3: PDF Reader & Annotator**~~ — DONE (see Known Issues for deferred text-selection bug)
+2. ~~**Phase 4: RSS Feeds**~~ — DONE (api/rss.ts, 11/12 functions, migration applied)
+3. **Phase 5: Media Transcription** — Whisper/Gemini server-side (last 1 API slot) — NEXT
 4. **Phases 6-9** — all client-side (Knowledge Graph, Paper Graph, Kanban, Shared Collections)
 
 ---
