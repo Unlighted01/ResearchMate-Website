@@ -1975,4 +1975,5 @@ html.dark .spotlight-card::before {
 /* Magnetic Button (added logic inside JS but transition here) */
 .magnetic-btn {
   transition: transform 0.1s cubic-bezier(0.33, 1, 0.68, 1), box-shadow 0.3s ease;
-  will-change: transform;
+  will-change: transform;
+}
