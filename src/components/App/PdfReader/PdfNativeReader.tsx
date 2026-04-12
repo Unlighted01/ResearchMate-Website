@@ -15,9 +15,11 @@ import {
   X,
   Highlighter,
   PenTool,
+  Eraser,
   Loader2,
   MousePointer2
 } from "lucide-react";
+import { savePdfLocally, getLocalPdf, clearLocalPdf } from "../../../services/localPdfStore";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
@@ -105,16 +107,31 @@ const PdfNativeReader: React.FC = () => {
       setPdfDoc(doc);
       setDocumentTitle(source.title);
       setLoadState("ready");
+
+      // Background persist the initial file payload into IndexedDB so it survives routing/refreshes
+      try {
+        const rawBytes = await doc.getData();
+        await savePdfLocally(source.title, rawBytes.buffer);
+      } catch (err) {
+        console.warn("Failed to locally persist PDF copy:", err);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to parse PDF");
       setLoadState("error");
     }
   }, [pdfDoc]);
 
-  // Handle URL Loads
+  // Handle URL Loads & Initial Local Load
   useEffect(() => {
     if (urlParam && loadState === "idle") {
       loadPdfFromSource({ url: urlParam, title: extractFilenameFromUrl(urlParam) });
+    } else if (!urlParam && loadState === "idle") {
+      // Check IndexedDB
+      getLocalPdf().then((stored) => {
+        if (stored && loadState === "idle") {
+          loadPdfFromSource({ data: stored.data, title: stored.title });
+        }
+      });
     }
   }, [urlParam, loadState, loadPdfFromSource]);
 
@@ -132,6 +149,22 @@ const PdfNativeReader: React.FC = () => {
       // PDF.js v4+ setter expects an object with a 'mode' property
       viewerRef.current.annotationEditorMode = { mode };
       setEditorMode(mode);
+    }
+  };
+
+  const handleErase = () => {
+    if (viewerRef.current?.annotationEditorUIManager) {
+      viewerRef.current.annotationEditorUIManager.delete();
+    }
+  };
+
+  const handleManualSaveToDB = async () => {
+    if (!pdfDoc) return;
+    try {
+      const data = await pdfDoc.saveDocument();
+      await savePdfLocally(documentTitle || "document.pdf", data.buffer);
+    } catch (e) {
+      console.warn("Manual save error:", e);
     }
   };
 
@@ -199,7 +232,7 @@ const PdfNativeReader: React.FC = () => {
           {/* Editor Modes */}
           <div className="flex bg-gray-100 dark:bg-white/5 rounded-lg p-1">
             <button
-              onClick={() => setMode(0)}
+              onClick={() => { setMode(0); handleManualSaveToDB(); }} // Normal Mode
               className={`p-2 rounded-md flex items-center gap-1 transition-all ${
                 editorMode === 0 ? "bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
@@ -208,22 +241,30 @@ const PdfNativeReader: React.FC = () => {
               <MousePointer2 className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setMode(15)} // Highlight mode
+              onClick={() => setMode(15)} // Draw Mode
               className={`p-2 rounded-md flex items-center gap-1 transition-all ${
                 editorMode === 15 ? "bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+              title="Draw Tool"
+            >
+              <PenTool className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setMode(9)} // Highlight Mode
+              className={`p-2 rounded-md flex items-center gap-1 transition-all ${
+                editorMode === 9 ? "bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
               title="Highlight Tool"
             >
               <Highlighter className="w-4 h-4" />
             </button>
+            <div className="w-px h-6 bg-gray-300 dark:bg-white/20 mx-1 self-center" />
             <button
-              onClick={() => setMode(13)} // Ink mode
-              className={`p-2 rounded-md flex items-center gap-1 transition-all ${
-                editorMode === 13 ? "bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
-              title="Draw Tool"
+              onClick={handleErase} // Erase Selected
+              className={`p-2 rounded-md flex items-center gap-1 transition-all text-gray-500 hover:text-red-500 dark:hover:text-red-400`}
+              title="Erase Selected Object"
             >
-              <PenTool className="w-4 h-4" />
+              <Eraser className="w-4 h-4" />
             </button>
           </div>
 
@@ -257,7 +298,7 @@ const PdfNativeReader: React.FC = () => {
             Download Edited PDF
           </button>
           <button
-            onClick={() => { setLoadState("idle"); setPdfDoc(null); }}
+            onClick={() => { clearLocalPdf(); setLoadState("idle"); setPdfDoc(null); setEditorMode(0); }}
             className="p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded-lg"
           >
             <X className="w-4 h-4" />
