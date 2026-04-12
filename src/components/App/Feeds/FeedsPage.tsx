@@ -93,6 +93,27 @@ const FeedsPage: React.FC = () => {
 
   // ---------- PART 4B: DATA LOADING ----------
 
+  const loadFeedItems = useCallback(async (feed: RssFeed) => {
+    setSelectedFeed(feed);
+    setItemsState("loading");
+    setItemsError(null);
+    setFeedItems([]);
+    setFeedMeta(null);
+    try {
+      const result = await fetchRssFeed(feed.url);
+      setFeedItems(result.items);
+      setFeedMeta(result);
+      setItemsState("ready");
+      // Fire-and-forget DB update
+      const latest = result.items[0]?.pubDate ?? null;
+      touchRssFeed(feed.id, latest).catch(() => {});
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to fetch feed";
+      setItemsError(msg);
+      setItemsState("error");
+    }
+  }, []);
+
   const loadFeeds = useCallback(async () => {
     setListState("loading");
     setError(null);
@@ -114,27 +135,6 @@ const FeedsPage: React.FC = () => {
   useEffect(() => {
     loadFeeds();
   }, [loadFeeds]);
-
-  const loadFeedItems = useCallback(async (feed: RssFeed) => {
-    setSelectedFeed(feed);
-    setItemsState("loading");
-    setItemsError(null);
-    setFeedItems([]);
-    setFeedMeta(null);
-    try {
-      const result = await fetchRssFeed(feed.url);
-      setFeedItems(result.items);
-      setFeedMeta(result);
-      setItemsState("ready");
-      // Fire-and-forget DB update
-      const latest = result.items[0]?.pubDate ?? null;
-      touchRssFeed(feed.id, latest).catch(() => {});
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to fetch feed";
-      setItemsError(msg);
-      setItemsState("error");
-    }
-  }, []);
 
   // ---------- PART 4C: HANDLERS ----------
 
