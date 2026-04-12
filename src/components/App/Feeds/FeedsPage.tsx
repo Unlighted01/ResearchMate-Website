@@ -100,12 +100,16 @@ const FeedsPage: React.FC = () => {
       const rows = await getAllRssFeeds();
       setFeeds(rows);
       setListState("ready");
+      // UX Improvement: Auto-select the first feed if nothing is selected
+      if (rows.length > 0) {
+        loadFeedItems(rows[0]);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load feeds";
       setError(msg);
       setListState("error");
     }
-  }, []);
+  }, [loadFeedItems]);
 
   useEffect(() => {
     loadFeeds();

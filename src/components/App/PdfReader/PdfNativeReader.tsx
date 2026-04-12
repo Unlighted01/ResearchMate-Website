@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+// @ts-ignore
 import "pdfjs-dist/web/pdf_viewer.css";
 import * as pdfjsLib from "pdfjs-dist";
+// @ts-ignore
 import * as pdfjsViewer from "pdfjs-dist/web/pdf_viewer.mjs";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {

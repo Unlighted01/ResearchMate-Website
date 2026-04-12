@@ -19,6 +19,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticateUser, deductCredit, refundCredit } from "./_utils/auth.js";
 
+export const config = {
+  maxDuration: 60, // Extend Hobby default 10s to maximum 60s
+};
+
 // ============================================
 // PART 2: TYPE DEFINITIONS
 // ============================================

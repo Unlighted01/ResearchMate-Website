@@ -385,6 +385,22 @@ const TranscribePage: React.FC = () => {
         </div>
       </div>
 
+      {/* Progress Indicator */}
+      {uiState === "working" && (
+        <div className="flex flex-col items-center justify-center p-8 mb-6 theme-surface rounded-2xl border border-[#007AFF]/30 bg-[#007AFF]/5 shadow-lg shadow-[#007AFF]/10">
+          <Loader2 size={32} className="animate-spin text-[#007AFF] mb-4" />
+          <h3 className="text-gray-900 dark:text-white font-medium text-lg mb-2">
+            Transcribing Media...
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-sm">
+            Our AI is currently listening to your audio and generating a highly accurate text transcript. This process can take up to 60 seconds depending on the media length.
+          </p>
+          <div className="w-full max-w-md mt-6 h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-[#5856D6] to-[#007AFF] w-full animate-pulse origin-left" />
+          </div>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className="flex items-start gap-3 p-4 mb-6 rounded-xl bg-[#FF3B30]/10 border border-[#FF3B30]/30 text-[#FF3B30]">

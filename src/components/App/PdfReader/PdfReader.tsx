@@ -13,6 +13,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+// @ts-ignore
 import "pdfjs-dist/web/pdf_viewer.css";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
