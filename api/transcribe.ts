@@ -222,6 +222,13 @@ async function callGeminiYoutube(
   apiKey: string,
   youtubeUrl: string,
 ): Promise<GeminiTranscribeResult> {
+  // Sanitize YouTube URL to remove any trailing tags/timestamps (e.g. &t=20s) that crash Gemini parser
+  let cleanUrl = youtubeUrl;
+  const match = /(?:v=|youtu\.be\/|shorts\/)([A-Za-z0-9_-]{6,})/.exec(youtubeUrl);
+  if (match && match[1]) {
+    cleanUrl = `https://www.youtube.com/watch?v=${match[1]}`;
+  }
+
   const body = {
     contents: [
       {
@@ -230,7 +237,7 @@ async function callGeminiYoutube(
           {
             fileData: {
               mimeType: "video/mp4",
-              fileUri: youtubeUrl,
+              fileUri: cleanUrl,
             },
           },
         ],
