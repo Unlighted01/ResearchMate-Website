@@ -52,20 +52,45 @@ export interface AuthResult {
 }
 
 // ============================================
+// CORS WHITELIST
+// ============================================
+// Shared by all endpoints — replaces the old `Access-Control-Allow-Origin: *`.
+const ALLOWED_ORIGINS = [
+  "https://researchmate.vercel.app",
+  "https://www.researchmate.vercel.app",
+  "http://localhost:5173",  // Vite dev
+  "http://localhost:3000",  // fallback dev
+];
+
+/**
+ * Sets CORS headers for the response. Returns the matched origin
+ * or "" if the caller is not whitelisted.
+ */
+export function setCorsHeaders(
+  req: VercelRequest,
+  res: VercelResponse,
+): string {
+  const origin = req.headers.origin ?? "";
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : "";
+
+  res.setHeader("Access-Control-Allow-Origin", allowed);
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization",
+  );
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  return allowed;
+}
+
+// ============================================
 // AUTHENTICATION HELPER
 // ============================================
 export async function authenticateUser(
   req: VercelRequest,
 ): Promise<AuthResult> {
   try {
-    // 1. Check for Custom API Key (BYOK Bypass via Secure Cookie)
-    const customKey = req.cookies?.custom_gemini_key;
-    if (customKey && customKey.startsWith("AIz")) {
-      console.log("⚡ Using User's Custom API Key (Bypassing Limits) via Secure Cookie");
-      return { user: { id: "custom-key-user" }, isFreeTier: false, customKey };
-    }
-
-    // 2. Extract JWT Token
+    // 1. Extract JWT Token — ALWAYS required, even for BYOK users
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return {
@@ -77,7 +102,7 @@ export async function authenticateUser(
     }
     const token = authHeader.split(" ")[1];
 
-    // 3. Verify Token with Supabase
+    // 2. Verify Token with Supabase — identity is always validated
     const {
       data: { user },
       error: authError,
@@ -89,6 +114,26 @@ export async function authenticateUser(
         statusCode: 401,
         user: null,
         isFreeTier: true,
+      };
+    }
+
+    // 3. Check for Custom API Key (BYOK) — only AFTER JWT is verified.
+    //    BYOK skips credit deduction but NOT identity or rate limiting.
+    const customKey = req.cookies?.custom_gemini_key;
+    if (customKey && customKey.startsWith("AIz")) {
+      if (!checkRateLimit(user.id)) {
+        return {
+          error: "Too many requests. Please wait a moment before trying again.",
+          statusCode: 429,
+          user: null,
+          isFreeTier: false,
+        };
+      }
+      console.log(`⚡ BYOK user ${user.id} using custom Gemini key`);
+      return {
+        user: { id: user.id, email: user.email },
+        isFreeTier: false,
+        customKey,
       };
     }
 
@@ -136,14 +181,14 @@ export async function authenticateUser(
     if (profileError) {
       console.error("Profile fetch error:", profileError);
       return {
-        error: `Failed to fetch user profile: ${profileError.message} (Code: ${profileError.code})`,
+        error: "Failed to fetch user profile",
         statusCode: 500,
         user: null,
         isFreeTier: true,
       };
     }
 
-    const credits = profile?.ai_credits ?? 0; // Safe default
+    const credits = profile?.ai_credits ?? 0;
 
     if (credits <= 0) {
       return {
@@ -167,7 +212,7 @@ export async function authenticateUser(
   } catch (error) {
     console.error("Auth Error:", error);
     return {
-      error: "Internal Server Authentication Error",
+      error: "Authentication failed",
       statusCode: 500,
       user: null,
       isFreeTier: true,
@@ -176,10 +221,29 @@ export async function authenticateUser(
 }
 
 // ============================================
-// CREDIT DEDUCTION HELPER
+// CREDIT DEDUCTION HELPER (Atomic)
 // ============================================
+// Uses a single UPDATE with ai_credits - 1 and a WHERE guard to prevent
+// race conditions. Falls back to read-then-write if RPC is not available.
 export async function deductCredit(userId: string): Promise<number | string> {
-  // Get current credits first to return accurate remaining count
+  // Atomic: decrement in one statement, return the new value
+  const { data, error } = await supabase.rpc("deduct_credit", {
+    p_user_id: userId,
+  });
+
+  // If the RPC exists and worked, `data` is the new credit count (or -1 if insufficient).
+  if (!error && data !== null && data !== undefined) {
+    if (data < 0) {
+      console.warn(`User ${userId} tried to deduct but has 0 credits`);
+      return 0;
+    }
+    return data as number;
+  }
+
+  // Fallback for deployments where the RPC migration hasn't been applied yet.
+  if (error) {
+    console.warn("deduct_credit RPC unavailable, using fallback:", error.message);
+  }
   const { data: profile } = await supabase
     .from("profiles")
     .select("ai_credits")
@@ -189,24 +253,29 @@ export async function deductCredit(userId: string): Promise<number | string> {
   const currentCredits = profile ? profile.ai_credits : 0;
   const newCredits = Math.max(0, currentCredits - 1);
 
-  const { error } = await supabase
+  await supabase
     .from("profiles")
     .update({ ai_credits: newCredits })
     .eq("id", userId);
-
-  if (error) {
-    console.error(`Failed to deduct credit for user ${userId}:`, error);
-  }
 
   return newCredits;
 }
 
 // ============================================
-// CREDIT REFUND HELPER
+// CREDIT REFUND HELPER (Atomic)
 // ============================================
 // Call this in the catch block of any AI endpoint to restore
 // a credit when the provider call fails after deduction.
 export async function refundCredit(userId: string): Promise<void> {
+  // Atomic: increment in one statement
+  const { error } = await supabase.rpc("refund_credit", {
+    p_user_id: userId,
+  });
+
+  if (!error) return;
+
+  // Fallback
+  console.warn("refund_credit RPC unavailable, using fallback:", error.message);
   const { data: profile } = await supabase
     .from("profiles")
     .select("ai_credits")
@@ -215,12 +284,8 @@ export async function refundCredit(userId: string): Promise<void> {
 
   if (!profile) return;
 
-  const { error } = await supabase
+  await supabase
     .from("profiles")
     .update({ ai_credits: profile.ai_credits + 1 })
     .eq("id", userId);
-
-  if (error) {
-    console.error(`Failed to refund credit for user ${userId}:`, error);
-  }
 }

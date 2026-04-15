@@ -70,7 +70,11 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
     return isMarkdown(t) ? stripMarkdown(t) : t;
   })();
 
+  const lastSpotlight = React.useRef(0);
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const now = Date.now();
+    if (now - lastSpotlight.current < 60) return; // 60ms throttle
+    lastSpotlight.current = now;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;

@@ -100,5 +100,87 @@ Upgrade the current AI Assistant from a simple summarizer into an agentic resear
 
 ---
 
+## [IN PROGRESS] Session: Security Hardening — Critical Auth Bypass + API Fixes
+**Date:** April 14, 2026
+**Agent:** Claude (Claude Code — Opus 4.6)
+
+### The Problem
+A full security audit revealed **3 critical, 6 high, and 6 medium** vulnerabilities across the API layer and Supabase Edge Functions. The most severe: the BYOK (Bring-Your-Own-Key) cookie auth bypass allows **fully unauthenticated access** to every AI endpoint. Combined with the unprotected `set-custom-key.ts` endpoint, an attacker can self-serve unlimited access with a single curl command.
+
+### Findings Summary
+
+#### Critical (Exploit Now)
+| ID | Issue | File | Lines |
+|----|-------|------|-------|
+| C-1 | **BYOK cookie bypass** — any cookie starting with `AIz` grants full access, no JWT, no rate limit, no credits, hardcoded `user_id: "custom-key-user"` | `api/_utils/auth.ts` | 62-65 |
+| C-2 | **Smart Pen unpair** — no auth check, any caller can delete any pen by pen_id | `supabase/functions/smart-pen/index.ts` | 305-313 |
+| C-3 | **Smart Pen JSON actions** — `confirm`, `list`, `unpair` have zero authentication; attacker can pair pen to any user_id | `supabase/functions/smart-pen/index.ts` | 204-349 |
+
+#### High (Fix Soon)
+| ID | Issue | File |
+|----|-------|------|
+| H-1 | Credit deduction race condition (non-atomic read-then-write) — 10 concurrent requests = 10 calls for 1 credit | `api/_utils/auth.ts` |
+| H-2 | SSRF guard in RSS misses IPv6, octal IPs, DNS rebinding, `metadata.google.internal` | `api/rss.ts` |
+| H-3 | In-memory rate limiter resets every Vercel cold start — effectively no rate limiting | `api/_utils/auth.ts` |
+| H-4 | `set-custom-key.ts` has zero auth — anyone can set the BYOK cookie | `api/set-custom-key.ts` |
+| H-5 | Raw provider error messages leak infrastructure details to clients | Multiple API files |
+| H-6 | `Access-Control-Allow-Origin: *` on all endpoints — any website can call API with visitor's cookies | All `api/*.ts` |
+
+#### Medium
+| ID | Issue |
+|----|-------|
+| M-1 | No RLS migrations for `paired_pens`/`pairing_codes` tables |
+| M-2 | No payload size limits on chat/summarize/insights/tags endpoints (Vercel 4.5MB default helps) |
+| M-3 | Gemini API keys in URL query params (logged by proxies) |
+| M-5 | Smart pen creates items with `user_id: null` if token invalid |
+| M-6 | `identify-source.ts` missing CORS headers |
+
+### The Approach (Planned Fix Order)
+
+**Round 1 — Critical + High (auth layer):**
+1. **C-1 + H-4: Fix BYOK auth bypass** — Require a valid JWT even for BYOK users. The custom key should only override which Gemini key is used, NOT skip authentication. In `auth.ts`, move the cookie check AFTER JWT verification. In `set-custom-key.ts`, add `authenticateUser()` call before setting the cookie.
+2. **H-1: Atomic credit deduction** — Replace the read-then-write pattern with a Postgres RPC: `UPDATE profiles SET ai_credits = ai_credits - 1 WHERE id = $1 AND ai_credits > 0 RETURNING ai_credits`. Create a Supabase migration for the RPC function.
+3. **H-6: Lock down CORS** — Replace `Access-Control-Allow-Origin: *` with a whitelist: `researchmate.vercel.app`, `localhost:5173` (dev). Apply to all endpoints via a shared helper.
+4. **H-5: Sanitize errors** — Wrap all catch blocks to return generic messages, log details server-side only.
+
+**Round 2 — SSRF + Rate Limiting:**
+5. **H-2: Harden SSRF** — Add IPv6 loopback/private blocks, DNS-resolved IP check (resolve hostname before fetch, reject private IPs), block `metadata.google.internal`.
+6. **H-3: Rate limiter** — Document the limitation. A proper fix requires Upstash Redis (out of scope for now, but add a TODO and tighten the window).
+
+**Round 3 — Smart Pen + Medium:**
+7. **C-2/C-3: Smart Pen auth** — Add `Authorization` header check or service key verification to all JSON actions in the Edge Function.
+8. **M-5: Reject null user_id** — Return 401 if `userId` is null after token lookup.
+9. **M-6: Add CORS to identify-source.ts** — Copy the standard CORS block.
+
+**Bonus (bundled):**
+- **P2 UI: Throttle `onMouseMove`** on `ItemGridCard.tsx` spotlight effect (60ms minimum per CLAUDE.md).
+
+### Files That Will Be Modified
+- `api/_utils/auth.ts` — BYOK flow rewrite, atomic credits
+- `api/set-custom-key.ts` — add auth requirement
+- `api/rss.ts` — SSRF hardening
+- `api/identify-source.ts` — add CORS
+- `api/chat.ts`, `api/summarize.ts`, `api/insights.ts`, `api/generate-tags.ts`, `api/ocr.ts`, `api/transcribe.ts`, `api/extract-citation.ts` — CORS whitelist, error sanitization
+- `supabase/functions/smart-pen/index.ts` — auth on JSON actions, null user_id guard
+- `supabase/migrations/20260414_atomic_credits.sql` — NEW: Postgres RPC for atomic credit ops
+- `src/components/App/Dashboard/ItemGridCard.tsx` — throttle onMouseMove
+
+### Status
+- ✅ **C-1: BYOK auth bypass FIXED** — Custom key check moved AFTER JWT verification. User identity always validated, rate limiter always applied.
+- ✅ **H-4: set-custom-key.ts auth FIXED** — Now requires valid JWT before setting cookie.
+- ✅ **H-1: Atomic credit deduction FIXED** — New Postgres RPCs `deduct_credit()` / `refund_credit()` with fallback to old pattern if migration not yet applied. Migration file: `supabase/migrations/20260414_atomic_credits.sql`.
+- ✅ **H-6: CORS locked down** — All 12 endpoints now use `setCorsHeaders()` which whitelists `researchmate.vercel.app` + localhost dev. `Access-Control-Allow-Credentials: true`.
+- ✅ **H-5: Error messages sanitized** — All outer catch blocks return generic "An internal error occurred" instead of leaking provider details.
+- ✅ **M-6: identify-source.ts CORS added** — Was completely missing CORS + OPTIONS.
+- ✅ **P2 UI: ItemGridCard spotlight throttled** — 60ms minimum between `getBoundingClientRect()` calls.
+- **⚠ NEEDS SUPABASE MIGRATION** — Run `supabase/migrations/20260414_atomic_credits.sql` in SQL Editor for atomic credits. Falls back gracefully until applied.
+- **REMAINING (not yet started):**
+  - H-2: SSRF hardening in rss.ts (IPv6, DNS rebinding, metadata hostnames)
+  - C-2/C-3: Smart Pen Edge Function auth
+  - M-1: RLS for paired_pens/pairing_codes tables
+  - M-5: Smart pen null user_id guard
+
+---
+
 *(Add new agent entries above this line)*
 

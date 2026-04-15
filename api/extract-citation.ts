@@ -5,7 +5,7 @@
 // ============================================
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { authenticateUser, deductCredit, refundCredit } from "./_utils/auth.js";
+import { authenticateUser, deductCredit, refundCredit, setCorsHeaders } from "./_utils/auth.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL =
@@ -943,10 +943,8 @@ async function lookupOpenAlexByURL(targetUrl: string): Promise<any | null> {
 // ============================================
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  // CORS
+  setCorsHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();

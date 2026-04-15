@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { authenticateUser, deductCredit, refundCredit } from "./_utils/auth.js";
+import { authenticateUser, deductCredit, refundCredit, setCorsHeaders } from "./_utils/auth.js";
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -79,6 +79,8 @@ async function identifyWithGemini(text: string, apiKey: string): Promise<any> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const auth = await authenticateUser(req);

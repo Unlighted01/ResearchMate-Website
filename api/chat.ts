@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { authenticateUser, deductCredit, refundCredit } from "./_utils/auth.js";
+import { authenticateUser, deductCredit, refundCredit, setCorsHeaders } from "./_utils/auth.js";
 
 // ============================================
 // CONFIGURATION
@@ -188,13 +188,8 @@ async function callGroqAPI(prompt: string, options: any = {}) {
 // MAIN HANDLER
 // ============================================
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS Headers
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization",
-  );
+  // CORS
+  setCorsHeaders(req, res);
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST")
@@ -308,6 +303,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     console.error("Chat API Error:", error);
     if (creditDeducted && deductedUserId) await refundCredit(deductedUserId);
-    return res.status(500).json({ error: (error as Error).message });
+    return res.status(500).json({ error: "An internal error occurred. Please try again." });
   }
 }

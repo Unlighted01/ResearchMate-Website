@@ -12,7 +12,7 @@
 // ============================================
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { authenticateUser } from "./_utils/auth.js";
+import { authenticateUser, setCorsHeaders } from "./_utils/auth.js";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -291,18 +291,9 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
-  // CORS preflight
-  if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization",
-    );
-    return res.status(200).end();
-  }
-
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // CORS
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") return res.status(200).end();
 
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });

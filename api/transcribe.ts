@@ -17,7 +17,7 @@
 // ============================================
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { authenticateUser, deductCredit, refundCredit } from "./_utils/auth.js";
+import { authenticateUser, deductCredit, refundCredit, setCorsHeaders } from "./_utils/auth.js";
 
 export const config = {
   maxDuration: 60, // Extend Hobby default 10s to maximum 60s
@@ -342,12 +342,7 @@ export default async function handler(
   res: VercelResponse,
 ) {
   // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization",
-  );
+  setCorsHeaders(req, res);
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") {
