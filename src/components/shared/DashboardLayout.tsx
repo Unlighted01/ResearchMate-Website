@@ -348,7 +348,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
             ))}
 
             {/* Divider */}
-            <div className="theme-divider my-4 h-px border-t" />
+            <div className="theme-divider my-2 h-px border-t" />
 
             {/* Bottom Nav */}
             <ul className="space-y-1">
@@ -419,12 +419,12 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
             {/* Device Status (only when expanded) */}
             {!sidebarCollapsed && (
-              <div className="mt-6 mb-2 mx-1">
-                <div className="theme-panel-muted rounded-xl p-4">
-                  <h4 className="theme-muted-text text-xs font-semibold uppercase tracking-wider mb-3">
+              <div className="mt-4 mb-1 mx-1">
+                <div className="theme-panel-muted rounded-xl p-3">
+                  <h4 className="theme-muted-text text-xs font-semibold uppercase tracking-wider mb-2">
                     Devices
                   </h4>
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     <div className="flex items-center gap-3">
                       <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
                         <Laptop className="w-4 h-4 text-[#007AFF]" />

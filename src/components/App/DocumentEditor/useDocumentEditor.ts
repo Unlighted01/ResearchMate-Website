@@ -29,10 +29,11 @@ export interface UseDocumentEditorReturn {
   saving: boolean;
 
   // Actions
-  handleNewDocument: () => Promise<void>;
+  handleNewDocument: (title: string) => Promise<void>;
   handleSelectDocument: (id: string) => Promise<void>;
   handleRenameDocument: (id: string, title: string) => Promise<void>;
   handleDeleteDocument: (id: string) => Promise<void>;
+  handleDeleteManyDocuments: (ids: string[]) => Promise<void>;
   handleContentChange: (content: Record<string, unknown>) => void;
 
   // Item import
@@ -167,9 +168,9 @@ const useDocumentEditor = (): UseDocumentEditorReturn => {
     [currentDoc]
   );
 
-  const handleNewDocument = useCallback(async () => {
+  const handleNewDocument = useCallback(async (title: string) => {
     try {
-      const doc = await createDocument();
+      const doc = await createDocument(title);
       setDocuments((prev) => [doc, ...prev]);
       setCurrentDoc(doc);
     } catch (err) {
@@ -227,6 +228,20 @@ const useDocumentEditor = (): UseDocumentEditorReturn => {
     [currentDoc]
   );
 
+  const handleDeleteManyDocuments = useCallback(
+    async (ids: string[]) => {
+      await Promise.all(ids.map(deleteDocument));
+      setDocuments((prev) => {
+        const remaining = prev.filter((d) => !ids.includes(d.id));
+        if (currentDoc && ids.includes(currentDoc.id)) {
+          setCurrentDoc(remaining[0] || null);
+        }
+        return remaining;
+      });
+    },
+    [currentDoc]
+  );
+
   // ============================================
   // PART 5: RETURN
   // ============================================
@@ -240,6 +255,7 @@ const useDocumentEditor = (): UseDocumentEditorReturn => {
     handleSelectDocument,
     handleRenameDocument,
     handleDeleteDocument,
+    handleDeleteManyDocuments,
     handleContentChange,
     dashboardItems,
     itemsLoading,
