@@ -387,7 +387,11 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-4">
+          <div className="mb-4">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+              Or sign in with Email
+            </h3>
+            <form onSubmit={handleLogin} className="space-y-4">
             <Input
               type="email"
               placeholder="Email address"
