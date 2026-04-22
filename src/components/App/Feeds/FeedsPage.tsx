@@ -18,6 +18,8 @@ import {
   X,
   AlertCircle,
   Search,
+  BookmarkPlus,
+  Check,
 } from "lucide-react";
 import {
   getAllRssFeeds,
@@ -32,6 +34,7 @@ import {
   type RssItem,
 } from "../../../services/rssFeedsService";
 import ConfirmDialog from "../../shared/ConfirmDialog";
+import { addItem } from "../../../services/storageService";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -86,6 +89,10 @@ const FeedsPage: React.FC = () => {
   const [addError, setAddError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Save to library state
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   // Unsubscribe confirm dialog state
   const [pendingDelete, setPendingDelete] = useState<RssFeed | null>(null);
@@ -222,6 +229,40 @@ const FeedsPage: React.FC = () => {
   const handleRefresh = useCallback(() => {
     if (selectedFeed) loadFeedItems(selectedFeed);
   }, [selectedFeed, loadFeedItems]);
+
+  const handleSaveArticle = useCallback(
+    async (item: RssItem) => {
+      const id = item.id || item.link;
+      setSavingIds((prev) => new Set(prev).add(id));
+      try {
+        const year = item.pubDate ? new Date(item.pubDate).getFullYear().toString() : "n.d.";
+        const authorStr = item.authors.length > 0 ? item.authors.join(", ") : "Unknown Author";
+        const siteName = selectedFeed?.title || "";
+        // Auto-generate APA-style citation
+        const citation = `${authorStr}. (${year}). ${item.title}. ${siteName}. ${item.link}`;
+
+        await addItem({
+          text: item.summary || item.title,
+          sourceUrl: item.link,
+          sourceTitle: item.title,
+          tags: [...(item.categories.slice(0, 3)), "feed"],
+          citation,
+          citationFormat: "apa",
+          deviceSource: "web",
+        });
+        setSavedIds((prev) => new Set(prev).add(id));
+      } catch {
+        // silent — toast not available here without prop drilling
+      } finally {
+        setSavingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    },
+    [selectedFeed]
+  );
 
   // ---------- PART 4D: DERIVED STATE ----------
 
@@ -539,6 +580,35 @@ const FeedsPage: React.FC = () => {
                             </div>
                           )}
                         </a>
+
+                        {/* Save to Library */}
+                        <div className="flex justify-end mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
+                          {(() => {
+                            const itemId = item.id || item.link;
+                            const isSaving = savingIds.has(itemId);
+                            const isSaved = savedIds.has(itemId);
+                            return (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleSaveArticle(item); }}
+                                disabled={isSaving || isSaved}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all active:scale-95 ${
+                                  isSaved
+                                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                                    : "bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20"
+                                }`}
+                              >
+                                {isSaving ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : isSaved ? (
+                                  <Check className="w-3.5 h-3.5" />
+                                ) : (
+                                  <BookmarkPlus className="w-3.5 h-3.5" />
+                                )}
+                                {isSaved ? "Saved" : isSaving ? "Saving…" : "Save to Library"}
+                              </button>
+                            );
+                          })()}
+                        </div>
                       </li>
                     ))}
                   </ul>

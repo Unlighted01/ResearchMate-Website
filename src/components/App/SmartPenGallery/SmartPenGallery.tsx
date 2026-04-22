@@ -59,6 +59,8 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
   const [pairedPens, setPairedPens] = useState<PairedPen[]>([]);
   const [extractingId, setExtractingId] = useState<string | null>(null);
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   useEffect(() => {
     // Get current user
     getCurrentUser().then((user) => {
@@ -242,6 +244,8 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
     }
   };
 
+  };
+  
   // Delete a scan item
   const deleteScan = async (scan: StorageItem) => {
     if (
@@ -259,6 +263,78 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
     } catch (err) {
       showToast("Failed to delete scan", "error");
     }
+  };
+
+  // Batch Operations
+  const handleBatchDelete = async () => {
+    if (!selectedIds.length) return;
+    if (!confirm(`Delete ${selectedIds.length} items? This cannot be undone.`)) return;
+    
+    setLoading(true);
+    try {
+      await Promise.all(selectedIds.map(id => deleteItem(id)));
+      setScans(scans.filter(s => !selectedIds.includes(s.id)));
+      setSelectedIds([]);
+      setIsSelectionMode(false);
+      showToast(`${selectedIds.length} items deleted`, "success");
+    } catch (err) {
+      showToast("Batch deletion failed", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBatchOCR = async () => {
+    if (!selectedIds.length) return;
+    
+    const scansToProcess = scans.filter(s => selectedIds.includes(s.id) && s.imageUrl && !s.ocrText);
+    if (!scansToProcess.length) {
+      showToast("No eligible items for OCR in selection", "info");
+      return;
+    }
+
+    showToast(`Starting OCR for ${scansToProcess.length} items...`, "info");
+    setExtractingId("batch"); // Use a special flag for batch
+    
+    let successCount = 0;
+    try {
+      for (const scan of scansToProcess) {
+        try {
+          const result = await runOcr(scan.imageUrl!, true);
+          await updateItem(scan.id, {
+            text: result.ocrText,
+            ocrText: result.ocrText,
+            ocrConfidence: result.ocrConfidence ?? undefined,
+            aiSummary: result.aiSummary || undefined,
+          });
+          successCount++;
+        } catch (e) {
+          console.error(`OCR failed for ${scan.id}`, e);
+        }
+      }
+      showToast(`Batch OCR complete: ${successCount} successful`, "success");
+      loadScans();
+      setSelectedIds([]);
+      setIsSelectionMode(false);
+    } catch (err) {
+      showToast("Batch OCR encountered an error", "error");
+    } finally {
+      setExtractingId(null);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredScans.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredScans.map(s => s.id));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
   };
 
   const filteredScans = scans.filter((scan) => {
@@ -309,6 +385,20 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
               {scans.length} {scans.length === 1 ? "scan" : "scans"}
             </span>
           </div>
+          <button
+            onClick={() => {
+              setIsSelectionMode(!isSelectionMode);
+              setSelectedIds([]);
+            }}
+            className={`p-2 rounded-xl border transition-all ${
+              isSelectionMode 
+                ? "bg-[#FF9500] text-white border-[#FF9500]" 
+                : "bg-white dark:bg-[#1C1C1E] border-gray-200/50 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+            }`}
+            title="Toggle Selection Mode"
+          >
+            <List className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -479,10 +569,31 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
 
                 {/* Hover Overlay */}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                  <button className="px-4 py-2 bg-white text-gray-900 text-sm font-medium rounded-full hover:bg-gray-100 transition-colors">
-                    View Details
-                  </button>
+                  {!isSelectionMode && (
+                    <button className="px-4 py-2 bg-white text-gray-900 text-sm font-medium rounded-full hover:bg-gray-100 transition-colors">
+                      View Details
+                    </button>
+                  )}
                 </div>
+
+                {/* Selection Overlay */}
+                {isSelectionMode && (
+                  <div 
+                    className="absolute inset-0 bg-black/20 z-10 flex items-start justify-start p-3"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelect(scan.id);
+                    }}
+                  >
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                      selectedIds.includes(scan.id) 
+                        ? "bg-[#FF9500] border-[#FF9500] scale-110" 
+                        : "bg-white/40 border-white"
+                    }`}>
+                      {selectedIds.includes(scan.id) && <Plus className="w-4 h-4 text-white rotate-45" style={{ transform: 'rotate(0deg)' }} />}
+                    </div>
+                  </div>
+                )}
 
                 {/* AI Badge */}
                 {scan.aiSummary && (
@@ -598,6 +709,55 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+        </div>
+      )}
+
+      {/* ========== BATCH ACTIONS TOOLBAR ========== */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-[#1C1C1E] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl px-6 py-4 flex items-center gap-6 animate-slide-up backdrop-blur-xl bg-opacity-95">
+          <div className="flex items-center gap-2 pr-6 border-r border-gray-100 dark:border-gray-800">
+            <div className="w-8 h-8 bg-[#FF9500] rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-orange-500/20">
+              {selectedIds.length}
+            </div>
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">Selected</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleBatchOCR}
+              disabled={extractingId === "batch"}
+              className="flex items-center gap-2 px-4 py-2 bg-[#FF9500]/10 text-[#FF9500] hover:bg-[#FF9500]/20 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+            >
+              {extractingId === "batch" ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Running OCR...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  Batch OCR
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleBatchDelete}
+              className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 rounded-xl text-sm font-semibold transition-all"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete All
+            </button>
+            <div className="w-px h-6 bg-gray-100 dark:bg-gray-800 mx-1" />
+            <button
+              onClick={() => setSelectedIds([])}
+              className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            >
+              Clear
+            </button>
+          </div>
         </div>
       )}
 

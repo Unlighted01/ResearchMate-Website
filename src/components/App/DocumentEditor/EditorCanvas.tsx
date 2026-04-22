@@ -18,6 +18,10 @@ import TextAlign from "@tiptap/extension-text-align";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import FontFamily from "@tiptap/extension-font-family";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
 import FontSize from "./extensions/fontSize";
 import Indent from "./extensions/indent";
 import Bibliography from "./extensions/bibliography";
@@ -58,6 +62,12 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({
       FontSize,
       Indent,
       Bibliography,
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
       Placeholder.configure({
         placeholder: "Start writing your research document...",
       }),

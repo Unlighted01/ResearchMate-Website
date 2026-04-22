@@ -74,6 +74,9 @@ export interface UseAIAssistantReturn {
 
   // Credits
   credits: number | string;
+
+  // Conversation management
+  clearHistory: () => void;
 }
 
 // ============================================
@@ -96,16 +99,32 @@ const useAIAssistant = (
   const [selectedItem, setSelectedItem] = useState<StorageItem | null>(null);
   const [summaryMode, setSummaryMode] = useState<SummaryMode>("standard");
 
-  // Chat state
+  // Credits
+  const [credits, setCredits] = useState<number | string>("...");
+
+  // Persist chat history in localStorage (keyed per user once session loads)
+  const CHAT_STORAGE_KEY = "rm_chat_history";
+
+  // Chat state — restore from localStorage if available
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>(() => {
+    try {
+      const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ChatMessage[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch { /* ignore */ }
+    return [
+      {
+        id: "welcome",
+        role: "ai",
+        text: "Hello! I'm ResearchMate AI. I can help you analyze your saved research, find connections, or summarize complex topics. How can I help you today?",
+        timestamp: Date.now(),
+      },
+    ];
+  });
+
   const [chatInput, setChatInput] = useState("");
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "ai",
-      text: "Hello! I'm ResearchMate AI. I can help you analyze your saved research, find connections, or summarize complex topics. How can I help you today?",
-      timestamp: Date.now(),
-    },
-  ]);
   const [isChatting, setIsChatting] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatAbortRef = useRef<AbortController | null>(null);
@@ -116,10 +135,25 @@ const useAIAssistant = (
   const [cursorPosition, setCursorPosition] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Credits
-  const [credits, setCredits] = useState<number | string>("...");
-
   // ---------- PART 3B: EFFECTS ----------
+
+  // Persist chat history to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatHistory));
+    } catch { /* quota exceeded — ignore */ }
+  }, [chatHistory, CHAT_STORAGE_KEY]);
+
+  const clearHistory = () => {
+    const welcome: ChatMessage = {
+      id: "welcome",
+      role: "ai",
+      text: "Hello! I'm ResearchMate AI. I can help you analyze your saved research, find connections, or summarize complex topics. How can I help you today?",
+      timestamp: Date.now(),
+    };
+    setChatHistory([welcome]);
+    localStorage.removeItem(CHAT_STORAGE_KEY);
+  };
 
   // Fetch credits on mount
   useEffect(() => {
@@ -453,6 +487,7 @@ const useAIAssistant = (
     insertMention,
     handleKeyDown,
     credits,
+    clearHistory,
   };
 };
 

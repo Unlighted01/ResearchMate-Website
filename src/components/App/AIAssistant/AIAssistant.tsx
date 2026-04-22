@@ -59,6 +59,7 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
     insertMention,
     handleKeyDown,
     credits,
+    clearHistory,
   } = useAIAssistant(showToast);
 
   // ---------- PART 3A: RENDER ----------
@@ -148,6 +149,7 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
           handleInputChange={handleInputChange}
           insertMention={insertMention}
           handleKeyDown={handleKeyDown}
+          clearHistory={clearHistory}
         />
       )}
 

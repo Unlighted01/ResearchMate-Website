@@ -312,3 +312,81 @@ export async function exportToPdf(
     document.body.removeChild(clone);
   }
 }
+
+// ============================================
+// PART 5: MARKDOWN EXPORT WITH YAML FRONT-MATTER
+// ============================================
+
+function nodeToMarkdown(node: TiptapNode, depth = 0): string {
+  switch (node.type) {
+    case "doc":
+      return (node.content || []).map((c) => nodeToMarkdown(c)).join("\n");
+
+    case "heading": {
+      const level = (node.attrs?.level as number) || 1;
+      const prefix = "#".repeat(Math.min(level, 6));
+      const text = (node.content || []).map((c) => nodeToMarkdown(c)).join("");
+      return `${prefix} ${text}\n`;
+    }
+
+    case "paragraph": {
+      const text = (node.content || []).map((c) => nodeToMarkdown(c)).join("");
+      return text ? `${text}\n` : "\n";
+    }
+
+    case "text": {
+      let text = node.text || "";
+      const marks = node.marks || [];
+      if (marks.some((m) => m.type === "bold")) text = `**${text}**`;
+      if (marks.some((m) => m.type === "italic")) text = `*${text}*`;
+      if (marks.some((m) => m.type === "underline")) text = `<u>${text}</u>`;
+      if (marks.some((m) => m.type === "strike")) text = `~~${text}~~`;
+      if (marks.some((m) => m.type === "code")) text = `\`${text}\``;
+      return text;
+    }
+
+    case "bulletList":
+      return (node.content || [])
+        .map((li) => `- ${(li.content || []).map((c) => nodeToMarkdown(c)).join("").trim()}`)
+        .join("\n") + "\n";
+
+    case "orderedList":
+      return (node.content || [])
+        .map((li, i) => `${i + 1}. ${(li.content || []).map((c) => nodeToMarkdown(c)).join("").trim()}`)
+        .join("\n") + "\n";
+
+    case "blockquote":
+      return (node.content || [])
+        .map((c) => `> ${nodeToMarkdown(c).trim()}`)
+        .join("\n") + "\n";
+
+    case "horizontalRule":
+      return "---\n";
+
+    case "hardBreak":
+      return "  \n";
+
+    default:
+      return (node.content || []).map((c) => nodeToMarkdown(c, depth)).join("");
+  }
+}
+
+export function exportToMarkdown(
+  json: Record<string, unknown>,
+  title: string,
+  citedSourceTitles: string[] = [],
+): void {
+  const doc = json as unknown as TiptapNode;
+  const body = nodeToMarkdown(doc);
+
+  const today = new Date().toISOString().split("T")[0];
+  const sourcesYaml = citedSourceTitles.length > 0
+    ? `sources:\n${citedSourceTitles.map((s) => `  - "${s.replace(/"/g, '\\"')}"`).join("\n")}\n`
+    : "";
+
+  const frontMatter = `---\ntitle: "${title}"\ndate: ${today}\n${sourcesYaml}---\n\n`;
+
+  const markdown = frontMatter + body;
+  const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+  saveAs(blob, `${title}.md`);
+}

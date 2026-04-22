@@ -275,7 +275,9 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
       </div>
     );
-  if (!session) return <Navigate to="/" state={{ from: location }} replace />;
+
+  const isGuest = localStorage.getItem("rm_guest_mode") === "true";
+  if (!session && !isGuest) return <Navigate to="/" state={{ from: location }} replace />;
   return <>{children}</>;
 };
 
@@ -298,6 +300,7 @@ import PdfReader from "./components/App/PdfReader";
 import FeedsPage from "./components/App/Feeds";
 import TranscribePage from "./components/App/Transcribe";
 import SupportPage from "./components/marketing/SupportPage";
+import KnowledgeGraphPage from "./components/App/KnowledgeGraph/KnowledgeGraphPage";
 
 // ============================================
 // PART 5: MAIN APP COMPONENT
@@ -476,6 +479,7 @@ export default function App() {
                         />
                         <Route path="pair-pen" element={<PairSmartPen />} />
                         <Route path="statistics" element={<Statistics />} />
+                        <Route path="graph" element={<KnowledgeGraphPage />} />
                         <Route
                           path="settings"
                           element={

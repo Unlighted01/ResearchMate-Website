@@ -183,3 +183,31 @@ export const extractDomain = (url: string): string => {
     return "";
   }
 };
+
+/** Returns the parenthetical / in-text citation form for a given format. */
+export const generateInTextCitation = (
+  data: CitationData,
+  format: CitationFormat
+): string => {
+  const lastName = data.author
+    ? data.author.split(",")[0].trim() || data.author.split(" ").pop() || data.author
+    : "Unknown";
+  const year = formatDate(data.publishDate, "year");
+  const title = data.title ? `"${data.title.slice(0, 40)}${data.title.length > 40 ? "…" : ""}"` : "Untitled";
+
+  switch (format) {
+    case "apa":
+    case "harvard":
+      return `(${lastName}, ${year})`;
+    case "mla":
+      return `(${lastName})`;
+    case "chicago":
+      return `(${lastName} ${year})`;
+    case "ieee":
+      return `[n]`; // IEEE uses numbered references; placeholder
+    case "bibtex":
+      return `\\cite{${lastName.toLowerCase()}${year}}`;
+    default:
+      return `(${lastName}, ${year})`;
+  }
+};

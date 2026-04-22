@@ -34,6 +34,7 @@ import {
   Highlighter,
   Loader2,
   BookOpen,
+  Table as TableIcon,
 } from "lucide-react";
 import type { CitationFormat } from "../Citations/citationUtils";
 
@@ -44,7 +45,7 @@ import type { CitationFormat } from "../Citations/citationUtils";
 interface EditorToolbarProps {
   editor: Editor | null;
   onInsertItem: () => void;
-  onExport: (format: "docx" | "pdf" | "tex") => void;
+  onExport: (format: "docx" | "pdf" | "tex" | "md") => void;
   onInsertBibliography: (format: CitationFormat) => void;
   saving: boolean;
 }
@@ -189,6 +190,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   const highlightRef = useRef<HTMLDivElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
   const bibRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
 
   useClickOutside(blockTypeRef, openDropdown === "blockType", () => setOpenDropdown(null));
   useClickOutside(fontFamilyRef, openDropdown === "fontFamily", () => setOpenDropdown(null));
@@ -197,6 +199,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   useClickOutside(highlightRef, openDropdown === "highlight", () => setOpenDropdown(null));
   useClickOutside(exportRef, showExport, () => setShowExport(false));
   useClickOutside(bibRef, showBib, () => setShowBib(false));
+  useClickOutside(tableRef, openDropdown === "table", () => setOpenDropdown(null));
 
   if (!editor) return null;
 
@@ -615,6 +618,102 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         <Minus className="w-4 h-4" />
       </ToolbarBtn>
 
+      <Divider />
+
+      {/* ---- Table Dropdown ---- */}
+      <div className="relative shrink-0" ref={tableRef}>
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => toggleDropdown("table")}
+          className={`p-1.5 rounded-md transition-colors shrink-0 ${
+            editor.isActive("table")
+              ? "bg-[#007AFF]/15 text-[#007AFF]"
+              : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+          }`}
+          title="Table actions"
+        >
+          <TableIcon className="w-4 h-4" />
+        </button>
+        {openDropdown === "table" && (
+          <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-[60] overflow-hidden p-1 flex flex-col">
+            {!editor.isActive("table") ? (
+              <button
+                onClick={() => {
+                  editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+                  setOpenDropdown(null);
+                }}
+                className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                Insert Table (3x3)
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => editor.chain().focus().addColumnBefore().run()}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+                >
+                  Add Column Before
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().addColumnAfter().run()}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+                >
+                  Add Column After
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().deleteColumn().run()}
+                  className="w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md"
+                >
+                  Delete Column
+                </button>
+                <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
+                <button
+                  onClick={() => editor.chain().focus().addRowBefore().run()}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+                >
+                  Add Row Before
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().addRowAfter().run()}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+                >
+                  Add Row After
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().deleteRow().run()}
+                  className="w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md"
+                >
+                  Delete Row
+                </button>
+                <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
+                <button
+                  onClick={() => editor.chain().focus().mergeCells().run()}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+                >
+                  Merge Cells
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().splitCell().run()}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+                >
+                  Split Cell
+                </button>
+                <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
+                <button
+                  onClick={() => {
+                    editor.chain().focus().deleteTable().run();
+                    setOpenDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                >
+                  Delete Table
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* ---- Spacer ---- */}
       <div className="flex-1 min-w-[8px]" />
 
@@ -696,9 +795,18 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 onExport("tex");
                 setShowExport(false);
               }}
-              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-b-xl transition-colors"
+              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               Export as .tex (LaTeX)
+            </button>
+            <button
+              onClick={() => {
+                onExport("md");
+                setShowExport(false);
+              }}
+              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-b-xl transition-colors"
+            >
+              Export as .md (Markdown)
             </button>
           </div>
         )}

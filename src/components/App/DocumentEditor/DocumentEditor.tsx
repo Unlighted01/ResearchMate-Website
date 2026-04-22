@@ -6,9 +6,9 @@
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Editor } from "@tiptap/react";
-import { FileEdit, X } from "lucide-react";
+import { FileEdit, X, Sparkles } from "lucide-react";
 
 import useDocumentEditor from "./useDocumentEditor";
 import DocumentSidebar from "./DocumentSidebar";
@@ -23,6 +23,7 @@ import {
   insertBibliography,
 } from "./bibliographyUtils";
 import type { CitationFormat } from "../Citations/citationUtils";
+import { addItem } from "../../../services/storageService";
 
 // ============================================
 // PART 2: COMPONENT
@@ -50,6 +51,51 @@ const DocumentEditor: React.FC = () => {
 
   const [editor, setEditor] = useState<Editor | null>(null);
   const [bibFormat, setBibFormat] = useState<CitationFormat>("apa");
+
+  // Banner shown after a paper arrives from Discover page
+  const [discoverBanner, setDiscoverBanner] = useState<string | null>(null);
+
+  // ── Discover → Editor handoff ─────────────────────────────────────
+  useEffect(() => {
+    if (!editor) return;
+    const raw = sessionStorage.getItem("rm_discover_to_editor");
+    if (!raw) return;
+    sessionStorage.removeItem("rm_discover_to_editor");
+    try {
+      const paper = JSON.parse(raw) as {
+        title: string;
+        text: string;
+        sourceUrl: string;
+        sourceTitle: string;
+        citation: string;
+        citationFormat: string;
+        deviceSource: string;
+      };
+
+      // Save to library (fire-and-forget)
+      addItem({
+        text: paper.text,
+        sourceUrl: paper.sourceUrl,
+        sourceTitle: paper.sourceTitle,
+        citation: paper.citation,
+        citationFormat: paper.citationFormat as any,
+        deviceSource: paper.deviceSource as any,
+        tags: ["discover"],
+      }).catch(() => {});
+
+      // Build inline content nodes
+      const nodes: Record<string, unknown>[] = [
+        { type: "paragraph", content: [{ type: "text", marks: [{ type: "bold" }], text: paper.title }] },
+        { type: "blockquote", content: [{ type: "paragraph", content: [{ type: "text", text: paper.text }] }] },
+        { type: "paragraph", content: [{ type: "text", marks: [{ type: "italic" }], text: paper.citation }] },
+        { type: "paragraph" },
+      ];
+
+      editor.chain().focus().insertContent(nodes).run();
+      setDiscoverBanner(`"${paper.title.slice(0, 60)}" inserted from Discover`);
+      setTimeout(() => setDiscoverBanner(null), 5000);
+    } catch { /* malformed payload — ignore */ }
+  }, [editor]);
 
   // ── Title-prompt modal state ──────────────────────────────────────
   const [showTitleModal, setShowTitleModal] = useState(false);
@@ -172,7 +218,14 @@ const DocumentEditor: React.FC = () => {
         />
 
         {currentDoc ? (
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 relative">
+            {/* Discover banner */}
+            {discoverBanner && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-purple-600 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg animate-fade-in-up">
+                <Sparkles className="w-3.5 h-3.5" />
+                {discoverBanner}
+              </div>
+            )}
             <EditorToolbar
               editor={editor}
               onInsertItem={() => setShowImportDrawer(true)}

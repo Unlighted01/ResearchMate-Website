@@ -7,7 +7,7 @@
 // ============================================
 
 import React from "react";
-import { Sparkles, Send, Bot, User, X } from "lucide-react";
+import { Sparkles, Send, Bot, User, X, Trash2 } from "lucide-react";
 import { StorageItem } from "../../../services/storageService";
 import { ChatMessage } from "./useAIAssistant";
 
@@ -29,6 +29,7 @@ interface ChatPanelProps {
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   insertMention: (item: StorageItem) => void;
   handleKeyDown: (e: React.KeyboardEvent) => void;
+  clearHistory: () => void;
 }
 
 // ============================================
@@ -49,9 +50,33 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   handleInputChange,
   insertMention,
   handleKeyDown,
+  clearHistory,
 }) => {
+  const userMessages = chatHistory.filter((m) => m.role === "user").length;
   return (
     <div className="animate-fade-in h-[600px] flex flex-col bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 overflow-hidden shadow-sm">
+      {/* Chat header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-[#007AFF]" />
+          <span className="text-sm font-semibold text-gray-900 dark:text-white">AI Chat</span>
+          {userMessages > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500">
+              {userMessages} {userMessages === 1 ? "message" : "messages"}
+            </span>
+          )}
+        </div>
+        {chatHistory.length > 1 && (
+          <button
+            onClick={clearHistory}
+            className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+            title="Clear conversation"
+          >
+            <Trash2 className="w-3 h-3" />
+            Clear
+          </button>
+        )}
+      </div>
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50 dark:bg-[#151516]">
         {chatHistory.map((msg) => (

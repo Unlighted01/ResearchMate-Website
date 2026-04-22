@@ -7,8 +7,9 @@
 // ============================================
 
 import React, { useState } from "react";
-import { Plus, FileText, Trash2, Pencil, Check, X, CheckSquare, Square } from "lucide-react";
+import { Plus, FileText, Trash2, Pencil, Check, X, CheckSquare, Square, Timer } from "lucide-react";
 import type { Document } from "../../../services/documentService";
+import FocusTimer from "./FocusTimer";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -292,6 +293,11 @@ const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
             )}
           </div>
         ))}
+      </div>
+
+      {/* Focus Timer Section */}
+      <div className="mt-auto border-t border-gray-200 dark:border-gray-700 pt-2">
+        <FocusTimer />
       </div>
     </div>
   );

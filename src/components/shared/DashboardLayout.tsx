@@ -35,6 +35,7 @@ import {
   BookOpen,
   Rss,
   Mic,
+  Waypoints,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -80,6 +81,7 @@ const NAV_GROUPS: {
     label: "Analyse",
     items: [
       { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
+      { icon: Waypoints, label: "Knowledge Graph", path: "/app/graph" },
       { icon: BarChart2, label: "Statistics", path: "/app/statistics" },
     ],
   },
@@ -148,15 +150,19 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
   // Load user and sidebar state
   useEffect(() => {
+    const isGuest = localStorage.getItem("rm_guest_mode") === "true";
+    
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
+      if (!data.user && !isGuest) {
         navigate("/");
       } else {
         setUser(data.user);
-        addNotification(
-          "login",
-          `Welcome back, ${data.user.email?.split("@")[0] || "researcher"}!`,
-        );
+        if (data.user) {
+          addNotification(
+            "login",
+            `Welcome back, ${data.user.email?.split("@")[0] || "researcher"}!`,
+          );
+        }
       }
     });
 
@@ -164,7 +170,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
     if (savedState === "true") {
       setSidebarCollapsed(true);
     }
-  }, [navigate]);
+  }, [navigate, addNotification]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -214,6 +220,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    localStorage.removeItem("rm_guest_mode");
     navigate("/");
   };
 
@@ -621,8 +628,23 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   aria-label="User profile menu"
                   className="theme-icon-button theme-hover-surface profile-trigger flex items-center gap-2 p-1.5 rounded-xl transition-colors"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center text-white font-medium text-sm">
-                    {user?.email?.charAt(0).toUpperCase() || "U"}
+                  <div className="w-8 h-8 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center text-white font-medium text-sm overflow-hidden relative group/avatar">
+                    {user?.identities?.[0]?.identity_data?.avatar_url ? (
+                      <img
+                        src={user.identities[0].identity_data.avatar_url}
+                        alt="User"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      user?.email?.charAt(0).toUpperCase() || (
+                        <User className="w-4 h-4" />
+                      )
+                    )}
+                    {localStorage.getItem("rm_guest_mode") === "true" && (
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                        <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse shadow-sm" />
+                      </div>
+                    )}
                   </div>
                 </button>
 
@@ -630,27 +652,51 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                 {profileOpen && (
                   <div className="theme-surface profile-dropdown absolute right-0 mt-2 w-64 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden animate-slide-down">
                     <div className="theme-divider px-4 py-4 border-b">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-white flex items-center justify-center text-lg font-bold overflow-hidden">
-                          {user?.identities?.[0]?.identity_data?.avatar_url ? (
-                            <img
-                              src={user.identities[0].identity_data.avatar_url}
-                              alt={user.email}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            user?.email?.charAt(0).toUpperCase() || "U"
-                          )}
+                      {localStorage.getItem("rm_guest_mode") === "true" ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 flex items-center justify-center text-lg font-bold">
+                              G
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                                Guest Account
+                              </p>
+                              <p className="text-[10px] text-yellow-600 dark:text-yellow-500 font-medium uppercase tracking-wider">
+                                Limited Access
+                              </p>
+                            </div>
+                          </div>
+                          <Link
+                            to="/signup"
+                            className="block w-full py-2 px-3 bg-[#007AFF] hover:bg-[#0066DD] text-white text-xs font-medium text-center rounded-lg transition-colors"
+                          >
+                            Sign up to save progress
+                          </Link>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                            {user?.email}
-                          </p>
-                          <div className="flex items-center gap-1 text-xs text-gray-500">
-                            <span>Free Plan</span>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-white flex items-center justify-center text-lg font-bold overflow-hidden">
+                            {user?.identities?.[0]?.identity_data?.avatar_url ? (
+                              <img
+                                src={user.identities[0].identity_data.avatar_url}
+                                alt={user.email}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              user?.email?.charAt(0).toUpperCase() || "U"
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {user?.email}
+                            </p>
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <span>Free Plan</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                     <div className="p-2">
                       {NAV_ITEMS.slice(0, 4).map((item) => (

@@ -5,7 +5,7 @@ import { Input } from "../shared/ui";
 import BubbleBackground from "../shared/BubbleBackground";
 import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
-import { Mail, Lock, Check, X } from "lucide-react";
+import { Mail, Lock, Check, X, ArrowRight } from "lucide-react";
 
 // Apple-style icons for OAuth
 const GoogleIcon = () => (
@@ -404,6 +404,24 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
               )}
             </button>
           </form>
+
+          {/* Guest Mode */}
+          <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
+            <button
+              onClick={() => {
+                localStorage.setItem("rm_guest_mode", "true");
+                showToast("Entering Guest Mode...", "info");
+                navigate("/app/dashboard");
+              }}
+              className="w-full py-3 px-4 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 font-medium rounded-xl transition-all border border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2"
+            >
+              <span>Continue as Guest</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            <p className="text-center mt-3 text-[10px] text-gray-400 uppercase tracking-widest">
+              No account required
+            </p>
+          </div>
         </div>
 
         {/* Footer */}

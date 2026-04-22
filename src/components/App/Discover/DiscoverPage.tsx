@@ -7,6 +7,7 @@
 // ============================================
 
 import React, { useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Search,
   ExternalLink,
@@ -21,6 +22,7 @@ import {
   X,
   Check,
   AlertCircle,
+  PenSquare,
 } from "lucide-react";
 import { supabase } from "../../../services/supabaseClient";
 import { addItem } from "../../../services/storageService";
@@ -98,6 +100,7 @@ function truncateAbstract(text: string, maxLen = 250): string {
 
 const DiscoverPage: React.FC<DiscoverPageProps> = ({ useToast }) => {
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   // ---------- PART 5A: STATE ----------
   const [query, setQuery] = useState("");
@@ -196,6 +199,36 @@ const DiscoverPage: React.FC<DiscoverPageProps> = ({ useToast }) => {
       }
     },
     [showToast]
+  );
+
+  const handleSendToEditor = useCallback(
+    (paper: AcademicResult) => {
+      const citationText = [
+        paper.authors.length > 0 ? paper.authors.join(", ") : "",
+        paper.year ? `(${paper.year})` : "",
+        `"${paper.title}"`,
+        paper.venue || "",
+        paper.doi ? `DOI: ${paper.doi}` : "",
+      ]
+        .filter(Boolean)
+        .join(". ");
+
+      sessionStorage.setItem(
+        "rm_discover_to_editor",
+        JSON.stringify({
+          title: paper.title,
+          text: paper.abstract || paper.title,
+          sourceUrl: paper.url,
+          sourceTitle: paper.title,
+          citation: citationText,
+          citationFormat: "apa",
+          deviceSource: "web",
+        })
+      );
+      navigate("/app/editor");
+      showToast("Opening editor with paper…", "info");
+    },
+    [navigate, showToast]
   );
 
   const toggleExpand = (id: string) => {
@@ -425,6 +458,16 @@ const DiscoverPage: React.FC<DiscoverPageProps> = ({ useToast }) => {
                   )}
 
                   <div className="flex-1" />
+
+                  {/* Send to Editor */}
+                  <button
+                    onClick={() => handleSendToEditor(paper)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all active:scale-95 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/40"
+                    title="Send to Document Editor"
+                  >
+                    <PenSquare className="w-3.5 h-3.5" />
+                    To Editor
+                  </button>
 
                   <button
                     onClick={() => handleSave(paper)}
