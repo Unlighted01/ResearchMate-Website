@@ -459,6 +459,7 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
               )}
             </button>
           </form>
+        </div>
 
           {/* Guest Mode */}
           <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
