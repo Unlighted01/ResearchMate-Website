@@ -244,8 +244,6 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
     }
   };
 
-  };
-  
   // Delete a scan item
   const deleteScan = async (scan: StorageItem) => {
     if (
@@ -709,9 +707,6 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
         </div>
       )}
 
