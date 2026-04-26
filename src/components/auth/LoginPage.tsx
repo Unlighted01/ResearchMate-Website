@@ -6,7 +6,7 @@ import BubbleBackground from "../shared/BubbleBackground";
 import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
 
-import { Mail, Lock, ArrowLeft } from "lucide-react";
+import { Mail, Lock, ArrowLeft, ArrowRight } from "lucide-react";
 
 // Apple-style icons for OAuth
 const GoogleIcon = () => (
