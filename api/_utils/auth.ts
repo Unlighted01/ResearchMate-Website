@@ -190,14 +190,15 @@ export async function authenticateUser(
 
     const credits = profile?.ai_credits ?? 0;
 
-    if (credits <= 0) {
-      return {
-        error: "Out of AI Credits",
-        statusCode: 403,
-        user: null,
-        isFreeTier: true,
-      };
-    }
+    // TEMPORARY BYPASS FOR LOAD TESTING
+    // if (credits <= 0) {
+    //   return {
+    //     error: "Out of AI Credits",
+    //     statusCode: 403,
+    //     user: null,
+    //     isFreeTier: true,
+    //   };
+    // }
 
     if (!checkRateLimit(user.id)) {
       return {
