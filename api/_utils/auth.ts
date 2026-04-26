@@ -7,7 +7,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 // 20 requests per 60 seconds per user.
 // Resets on function cold start (serverless limitation) — good enough as a
 // first-pass guard. Replace with Upstash Redis for persistent limiting.
-const RATE_LIMIT_MAX = 1000;
+const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const rateLimitMap = new Map<string, number[]>();
 
@@ -190,15 +190,14 @@ export async function authenticateUser(
 
     const credits = profile?.ai_credits ?? 0;
 
-    // TEMPORARY BYPASS FOR LOAD TESTING
-    // if (credits <= 0) {
-    //   return {
-    //     error: "Out of AI Credits",
-    //     statusCode: 403,
-    //     user: null,
-    //     isFreeTier: true,
-    //   };
-    // }
+    if (credits <= 0) {
+      return {
+        error: "Out of AI Credits",
+        statusCode: 403,
+        user: null,
+        isFreeTier: true,
+      };
+    }
 
     if (!checkRateLimit(user.id)) {
       return {
