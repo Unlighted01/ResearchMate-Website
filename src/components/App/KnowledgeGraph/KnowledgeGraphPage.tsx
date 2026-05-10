@@ -3,7 +3,7 @@
 // ============================================
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import ForceGraph2D from "react-force-graph-2d";
+import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
 import * as d3 from "d3";
 import { getAllItems, StorageItem } from "../../../services/storageService";
 import { Search, Info, Filter, ZoomIn, ZoomOut, Maximize2, X, FileText, Tag, Calendar } from "lucide-react";
@@ -42,7 +42,7 @@ const KnowledgeGraphPage: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const fgRef = useRef<any>();
+  const fgRef = useRef<ForceGraphMethods>();
 
   // ---------- PART 2A: DATA LOADING ----------
 
