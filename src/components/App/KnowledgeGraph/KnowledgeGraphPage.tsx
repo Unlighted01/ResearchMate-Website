@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import ForceGraph2D from "react-force-graph-2d";
+import * as d3 from "d3";
 import { getAllItems, StorageItem } from "../../../services/storageService";
 import { Search, Info, Filter, ZoomIn, ZoomOut, Maximize2, X, FileText, Tag, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -58,6 +59,15 @@ const KnowledgeGraphPage: React.FC = () => {
     };
     load();
   }, []);
+
+  // ---------- PART 2A.5: PHYSICS TUNING ----------
+  useEffect(() => {
+    if (fgRef.current && !loading) {
+      fgRef.current.d3Force("charge")?.strength(-300);
+      fgRef.current.d3Force("link")?.distance(120);
+      fgRef.current.d3Force("collide", d3.forceCollide().radius((d: any) => d.val + 10));
+    }
+  }, [loading]);
 
   // ---------- PART 2B: GRAPH CALCULATION ----------
 
@@ -223,9 +233,10 @@ const KnowledgeGraphPage: React.FC = () => {
             ctx.fill();
 
             // Only show labels when zoomed in or hovering
-            if (globalScale > 3 || node === hoverNode) {
+            if (globalScale > 1.2 || node === hoverNode) {
+              const displayLabel = node === hoverNode ? label : (label.length > 25 ? label.substring(0, 25) + "..." : label);
               ctx.fillStyle = document.documentElement.classList.contains("dark") ? "#fff" : "#333";
-              ctx.fillText(label, node.x, node.y + node.val + 4);
+              ctx.fillText(displayLabel, node.x, node.y + node.val + 4);
             }
           }}
           onNodeHover={(node: any) => setHoverNode(node)}
