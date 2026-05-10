@@ -292,7 +292,6 @@ import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import AIAssistant from "./components/App/AIAssistant";
 import Statistics from "./components/App/Statistics";
-import KnowledgeGraph from "./components/App/KnowledgeGraph";
 import SmartPenGallery from "./components/App/SmartPenGallery";
 import PairSmartPen from "./components/App/PairSmartPen";
 import DocumentEditor from "./components/App/DocumentEditor";
