@@ -85,7 +85,15 @@ const KnowledgeGraphPage: React.FC = () => {
   const [showTopicLinks, setShowTopicLinks] = useState(true);
   
   const fgRef = useRef<any>();
-  const isDark = document.documentElement.classList.contains("dark");
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   // ---------- DATA LOADING ----------
 
@@ -137,10 +145,11 @@ const KnowledgeGraphPage: React.FC = () => {
         posArray[i+1] = (Math.random() - 0.5) * 3000;
         posArray[i+2] = (Math.random() - 0.5) * 3000;
         
-        // Slight color variations for stars (white to pale blue/purple)
-        colorArray[i] = 0.8 + Math.random() * 0.2; // R
-        colorArray[i+1] = 0.8 + Math.random() * 0.2; // G
-        colorArray[i+2] = 0.9 + Math.random() * 0.1; // B
+        // In dark mode: white to pale blue/purple stars
+        // In light mode: use dark blue/purple dust
+        colorArray[i] = isDark ? (0.8 + Math.random() * 0.2) : (0.2 + Math.random() * 0.2); // R
+        colorArray[i+1] = isDark ? (0.8 + Math.random() * 0.2) : (0.2 + Math.random() * 0.2); // G
+        colorArray[i+2] = isDark ? (0.9 + Math.random() * 0.1) : (0.4 + Math.random() * 0.3); // B
       }
       
       starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
@@ -150,14 +159,14 @@ const KnowledgeGraphPage: React.FC = () => {
         size: 2, 
         vertexColors: true,
         transparent: true, 
-        opacity: 0.6,
+        opacity: isDark ? 0.6 : 0.2, // Subtle in light mode
         sizeAttenuation: true
       });
       const starMesh = new THREE.Points(starGeo, starMat);
       starMesh.name = 'galaxyStars';
       scene.add(starMesh);
     }
-  }, [loading]);
+  }, [loading, isDark]);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -447,13 +456,13 @@ const KnowledgeGraphPage: React.FC = () => {
           linkDirectionalParticleSpeed={(d: any) => d.linkType === 'tag' ? 0.005 : 0.002}
           linkWidth={(link: any) => highlightLinks.has(link) ? 1.5 : 0.3}
           linkColor={(link: any) => {
-            if (hoverNode && !highlightLinks.has(link)) return 'rgba(255,255,255,0.01)';
+            if (hoverNode && !highlightLinks.has(link)) return isDark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.02)';
             if (highlightLinks.has(link)) {
               if (link.linkType === 'tag') return '#c084fc'; // Bright purple
               if (link.linkType === 'source') return '#fbbf24'; // Bright amber
               return '#38bdf8'; // Bright Sky Blue
             }
-            return "rgba(255,255,255,0.05)"; // Constellation lines
+            return isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.15)"; // Constellation lines
           }}
           linkDirectionalParticleWidth={(link: any) => highlightLinks.has(link) ? 3 : 1}
           onNodeHover={(node: any) => setHoverNode(node)}
@@ -492,9 +501,9 @@ const KnowledgeGraphPage: React.FC = () => {
               const label = node.name;
               const displayLabel = isHovered ? label : (label.length > 25 ? label.substring(0, 25) + "..." : label);
               const sprite = new SpriteText(displayLabel);
-              sprite.color = "#ffffff";
+              sprite.color = isDark ? "#ffffff" : "#111827";
               sprite.textHeight = 4;
-              sprite.backgroundColor = "rgba(10, 5, 20, 0.85)";
+              sprite.backgroundColor = isDark ? "rgba(10, 5, 20, 0.85)" : "rgba(255, 255, 255, 0.85)";
               sprite.borderColor = node.color;
               sprite.borderWidth = 0.5;
               sprite.borderRadius = 4;
