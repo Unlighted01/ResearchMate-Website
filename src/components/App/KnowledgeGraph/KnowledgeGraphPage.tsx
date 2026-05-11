@@ -146,20 +146,41 @@ const KnowledgeGraphPage: React.FC = () => {
         posArray[i+2] = (Math.random() - 0.5) * 3000;
         
         // In dark mode: white to pale blue/purple stars
-        // In light mode: use dark blue/purple dust
-        colorArray[i] = isDark ? (0.8 + Math.random() * 0.2) : (0.2 + Math.random() * 0.2); // R
-        colorArray[i+1] = isDark ? (0.8 + Math.random() * 0.2) : (0.2 + Math.random() * 0.2); // G
-        colorArray[i+2] = isDark ? (0.9 + Math.random() * 0.1) : (0.4 + Math.random() * 0.3); // B
+        // In light mode: vibrant nebula colors (cyan, magenta, gold, violet)
+        if (isDark) {
+          colorArray[i] = 0.8 + Math.random() * 0.2; // R
+          colorArray[i+1] = 0.8 + Math.random() * 0.2; // G
+          colorArray[i+2] = 0.9 + Math.random() * 0.1; // B
+        } else {
+          // Vibrant light-mode galaxy colors
+          const colorType = Math.random();
+          if (colorType < 0.33) {
+            // Cyan/Blue
+            colorArray[i] = 0.0 + Math.random() * 0.2; 
+            colorArray[i+1] = 0.6 + Math.random() * 0.4; 
+            colorArray[i+2] = 0.8 + Math.random() * 0.2; 
+          } else if (colorType < 0.66) {
+            // Magenta/Pink
+            colorArray[i] = 0.8 + Math.random() * 0.2; 
+            colorArray[i+1] = 0.2 + Math.random() * 0.3; 
+            colorArray[i+2] = 0.6 + Math.random() * 0.4; 
+          } else {
+            // Soft Gold/Amber
+            colorArray[i] = 0.9 + Math.random() * 0.1; 
+            colorArray[i+1] = 0.7 + Math.random() * 0.2; 
+            colorArray[i+2] = 0.1 + Math.random() * 0.3; 
+          }
+        }
       }
       
       starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
       starGeo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
       
       const starMat = new THREE.PointsMaterial({ 
-        size: 2, 
+        size: isDark ? 2 : 3, // slightly larger in light mode to be visible 
         vertexColors: true,
         transparent: true, 
-        opacity: isDark ? 0.6 : 0.2, // Subtle in light mode
+        opacity: isDark ? 0.6 : 0.4, // bright enough to see, but not overwhelming
         sizeAttenuation: true
       });
       const starMesh = new THREE.Points(starGeo, starMat);
@@ -454,7 +475,7 @@ const KnowledgeGraphPage: React.FC = () => {
           nodeRelSize={6}
           linkDirectionalParticles={2}
           linkDirectionalParticleSpeed={(d: any) => d.linkType === 'tag' ? 0.005 : 0.002}
-          linkWidth={(link: any) => highlightLinks.has(link) ? 1.5 : 0.3}
+          linkWidth={(link: any) => highlightLinks.has(link) ? 1.5 : (isDark ? 0.3 : 0.6)}
           linkColor={(link: any) => {
             if (hoverNode && !highlightLinks.has(link)) return isDark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.02)';
             if (highlightLinks.has(link)) {
@@ -462,7 +483,7 @@ const KnowledgeGraphPage: React.FC = () => {
               if (link.linkType === 'source') return '#fbbf24'; // Bright amber
               return '#38bdf8'; // Bright Sky Blue
             }
-            return isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.15)"; // Constellation lines
+            return isDark ? "rgba(255,255,255,0.05)" : "rgba(56, 189, 248, 0.15)"; // Constellation lines (light blue in light mode)
           }}
           linkDirectionalParticleWidth={(link: any) => highlightLinks.has(link) ? 3 : 1}
           onNodeHover={(node: any) => setHoverNode(node)}
