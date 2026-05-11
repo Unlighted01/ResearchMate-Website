@@ -1,12 +1,15 @@
 // ============================================
-// KnowledgeGraphPage.tsx - Visual Research Map
+// KnowledgeGraphPage.tsx - Visual Research Map (3D)
 // ============================================
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
-import * as d3 from "d3";
+// @ts-ignore
+import ForceGraph3D from "react-force-graph-3d";
+import * as THREE from "three";
+// @ts-ignore
+import SpriteText from "three-spritetext";
 import { getAllItems, StorageItem } from "../../../services/storageService";
-import { Search, Info, Filter, ZoomIn, ZoomOut, Maximize2, X, FileText, Tag, Calendar } from "lucide-react";
+import { Search, Info, Filter, ZoomIn, ZoomOut, Maximize2, X, FileText, Tag, Calendar, Network, Link as LinkIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ============================================
@@ -19,14 +22,19 @@ interface GraphNode {
   val: number;
   color: string;
   item: StorageItem;
+  extractedKeywords: string[];
   x?: number;
   y?: number;
+  z?: number;
 }
 
 interface GraphLink {
   source: string | GraphNode;
   target: string | GraphNode;
   commonTags: string[];
+  commonKeywords: string[];
+  isSourceLink: boolean;
+  linkType: "tag" | "source" | "topic";
 }
 
 interface GraphData {
@@ -35,7 +43,32 @@ interface GraphData {
 }
 
 // ============================================
-// PART 2: COMPONENT
+// PART 2: NLP ENGINE
+// ============================================
+
+const STOP_WORDS = new Set([
+  "the", "and", "that", "this", "with", "from", "for", "are", "was", "will", "have", "you", 
+  "not", "your", "can", "has", "how", "but", "what", "all", "were", "they", "there", "their", 
+  "when", "about", "which", "would", "like", "one", "more", "some", "out", "into", "just", 
+  "also", "could", "than", "over", "only", "most", "been", "much", "very", "such", "through", 
+  "before", "after", "these", "those"
+]);
+
+function extractKeywords(text: string): string[] {
+  if (!text) return [];
+  const words = text.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
+  const counts: Record<string, number> = {};
+  words.forEach(w => {
+    if (!STOP_WORDS.has(w)) counts[w] = (counts[w] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(e => e[0]);
+}
+
+// ============================================
+// PART 3: COMPONENT
 // ============================================
 
 const KnowledgeGraphPage: React.FC = () => {
@@ -49,16 +82,17 @@ const KnowledgeGraphPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [showTagFilter, setShowTagFilter] = useState(false);
+  const [showTopicLinks, setShowTopicLinks] = useState(true);
   
-  const fgRef = useRef<ForceGraphMethods | null>(null);
+  const fgRef = useRef<any>();
   const isDark = document.documentElement.classList.contains("dark");
 
-  // ---------- PART 2A: DATA LOADING ----------
+  // ---------- DATA LOADING ----------
 
   useEffect(() => {
     const load = async () => {
       try {
-        const allItems = await getAllItems(1000); // Fetch up to 1000 items
+        const allItems = await getAllItems(1000); 
         setItems(allItems);
       } catch (err) {
         console.error("Failed to load items for graph:", err);
@@ -69,46 +103,104 @@ const KnowledgeGraphPage: React.FC = () => {
     load();
   }, []);
 
-  // ---------- PART 2A.5: PHYSICS TUNING ----------
+  // ---------- PHYSICS & GALAXY THEME ----------
   useEffect(() => {
     if (fgRef.current && !loading) {
-      fgRef.current.d3Force("charge")?.strength(-350);
-      fgRef.current.d3Force("link")?.distance(140);
-      fgRef.current.d3Force("collide", d3.forceCollide().radius((d: any) => d.val + 15));
+      fgRef.current.d3Force("charge").strength(-150);
+      fgRef.current.d3Force("link").distance(80);
+      
+      // Galaxy Starfield Background
+      const scene = fgRef.current.scene();
+      
+      // Remove old stars if re-running
+      const oldStars = scene.getObjectByName('galaxyStars');
+      if (oldStars) scene.remove(oldStars);
+
+      const starGeo = new THREE.BufferGeometry();
+      const starCount = 3000;
+      const posArray = new Float32Array(starCount * 3);
+      const colorArray = new Float32Array(starCount * 3);
+      
+      for(let i = 0; i < starCount * 3; i+=3) {
+        // Spread stars in a large sphere
+        posArray[i] = (Math.random() - 0.5) * 3000;
+        posArray[i+1] = (Math.random() - 0.5) * 3000;
+        posArray[i+2] = (Math.random() - 0.5) * 3000;
+        
+        // Slight color variations for stars (white to pale blue/purple)
+        colorArray[i] = 0.8 + Math.random() * 0.2; // R
+        colorArray[i+1] = 0.8 + Math.random() * 0.2; // G
+        colorArray[i+2] = 0.9 + Math.random() * 0.1; // B
+      }
+      
+      starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+      starGeo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+      
+      const starMat = new THREE.PointsMaterial({ 
+        size: 2, 
+        vertexColors: true,
+        transparent: true, 
+        opacity: 0.6,
+        sizeAttenuation: true
+      });
+      const starMesh = new THREE.Points(starGeo, starMat);
+      starMesh.name = 'galaxyStars';
+      scene.add(starMesh);
     }
   }, [loading]);
 
-  // ---------- PART 2B: GRAPH CALCULATION ----------
+  // ---------- GRAPH CALCULATION ----------
+
+  const itemsWithKeywords = useMemo(() => {
+    return items.map((item) => ({
+      ...item,
+      extractedKeywords: extractKeywords(`${item.sourceTitle || ""} ${item.aiSummary || ""} ${item.text}`)
+    }));
+  }, [items]);
 
   const graphData = useMemo(() => {
-    const nodes: GraphNode[] = items.map((item) => ({
+    const nodes: GraphNode[] = itemsWithKeywords.map((item) => ({
       id: item.id,
       name: item.sourceTitle || item.text.substring(0, 30) + "...",
       val: 3 + (item.tags?.length || 0) * 1.5, // Size by tag count
       color: item.color ? getHexColor(item.color) : "#007AFF",
       item: item,
+      extractedKeywords: item.extractedKeywords
     }));
 
     const links: GraphLink[] = [];
-    // Link items that share tags
-    for (let i = 0; i < items.length; i++) {
-      for (let j = i + 1; j < items.length; j++) {
-        const tags1 = items[i].tags || [];
-        const tags2 = items[j].tags || [];
-        const commonTags = tags1.filter((t) => tags2.includes(t));
+    
+    for (let i = 0; i < itemsWithKeywords.length; i++) {
+      for (let j = i + 1; j < itemsWithKeywords.length; j++) {
+        const itemA = itemsWithKeywords[i];
+        const itemB = itemsWithKeywords[j];
 
-        if (commonTags.length > 0) {
+        const tagsA = itemA.tags || [];
+        const tagsB = itemB.tags || [];
+        const commonTags = tagsA.filter((t) => tagsB.includes(t));
+
+        const isSourceLink = !!(itemA.sourceUrl && itemA.sourceUrl === itemB.sourceUrl);
+        const commonKeywords = itemA.extractedKeywords.filter(k => itemB.extractedKeywords.includes(k));
+
+        if (commonTags.length > 0 || isSourceLink || commonKeywords.length >= 2) {
+          let linkType: "tag" | "source" | "topic" = "topic";
+          if (commonTags.length > 0) linkType = "tag";
+          else if (isSourceLink) linkType = "source";
+
           links.push({
-            source: items[i].id,
-            target: items[j].id,
-            commonTags: commonTags,
+            source: itemA.id,
+            target: itemB.id,
+            commonTags,
+            commonKeywords,
+            isSourceLink,
+            linkType
           });
         }
       }
     }
 
     return { nodes, links };
-  }, [items]);
+  }, [itemsWithKeywords]);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -116,7 +208,7 @@ const KnowledgeGraphPage: React.FC = () => {
     return Array.from(tags).sort();
   }, [items]);
 
-  // ---------- PART 2C: UTILS & FILTERING ----------
+  // ---------- UTILS & FILTERING ----------
 
   function getHexColor(colorName: string): string {
     const colors: Record<string, string> = {
@@ -148,13 +240,14 @@ const KnowledgeGraphPage: React.FC = () => {
     const nodeIds = new Set(filteredNodes.map((n) => n.id));
     const filteredLinks = graphData.links.filter(
       (l) => {
+        if (!showTopicLinks && l.linkType === "topic") return false;
         const sid = typeof l.source === 'object' ? (l.source as any).id : l.source;
         const tid = typeof l.target === 'object' ? (l.target as any).id : l.target;
         return nodeIds.has(sid) && nodeIds.has(tid);
       }
     );
     return { nodes: filteredNodes, links: filteredLinks };
-  }, [graphData, searchQuery, selectedTags]);
+  }, [graphData, searchQuery, selectedTags, showTopicLinks]);
 
   // Precompute neighbors for hover highlighting
   const highlightNodes = useMemo(() => {
@@ -188,7 +281,7 @@ const KnowledgeGraphPage: React.FC = () => {
     return set;
   }, [hoverNode, hoverLink, filteredData.links]);
 
-  // ---------- PART 2D: RENDER ----------
+  // ---------- RENDER ----------
 
   if (loading) {
     return (
@@ -199,28 +292,31 @@ const KnowledgeGraphPage: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col relative overflow-hidden bg-gray-50 dark:bg-black rounded-3xl border border-gray-200 dark:border-gray-800 shadow-apple-lg">
+    <div className="h-full flex flex-col relative overflow-hidden bg-[#0b081a] dark:bg-[#030008] rounded-3xl border border-indigo-900/30 shadow-2xl">
+      
+      {/* 3D Scene Lighting via ForceGraph3D internal scene config, but defaults are fine */}
+      
       {/* Header / Controls */}
       <div className="absolute top-6 left-6 right-6 z-10 flex items-start justify-between pointer-events-none">
         <div className="flex flex-col gap-4 pointer-events-auto">
-          <div className="glass-card p-4 rounded-2xl flex flex-col gap-1 w-64 shadow-xl border-white/20">
-            <h1 className="text-lg font-bold flex items-center gap-2">
-              <WaypointsIcon className="w-5 h-5 text-[#007AFF]" />
-              Knowledge Graph
+          <div className="glass-card p-4 rounded-2xl flex flex-col gap-1 w-64 shadow-2xl border-white/10 bg-black/40 backdrop-blur-md">
+            <h1 className="text-lg font-bold flex items-center gap-2 text-white">
+              <WaypointsIcon className="w-5 h-5 text-indigo-400" />
+              Galaxy Map
             </h1>
-            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest">
-              Mapping your research clusters
+            <p className="text-[10px] text-indigo-200/70 font-medium uppercase tracking-widest">
+              Immersive Research Clusters
             </p>
           </div>
 
           <div className="flex gap-2">
-            <div className="glass-card p-2 rounded-xl flex items-center gap-2 w-64 shadow-sm border-white/50 bg-white/60 dark:bg-black/60 backdrop-blur-md">
-              <Search className="w-4 h-4 text-gray-400 ml-2" />
+            <div className="glass-card p-2 rounded-xl flex items-center gap-2 w-64 shadow-lg border-white/10 bg-black/40 backdrop-blur-md">
+              <Search className="w-4 h-4 text-indigo-300 ml-2" />
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by title or tag..."
-                className="bg-transparent border-none text-sm focus:ring-0 w-full placeholder:text-gray-400"
+                placeholder="Search constellations..."
+                className="bg-transparent border-none text-sm focus:ring-0 w-full placeholder:text-indigo-400/50 text-white"
               />
               {searchQuery && (
                 <button onClick={() => setSearchQuery("")}>
@@ -228,6 +324,15 @@ const KnowledgeGraphPage: React.FC = () => {
                 </button>
               )}
             </div>
+
+            <button
+              onClick={() => setShowTopicLinks(!showTopicLinks)}
+              className={`glass-card p-2 px-3 rounded-xl flex items-center gap-2 shadow-sm border-white/50 text-sm font-bold transition-colors ${showTopicLinks ? 'bg-sky-500 text-white border-sky-500 shadow-sky-500/20 shadow-md' : 'bg-white/60 dark:bg-black/60 text-gray-600 dark:text-gray-300 hover:bg-white/90 dark:hover:bg-white/10 backdrop-blur-md'}`}
+              title="Toggle Auto-Topic Links"
+            >
+              <Network className="w-4 h-4" />
+              <span>Topics</span>
+            </button>
 
             <div className="relative">
               <button 
@@ -302,194 +407,104 @@ const KnowledgeGraphPage: React.FC = () => {
             >
               <Maximize2 className="w-4 h-4 text-gray-600 dark:text-gray-300" />
             </button>
-            <div className="h-px w-6 bg-gray-200 dark:bg-white/10 my-1" />
-            <button
-              onClick={() => {
-                const current = fgRef.current?.zoom();
-                if (current) fgRef.current?.zoom(current * 1.2, 400);
-              }}
-              className="p-2 hover:bg-white/50 dark:hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <ZoomIn className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-            </button>
-            <button
-              onClick={() => {
-                const current = fgRef.current?.zoom();
-                if (current) fgRef.current?.zoom(current / 1.2, 400);
-              }}
-              className="p-2 hover:bg-white/50 dark:hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <ZoomOut className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-            </button>
           </div>
         </div>
       </div>
 
       {/* Graph Area */}
-      <div className="flex-1 w-full h-full relative group">
-        <ForceGraph2D
+      <div className="flex-1 w-full h-full relative group cursor-crosshair">
+        <ForceGraph3D
           ref={fgRef}
           graphData={filteredData}
           backgroundColor="rgba(0,0,0,0)"
           nodeRelSize={6}
           linkDirectionalParticles={2}
-          linkDirectionalParticleSpeed={(d) => (d as any).commonTags.length * 0.005}
-          linkWidth={(link: any) => highlightLinks.has(link) ? 3 : Math.max(1, (link.commonTags.length * 0.5))}
+          linkDirectionalParticleSpeed={(d: any) => d.linkType === 'tag' ? 0.005 : 0.002}
+          linkWidth={(link: any) => highlightLinks.has(link) ? 1.5 : 0.3}
           linkColor={(link: any) => {
-            if (hoverNode && !highlightLinks.has(link)) return isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)';
-            return highlightLinks.has(link) ? (isDark ? 'rgba(147,51,234,0.8)' : 'rgba(168,85,247,0.8)') : (isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)");
+            if (hoverNode && !highlightLinks.has(link)) return 'rgba(255,255,255,0.01)';
+            if (highlightLinks.has(link)) {
+              if (link.linkType === 'tag') return '#c084fc'; // Bright purple
+              if (link.linkType === 'source') return '#fbbf24'; // Bright amber
+              return '#38bdf8'; // Bright Sky Blue
+            }
+            return "rgba(255,255,255,0.05)"; // Constellation lines
           }}
-          linkDirectionalParticleWidth={(link: any) => highlightLinks.has(link) ? 4 : 2}
+          linkDirectionalParticleWidth={(link: any) => highlightLinks.has(link) ? 3 : 1}
           onNodeHover={(node: any) => setHoverNode(node)}
           onNodeClick={(node: any) => setSelectedNode(node)}
           onLinkHover={(link: any) => setHoverLink(link)}
-          nodeCanvasObject={(node: any, ctx, globalScale) => {
+          nodeThreeObject={(node: any) => {
+            const group = new THREE.Group();
+
             const isHovered = node === hoverNode;
             const isHighlighted = highlightNodes.has(node.id);
             const dimNode = hoverNode && !isHighlighted;
             
-            // Draw node circle
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, node.val, 0, 2 * Math.PI, false);
-            ctx.fillStyle = dimNode ? (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)') : node.color;
-            ctx.fill();
-
-            // Node Outline & Glow
+            // Sphere
+            const geometry = new THREE.SphereGeometry(node.val, 16, 16);
+            const material = new THREE.MeshStandardMaterial({
+              color: node.color,
+              transparent: true,
+              opacity: dimNode ? 0.05 : 0.9,
+              emissive: node.color,
+              emissiveIntensity: isHovered || node === selectedNode ? 2.0 : 0.5,
+              roughness: 0.2,
+              metalness: 0.8
+            });
+            const sphere = new THREE.Mesh(geometry, material);
+            
+            // Add point light to highlighted nodes (stars)
             if (isHovered || node === selectedNode) {
-              ctx.strokeStyle = isDark ? 'white' : 'black';
-              ctx.lineWidth = 2 / globalScale;
-              ctx.stroke();
-              
-              if (isHovered) {
-                // Subtle glow
-                ctx.shadowColor = node.color;
-                ctx.shadowBlur = 10;
-                ctx.fill();
-                ctx.shadowBlur = 0; // reset
-              }
+               const light = new THREE.PointLight(node.color, 1.5, 100);
+               group.add(light);
             }
+            
+            group.add(sphere);
 
-            // Label Drawing
-            if (!dimNode && (globalScale > 1.2 || isHovered || isHighlighted)) {
+            // Sprite Label
+            if (!dimNode && (isHovered || isHighlighted || node.val > 6)) {
               const label = node.name;
               const displayLabel = isHovered ? label : (label.length > 25 ? label.substring(0, 25) + "..." : label);
-              const fontSize = 12 / globalScale;
-              ctx.font = `600 ${fontSize}px Inter, sans-serif`;
-              const textWidth = ctx.measureText(displayLabel).width;
-              
-              const paddingX = fontSize * 0.8;
-              const paddingY = fontSize * 0.5;
-              const bckgW = textWidth + paddingX * 2;
-              const bckgH = fontSize + paddingY * 2;
-              const labelY = node.y + node.val + bckgH / 2 + 4; // Position below node
-
-              // Pill Background
-              ctx.fillStyle = isDark ? "rgba(20, 20, 20, 0.95)" : "rgba(255, 255, 255, 0.95)";
-              ctx.beginPath();
-              // @ts-ignore - roundRect is in modern TS DOM libs but might complain
-              if (ctx.roundRect) {
-                ctx.roundRect(node.x - bckgW / 2, labelY - bckgH / 2, bckgW, bckgH, bckgH / 2);
-              } else {
-                ctx.rect(node.x - bckgW / 2, labelY - bckgH / 2, bckgW, bckgH);
-              }
-              ctx.fill();
-              
-              // Outline for pill
-              ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)";
-              ctx.lineWidth = 1 / globalScale;
-              ctx.stroke();
-
-              // Text
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.fillStyle = isDark ? "#fff" : "#111";
-              ctx.fillText(displayLabel, node.x, labelY);
+              const sprite = new SpriteText(displayLabel);
+              sprite.color = "#ffffff";
+              sprite.textHeight = 4;
+              sprite.backgroundColor = "rgba(10, 5, 20, 0.85)";
+              sprite.borderColor = node.color;
+              sprite.borderWidth = 0.5;
+              sprite.borderRadius = 4;
+              sprite.padding = [4, 2];
+              sprite.position.y = node.val + 6;
+              group.add(sprite);
             }
-          }}
-          nodePointerAreaPaint={(node: any, color: string, ctx, globalScale) => {
-            // Circle hitbox
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, node.val + 4, 0, 2 * Math.PI, false); // generous hit area for circle
-            ctx.fill();
 
-            // Text Pill Hitbox (only if drawn)
-            const isHovered = node === hoverNode;
-            const isHighlighted = highlightNodes.has(node.id);
-            if (globalScale > 1.2 || isHovered || isHighlighted) {
-              const label = node.name;
-              const displayLabel = isHovered ? label : (label.length > 25 ? label.substring(0, 25) + "..." : label);
-              const fontSize = 12 / globalScale;
-              ctx.font = `600 ${fontSize}px Inter, sans-serif`;
-              const textWidth = ctx.measureText(displayLabel).width;
-              
-              const paddingX = fontSize * 0.8;
-              const paddingY = fontSize * 0.5;
-              const bckgW = textWidth + paddingX * 2;
-              const bckgH = fontSize + paddingY * 2;
-              const labelY = node.y + node.val + bckgH / 2 + 4;
-
-              ctx.beginPath();
-              if (ctx.roundRect) {
-                ctx.roundRect(node.x - bckgW / 2, labelY - bckgH / 2, bckgW, bckgH, bckgH / 2);
-              } else {
-                ctx.rect(node.x - bckgW / 2, labelY - bckgH / 2, bckgW, bckgH);
-              }
-              ctx.fill();
-            }
+            return group;
           }}
-          linkCanvasObjectMode={() => 'after'}
-          linkCanvasObject={(link: any, ctx, globalScale) => {
-            if (link === hoverLink && link.commonTags?.length) {
-              // Draw a label on the link
-              const start = link.source;
-              const end = link.target;
-              if (typeof start !== 'object' || typeof end !== 'object') return;
-              
-              const midX = start.x + (end.x - start.x) / 2;
-              const midY = start.y + (end.y - start.y) / 2;
-              
-              const label = `${link.commonTags.length} shared tag${link.commonTags.length > 1 ? 's' : ''}`;
-              const fontSize = 10 / globalScale;
-              ctx.font = `800 ${fontSize}px Inter, sans-serif`;
-              const textWidth = ctx.measureText(label).width;
-              const paddingX = fontSize * 0.8;
-              const paddingY = fontSize * 0.4;
-              
-              // Draw background pill
-              ctx.fillStyle = isDark ? "rgba(147, 51, 234, 0.95)" : "rgba(168, 85, 247, 0.95)"; // Purple pill
-              ctx.beginPath();
-              if (ctx.roundRect) {
-                ctx.roundRect(midX - textWidth/2 - paddingX, midY - fontSize/2 - paddingY, textWidth + paddingX*2, fontSize + paddingY*2, fontSize);
-              } else {
-                ctx.rect(midX - textWidth/2 - paddingX, midY - fontSize/2 - paddingY, textWidth + paddingX*2, fontSize + paddingY*2);
-              }
-              ctx.fill();
-              
-              // Draw text
-              ctx.fillStyle = "#ffffff";
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.fillText(label, midX, midY);
-            }
-          }}
-          cooldownTicks={100}
         />
       </div>
 
       {/* Legend / Stats */}
-      <div className="absolute bottom-6 left-6 z-10 glass-card p-4 rounded-2xl flex flex-col gap-2 shadow-lg border border-white/20 bg-white/60 dark:bg-black/60 backdrop-blur-md">
-        <div className="flex items-center gap-6">
+      <div className="absolute bottom-6 left-6 z-10 glass-card p-4 rounded-2xl flex flex-col gap-3 shadow-lg border border-white/20 bg-white/60 dark:bg-black/60 backdrop-blur-md">
+        <div className="flex items-center gap-4 text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+           <span>{filteredData.nodes.length} Items</span>
+        </div>
+        <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#007AFF] shadow-sm" />
-            <span className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
-              {filteredData.nodes.length} Items
+            <div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-sm" />
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+              {filteredData.links.filter((l: any) => l.linkType === 'tag').length} Tag Links
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-sm" />
-            <span className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
-              {filteredData.links.length} Links
+            <div className="w-2.5 h-2.5 rounded-full bg-sky-500 shadow-sm" />
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+              {filteredData.links.filter((l: any) => l.linkType === 'topic').length} Topic Links
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm" />
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+              {filteredData.links.filter((l: any) => l.linkType === 'source').length} Source Links
             </span>
           </div>
         </div>
@@ -550,6 +565,22 @@ const KnowledgeGraphPage: React.FC = () => {
                   ))}
                 </div>
 
+                {selectedNode.extractedKeywords && selectedNode.extractedKeywords.length > 0 && (
+                  <div className="pt-4 border-t border-gray-100 dark:border-white/5">
+                    <div className="flex items-center gap-2 mb-3 text-gray-500 dark:text-gray-400">
+                      <Network className="w-4 h-4" />
+                      <span className="text-xs font-bold uppercase tracking-wider">Top Keywords</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedNode.extractedKeywords.map(k => (
+                        <span key={k} className="px-2 py-0.5 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 text-[10px] font-medium rounded">
+                          {k}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="pt-4 border-t border-gray-100 dark:border-white/5">
                   <div className="flex items-center gap-2 mb-3 text-gray-500 dark:text-gray-400">
                     <Info className="w-4 h-4" />
@@ -572,6 +603,43 @@ const KnowledgeGraphPage: React.FC = () => {
                   Captured {new Date(selectedNode.item.createdAt).toLocaleDateString()}
                 </div>
               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* Link Hover Detail Popup */}
+      <AnimatePresence>
+        {hoverLink && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 glass-card p-3 rounded-2xl shadow-xl border border-white/20 bg-white/90 dark:bg-black/90 backdrop-blur-xl flex flex-col items-center pointer-events-none"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <LinkIcon className={`w-4 h-4 ${hoverLink.linkType === 'tag' ? 'text-purple-500' : hoverLink.linkType === 'source' ? 'text-amber-500' : 'text-sky-500'}`} />
+              <span className="text-xs font-bold uppercase tracking-widest text-gray-800 dark:text-gray-200">
+                {hoverLink.linkType} Connection
+              </span>
+            </div>
+            
+            <div className="flex flex-wrap gap-1 justify-center max-w-[250px]">
+              {hoverLink.linkType === 'tag' && hoverLink.commonTags.map(t => (
+                <span key={t} className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-bold rounded">
+                  {t}
+                </span>
+              ))}
+              {hoverLink.linkType === 'topic' && hoverLink.commonKeywords.map(k => (
+                <span key={k} className="px-1.5 py-0.5 bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 text-[10px] font-bold rounded">
+                  {k}
+                </span>
+              ))}
+              {hoverLink.linkType === 'source' && (
+                <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded text-center">
+                  Clipped from the same Website
+                </span>
+              )}
             </div>
           </motion.div>
         )}

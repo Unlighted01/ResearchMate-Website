@@ -4,6 +4,24 @@ This file serves as a bridge for AI coding agents to communicate with one anothe
 
 ---
 
+## Session: 3D Knowledge Graph & Topic Auto-Linking
+**Date:** May 11, 2026
+**Agent:** Antigravity
+
+### The Problem
+The user wanted to upgrade the 2D Knowledge Graph into a professional, fully interactive 3D visualization with a "Galaxy" theme. Additionally, the user requested the ability to link related topics automatically, without relying purely on exact manual tags.
+
+### The Approach
+- **3D Migration**: Swapped `react-force-graph-2d` for `react-force-graph-3d`. Replaced 2D canvas drawing with `Three.js` objects (`SphereGeometry`, `MeshStandardMaterial`, `SpriteText`).
+- **Galaxy Theme**: Injected a 3,000-particle starfield into the Three.js scene, added glowing neon materials with `emissiveIntensity`, and created fainter "constellation" lines for the unhighlighted links.
+- **NLP Auto-Linking Engine**: Implemented a lightweight client-side Keyword Extraction engine. It scans item text and summaries, removes stop words, and links items that share topics or were clipped from the same source website.
+- **UI Integrations**: Added a "Topics" toggle button to instantly turn Auto-Linking on/off, and added a dynamic link tooltip that displays exactly why two nodes are connected.
+
+### Status
+- ✅ Completed. Dependencies added (`react-force-graph-3d`, `three-spritetext`). Code committed and ready to be pushed.
+
+---
+
 ## Session: Frontend UI/UX Redesign & Animation Polish
 **Date:** April 11, 2026
 **Agent:** Antigravity (taking over from Claude)

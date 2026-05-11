@@ -77,7 +77,7 @@ All phases were planned and approved by user (Kian) in April 2026.
 | 3 | PDF Reader & Annotator | DONE (⚠ text selection bug — see Known Issues) | No (client-side pdfjs-dist) |
 | 4 | RSS Feeds (ArXiv/PubMed new paper alerts) | DONE | Yes (api/rss.ts — CORS proxy, no credits) |
 | 5 | Media Transcription (audio/video -> text) | DONE | Yes (api/transcribe.ts — Gemini native + Groq Whisper fallback) |
-| 6 | Knowledge Graph (concept maps) | NOT STARTED | No (client-side D3/force graph) |
+| 6 | Knowledge Graph (concept maps) | DONE (3D) | No (client-side Three.js / react-force-graph-3d) |
 | 7 | Paper Citation Graph | NOT STARTED | No (Semantic Scholar API from client) |
 | 8 | Kanban Board (project workflow) | NOT STARTED | No (direct Supabase) |
 | 9 | Shared Collections (collaboration) | NOT STARTED | No (Supabase RLS) |
@@ -86,7 +86,20 @@ All phases were planned and approved by user (Kian) in April 2026.
 
 ---
 
-## What Was Built Recently (April 2026 Sessions)
+## What Was Built Recently (April & May 2026 Sessions)
+
+### Phase 6: Knowledge Graph (May 11, 2026)
+
+A fully interactive 3D "Galaxy Map" for visualizing relationships between saved items.
+
+**Files modified/created:**
+- `src/components/App/KnowledgeGraph/KnowledgeGraphPage.tsx` — Completely rewritten to use `react-force-graph-3d`, generating `THREE.SphereGeometry` for nodes and `SpriteText` for labels in a dark galaxy-themed scene with 3,000 particle stars.
+- `package.json` — Installed `react-force-graph-3d` and `three-spritetext`.
+
+**Features:**
+- **Auto-Linking NLP Engine:** Uses client-side keyword extraction to automatically draw "Topic Links" between items that share keywords, avoiding the need for manual tags.
+- **Source Links:** Connects items clipped from the same URL/Website.
+- **Interactivity:** 3D rotation, zooming, neighborhood highlighting (dimming distant nodes), and hovering links to see exactly why items are connected.
 
 
 
@@ -368,7 +381,8 @@ const NAV_ITEMS = [
 1. ~~**Phase 3: PDF Reader & Annotator**~~ — DONE (see Known Issues for deferred text-selection bug)
 2. ~~**Phase 4: RSS Feeds**~~ — DONE (api/rss.ts, migration applied)
 3. ~~**Phase 5: Media Transcription**~~ — DONE (api/transcribe.ts — Gemini + Groq Whisper, full 12/12 slots)
-4. **Phases 6-9** — all client-side (Knowledge Graph, Paper Graph, Kanban, Shared Collections) — NEXT
+4. ~~**Phase 6: Knowledge Graph**~~ — DONE (3D React Force Graph)
+5. **Phases 7-9** — all client-side (Paper Graph, Kanban, Shared Collections) — NEXT
 
 > **Note:** All 12 Vercel slots are full. Adding any new serverless endpoint now requires either upgrading to Pro, merging two existing endpoints, or moving one to a Supabase Edge Function.
 
