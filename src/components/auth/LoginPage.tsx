@@ -157,70 +157,18 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
       rememberMe ? "true" : "false"
     );
 
-    // Get OAuth URL from Supabase
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    // Get OAuth URL from Supabase and let it redirect the page natively
+    const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: `${window.location.origin}/#/auth/callback`,
-        skipBrowserRedirect: true,
+        // Default behavior is to redirect the browser
       },
     });
 
     if (error) {
       showToast(error.message, "error");
       setOauthLoading(null);
-      return;
-    }
-
-    if (data?.url) {
-      // Open popup window
-      const width = 500;
-      const height = 600;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-
-      const popup = window.open(
-        data.url,
-        "oauth_popup",
-        `width=${width},height=${height},left=${left},top=${top},popup=true`
-      );
-
-      if (!popup) {
-        showToast(
-          "Popup was blocked. Please allow popups for this site.",
-          "error"
-        );
-        setOauthLoading(null);
-        return;
-      }
-
-      // Listen for message from popup
-      const handleMessage = (event: MessageEvent) => {
-        if (event.origin !== window.location.origin) return;
-        if (event.data?.type === "AUTH_SUCCESS") {
-          window.removeEventListener("message", handleMessage);
-          setOauthLoading(null);
-          showToast("Welcome back!", "success");
-          navigate(from, { replace: true });
-        }
-      };
-      window.addEventListener("message", handleMessage);
-
-      // Check if popup is closed periodically (user cancelled)
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          window.removeEventListener("message", handleMessage);
-          oauthCleanupRef.current = null;
-          setOauthLoading(null);
-        }
-      }, 500);
-
-      // Store cleanup for unmount safety
-      oauthCleanupRef.current = () => {
-        clearInterval(checkClosed);
-        window.removeEventListener("message", handleMessage);
-      };
     }
   };
 
