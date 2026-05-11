@@ -109,6 +109,16 @@ const KnowledgeGraphPage: React.FC = () => {
       fgRef.current.d3Force("charge").strength(-150);
       fgRef.current.d3Force("link").distance(80);
       
+      // Camera and Controls tuning
+      if (fgRef.current.controls) {
+        const controls = fgRef.current.controls();
+        if (controls) {
+          controls.zoomSpeed = 0.5; // less sensitive zoom
+          controls.rotateSpeed = 0.4; // less sensitive rotation
+          controls.panSpeed = 0.5;
+        }
+      }
+
       // Galaxy Starfield Background
       const scene = fgRef.current.scene();
       
@@ -148,6 +158,21 @@ const KnowledgeGraphPage: React.FC = () => {
       scene.add(starMesh);
     }
   }, [loading]);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in the search box
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key.toLowerCase() === 'r') {
+        fgRef.current?.zoomToFit(400);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // ---------- GRAPH CALCULATION ----------
 
