@@ -137,12 +137,12 @@ const KnowledgeGraphPage: React.FC = () => {
       filteredNodes = filteredNodes.filter(
         (n) =>
           n.name.toLowerCase().includes(query) ||
-          n.item.tags.some((t) => t.toLowerCase().includes(query))
+          n.item.tags?.some((t) => t.toLowerCase().includes(query))
       );
     }
     
     if (selectedTags.size > 0) {
-      filteredNodes = filteredNodes.filter(n => n.item.tags.some(t => selectedTags.has(t)));
+      filteredNodes = filteredNodes.filter(n => n.item.tags?.some(t => selectedTags.has(t)));
     }
 
     const nodeIds = new Set(filteredNodes.map((n) => n.id));
@@ -539,7 +539,7 @@ const KnowledgeGraphPage: React.FC = () => {
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
-                  {selectedNode.item.tags.map((tag) => (
+                  {(selectedNode.item.tags || []).map((tag) => (
                     <span
                       key={tag}
                       className="flex items-center gap-1 px-2.5 py-1 bg-[#007AFF]/10 dark:bg-[#007AFF]/20 text-[#007AFF] dark:text-blue-400 text-[10px] font-bold rounded-full uppercase tracking-wider"
