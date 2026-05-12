@@ -66,53 +66,186 @@ export const MAX_FEEDS_PER_USER = 20;
  * Curated starter feeds the user can one-click subscribe to.
  */
 export const CURATED_FEEDS: CuratedFeedPreset[] = [
+  // ── AI / ML ──────────────────────────────────────────────────────
   {
     title: "arXiv — Artificial Intelligence",
     url: "https://rss.arxiv.org/rss/cs.AI",
     category: "AI / ML",
-    description: "Latest cs.AI submissions",
+    description: "Daily new papers in AI from arXiv",
   },
   {
     title: "arXiv — Machine Learning",
     url: "https://rss.arxiv.org/rss/cs.LG",
     category: "AI / ML",
-    description: "Latest cs.LG submissions",
+    description: "Daily new papers in ML from arXiv",
   },
   {
-    title: "arXiv — Computation and Language (NLP)",
+    title: "arXiv — Computation & Language (NLP)",
     url: "https://rss.arxiv.org/rss/cs.CL",
     category: "AI / ML",
-    description: "Latest cs.CL submissions (NLP)",
-  },
-  {
-    title: "arXiv — Statistics / Machine Learning",
-    url: "https://rss.arxiv.org/rss/stat.ML",
-    category: "AI / ML",
-    description: "Latest stat.ML submissions",
+    description: "Daily NLP papers from arXiv",
   },
   {
     title: "arXiv — Computer Vision",
     url: "https://rss.arxiv.org/rss/cs.CV",
     category: "AI / ML",
-    description: "Latest cs.CV submissions",
+    description: "Daily computer vision papers from arXiv",
   },
+  {
+    title: "arXiv — Statistics / ML",
+    url: "https://rss.arxiv.org/rss/stat.ML",
+    category: "AI / ML",
+    description: "Statistical ML papers from arXiv",
+  },
+  {
+    title: "Google AI Blog",
+    url: "https://blog.research.google/feeds/posts/default",
+    category: "AI / ML",
+    description: "Research updates from Google AI",
+  },
+  {
+    title: "OpenAI News",
+    url: "https://openai.com/blog/rss.xml",
+    category: "AI / ML",
+    description: "Latest announcements from OpenAI",
+  },
+  {
+    title: "DeepMind Blog",
+    url: "https://deepmind.google/blog/rss.xml",
+    category: "AI / ML",
+    description: "Research & insights from Google DeepMind",
+  },
+  // ── Science ──────────────────────────────────────────────────────
   {
     title: "Nature — Latest Research",
     url: "https://www.nature.com/nature.rss",
     category: "Science",
-    description: "Latest Nature research articles",
+    description: "Flagship Nature research articles",
   },
   {
-    title: "Science Magazine — Current Issue",
+    title: "Science Magazine",
     url: "https://www.science.org/action/showFeed?type=etoc&feed=rss&jc=science",
     category: "Science",
-    description: "Current Science issue feed",
+    description: "Top peer-reviewed science",
   },
+  {
+    title: "Science Daily — Top Science",
+    url: "https://www.sciencedaily.com/rss/top/science.xml",
+    category: "Science",
+    description: "Breaking science news summaries",
+  },
+  {
+    title: "PLOS ONE",
+    url: "https://journals.plos.org/plosone/feed/atom",
+    category: "Science",
+    description: "Open-access research across all disciplines",
+  },
+  {
+    title: "MIT Technology Review",
+    url: "https://www.technologyreview.com/feed/",
+    category: "Science",
+    description: "Technology & science reporting from MIT",
+  },
+  // ── Biomedical / Health ──────────────────────────────────────────
   {
     title: "PubMed — Trending Articles",
     url: "https://pubmed.ncbi.nlm.nih.gov/rss/trending.xml",
     category: "Biomedical",
-    description: "PubMed trending biomedical papers",
+    description: "Trending biomedical papers on PubMed",
+  },
+  {
+    title: "The Lancet",
+    url: "https://www.thelancet.com/rssfeed/lancet_online.xml",
+    category: "Biomedical",
+    description: "Top medical research & clinical findings",
+  },
+  {
+    title: "New England Journal of Medicine",
+    url: "https://www.nejm.org/action/showFeed?jc=nejm&type=etoc&feed=rss",
+    category: "Biomedical",
+    description: "Landmark clinical & translational research",
+  },
+  // ── Physics ──────────────────────────────────────────────────────
+  {
+    title: "arXiv — High Energy Physics",
+    url: "https://rss.arxiv.org/rss/hep-ph",
+    category: "Physics",
+    description: "Phenomenology in high energy physics",
+  },
+  {
+    title: "arXiv — Quantum Physics",
+    url: "https://rss.arxiv.org/rss/quant-ph",
+    category: "Physics",
+    description: "Latest quantum physics preprints",
+  },
+  {
+    title: "Physical Review Letters",
+    url: "https://feeds.aps.org/rss/recent/prl.rss",
+    category: "Physics",
+    description: "High-impact letters from APS",
+  },
+  // ── Technology / Engineering ─────────────────────────────────────
+  {
+    title: "Hacker News — Best",
+    url: "https://news.ycombinator.com/rss",
+    category: "Tech News",
+    description: "Top tech, startup & programming stories",
+  },
+  {
+    title: "Ars Technica",
+    url: "https://feeds.arstechnica.com/arstechnica/index",
+    category: "Tech News",
+    description: "In-depth tech journalism & analysis",
+  },
+  {
+    title: "IEEE Spectrum",
+    url: "https://spectrum.ieee.org/rss/fulltext",
+    category: "Tech News",
+    description: "Engineering news from the IEEE",
+  },
+  {
+    title: "arXiv — Software Engineering",
+    url: "https://rss.arxiv.org/rss/cs.SE",
+    category: "Tech News",
+    description: "Software engineering research from arXiv",
+  },
+  // ── Economics & Social Science ───────────────────────────────────
+  {
+    title: "NBER Working Papers",
+    url: "https://feeds.nber.org/nber/new_working_papers",
+    category: "Economics",
+    description: "New working papers from National Bureau of Economic Research",
+  },
+  {
+    title: "LSE Business Review",
+    url: "https://blogs.lse.ac.uk/businessreview/feed/",
+    category: "Economics",
+    description: "Business & economics research insights from LSE",
+  },
+  {
+    title: "arXiv — Economics",
+    url: "https://rss.arxiv.org/rss/econ",
+    category: "Economics",
+    description: "Economics preprints from arXiv",
+  },
+  // ── Cybersecurity ────────────────────────────────────────────────
+  {
+    title: "Krebs on Security",
+    url: "https://krebsonsecurity.com/feed/",
+    category: "Cybersecurity",
+    description: "Investigative cybersecurity journalism",
+  },
+  {
+    title: "The Hacker News",
+    url: "https://feeds.feedburner.com/TheHackersNews",
+    category: "Cybersecurity",
+    description: "Latest cybersecurity news & vulnerabilities",
+  },
+  {
+    title: "arXiv — Cryptography & Security",
+    url: "https://rss.arxiv.org/rss/cs.CR",
+    category: "Cybersecurity",
+    description: "Cryptography & security research from arXiv",
   },
 ];
 
