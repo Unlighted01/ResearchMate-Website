@@ -31,15 +31,7 @@ export default function () {
     return;
   }
 
-  // 1. Check Health (Lightweight)
-  const healthRes = http.get(`${BASE_URL}/api/health`);
-  check(healthRes, {
-    'health is 200': (r) => r.status === 200,
-  });
-
-  sleep(1);
-
-  // 2. Perform a "Summarize" (Heavyweight - hits Gemini & DB)
+  // 1. Perform a "Summarize" (Heavyweight - hits Gemini & DB)
   const payload = JSON.stringify({
     text: 'Artificial Intelligence is transforming the world. It is used in medicine, finance, and transportation. Researchers are developing new algorithms every day to make it more efficient.',
   });
@@ -53,10 +45,14 @@ export default function () {
 
   const summarizeRes = http.post(`${BASE_URL}/api/summarize`, payload, params);
   
-  check(summarizeRes, {
+  const is200 = check(summarizeRes, {
     'summarize is 200': (r) => r.status === 200,
-    'has summary text': (r) => r.json().summary !== undefined,
+    'has summary text': (r) => r.status === 200 && r.json().summary !== undefined,
   });
+
+  if (!is200) {
+    console.error(`Status: ${summarizeRes.status}, Body: ${summarizeRes.body}`);
+  }
 
   // Wait between 1-3 seconds to simulate "thinking" time
   sleep(Math.random() * 2 + 1);

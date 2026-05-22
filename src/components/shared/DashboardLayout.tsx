@@ -14,6 +14,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import CommandPalette from "./CommandPalette";
 import ClockWidget from "./ClockWidget";
+import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -252,14 +253,16 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
       />
 
       {/* ========== SIDEBAR ========== */}
-      <aside
+      <motion.aside
+        animate={{
+          width: sidebarCollapsed ? 72 : 260
+        }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className={`
           theme-sidebar
           fixed inset-y-0 left-0 z-30
           backdrop-blur-xl backdrop-saturate-150
-          transition-all duration-300 ease-out
           overflow-hidden
-          ${sidebarCollapsed ? "w-[72px]" : "w-[260px]"}
           ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
         `}
@@ -282,11 +285,19 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                 alt="Logo"
                 className="w-8 h-8 hover:scale-105 transition-transform"
               />
-              {!sidebarCollapsed && (
-                <span className="theme-title text-base font-semibold">
-                  ResearchMate
-                </span>
-              )}
+              <AnimatePresence mode="wait">
+                {!sidebarCollapsed && (
+                  <motion.span
+                    initial={{ opacity: 0, width: 0 }}
+                    animate={{ opacity: 1, width: "auto" }}
+                    exit={{ opacity: 0, width: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="theme-title text-base font-semibold whitespace-nowrap overflow-hidden"
+                  >
+                    ResearchMate
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </Link>
           </div>
 
@@ -300,11 +311,19 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                 key={group.label}
                 className={groupIdx === 0 ? "" : "mt-2"}
               >
-                {!sidebarCollapsed && (
-                  <div className="theme-sidebar-section-label">
-                    {group.label}
-                  </div>
-                )}
+                <AnimatePresence mode="wait">
+                  {!sidebarCollapsed && (
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="theme-sidebar-section-label whitespace-nowrap"
+                    >
+                      {group.label}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 {sidebarCollapsed && groupIdx > 0 && (
                   <div className="theme-divider mx-2 my-2 h-px border-t" />
                 )}
@@ -330,15 +349,21 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                           `}
                         >
                           <item.icon className="theme-nav-icon w-5 h-5 flex-shrink-0" />
-                          {!sidebarCollapsed && (
-                            <span
-                              className={`text-sm font-medium ${
-                                isActive ? "" : "theme-muted-text"
-                              }`}
-                            >
-                              {item.label}
-                            </span>
-                          )}
+                          <AnimatePresence mode="wait">
+                            {!sidebarCollapsed && (
+                              <motion.span
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -10 }}
+                                transition={{ duration: 0.15 }}
+                                className={`text-sm font-medium whitespace-nowrap ${
+                                  isActive ? "" : "theme-muted-text"
+                                }`}
+                              >
+                                {item.label}
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
 
                           {/* Tooltip */}
                           {sidebarCollapsed && (
@@ -370,16 +395,24 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   `}
                 >
                   <Search className="theme-nav-icon w-5 h-5 flex-shrink-0" />
-                  {!sidebarCollapsed && (
-                    <div className="flex-1 flex justify-between items-center min-w-0">
-                      <span className="text-sm font-medium theme-muted-text">
-                        Search
-                      </span>
-                      <kbd className="theme-kbd px-1.5 py-0.5 rounded text-[10px]">
-                        ⌘K
-                      </kbd>
-                    </div>
-                  )}
+                  <AnimatePresence mode="wait">
+                    {!sidebarCollapsed && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="flex-1 flex justify-between items-center min-w-0 whitespace-nowrap"
+                      >
+                        <span className="text-sm font-medium theme-muted-text">
+                          Search
+                        </span>
+                        <kbd className="theme-kbd px-1.5 py-0.5 rounded text-[10px]">
+                          ⌘K
+                        </kbd>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   {sidebarCollapsed && (
                     <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
                       Search (⌘K)
@@ -404,17 +437,23 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   `}
                 >
                   <Settings className="theme-nav-icon w-5 h-5 flex-shrink-0" />
-                  {!sidebarCollapsed && (
-                    <span
-                      className={`text-sm font-medium ${
-                        location.pathname === "/app/settings"
-                          ? ""
-                          : "theme-muted-text"
-                      }`}
-                    >
-                      Settings
-                    </span>
-                  )}
+                  <AnimatePresence mode="wait">
+                    {!sidebarCollapsed && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className={`text-sm font-medium whitespace-nowrap ${
+                          location.pathname === "/app/settings"
+                            ? ""
+                            : "theme-muted-text"
+                        }`}
+                      >
+                        Settings
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                   {sidebarCollapsed && (
                     <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
                       Settings
@@ -425,50 +464,58 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
             </ul>
 
             {/* Device Status (only when expanded) */}
-            {!sidebarCollapsed && (
-              <div className="mt-4 mb-1 mx-1">
-                <div className="theme-panel-muted rounded-xl p-3">
-                  <h4 className="theme-muted-text text-xs font-semibold uppercase tracking-wider mb-2">
-                    Devices
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
-                        <Laptop className="w-4 h-4 text-[#007AFF]" />
+            <AnimatePresence>
+              {!sidebarCollapsed && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="mt-4 mb-1 mx-1 overflow-hidden"
+                >
+                  <div className="theme-panel-muted rounded-xl p-3">
+                    <h4 className="theme-muted-text text-xs font-semibold uppercase tracking-wider mb-2">
+                      Devices
+                    </h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
+                          <Laptop className="w-4 h-4 text-[#007AFF]" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            Extension
+                          </p>
+                        </div>
+                        <div className="w-2 h-2 bg-[#34C759] rounded-full" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          Extension
-                        </p>
+                      <div className="flex items-center gap-3">
+                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
+                          <Smartphone className="w-4 h-4 text-[#5856D6]" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            Mobile
+                          </p>
+                        </div>
+                        <div className="w-2 h-2 bg-[#34C759] rounded-full" />
                       </div>
-                      <div className="w-2 h-2 bg-[#34C759] rounded-full" />
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
-                        <Smartphone className="w-4 h-4 text-[#5856D6]" />
+                      <div className="flex items-center gap-3">
+                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
+                          <PenTool className="w-4 h-4 text-[#FF9500]" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            Smart Pen
+                          </p>
+                        </div>
+                        <div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          Mobile
-                        </p>
-                      </div>
-                      <div className="w-2 h-2 bg-[#34C759] rounded-full" />
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
-                        <PenTool className="w-4 h-4 text-[#FF9500]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          Smart Pen
-                        </p>
-                      </div>
-                      <div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full" />
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </nav>
 
           {/* Collapse Toggle */}
@@ -490,13 +537,23 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   sidebarCollapsed ? "rotate-180" : ""
                 }`}
               />
-              {!sidebarCollapsed && (
-                <span className="text-sm font-medium">Collapse</span>
-              )}
+              <AnimatePresence mode="wait">
+                {!sidebarCollapsed && (
+                  <motion.span
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.15 }}
+                    className="text-sm font-medium whitespace-nowrap"
+                  >
+                    Collapse
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </button>
           </div>
         </div>
-      </aside>
+      </motion.aside>
 
       {/* ========== MAIN CONTENT ========== */}
       <div
@@ -563,8 +620,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                 </button>
 
                 {/* Notifications Dropdown */}
-                {notificationsOpen && (
-                  <div className="theme-surface notifications-dropdown absolute right-0 mt-2 w-80 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden animate-slide-down">
+                <AnimatePresence>
+                  {notificationsOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      className="theme-surface notifications-dropdown absolute right-0 mt-2 w-80 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden"
+                    >
                     <div className="theme-divider px-4 py-3 border-b flex items-center justify-between">
                       <h3 className="font-semibold text-gray-900 dark:text-white">
                         Notifications
@@ -614,8 +678,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                         ))
                       )}
                     </div>
-                  </div>
-                )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Profile */}
@@ -649,8 +714,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                 </button>
 
                 {/* Profile Dropdown */}
-                {profileOpen && (
-                  <div className="theme-surface profile-dropdown absolute right-0 mt-2 w-64 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden animate-slide-down">
+                <AnimatePresence>
+                  {profileOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      className="theme-surface profile-dropdown absolute right-0 mt-2 w-64 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden"
+                    >
                     <div className="theme-divider px-4 py-4 border-b">
                       {localStorage.getItem("rm_guest_mode") === "true" ? (
                         <div className="space-y-3">
@@ -728,8 +800,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                         <span className="text-sm">Sign Out</span>
                       </button>
                     </div>
-                  </div>
-                )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
@@ -753,12 +826,17 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
       />
 
       {/* Mobile Sidebar Overlay */}
-      {mobileSidebarOpen && (
-        <div
-          className="theme-overlay fixed inset-0 z-20 lg:hidden animate-fade-in"
-          onClick={() => setMobileSidebarOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {mobileSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.4 }}
+            exit={{ opacity: 0 }}
+            className="theme-overlay fixed inset-0 z-20 lg:hidden"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
