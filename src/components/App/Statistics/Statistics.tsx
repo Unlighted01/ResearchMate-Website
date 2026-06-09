@@ -15,13 +15,15 @@ import SourceBreakdownChart from "./SourceBreakdownChart";
 import ActivityTrendChart from "./ActivityTrendChart";
 import InsightsBar from "./InsightsBar";
 import StatsSkeleton from "./StatsSkeleton";
+import ActivityFeed from "./ActivityFeed";
+import TopTagsList from "./TopTagsList";
 
 // ============================================
 // PART 2: COMPONENT
 // ============================================
 
 const Statistics: React.FC = () => {
-  const { loading, timeRange, setTimeRange, stats, computedStats, statCards } =
+  const { loading, timeRange, setTimeRange, stats, computedStats, statCards, allItems } =
     useStatisticsData();
 
   // ---------- PART 2A: LOADING STATE ----------
@@ -39,6 +41,12 @@ const Statistics: React.FC = () => {
       </div>
 
       <ActivityTrendChart data={stats.daily} />
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ActivityFeed items={allItems} />
+        <TopTagsList tags={stats.topTags} />
+      </div>
+
       <InsightsBar computedStats={computedStats} />
     </div>
   );

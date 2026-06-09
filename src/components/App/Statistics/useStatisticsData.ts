@@ -7,8 +7,10 @@
 // ============================================
 
 import { useState, useEffect, useMemo } from "react";
-import { getAllItems, StorageItem } from "../../../services/storageService";
-import { Activity, Calendar, Layers, Zap } from "lucide-react";
+import { getAllItems, subscribeToItems, StorageItem } from "../../../services/storageService";
+import { getAllCollections } from "../../../services/collectionsService";
+import { supabase } from "../../../services/supabaseClient";
+import { Activity, Calendar, Layers, Zap, Flame } from "lucide-react";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -46,6 +48,7 @@ export interface ComputedStats {
   avgPerDay: number;
   mostActiveDay: string;
   aiCoverage: string;
+  streakDays: number;
 }
 
 export interface StatsData {
@@ -54,6 +57,7 @@ export interface StatsData {
   bySource: SourceDatum[];
   weekly: ChartPoint[];
   daily: DailyPoint[];
+  topTags: Array<{ tag: string; count: number }>;
 }
 
 export interface UseStatisticsDataReturn {
@@ -73,15 +77,56 @@ export interface UseStatisticsDataReturn {
 const useStatisticsData = (): UseStatisticsDataReturn => {
   // ---------- PART 3A: STATE ----------
   const [allItems, setAllItems] = useState<StorageItem[]>([]);
+  const [collectionsCount, setCollectionsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("week");
 
   // ---------- PART 3B: EFFECTS ----------
   useEffect(() => {
-    getAllItems(1000).then((items) => {
-      setAllItems(items);
-      setLoading(false);
-    });
+    let unsubscribe: (() => void) | null = null;
+
+    const loadData = async () => {
+      try {
+        const [items, collections] = await Promise.all([
+          getAllItems(1000),
+          getAllCollections().catch(() => [])
+        ]);
+        setAllItems(items);
+        setCollectionsCount(collections.length);
+        setLoading(false);
+
+        // Realtime Subscription
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          unsubscribe = subscribeToItems(user.id, (payload) => {
+            if (payload.eventType === "INSERT" && payload.new) {
+              setAllItems((prev) => [payload.new!, ...prev]);
+            } else if (payload.eventType === "UPDATE" && payload.new) {
+              setAllItems((prev) =>
+                prev.map((item) =>
+                  item.id === payload.new!.id ? payload.new! : item
+                )
+              );
+            } else if (payload.eventType === "DELETE" && payload.old) {
+              setAllItems((prev) =>
+                prev.filter((item) => item.id !== payload.old!.id)
+              );
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load statistics data:", err);
+        setLoading(false);
+      }
+    };
+
+    loadData();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, []);
 
   // ---------- PART 3C: COMPUTED STATS ----------
@@ -110,7 +155,7 @@ const useStatisticsData = (): UseStatisticsDataReturn => {
         : [];
 
     // Source counts + summary count
-    const sourceCount = { extension: 0, mobile: 0, web: 0, smart_pen: 0 };
+    const sourceCount = { extension: 0, mobile: 0, web: 0, smart_pen: 0, transcription: 0 };
     let withSummary = 0;
     currentItems.forEach((item) => {
       const src = (item.deviceSource || "web") as keyof typeof sourceCount;
@@ -193,12 +238,13 @@ const useStatisticsData = (): UseStatisticsDataReturn => {
       daily = weekly.map((d) => ({ date: d.name, count: d.count }));
     }
 
-    // Pie chart data
+    // Pie/source chart data
     const pieColors = {
       extension: "#007AFF",
       mobile: "#5856D6",
       web: "#34C759",
       smart_pen: "#FF9500",
+      transcription: "#FF2D55",
     };
     const bySource = Object.entries(sourceCount)
       .map(([name, value]) => ({
@@ -252,6 +298,67 @@ const useStatisticsData = (): UseStatisticsDataReturn => {
       return (pct >= 0 ? "+" : "") + pct + "%";
     };
 
+    // Calculate Streak Days
+    const getLocalDateString = (d: Date) => {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const dates = allItems.map((item) => getLocalDateString(new Date(item.createdAt)));
+    const uniqueDates = Array.from(new Set(dates)).sort((a, b) => b.localeCompare(a));
+    const todayStr = getLocalDateString(now);
+    
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = getLocalDateString(yesterday);
+
+    let streakDays = 0;
+    if (uniqueDates.includes(todayStr)) {
+      streakDays = 1;
+      const checkDate = new Date();
+      checkDate.setDate(checkDate.getDate() - 1);
+      while (true) {
+        const checkStr = getLocalDateString(checkDate);
+        if (uniqueDates.includes(checkStr)) {
+          streakDays++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+    } else if (uniqueDates.includes(yesterdayStr)) {
+      streakDays = 1;
+      const checkDate = new Date();
+      checkDate.setDate(checkDate.getDate() - 2);
+      while (true) {
+        const checkStr = getLocalDateString(checkDate);
+        if (uniqueDates.includes(checkStr)) {
+          streakDays++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Top Tags Extraction
+    const tagCounts: Record<string, number> = {};
+    allItems.forEach((item) => {
+      if (Array.isArray(item.tags)) {
+        item.tags.forEach((tag) => {
+          if (!tag.startsWith("color:") && !tag.startsWith("pinned:")) {
+            tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+          }
+        });
+      }
+    });
+    const topTags = Object.entries(tagCounts)
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
     const computedStatCards: StatCard[] = [
       {
         label: "Total Items",
@@ -266,6 +373,13 @@ const useStatisticsData = (): UseStatisticsDataReturn => {
         icon: Zap,
         color: "#5856D6",
         change: calcChange(withSummary, prevWithSummary),
+      },
+      {
+        label: "Streak Days",
+        value: streakDays,
+        icon: Flame,
+        color: "#FF3B30",
+        change: streakDays > 0 ? `${streakDays} day${streakDays > 1 ? "s" : ""}` : "—",
       },
       {
         label: "This Week",
@@ -284,8 +398,8 @@ const useStatisticsData = (): UseStatisticsDataReturn => {
     ];
 
     return {
-      stats: { total: currentItems.length, withSummary, bySource, weekly, daily },
-      computedStats: { weekTotal, avgPerDay, mostActiveDay, aiCoverage },
+      stats: { total: currentItems.length, withSummary, bySource, weekly, daily, topTags },
+      computedStats: { weekTotal, avgPerDay, mostActiveDay, aiCoverage, streakDays },
       statCards: computedStatCards,
     };
   }, [allItems, timeRange]);
