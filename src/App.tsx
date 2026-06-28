@@ -291,16 +291,11 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import AIAssistant from "./components/App/AIAssistant";
-import Statistics from "./components/App/Statistics";
 import SmartPenGallery from "./components/App/SmartPenGallery";
 import PairSmartPen from "./components/App/PairSmartPen";
 import DocumentEditor from "./components/App/DocumentEditor";
-import { DiscoverPage } from "./components/App/Discover";
 import PdfReader from "./components/App/PdfReader";
-import FeedsPage from "./components/App/Feeds";
-import TranscribePage from "./components/App/Transcribe";
 import SupportPage from "./components/marketing/SupportPage";
-import KnowledgeGraphPage from "./components/App/KnowledgeGraph/KnowledgeGraphPage";
 
 // ============================================
 // PART 5: MAIN APP COMPONENT
@@ -432,14 +427,6 @@ export default function App() {
                           }
                         />
                         <Route
-                          path="discover"
-                          element={
-                            <DiscoverPage
-                              useToast={() => ({ showToast, ToastComponent })}
-                            />
-                          }
-                        />
-                        <Route
                           path="collections"
                           element={
                             <CollectionsPage
@@ -467,8 +454,6 @@ export default function App() {
                           path="pdf-reader"
                           element={<PdfReader />}
                         />
-                        <Route path="feeds" element={<FeedsPage />} />
-                        <Route path="transcribe" element={<TranscribePage />} />
                         <Route
                           path="smart-pen"
                           element={
@@ -478,8 +463,6 @@ export default function App() {
                           }
                         />
                         <Route path="pair-pen" element={<PairSmartPen />} />
-                        <Route path="statistics" element={<Statistics />} />
-                        <Route path="graph" element={<KnowledgeGraphPage />} />
                         <Route
                           path="settings"
                           element={

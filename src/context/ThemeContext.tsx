@@ -7,7 +7,7 @@ import React, {
 } from "react";
 
 type Theme = "light" | "dark" | "system";
-type VisualTheme = "minimalist" | "bubble" | "glass";
+type VisualTheme = "minimalist" | "glass";
 
 interface ThemeContextType {
   theme: Theme;
@@ -20,7 +20,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const COLOR_THEME_KEY = "theme";
 const VISUAL_THEME_KEY = "visualTheme";
 const validColorThemes: Theme[] = ["light", "dark", "system"];
-const validVisualThemes: VisualTheme[] = ["minimalist", "bubble", "glass"];
+const validVisualThemes: VisualTheme[] = ["minimalist", "glass"];
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,

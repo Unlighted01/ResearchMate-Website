@@ -20,7 +20,6 @@ import {
   FolderOpen,
   MessageSquare,
   PenTool,
-  BarChart2,
   Settings,
   LogOut,
   Menu,
@@ -31,12 +30,8 @@ import {
   Smartphone,
   Quote,
   FileEdit,
-  GraduationCap,
   ChevronLeft,
   BookOpen,
-  Rss,
-  Mic,
-  Waypoints,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -57,33 +52,18 @@ const NAV_GROUPS: {
     ],
   },
   {
-    label: "Discover",
-    items: [
-      { icon: GraduationCap, label: "Discover", path: "/app/discover" },
-      { icon: Rss, label: "Feeds", path: "/app/feeds" },
-    ],
-  },
-  {
-    label: "Capture",
+    label: "Reading & Capture",
     items: [
       { icon: BookOpen, label: "PDF Reader", path: "/app/pdf-reader" },
-      { icon: Mic, label: "Transcribe", path: "/app/transcribe" },
       { icon: PenTool, label: "Smart Pen", path: "/app/smart-pen" },
     ],
   },
   {
-    label: "Create",
+    label: "Write & Assist",
     items: [
       { icon: FileEdit, label: "Editor", path: "/app/editor" },
       { icon: Quote, label: "Citations", path: "/app/citations" },
-    ],
-  },
-  {
-    label: "Analyse",
-    items: [
       { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
-      { icon: Waypoints, label: "Knowledge Graph", path: "/app/graph" },
-      { icon: BarChart2, label: "Statistics", path: "/app/statistics" },
     ],
   },
 ];
@@ -255,14 +235,16 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
       {/* ========== SIDEBAR ========== */}
       <motion.aside
         animate={{
-          width: sidebarCollapsed ? 72 : 260
+          width: sidebarCollapsed ? 76 : 260
         }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className={`
           theme-sidebar
-          fixed inset-y-0 left-0 z-30
-          backdrop-blur-xl backdrop-saturate-150
+          fixed top-4 bottom-4 left-4 z-30
+          backdrop-blur-2xl backdrop-saturate-200
           overflow-hidden
+          rounded-3xl shadow-xl border border-white/10 dark:border-white/[0.06]
+          bg-[var(--glass-bg)]
           ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
         `}
@@ -270,7 +252,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         <div className="h-full flex flex-col">
           {/* Header: Logo */}
           <div
-            className={`theme-divider h-14 flex items-center border-b ${
+            className={`theme-divider h-14 flex items-center border-b border-white/5 dark:border-white/[0.06] ${
               sidebarCollapsed ? "justify-center px-2" : "px-5"
             }`}
           >
@@ -292,7 +274,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                     animate={{ opacity: 1, width: "auto" }}
                     exit={{ opacity: 0, width: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="theme-title text-base font-semibold whitespace-nowrap overflow-hidden"
+                    className="theme-title font-title text-base font-semibold whitespace-nowrap overflow-hidden tracking-tight text-[var(--text-primary)]"
                   >
                     ResearchMate
                   </motion.span>
@@ -318,14 +300,14 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="theme-sidebar-section-label whitespace-nowrap"
+                      className="theme-sidebar-section-label font-title font-bold text-[10px] uppercase tracking-wider text-[var(--text-muted)] opacity-80 px-4 py-2 mt-4 whitespace-nowrap"
                     >
                       {group.label}
                     </motion.div>
                   )}
                 </AnimatePresence>
                 {sidebarCollapsed && groupIdx > 0 && (
-                  <div className="theme-divider mx-2 my-2 h-px border-t" />
+                  <div className="theme-divider mx-2 my-2 h-px border-t border-white/5 dark:border-white/[0.06]" />
                 )}
                 <ul className="space-y-1">
                   {group.items.map((item) => {
@@ -335,6 +317,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                         <Link
                           to={item.path}
                           onClick={() => setMobileSidebarOpen(false)}
+                          style={isActive ? { background: "transparent", boxShadow: "none" } : undefined}
                           className={`
                             theme-sidebar-item
                             flex items-center gap-3 px-3 py-2 rounded-xl
@@ -342,13 +325,24 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                             hover:scale-[1.02] active:scale-[0.98]
                             ${
                               isActive
-                                ? "theme-sidebar-item-active"
-                                : "theme-hover-surface"
+                                ? "theme-sidebar-item-active text-cyan-600 dark:text-cyan-400 font-semibold"
+                                : "theme-hover-surface text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                             }
                             ${sidebarCollapsed ? "justify-center" : ""}
                           `}
                         >
-                          <item.icon className="theme-nav-icon w-5 h-5 flex-shrink-0" />
+                          {isActive && (
+                            <motion.div
+                              layoutId="activeSidebarNavIndicator"
+                              transition={{
+                                type: "spring",
+                                stiffness: 380,
+                                damping: 30,
+                              }}
+                              className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-indigo-500/10 to-violet-500/10 dark:from-cyan-500/15 dark:via-indigo-500/10 dark:to-violet-500/15 rounded-xl border border-cyan-500/20 dark:border-cyan-400/30 shadow-[0_0_15px_rgba(6,182,212,0.12)] z-0 animate-pulse-soft"
+                            />
+                          )}
+                          <item.icon className={`w-5 h-5 flex-shrink-0 relative z-10 transition-colors duration-300 ${isActive ? "text-cyan-500 dark:text-cyan-400" : "text-[var(--text-muted)] group-hover:text-[var(--text-primary)]"}`} />
                           <AnimatePresence mode="wait">
                             {!sidebarCollapsed && (
                               <motion.span
@@ -356,7 +350,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: -10 }}
                                 transition={{ duration: 0.15 }}
-                                className={`text-sm font-medium whitespace-nowrap ${
+                                className={`text-sm font-medium whitespace-nowrap relative z-10 ${
                                   isActive ? "" : "theme-muted-text"
                                 }`}
                               >
@@ -367,7 +361,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
                           {/* Tooltip */}
                           {sidebarCollapsed && (
-                      <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
+                            <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
                               {item.label}
                             </div>
                           )}
@@ -424,19 +418,31 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                 <Link
                   to="/app/settings"
                   onClick={() => setMobileSidebarOpen(false)}
+                  style={location.pathname === "/app/settings" ? { background: "transparent", boxShadow: "none" } : undefined}
                   className={`
                     theme-sidebar-item
                     flex items-center gap-3 px-3 py-2.5 rounded-xl
                     transition-all duration-200 group relative
                     ${
                       location.pathname === "/app/settings"
-                        ? "theme-sidebar-item-active"
-                        : "theme-hover-surface"
+                        ? "theme-sidebar-item-active text-cyan-600 dark:text-cyan-400 font-semibold"
+                        : "theme-hover-surface text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                     }
                     ${sidebarCollapsed ? "justify-center" : ""}
                   `}
                 >
-                  <Settings className="theme-nav-icon w-5 h-5 flex-shrink-0" />
+                  {location.pathname === "/app/settings" && (
+                    <motion.div
+                      layoutId="activeSidebarNavIndicator"
+                      transition={{
+                        type: "spring",
+                        stiffness: 380,
+                        damping: 30,
+                      }}
+                      className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-indigo-500/10 to-violet-500/10 dark:from-cyan-500/15 dark:via-indigo-500/10 dark:to-violet-500/15 rounded-xl border border-cyan-500/20 dark:border-cyan-400/30 shadow-[0_0_15px_rgba(6,182,212,0.12)] z-0 animate-pulse-soft"
+                    />
+                  )}
+                  <Settings className={`w-5 h-5 flex-shrink-0 relative z-10 transition-colors duration-300 ${location.pathname === "/app/settings" ? "text-cyan-500 dark:text-cyan-400" : "text-[var(--text-muted)] group-hover:text-[var(--text-primary)]"}`} />
                   <AnimatePresence mode="wait">
                     {!sidebarCollapsed && (
                       <motion.span
@@ -444,7 +450,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -10 }}
                         transition={{ duration: 0.15 }}
-                        className={`text-sm font-medium whitespace-nowrap ${
+                        className={`text-sm font-medium whitespace-nowrap relative z-10 ${
                           location.pathname === "/app/settings"
                             ? ""
                             : "theme-muted-text"
@@ -473,43 +479,43 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="mt-4 mb-1 mx-1 overflow-hidden"
                 >
-                  <div className="theme-panel-muted rounded-xl p-3">
-                    <h4 className="theme-muted-text text-xs font-semibold uppercase tracking-wider mb-2">
+                  <div className="theme-panel-muted rounded-2xl p-3 bg-white/30 dark:bg-white/[0.01] border border-white/5 dark:border-white/[0.04] backdrop-blur-md">
+                    <h4 className="theme-muted-text text-[10px] font-bold uppercase tracking-wider mb-2 font-title">
                       Devices
                     </h4>
                     <div className="space-y-2">
                       <div className="flex items-center gap-3">
-                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
-                          <Laptop className="w-4 h-4 text-[#007AFF]" />
+                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm bg-white/50 dark:bg-black/30 border border-white/10 dark:border-white/[0.06]">
+                          <Laptop className="w-4 h-4 text-cyan-500" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          <p className="text-sm font-medium text-[var(--text-primary)] truncate">
                             Extension
                           </p>
                         </div>
-                        <div className="w-2 h-2 bg-[#34C759] rounded-full" />
+                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
-                          <Smartphone className="w-4 h-4 text-[#5856D6]" />
+                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm bg-white/50 dark:bg-black/30 border border-white/10 dark:border-white/[0.06]">
+                          <Smartphone className="w-4 h-4 text-violet-500" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          <p className="text-sm font-medium text-[var(--text-primary)] truncate">
                             Mobile
                           </p>
                         </div>
-                        <div className="w-2 h-2 bg-[#34C759] rounded-full" />
+                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm">
-                          <PenTool className="w-4 h-4 text-[#FF9500]" />
+                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm bg-white/50 dark:bg-black/30 border border-white/10 dark:border-white/[0.06]">
+                          <PenTool className="w-4 h-4 text-amber-500" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          <p className="text-sm font-medium text-[var(--text-primary)] truncate">
                             Smart Pen
                           </p>
                         </div>
-                        <div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                        <div className="w-1.5 h-1.5 bg-zinc-300 dark:bg-zinc-600 rounded-full" />
                       </div>
                     </div>
                   </div>
@@ -519,7 +525,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
           </nav>
 
           {/* Collapse Toggle */}
-          <div className="theme-divider p-3 border-t">
+          <div className="theme-divider p-3 border-t border-white/5 dark:border-white/[0.06]">
             <button
               onClick={toggleSidebar}
               aria-label={
@@ -528,7 +534,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
               className={`
                 theme-sidebar-item theme-hover-surface
                 hidden lg:flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
-                transition-all duration-200
+                transition-all duration-200 text-[var(--text-muted)] hover:text-[var(--text-primary)]
                 ${sidebarCollapsed ? "justify-center" : ""}
               `}
             >
@@ -560,20 +566,21 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         className={`
           flex-1 flex flex-col min-h-screen min-w-0
           transition-all duration-300
-          ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[260px]"}
+          ${sidebarCollapsed ? "lg:ml-[108px]" : "lg:ml-[292px]"}
+          p-4 lg:p-6
         `}
       >
         {/* Header */}
-        <header className="theme-headerbar theme-divider sticky top-0 z-20 backdrop-blur-xl backdrop-saturate-150 border-b">
-          <div className="h-14 px-4 lg:px-8 flex items-center justify-between gap-4">
+        <header className="theme-headerbar theme-divider sticky top-0 z-20 backdrop-blur-2xl bg-white/40 dark:bg-[#09090b]/40 rounded-2xl border border-white/10 dark:border-white/[0.05] shadow-[0_4px_30px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.2)] mb-4 lg:mb-6">
+          <div className="h-14 px-4 lg:px-6 flex items-center justify-between gap-4">
             {/* Left: Mobile Menu + Search */}
             <div className="flex items-center gap-4 flex-1">
               <button
-                className="theme-icon-button theme-hover-surface lg:hidden p-2 rounded-xl transition-colors"
+                className="theme-icon-button theme-hover-surface lg:hidden p-2 rounded-xl transition-colors border border-white/10 dark:border-white/[0.06] bg-[var(--glass-bg)]"
                 onClick={() => setMobileSidebarOpen(true)}
                 aria-label="Open sidebar"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="w-5 h-5 text-[var(--text-primary)]" />
               </button>
 
               {/* Search - Hide on Dashboard to avoid duplication */}
@@ -584,16 +591,16 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   ${searchFocused ? "max-w-lg" : ""}
                 `}
                 >
-                  <Search className="theme-muted-text absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" />
+                  <Search className="text-[var(--text-muted)] absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" />
                   <input
                     type="text"
                     placeholder="Search..."
-                    className="theme-search theme-input w-full pl-11 pr-4 py-2 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 transition-all"
+                    className="theme-search theme-input w-full pl-11 pr-4 py-2 rounded-xl text-sm text-[var(--text-primary)] bg-[var(--glass-bg)] border border-white/10 dark:border-white/[0.06] placeholder-gray-500/80 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/50 transition-all shadow-inner"
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setSearchFocused(false)}
                   />
-                  <div className="theme-muted-text absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs">
-                    <kbd className="theme-kbd px-1.5 py-0.5 rounded text-[10px]">
+                  <div className="text-[var(--text-muted)] absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs">
+                    <kbd className="theme-kbd px-1.5 py-0.5 rounded text-[10px] bg-black/5 dark:bg-white/5 border border-white/10 dark:border-white/[0.06]">
                       ⌘K
                     </kbd>
                   </div>
@@ -602,126 +609,140 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
             </div>
 
             {/* Right: Actions */}
-            <div className="flex items-center gap-2">
-              {/* Notifications */}
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    setNotificationsOpen(!notificationsOpen);
-                    setProfileOpen(false);
-                  }}
-                  aria-label="Notifications"
-                  className="theme-icon-button theme-hover-surface notifications-trigger p-2.5 rounded-xl transition-colors relative"
-                >
-                  <Bell className="w-5 h-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF3B30] rounded-full" />
-                  )}
-                </button>
-
-                {/* Notifications Dropdown */}
-                <AnimatePresence>
-                  {notificationsOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 15, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                      className="theme-surface notifications-dropdown absolute right-0 mt-2 w-80 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden"
-                    >
-                    <div className="theme-divider px-4 py-3 border-b flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        Notifications
-                      </h3>
-                      {unreadCount > 0 && (
-                        <button
-                          onClick={markAllAsRead}
-                          className="text-xs text-[#007AFF] hover:text-[#0066DD] font-medium"
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {activities.length === 0 ? (
-                        <div className="px-4 py-8 text-center">
-                          <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">
-                            No notifications
-                          </p>
-                        </div>
-                      ) : (
-                        activities.map((activity) => (
-                          <div
-                            key={activity.id}
-                            className={`theme-hover-surface px-4 py-3 transition-colors ${
-                              !activity.read ? "theme-dropdown-highlight" : ""
-                            }`}
-                          >
-                            <div className="flex gap-3">
-                              <div className="theme-panel-muted w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
-                                {getActivityIcon(activity.type)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-gray-900 dark:text-white">
-                                  {activity.message}
-                                </p>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                  {formatTimeAgo(activity.time)}
-                                </p>
-                              </div>
-                              {!activity.read && (
-                                <div className="w-2 h-2 bg-[#007AFF] rounded-full flex-shrink-0 mt-2" />
-                              )}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+            <div className="flex items-center gap-4">
+              {/* Supabase Real-time Sync activity sparkler */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 dark:bg-cyan-500/15 border border-cyan-500/20 text-cyan-600 dark:text-cyan-400 text-xs font-semibold select-none shadow-[0_0_10px_rgba(6,182,212,0.1)]">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-gradient-to-r from-cyan-400 to-emerald-400"></span>
+                </span>
+                <span className="hidden sm:inline font-sans">Synced</span>
               </div>
 
-              {/* Profile */}
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    setProfileOpen(!profileOpen);
-                    setNotificationsOpen(false);
-                  }}
-                  aria-label="User profile menu"
-                  className="theme-icon-button theme-hover-surface profile-trigger flex items-center gap-2 p-1.5 rounded-xl transition-colors"
-                >
-                  <div className="w-8 h-8 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center text-white font-medium text-sm overflow-hidden relative group/avatar">
-                    {user?.identities?.[0]?.identity_data?.avatar_url ? (
-                      <img
-                        src={user.identities[0].identity_data.avatar_url}
-                        alt="User"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      user?.email?.charAt(0).toUpperCase() || (
-                        <User className="w-4 h-4" />
-                      )
+              {/* Streamlined Glass Action Bar (Notifications + Profile) */}
+              <div className="flex items-center gap-1 p-1 rounded-2xl bg-white/40 dark:bg-[#09090b]/40 backdrop-blur-xl border border-white/10 dark:border-white/[0.06] shadow-md z-20">
+                {/* Notifications */}
+                <div className="relative flex items-center justify-center">
+                  <button
+                    onClick={() => {
+                      setNotificationsOpen(!notificationsOpen);
+                      setProfileOpen(false);
+                    }}
+                    aria-label="Notifications"
+                    className="theme-icon-button theme-hover-surface notifications-trigger p-2 rounded-xl transition-colors relative flex items-center justify-center hover:scale-[1.03] active:scale-[0.97]"
+                  >
+                    <Bell className="w-4 h-4 text-[var(--text-primary)]" />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF3B30] rounded-full animate-pulse" />
                     )}
-                    {localStorage.getItem("rm_guest_mode") === "true" && (
-                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                        <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse shadow-sm" />
-                      </div>
-                    )}
-                  </div>
-                </button>
+                  </button>
 
-                {/* Profile Dropdown */}
-                <AnimatePresence>
-                  {profileOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                  {/* Notifications Dropdown */}
+                  <AnimatePresence>
+                    {notificationsOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                        className="theme-surface notifications-dropdown absolute right-[-50px] sm:right-0 top-full mt-3 w-80 rounded-2xl shadow-2xl border border-white/10 dark:border-white/[0.06] bg-[var(--surface-overlay)] backdrop-blur-2xl overflow-hidden"
+                      >
+                      <div className="theme-divider px-4 py-3 border-b border-white/5 dark:border-white/[0.06] flex items-center justify-between">
+                        <h3 className="font-semibold text-[var(--text-primary)] font-title text-sm">
+                          Notifications
+                        </h3>
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={markAllAsRead}
+                            className="text-xs text-cyan-500 hover:text-cyan-400 font-medium transition-colors"
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-80 overflow-y-auto">
+                        {activities.length === 0 ? (
+                          <div className="px-4 py-8 text-center">
+                            <Bell className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2 opacity-60" />
+                            <p className="text-sm text-[var(--text-muted)]">
+                              No notifications
+                            </p>
+                          </div>
+                        ) : (
+                          activities.map((activity) => (
+                            <div
+                              key={activity.id}
+                              className={`theme-hover-surface px-4 py-3 transition-colors ${
+                                !activity.read ? "bg-cyan-500/5 dark:bg-cyan-400/5" : ""
+                              }`}
+                            >
+                              <div className="flex gap-3">
+                                <div className="theme-panel-muted w-8 h-8 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center flex-shrink-0">
+                                  {getActivityIcon(activity.type)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-[var(--text-primary)]">
+                                    {activity.message}
+                                  </p>
+                                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                                    {formatTimeAgo(activity.time)}
+                                  </p>
+                                </div>
+                                {!activity.read && (
+                                  <div className="w-2 h-2 bg-cyan-500 rounded-full flex-shrink-0 mt-2 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Vertical Divider */}
+                <div className="w-px h-5 bg-black/10 dark:bg-white/10 self-center mx-1" />
+
+                {/* Profile */}
+                <div className="relative flex items-center justify-center">
+                  <button
+                    onClick={() => {
+                      setProfileOpen(!profileOpen);
+                      setNotificationsOpen(false);
+                    }}
+                    aria-label="User profile menu"
+                    className="theme-icon-button theme-hover-surface profile-trigger flex items-center gap-2 p-1 rounded-xl transition-colors hover:scale-[1.03] active:scale-[0.97]"
+                  >
+                    <div className="w-7 h-7 bg-gradient-to-br from-cyan-400 via-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-xs overflow-hidden relative group/avatar shadow-[0_0_8px_rgba(99,102,241,0.2)]">
+                      {user?.identities?.[0]?.identity_data?.avatar_url ? (
+                        <img
+                          src={user.identities[0].identity_data.avatar_url}
+                          alt="User"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        user?.email?.charAt(0).toUpperCase() || (
+                          <User className="w-3 h-3" />
+                        )
+                      )}
+                      {localStorage.getItem("rm_guest_mode") === "true" && (
+                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse shadow-sm" />
+                        </div>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Profile Dropdown */}
+                  <AnimatePresence>
+                    {profileOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 15, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 10, scale: 0.95 }}
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                      className="theme-surface profile-dropdown absolute right-0 mt-2 w-64 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden"
+                      className="theme-surface profile-dropdown absolute right-0 top-full mt-2 w-64 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden"
                     >
                     <div className="theme-divider px-4 py-4 border-b">
                       {localStorage.getItem("rm_guest_mode") === "true" ? (
@@ -804,12 +825,13 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   )}
                 </AnimatePresence>
               </div>
+              </div>
             </div>
           </div>
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 lg:p-8 overflow-y-auto overflow-x-hidden w-full max-w-full">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
           <div key={location.pathname} className="page-transition-enter h-full">
             {children}
           </div>

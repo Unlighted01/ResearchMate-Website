@@ -18,7 +18,7 @@ interface AppearanceTabProps {
   theme: string;
   setTheme: (t: "light" | "dark" | "system") => void;
   visualTheme: string;
-  setVisualTheme: (t: "minimalist" | "bubble" | "glass") => void;
+  setVisualTheme: (t: "minimalist" | "glass") => void;
   showToast: (msg: string, type: "success" | "error" | "info") => void;
 }
 
@@ -47,11 +47,10 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
             label="Visual Theme"
             value={visualTheme}
             onChange={(value) =>
-              setVisualTheme(value as "minimalist" | "bubble" | "glass")
+              setVisualTheme(value as "minimalist" | "glass")
             }
             options={[
               { value: "minimalist", label: "Minimalist (Default)" },
-              { value: "bubble", label: "Bubble" },
               { value: "glass", label: "Glass" },
             ]}
           />

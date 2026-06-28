@@ -32,83 +32,99 @@
    PART 1: CSS VARIABLES & THEME
    ============================================ */
 
-:root {
-  /* Apple-inspired color palette */
-  --apple-blue: #007aff;
-  --apple-blue-dark: #0051d5;
-  --apple-gray-1: #8e8e93;
-  --apple-gray-2: #636366;
-  --apple-gray-3: #48484a;
-  --apple-gray-4: #3a3a3c;
-  --apple-gray-5: #2c2c2e;
-  --apple-gray-6: #1c1c1e;
+:root, [data-theme="light"] {
+  /* OKLCH Space Theme Tokens */
+  --color-primary: oklch(0.55 0.22 260);
+  --surface-base: oklch(0.98 0.005 240);
+  --surface-elevated: oklch(1.0 0.0 0);
+  --surface-overlay: oklch(1.0 0.0 0 / 0.85);
+  --text-primary: oklch(0.12 0.01 250);
+  --text-muted: oklch(0.55 0.01 250);
+  --border-subtle: oklch(0.90 0.01 250);
 
-  /* ResearchMate Brand Colors */
+  /* 8px Spacing Grid */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+  --space-7: 56px;
+  --space-8: 64px;
+
+  /* Typography scale */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-title: "Fraunces", Georgia, serif;
+
+  /* Nebula Glass Accents */
+  --accent-gradient: linear-gradient(135deg, oklch(0.65 0.24 280) 0%, oklch(0.65 0.25 320) 100%);
+  --hairline-border: 1px solid oklch(0.12 0.01 250 / 0.08);
+
+  /* Core UI Semantic Mappings for backward compatibility */
+  --bg-primary: var(--surface-base);
+  --bg-secondary: oklch(0.96 0.005 240);
+  --bg-tertiary: oklch(0.92 0.005 240);
+  --glass-bg: oklch(1.0 0.0 0 / 0.72);
+  --glass-border: oklch(0.0 0.0 0 / 0.08);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+
   --rm-blue: #007aff;
-  --rm-blue-light: #5ac8fa;
-  --rm-blue-dark: #0051d5;
   --rm-purple: #5856d6;
-  --rm-purple-light: #af52de;
   --rm-green: #34c759;
   --rm-orange: #ff9500;
   --rm-red: #ff3b30;
-  --rm-teal: #5ac8fa;
 
-  /* Semantic Colors */
-  --rm-success: var(--rm-green);
-  --rm-warning: var(--rm-orange);
-  --rm-error: var(--rm-red);
-  --rm-info: var(--rm-blue);
-
-  /* Accent Gradients */
-  --rm-gradient-primary: linear-gradient(
-    135deg,
-    var(--rm-blue) 0%,
-    var(--rm-purple) 100%
-  );
-  --rm-gradient-success: linear-gradient(135deg, #34c759 0%, #30d158 100%);
-  --rm-gradient-premium: linear-gradient(135deg, #5856d6 0%, #af52de 100%);
-
-  /* Light mode backgrounds */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f7;
-  --bg-tertiary: #e8e8ed;
-
-  /* Glass effects */
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.18);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-
-  /* Typography */
-  --font-sans:
-    "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
-    Roboto, sans-serif;
-  --font-title:
-    "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
-    Roboto, sans-serif;
-
-  /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.dark {
-  --bg-primary: #000000;
-  --bg-secondary: #1c1c1e;
-  --bg-tertiary: #2c2c2e;
+.dark, [data-theme="dark"] {
+  /* OKLCH Premium Dark Theme Tokens */
+  --color-primary: oklch(0.70 0.22 280); /* Bright violet-cyan blend */
+  --surface-base: oklch(0.13 0.01 250); /* Deep Slate/Zinc #09090b range */
+  --surface-elevated: oklch(0.16 0.01 250 / 0.45); /* Semi-translucent glass */
+  --surface-overlay: oklch(0.15 0.01 250 / 0.85); /* Dropdowns/modals */
+  --text-primary: oklch(0.95 0.01 250); /* Ultra high contrast white */
+  --text-muted: oklch(0.65 0.01 250); /* Gray muted text */
+  --border-subtle: oklch(0.25 0.01 250 / 0.5); /* 1px hairline border */
 
-  --glass-bg: rgba(28, 28, 30, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.32);
+  /* Nebula Glass Dark Accents */
+  --hairline-border: 1px solid oklch(1.0 0.0 0 / 0.1);
+  --accent-gradient: linear-gradient(135deg, oklch(0.75 0.16 195) 0%, oklch(0.60 0.25 320) 100%); /* cyan-to-violet nebula */
 
-  /* Dark mode accent adjustments for better contrast */
+  /* Core UI Semantic Mappings */
+  --bg-primary: var(--surface-base);
+  --bg-secondary: oklch(0.15 0.01 250);
+  --bg-tertiary: oklch(0.18 0.01 250);
+  --glass-bg: oklch(0.14 0.01 250 / 0.45);
+  --glass-border: oklch(1.0 0.0 0 / 0.1);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
   --rm-blue: #0a84ff;
   --rm-purple: #bf5af2;
   --rm-green: #30d158;
   --rm-orange: #ff9f0a;
   --rm-red: #ff453a;
+}
+
+/* Nebula Glass Glow Keyframe Animations */
+@keyframes nebula-drifting {
+  0% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.05); }
+  66% { transform: translate(-20px, 20px) scale(0.98); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 5px oklch(0.70 0.22 280 / 0.2)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 15px oklch(0.70 0.22 280 / 0.4)); }
+}
+
+@keyframes spotlight-glow {
+  0% { opacity: 0.4; }
+  100% { opacity: 0.8; }
 }
 
 /* ============================================
@@ -291,11 +307,25 @@ html.dark[data-ui-theme="minimalist"] {
 }
 
 html[data-ui-theme="minimalist"] body {
-  background: #fafafa;
+  background:
+    radial-gradient(at 0% 0%, rgba(240, 240, 240, 0.4) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(220, 220, 220, 0.3) 0px, transparent 50%),
+    linear-gradient(to right, rgba(0, 0, 0, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.02) 1px, transparent 1px),
+    #fafafa;
+  background-size: 100% 100%, 100% 100%, 60px 60px, 60px 60px;
+  animation: minimalist-grid-drift 40s linear infinite;
 }
 
 html.dark[data-ui-theme="minimalist"] body {
-  background: #000000;
+  background:
+    radial-gradient(at 0% 0%, rgba(20, 20, 20, 0.6) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(10, 10, 10, 0.5) 0px, transparent 50%),
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    #09090b;
+  background-size: 100% 100%, 100% 100%, 60px 60px, 60px 60px;
+  animation: minimalist-grid-drift 40s linear infinite;
 }
 
 /* Editorial letter-spacing on titles in minimalist mode */
@@ -391,18 +421,22 @@ html.dark[data-ui-theme="bubble"] {
 
 html[data-ui-theme="bubble"] body {
   background:
-    radial-gradient(circle at 15% 20%, rgba(244, 114, 182, 0.14) 0%, transparent 45%),
-    radial-gradient(circle at 85% 80%, rgba(196, 181, 253, 0.16) 0%, transparent 45%),
-    radial-gradient(circle at 50% 50%, rgba(186, 230, 252, 0.10) 0%, transparent 60%),
+    radial-gradient(circle at 15% 20%, rgba(244, 114, 182, 0.16) 0%, transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(196, 181, 253, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(186, 230, 252, 0.12) 0%, transparent 60%),
     #fdf9ff;
+  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
+  animation: bubble-mesh-drift 25s ease-in-out infinite;
 }
 
 html.dark[data-ui-theme="bubble"] body {
   background:
-    radial-gradient(circle at 20% 25%, rgba(232, 121, 249, 0.12) 0%, transparent 45%),
-    radial-gradient(circle at 80% 75%, rgba(167, 139, 250, 0.14) 0%, transparent 45%),
-    radial-gradient(circle at 55% 45%, rgba(244, 114, 182, 0.08) 0%, transparent 55%),
-    #0d0814;
+    radial-gradient(circle at 20% 25%, rgba(232, 121, 249, 0.14) 0%, transparent 45%),
+    radial-gradient(circle at 80% 75%, rgba(167, 139, 250, 0.16) 0%, transparent 45%),
+    radial-gradient(circle at 55% 45%, rgba(244, 114, 182, 0.15) 0%, transparent 55%),
+    #0b0712;
+  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
+  animation: bubble-mesh-drift 25s ease-in-out infinite;
 }
 
 
@@ -503,18 +537,23 @@ html.dark[data-ui-theme="glass"] {
 html[data-ui-theme="glass"] body {
   /* Light glass: cool gray-blue base with soft desaturated orbs */
   background:
-    radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.07) 0%, transparent 45%),
-    radial-gradient(circle at 80% 80%, rgba(167, 139, 250, 0.07) 0%, transparent 45%),
+    radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.15) 0%, transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(167, 139, 250, 0.15) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.1) 0%, transparent 60%),
     #f0f4f8;
+  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
+  animation: glass-aurora-drift 30s ease-in-out infinite;
 }
 
 html.dark[data-ui-theme="glass"] body {
   /* Dark glass: near-black with vivid glowing orbs */
   background:
-    radial-gradient(circle at 15% 20%, rgba(34, 211, 238, 0.12) 0%, transparent 45%),
-    radial-gradient(circle at 85% 75%, rgba(167, 139, 250, 0.10) 0%, transparent 45%),
-    radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
-    #0a0a0f;
+    radial-gradient(circle at 15% 20%, rgba(34, 211, 238, 0.22) 0%, transparent 45%),
+    radial-gradient(circle at 85% 75%, rgba(167, 139, 250, 0.2) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.14) 0%, transparent 60%),
+    #05050a;
+  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
+  animation: glass-aurora-drift 30s ease-in-out infinite;
 }
 
 /* === GLASS THEME UTILITY CLASSES === */
@@ -801,6 +840,92 @@ h6 {
 /* ============================================
    PART 5: ANIMATIONS
    ============================================ */
+
+/* Buttery-smooth transitions when toggling light/dark or active layout themes */
+body,
+.theme-surface,
+.theme-sidebar,
+.theme-headerbar,
+.theme-input,
+.theme-search,
+.theme-btn,
+.theme-title,
+.theme-muted-text,
+.theme-sidebar-item {
+  transition: 
+    background-color var(--transition-slow),
+    background-image var(--transition-slow),
+    border-color var(--transition-base),
+    color var(--transition-base),
+    box-shadow var(--transition-base),
+    backdrop-filter var(--transition-slow);
+}
+
+@keyframes mesh-slow {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 50% 100%;
+  }
+  100% {
+    background-position: 100% 0%;
+  }
+}
+
+/* Minimalist Editorial Precision Grid Drift */
+@keyframes minimalist-grid-drift {
+  0% {
+    background-position: 
+      0% 0%, 
+      100% 100%, 
+      0px 0px, 
+      0px 0px;
+  }
+  100% {
+    background-position: 
+      0% 0%, 
+      100% 100%, 
+      60px 60px, 
+      60px 60px;
+  }
+}
+
+/* Playful Bubble Mesh Morph and Drift */
+@keyframes bubble-mesh-drift {
+  0% {
+    background-position: 0% 0%, 100% 100%, 50% 50%;
+    background-size: 200% 200%, 200% 200%, 200% 200%;
+  }
+  33% {
+    background-position: 30% 10%, 70% 90%, 40% 60%;
+    background-size: 220% 220%, 180% 180%, 210% 210%;
+  }
+  66% {
+    background-position: 10% 40%, 90% 60%, 60% 30%;
+    background-size: 180% 180%, 220% 220%, 190% 190%;
+  }
+  100% {
+    background-position: 0% 0%, 100% 100%, 50% 50%;
+    background-size: 200% 200%, 200% 200%, 200% 200%;
+  }
+}
+
+/* Glowing Neon Aurora Drift */
+@keyframes glass-aurora-drift {
+  0% {
+    background-position: 0% 0%, 100% 100%, 50% 50%;
+    background-size: 200% 200%, 200% 200%, 200% 200%;
+  }
+  50% {
+    background-position: 80% 20%, 20% 80%, 30% 70%;
+    background-size: 260% 260%, 240% 240%, 180% 180%;
+  }
+  100% {
+    background-position: 0% 0%, 100% 100%, 50% 50%;
+    background-size: 200% 200%, 200% 200%, 200% 200%;
+  }
+}
 
 /* Fade in up - for page transitions */
 @keyframes fade-in-up {

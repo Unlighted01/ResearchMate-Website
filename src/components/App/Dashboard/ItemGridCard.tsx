@@ -58,12 +58,19 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
   onClick,
   onDelete,
 }) => {
-  const colorBorderClass =
-    item.color === "yellow" ? "border-l-[4px] border-l-[#FBBF24] bg-amber-50/10 dark:bg-amber-900/10" :
-    item.color === "green" ? "border-l-[4px] border-l-[#34D399] bg-emerald-50/10 dark:bg-emerald-900/10" :
-    item.color === "blue" ? "border-l-[4px] border-l-[#60A5FA] bg-blue-50/10 dark:bg-blue-900/10" :
-    item.color === "red" ? "border-l-[4px] border-l-[#F87171] bg-red-50/10 dark:bg-red-900/10" :
-    item.color === "purple" ? "border-l-[4px] border-l-[#A78BFA] bg-purple-50/10 dark:bg-purple-900/10" : "";
+  const colorTagClass =
+    item.color === "yellow" ? "bg-amber-500" :
+    item.color === "green" ? "bg-emerald-500" :
+    item.color === "blue" ? "bg-blue-500" :
+    item.color === "red" ? "bg-rose-500" :
+    item.color === "purple" ? "bg-purple-500" : "bg-slate-400";
+
+  const colorGlowClass =
+    item.color === "yellow" ? "from-amber-500/5 to-transparent" :
+    item.color === "green" ? "from-emerald-500/5 to-transparent" :
+    item.color === "blue" ? "from-blue-500/5 to-transparent" :
+    item.color === "red" ? "from-rose-500/5 to-transparent" :
+    item.color === "purple" ? "from-purple-500/5 to-transparent" : "from-slate-500/5 to-transparent";
 
   const displayText = (() => {
     const t = item.aiSummary || item.text || item.ocrText || "";
@@ -94,99 +101,145 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
       }}
       whileHover={{
         y: -6,
-        boxShadow: "0 16px 40px -8px rgba(0, 122, 255, 0.15)",
+        boxShadow: "0 16px 40px -8px rgba(99, 102, 241, 0.15)",
       }}
       onClick={() => onClick(item)}
-      className={`spotlight-card group relative glass-card rounded-2xl p-5 flex flex-col h-[240px] transition-all duration-300 hover:border-[#007AFF]/30
-        ${colorBorderClass}
-        ${isSelected ? "ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/10" : ""}
+      className={`spotlight-card group relative bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-5 flex flex-col h-[240px] transition-all duration-300 hover:border-indigo-500/30 overflow-hidden
+        ${isSelected ? "ring-2 ring-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/20" : ""}
         cursor-pointer`}
     >
-      {/* Checkbox */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(item.id);
-        }}
-        className={`absolute bottom-3 left-3 z-10 p-1 rounded-lg border bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm transition-all duration-200 ${
-          isSelected || hasAnySelection
-            ? "opacity-100 scale-100"
-            : "opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100"
-        } ${
-          isSelected
-            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/40"
-            : "border-gray-200 hover:border-gray-300 dark:border-gray-700"
-        }`}
-        aria-label={isSelected ? "Deselect item" : "Select item"}
-      >
-        <div
-          className={`w-4 h-4 rounded border flex items-center justify-center transition-colors dark:border-gray-600 ${
-            isSelected
-              ? "bg-blue-600 border-blue-600"
-              : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
-          }`}
-        >
-          {isSelected && <Check className="w-3 h-3 text-white" />}
+      {/* Accent Color Side Indicator */}
+      <div className={`absolute left-0 top-12 bottom-12 w-[3px] rounded-r-md ${colorTagClass} transition-all duration-300`} />
+
+      {/* Subtle Color Accent Background Aura */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${colorGlowClass} opacity-60 pointer-events-none rounded-2xl`} />
+
+      {/* Selected Badge (Visible when card is not hovered but is selected) */}
+      {isSelected && (
+        <div className="absolute top-3 left-3 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white shadow-md shadow-indigo-600/20 border border-white dark:border-slate-900 transition-all duration-200 group-hover:scale-0 group-hover:opacity-0">
+          <Check className="w-3.5 h-3.5 stroke-[3]" />
         </div>
-      </button>
+      )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-3 z-10">
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center"
+          className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100/80 dark:bg-slate-800/80 backdrop-blur-sm shadow-sm transition-transform duration-300 group-hover:scale-105"
           style={{
-            backgroundColor: `${getSourceColor(item.deviceSource || "web")}15`,
+            borderLeft: `3px solid ${getSourceColor(item.deviceSource || "web")}`
           }}
         >
-          <span style={{ color: getSourceColor(item.deviceSource || "web") }}>
+          <span className="text-slate-600 dark:text-slate-300">
             {getSourceIcon(item.deviceSource || "web")}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        
+        <div className="flex items-center gap-1.5">
           {item.aiSummary && (
-            <span className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white text-[10px] font-semibold rounded-full">
-              <Zap className="w-3 h-3" />
-              AI
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[9px] font-bold tracking-wider uppercase rounded-full shadow-sm shadow-indigo-500/20">
+              <Zap className="w-2.5 h-2.5 animate-pulse" />
+              AI SUM
             </span>
           )}
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0">
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 leading-snug">
+      <div className="flex-1 min-h-0 z-10 flex flex-col justify-start">
+        <h3
+          className="text-base font-bold text-slate-800 dark:text-slate-100 mb-1.5 line-clamp-2 leading-snug tracking-tight transition-colors group-hover:text-slate-950 dark:group-hover:text-white"
+          style={{ fontFamily: "var(--font-title, 'Fraunces', Georgia, serif)" }}
+        >
           {item.sourceTitle || "Untitled Research"}
         </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed">
+        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed font-sans">
           {displayText}
         </p>
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-          <Clock className="w-3.5 h-3.5" />
-          {new Date(item.createdAt).toLocaleDateString()}
+      {/* Sleek Monospaced Metadata Columns */}
+      <div className="grid grid-cols-2 gap-y-1 mt-auto pt-3 border-t border-slate-200/50 dark:border-slate-800/50 font-mono text-[9px] text-slate-500/85 dark:text-slate-400/85 tracking-wider z-10">
+        <div className="flex items-center gap-1">
+          <Clock className="w-2.5 h-2.5 text-indigo-500 dark:text-indigo-400" />
+          <span>DATE // {new Date(item.createdAt).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: '2-digit' })}</span>
         </div>
-        {item.tags && item.tags.length > 0 && (
-          <div className="flex items-center gap-1">
-            <Tag className="w-3.5 h-3.5 text-gray-400" />
-            <span className="text-xs text-gray-400">{item.tags.length}</span>
-          </div>
-        )}
+        <div className="flex items-center justify-end gap-1">
+          <span className="w-1 h-1 rounded-full bg-indigo-500 animate-pulse"></span>
+          <span>SRC // {String(item.deviceSource || "web").toUpperCase()}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Tag className="w-2.5 h-2.5 text-emerald-500 dark:text-emerald-400" />
+          <span>TAGS // {item.tags ? String(item.tags.length).padStart(2, '0') : "00"}</span>
+        </div>
+        <div className="flex items-center justify-end gap-1">
+          <span className="font-semibold text-slate-400 dark:text-slate-500">SIZE //</span>
+          <span>{String(displayText.length).padStart(4, '0')}C</span>
+        </div>
       </div>
 
-      {/* Delete Button (on hover) */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(item.id);
-        }}
-        aria-label="Delete item"
-        className="absolute top-3 right-3 p-2 bg-white dark:bg-gray-800 text-gray-400 hover:text-[#FF3B30] rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 dark:hover:bg-red-900/20"
-      >
-        <TrashIcon size={16} dangerHover />
-      </button>
+      {/* Premium Hover Action Sheet Bar (Slides up on Hover) */}
+      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-white/95 via-white/90 to-white/70 dark:from-slate-950/95 dark:via-slate-900/90 dark:to-slate-900/70 backdrop-blur-md border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between transition-all duration-300 translate-y-full group-hover:translate-y-0 opacity-0 group-hover:opacity-100 z-20">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(item.id);
+          }}
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[10px] font-medium transition-all duration-200 ${
+            isSelected
+              ? "bg-indigo-500 border-indigo-500 text-white shadow-sm shadow-indigo-500/20"
+              : "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${
+            isSelected ? "bg-white border-white text-indigo-500" : "bg-white dark:bg-gray-800 border-slate-300"
+          }`}>
+            {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+          </div>
+          <span>{isSelected ? "Selected" : "Select"}</span>
+        </button>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(displayText);
+              const btn = e.currentTarget;
+              const originalContent = btn.innerHTML;
+              btn.innerHTML = '<span>Copied!</span>';
+              btn.classList.add('bg-emerald-500', 'text-white', 'border-emerald-500');
+              setTimeout(() => {
+                btn.innerHTML = originalContent;
+                btn.classList.remove('bg-emerald-500', 'text-white', 'border-emerald-500');
+              }, 1500);
+            }}
+            className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-[10px] font-medium transition-all"
+            title="Copy content"
+          >
+            Copy
+          </button>
+          
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick(item);
+            }}
+            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-medium transition-all shadow-sm shadow-indigo-600/20"
+          >
+            Open
+          </button>
+          
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(item.id);
+            }}
+            className="p-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-600 hover:text-white border border-rose-500/20 rounded-lg transition-all"
+            title="Delete research item"
+          >
+            <TrashIcon size={13} />
+          </button>
+        </div>
+      </div>
     </motion.div>
   );
 };
