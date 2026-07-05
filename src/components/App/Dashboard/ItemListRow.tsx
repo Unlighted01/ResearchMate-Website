@@ -107,12 +107,12 @@ const ItemListRow: React.FC<ItemListRowProps> = ({
       {/* Footer / Actions */}
       <div className="flex items-center gap-3 shrink-0 ml-auto sm:ml-0 mt-2 sm:mt-0">
         {item.aiSummary && (
-          <span className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white text-[10px] font-semibold rounded-full">
+          <span className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white text-xs font-semibold rounded-full">
             <Zap className="w-3 h-3" />
             AI
           </span>
         )}
-        <span className="text-xs text-gray-400">
+        <span className="text-sm text-gray-400">
           {new Date(item.createdAt).toLocaleDateString()}
         </span>
         <button

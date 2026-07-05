@@ -136,7 +136,7 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
         
         <div className="flex items-center gap-1.5">
           {item.aiSummary && (
-            <span className="flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[9px] font-bold tracking-wider uppercase rounded-full shadow-sm shadow-indigo-500/20">
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-bold tracking-wider uppercase rounded-full shadow-sm shadow-indigo-500/20">
               <Zap className="w-2.5 h-2.5 animate-pulse" />
               AI SUM
             </span>
@@ -152,13 +152,13 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
         >
           {item.sourceTitle || "Untitled Research"}
         </h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed font-sans">
+        <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed font-sans">
           {displayText}
         </p>
       </div>
 
       {/* Sleek Monospaced Metadata Columns */}
-      <div className="grid grid-cols-2 gap-y-1 mt-auto pt-3 border-t border-slate-200/50 dark:border-slate-800/50 font-mono text-[9px] text-slate-500/85 dark:text-slate-400/85 tracking-wider z-10">
+      <div className="grid grid-cols-2 gap-y-1 mt-auto pt-3 border-t border-slate-200/50 dark:border-slate-800/50 font-mono text-xs text-slate-500/85 dark:text-slate-400/85 tracking-wider z-10">
         <div className="flex items-center gap-1">
           <Clock className="w-2.5 h-2.5 text-indigo-500 dark:text-indigo-400" />
           <span>DATE // {new Date(item.createdAt).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: '2-digit' })}</span>
@@ -184,7 +184,7 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
             e.stopPropagation();
             onSelect(item.id);
           }}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[10px] font-medium transition-all duration-200 ${
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all duration-200 ${
             isSelected
               ? "bg-indigo-500 border-indigo-500 text-white shadow-sm shadow-indigo-500/20"
               : "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
@@ -212,7 +212,7 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
                 btn.classList.remove('bg-emerald-500', 'text-white', 'border-emerald-500');
               }, 1500);
             }}
-            className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-[10px] font-medium transition-all"
+            className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-xs font-medium transition-all"
             title="Copy content"
           >
             Copy
@@ -223,7 +223,7 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
               e.stopPropagation();
               onClick(item);
             }}
-            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-medium transition-all shadow-sm shadow-indigo-600/20"
+            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition-all shadow-sm shadow-indigo-600/20"
           >
             Open
           </button>

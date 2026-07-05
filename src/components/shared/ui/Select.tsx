@@ -61,11 +61,11 @@ export const Select: React.FC<SelectProps> = ({
           cursor-pointer
         `}
       >
-        <option value="" disabled>
+        <option value="" disabled className="bg-white dark:bg-[#2C2C2E] text-gray-400">
           {placeholder}
         </option>
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} className="bg-white dark:bg-[#2C2C2E] text-gray-900 dark:text-white">
             {option.label}
           </option>
         ))}

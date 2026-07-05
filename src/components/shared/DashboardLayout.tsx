@@ -300,7 +300,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="theme-sidebar-section-label font-title font-bold text-[10px] uppercase tracking-wider text-[var(--text-muted)] opacity-80 px-4 py-2 mt-4 whitespace-nowrap"
+                      className="theme-sidebar-section-label font-title font-bold text-xs uppercase tracking-wider text-[var(--text-muted)] opacity-80 px-4 py-2 mt-4 whitespace-nowrap"
                     >
                       {group.label}
                     </motion.div>
@@ -480,7 +480,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                   className="mt-4 mb-1 mx-1 overflow-hidden"
                 >
                   <div className="theme-panel-muted rounded-2xl p-3 bg-white/30 dark:bg-white/[0.01] border border-white/5 dark:border-white/[0.04] backdrop-blur-md">
-                    <h4 className="theme-muted-text text-[10px] font-bold uppercase tracking-wider mb-2 font-title">
+                    <h4 className="theme-muted-text text-xs font-bold uppercase tracking-wider mb-2 font-title">
                       Devices
                     </h4>
                     <div className="space-y-2">
@@ -600,7 +600,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                     onBlur={() => setSearchFocused(false)}
                   />
                   <div className="text-[var(--text-muted)] absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs">
-                    <kbd className="theme-kbd px-1.5 py-0.5 rounded text-[10px] bg-black/5 dark:bg-white/5 border border-white/10 dark:border-white/[0.06]">
+                    <kbd className="theme-kbd px-1.5 py-0.5 rounded text-xs bg-black/5 dark:bg-white/5 border border-white/10 dark:border-white/[0.06]">
                       ⌘K
                     </kbd>
                   </div>
@@ -611,7 +611,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
             {/* Right: Actions */}
             <div className="flex items-center gap-4">
               {/* Supabase Real-time Sync activity sparkler */}
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 dark:bg-cyan-500/15 border border-cyan-500/20 text-cyan-600 dark:text-cyan-400 text-xs font-semibold select-none shadow-[0_0_10px_rgba(6,182,212,0.1)]">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 dark:bg-cyan-500/15 border border-cyan-500/20 text-cyan-600 dark:text-cyan-400 text-sm font-semibold select-none shadow-[0_0_10px_rgba(6,182,212,0.1)]">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-gradient-to-r from-cyan-400 to-emerald-400"></span>
@@ -755,14 +755,14 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
                               <p className="text-sm font-semibold text-gray-900 dark:text-white">
                                 Guest Account
                               </p>
-                              <p className="text-[10px] text-yellow-600 dark:text-yellow-500 font-medium uppercase tracking-wider">
+                              <p className="text-xs text-yellow-600 dark:text-yellow-500 font-semibold uppercase tracking-wider">
                                 Limited Access
                               </p>
                             </div>
                           </div>
                           <Link
                             to="/signup"
-                            className="block w-full py-2 px-3 bg-[#007AFF] hover:bg-[#0066DD] text-white text-xs font-medium text-center rounded-lg transition-colors"
+                            className="block w-full py-2 px-3 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-semibold text-center rounded-lg transition-colors"
                           >
                             Sign up to save progress
                           </Link>

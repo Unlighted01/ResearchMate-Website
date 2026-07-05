@@ -33,6 +33,7 @@
    ============================================ */
 
 :root, [data-theme="light"] {
+  color-scheme: light;
   /* OKLCH Space Theme Tokens */
   --color-primary: oklch(0.55 0.22 260);
   --surface-base: oklch(0.98 0.005 240);
@@ -81,6 +82,7 @@
 }
 
 .dark, [data-theme="dark"] {
+  color-scheme: dark;
   /* OKLCH Premium Dark Theme Tokens */
   --color-primary: oklch(0.70 0.22 280); /* Bright violet-cyan blend */
   --surface-base: oklch(0.13 0.01 250); /* Deep Slate/Zinc #09090b range */
