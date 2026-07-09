@@ -57,6 +57,7 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
   const [showPairing, setShowPairing] = useState(false);
   const [userId, setUserId] = useState<string>("");
   const [pairedPens, setPairedPens] = useState<PairedPen[]>([]);
+  const [pairedDevices, setPairedDevices] = useState<any[]>([]);
   const [extractingId, setExtractingId] = useState<string | null>(null);
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -67,6 +68,7 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
       if (user) {
         setUserId(user.id);
         loadPairedPens(user.id);
+        loadPairedDevices(user.id);
       }
     });
 
@@ -74,11 +76,11 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
     loadScans();
   }, []);
 
-  // Realtime subscription for device status
+  // Realtime subscription for device status and sync broadcasts
   useEffect(() => {
     if (!userId) return;
 
-    console.log("🔄 Subscribing to paired_pens realtime updates...");
+    console.log("🔄 Subscribing to paired_pens and user-sync realtime updates...");
 
     const channel = supabase
       .channel("paired_pens_realtime")
@@ -92,7 +94,6 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
         },
         (payload) => {
           console.log("📡 Realtime update:", payload.eventType, payload);
-          // Reload paired pens on any change
           loadPairedPens(userId);
 
           // Show toast for important events
@@ -103,13 +104,42 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
           }
         },
       )
-      .subscribe((status) => {
-        console.log("📡 Subscription status:", status);
-      });
+      .subscribe();
+
+    const deviceChannel = supabase
+      .channel("paired_devices_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "paired_devices",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          loadPairedDevices(userId);
+        },
+      )
+      .subscribe();
+
+    const syncChannel = supabase.channel(`user-sync:${userId}`);
+    syncChannel
+      .on("broadcast", { event: "new-scan" }, () => {
+        loadScans();
+        showToast("New note synced from mobile!", "success");
+      })
+      .on("broadcast", { event: "mobile-connected" }, () => {
+        loadPairedPens(userId);
+        loadPairedDevices(userId);
+        showToast("Mobile scanner connected!", "success");
+      })
+      .subscribe();
 
     return () => {
-      console.log("🔄 Unsubscribing from paired_pens...");
+      console.log("🔄 Unsubscribing from paired_pens and user-sync...");
       supabase.removeChannel(channel);
+      supabase.removeChannel(deviceChannel);
+      supabase.removeChannel(syncChannel);
     };
   }, [userId]);
 
@@ -146,6 +176,39 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
       }
     } catch (err) {
       console.error("Failed to load paired pens:", err);
+    }
+  };
+
+  const loadPairedDevices = async (uid: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("paired_devices")
+        .select("*")
+        .eq("user_id", uid);
+      if (!error && data) {
+        setPairedDevices(data);
+      }
+    } catch (err) {
+      console.error("Failed to load paired devices:", err);
+    }
+  };
+
+  const handleUnpairDevice = async (id: string) => {
+    if (!confirm("Disconnect this device? This will terminate the sync session.")) return;
+
+    try {
+      const { error } = await supabase
+        .from("paired_devices")
+        .delete()
+        .eq("id", id);
+      if (!error) {
+        setPairedDevices(prev => prev.filter(d => d.id !== id));
+        showToast("Device disconnected", "info");
+      } else {
+        showToast("Failed to disconnect", "error");
+      }
+    } catch (err) {
+      showToast("Connection error", "error");
     }
   };
 
@@ -405,31 +468,50 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
       </div>
 
       {/* ========== PAIRED DEVICES ========== */}
-      {pairedPens.length > 0 && (
+      {(pairedPens.length > 0 || pairedDevices.length > 0) && (
         <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 p-4">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
             <Wifi className="w-4 h-4 text-green-500" />
             Connected Devices
           </h3>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-3">
+            {/* Hardware Smart Pens */}
             {pairedPens.map((pen) => (
               <div
                 key={pen.pen_id}
                 className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl"
               >
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-green-600 dark:text-green-500 bg-green-100 dark:bg-green-950/40 px-1.5 py-0.5 rounded">Pen</span>
                 <span className="text-sm text-green-700 dark:text-green-400 font-medium">
                   {pen.pen_id.substring(0, 12)}...
                 </span>
-                <span className="text-xs text-green-600 dark:text-green-500">
-                  {formatDate(pen.paired_at)}
-                </span>
                 <button
                   onClick={() => unpairPen(pen.pen_id)}
-                  className="p-1 hover:bg-green-200 dark:hover:bg-green-800 rounded-lg transition-colors"
+                  className="p-1 hover:bg-green-200 dark:hover:bg-green-850 rounded-lg transition-colors"
                   title="Disconnect"
                 >
                   <X className="w-3 h-3 text-green-600" />
+                </button>
+              </div>
+            ))}
+            {/* Mobile / Tablet Sync Sessions */}
+            {pairedDevices.map((device) => (
+              <div
+                key={device.id}
+                className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl"
+              >
+                <div className={`w-2 h-2 rounded-full ${device.is_connected ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
+                <span className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-500 bg-blue-100 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">Sync</span>
+                <span className="text-sm text-blue-700 dark:text-blue-400 font-medium">
+                  {device.device_name || (device.device_type === "mobile_scanner" ? "Mobile Scanner" : "Tablet Sync")}
+                </span>
+                <button
+                  onClick={() => handleUnpairDevice(device.id)}
+                  className="p-1 hover:bg-blue-200 dark:hover:bg-blue-850 rounded-lg transition-colors"
+                  title="Disconnect"
+                >
+                  <X className="w-3 h-3 text-blue-600" />
                 </button>
               </div>
             ))}
