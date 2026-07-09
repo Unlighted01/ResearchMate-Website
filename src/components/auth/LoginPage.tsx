@@ -86,7 +86,14 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
             // User opted out of "Keep me signed in" — sign them out on next visit
             await supabase.auth.signOut();
           } else {
-            navigate(from, { replace: true });
+            const savedRedirect = sessionStorage.getItem("mobile_sync_redirect");
+            if (savedRedirect) {
+              sessionStorage.removeItem("mobile_sync_redirect");
+              const path = savedRedirect.startsWith("#") ? savedRedirect.slice(1) : savedRedirect;
+              navigate(path, { replace: true });
+            } else {
+              navigate(from, { replace: true });
+            }
           }
         }
       } finally {
@@ -146,7 +153,14 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
       setLoading(false);
     } else {
       showToast("Welcome back!", "success");
-      navigate(from, { replace: true });
+      const savedRedirect = sessionStorage.getItem("mobile_sync_redirect");
+      if (savedRedirect) {
+        sessionStorage.removeItem("mobile_sync_redirect");
+        const path = savedRedirect.startsWith("#") ? savedRedirect.slice(1) : savedRedirect;
+        navigate(path, { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     }
   };
 

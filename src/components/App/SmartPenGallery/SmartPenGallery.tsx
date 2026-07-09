@@ -128,7 +128,11 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
   const loadScans = async () => {
     setLoading(true);
     const items = await getAllItems();
-    setScans(items.filter((i) => i.deviceSource === "smart_pen"));
+    setScans(
+      items.filter((i) =>
+        ["smart_pen", "mobile_scanner", "tablet_sync"].includes(i.deviceSource || "")
+      )
+    );
     setLoading(false);
   };
 
@@ -352,10 +356,10 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
             <div className="w-10 h-10 bg-gradient-to-br from-[#FF9500] to-[#FF6B00] rounded-xl flex items-center justify-center">
               <PenTool className="w-5 h-5 text-white" />
             </div>
-            Smart Pen Gallery
+            Sync & Scanner Gallery
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Digitized with OCR
+            Digitized mobile scans, tablet syncs & smart pen notes
           </p>
         </div>
 
@@ -366,7 +370,7 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#FF9500] to-[#FF6B00] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-orange-500/25 transition-all"
           >
             <Plus className="w-4 h-4" />
-            Pair New Pen
+            Pair New Device
           </button>
           <button
             onClick={() => {

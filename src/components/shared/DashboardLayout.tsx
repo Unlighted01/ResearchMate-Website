@@ -55,7 +55,7 @@ const NAV_GROUPS: {
     label: "Reading & Capture",
     items: [
       { icon: BookOpen, label: "PDF Reader", path: "/app/pdf-reader" },
-      { icon: PenTool, label: "Smart Pen", path: "/app/smart-pen" },
+      { icon: PenTool, label: "Sync & Scanner", path: "/app/smart-pen" },
     ],
   },
   {

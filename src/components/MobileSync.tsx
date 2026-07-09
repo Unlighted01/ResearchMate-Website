@@ -51,6 +51,17 @@ const MobileSync: React.FC = () => {
 
   useEffect(() => {
     const verifyPairing = async () => {
+      // 1. Check if user is logged in
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // Save current location (hash and params) to redirect back after login
+        sessionStorage.setItem("mobile_sync_redirect", window.location.hash || window.location.pathname + window.location.search);
+        setErrorMessage("Authentication required. Redirecting to login...");
+        setVerifying(false);
+        setTimeout(() => navigate("/login"), 1500);
+        return;
+      }
+
       if (!uid || !token) {
         setErrorMessage("Invalid pairing parameters.");
         setVerifying(false);
