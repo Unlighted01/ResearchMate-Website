@@ -4,7 +4,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { encode as encodeBase64, decode as decodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -343,6 +343,231 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ success: true, paired: false }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Generate sync token for mobile pairing
+    if (action === "generate-sync-token") {
+      const { user_id } = body;
+      if (!user_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing user_id" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const token = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+      // Delete any existing unused tokens for this user's mobile_scanner device type
+      await supabase
+        .from("paired_devices")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("device_type", "mobile_scanner");
+
+      const { error: dbError } = await supabase
+        .from("paired_devices")
+        .insert({
+          user_id: user_id,
+          device_name: "Mobile Scanner",
+          device_type: "mobile_scanner",
+          session_token: token,
+          token_expires_at: expiresAt,
+          is_connected: false,
+        });
+
+      if (dbError) {
+        console.error("Token save DB Error:", dbError);
+        return new Response(
+          JSON.stringify({ success: false, error: dbError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, token }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify sync token and confirm pairing connection
+    if (action === "verify-sync-token") {
+      const { token } = body;
+      if (!token) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing token" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: deviceData, error: deviceError } = await supabase
+        .from("paired_devices")
+        .select("*")
+        .eq("session_token", token)
+        .single();
+
+      if (deviceError || !deviceData || new Date(deviceData.token_expires_at) < new Date()) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Invalid or expired pairing token" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Update connected state
+      await supabase
+        .from("paired_devices")
+        .update({ is_connected: true, last_sync: new Date().toISOString() })
+        .eq("id", deviceData.id);
+
+      // Broadcast connection event to the user's sync channel
+      try {
+        const channel = supabase.channel(`user-sync:${deviceData.user_id}`);
+        await channel.send({
+          type: "broadcast",
+          event: "mobile-connected",
+          payload: {
+            deviceId: deviceData.id,
+            deviceName: deviceData.device_name,
+          }
+        });
+      } catch (err) {
+        console.error("Realtime broadcast error:", err);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          user_id: deviceData.user_id,
+          device_name: deviceData.device_name
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Mobile Portal handwriting scan upload
+    if (action === "mobile-upload") {
+      const { image, user_id, title, collection_id } = body;
+      if (!image || !user_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing image payload or user_id" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Clean base64 header
+      const base64Clean = image.replace(/^data:image\/[a-z]+;base64,/, "");
+      let imageBuffer: ArrayBuffer;
+      try {
+        imageBuffer = decodeBase64(base64Clean);
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Failed to decode base64 image data" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Upload to scans bucket
+      const filename = `mobile-scan/scan_${crypto.randomUUID()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("scans")
+        .upload(filename, imageBuffer, { contentType: "image/jpeg" });
+
+      if (uploadError) {
+        console.error("Storage upload error:", uploadError);
+        return new Response(
+          JSON.stringify({ success: false, error: uploadError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("scans")
+        .getPublicUrl(filename);
+      const imageUrl = urlData?.publicUrl || "";
+
+      // Forward to Vercel OCR API
+      let ocrText = "";
+      let ocrFailed = false;
+      let ocrError = "";
+
+      console.log(`Forwarding mobile image to centralized OCR: ${VERCEL_OCR_URL}`);
+
+      try {
+        const ocrResponse = await fetch(VERCEL_OCR_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-smart-pen-key": SMART_PEN_SERVICE_KEY,
+          },
+          body: JSON.stringify({
+            image: image,
+            includeSummary: false,
+          }),
+        });
+
+        const ocrData = await ocrResponse.json();
+
+        if (ocrResponse.ok && ocrData.success) {
+          ocrText = ocrData.ocrText;
+        } else {
+          ocrFailed = true;
+          ocrError = ocrData.error || `HTTP ${ocrResponse.status}`;
+        }
+      } catch (err) {
+        ocrFailed = true;
+        ocrError = (err as Error).message;
+      }
+
+      // Save to items
+      const itemData: Record<string, unknown> = {
+        user_id: user_id,
+        text: ocrText || "",
+        source_title: title || `Scan ${new Date().toLocaleString()}`,
+        device_source: "mobile_scanner",
+        image_url: imageUrl,
+        ocr_text: ocrText,
+        ocr_failed: ocrFailed,
+        ocr_error: ocrFailed ? ocrError : null,
+        collection_id: collection_id || null,
+        ai_summary: null,
+        tags: ["mobile-scan"],
+        note: "",
+      };
+
+      const { data: item, error: dbError } = await supabase
+        .from("items")
+        .insert(itemData)
+        .select()
+        .single();
+
+      if (dbError) {
+        console.error("Save scanned item DB Error:", dbError);
+      }
+
+      // Broadcast new-scan event to active sync channels
+      try {
+        const channel = supabase.channel(`user-sync:${user_id}`);
+        await channel.send({
+          type: "broadcast",
+          event: "new-scan",
+          payload: {
+            itemId: item?.id,
+            imageUrl: imageUrl,
+          }
+        });
+      } catch (err) {
+        console.error("Realtime scan broadcast error:", err);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          image_url: imageUrl,
+          ocr_text: ocrText,
+          item_id: item?.id,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

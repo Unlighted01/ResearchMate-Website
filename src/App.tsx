@@ -31,6 +31,7 @@ import SettingsPage from "./components/App/Settings";
 import Dashboard from "./components/App/Dashboard";
 import CollectionsPage from "./components/App/CollectionsPage";
 import { CitationGenerator } from "./components/App/Citations";
+import MobileSync from "./components/MobileSync";
 
 // ============================================
 // PART 2: TOAST NOTIFICATION COMPONENT
@@ -410,6 +411,7 @@ export default function App() {
                 }
               />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/mobile-sync" element={<MobileSync />} />
 
               {/* Private Routes */}
               <Route
