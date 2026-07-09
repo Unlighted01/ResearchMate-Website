@@ -24,6 +24,7 @@ const MobileSync: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const channelRef = useRef<any>(null);
 
   const uid = searchParams.get("uid");
   const token = searchParams.get("token");
@@ -76,6 +77,22 @@ const MobileSync: React.FC = () => {
         setDeviceName(data.device_name || "Mobile Scanner");
         setVerified(true);
 
+        // Connect to Realtime Channel
+        const ch = supabase.channel(`user-sync:${data.user_id}`);
+        ch.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            ch.send({
+              type: "broadcast",
+              event: "mobile-connected",
+              payload: {
+                deviceId: "mobile_device",
+                deviceName: data.device_name || "Mobile Scanner",
+              },
+            });
+          }
+        });
+        channelRef.current = ch;
+
         // Fetch User Collections
         const { data: cols } = await supabase
           .from("collections")
@@ -100,6 +117,15 @@ const MobileSync: React.FC = () => {
 
     verifyPairing();
   }, [uid, token, navigate]);
+
+  // Cleanup Realtime Channel on unmount
+  useEffect(() => {
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+    };
+  }, []);
 
   // ============================================
   // PART 4: CANVAS COMPRESSION HELPER
@@ -189,6 +215,19 @@ const MobileSync: React.FC = () => {
       ]);
       setCustomTitle("");
       setUploadStatus("success");
+
+      // Broadcast new scan event
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: "broadcast",
+          event: "new-scan",
+          payload: {
+            itemId: data.item_id,
+            imageUrl: data.image_url,
+          },
+        });
+      }
+
       setTimeout(() => setUploadStatus("idle"), 2500);
 
     } catch (err: any) {
