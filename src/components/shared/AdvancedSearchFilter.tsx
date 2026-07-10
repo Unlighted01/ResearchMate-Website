@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Filter, Calendar, Tag, Laptop, Sparkles } from "lucide-react";
+import { X, Filter, Calendar, Tag, Laptop, Sparkles, Smartphone, PenTool, Globe } from "lucide-react";
 
 export interface SearchFilters {
   dateRange?: {
@@ -75,9 +75,11 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
 
   const deviceSources = [
     { id: "extension", label: "Browser Extension", icon: Laptop },
-    { id: "mobile", label: "Mobile", icon: Laptop },
-    { id: "smart_pen", label: "Smart Pen", icon: Laptop },
-    { id: "web", label: "Web", icon: Laptop },
+    { id: "mobile", label: "Mobile App", icon: Smartphone },
+    { id: "mobile_scanner", label: "Mobile Scanner", icon: Smartphone },
+    { id: "tablet_sync", label: "Tablet Sync", icon: Smartphone },
+    { id: "smart_pen", label: "Smart Pen", icon: PenTool },
+    { id: "web", label: "Web Dashboard", icon: Globe },
   ];
 
   // Use Portal to render at document.body level

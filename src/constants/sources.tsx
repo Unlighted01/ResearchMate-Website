@@ -17,6 +17,8 @@ export const getSourceIcon = (source: string): React.ReactNode => {
   const icons: Record<string, React.ReactNode> = {
     extension: <Laptop className="w-4 h-4" />,
     mobile: <Smartphone className="w-4 h-4" />,
+    mobile_scanner: <Smartphone className="w-4 h-4" />,
+    tablet_sync: <Smartphone className="w-4 h-4" />,
     smart_pen: <PenTool className="w-4 h-4" />,
     web: <Globe className="w-4 h-4" />,
   };

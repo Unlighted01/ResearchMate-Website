@@ -13,8 +13,6 @@ import {
   Chrome,
   FolderPlus,
   BookOpen,
-  Mic,
-  Rss,
   MessageSquare,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -197,11 +195,11 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
               </a>
 
               {/* Quick-action grid — expose other capture/discover entry points */}
-              <div className="mt-10 w-full max-w-3xl">
+              <div className="mt-10 w-full max-w-xl mx-auto">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 text-center">
                   Or jump straight in
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
                     {
                       to: "/app/pdf-reader",
@@ -210,22 +208,6 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                       sub: "Upload and annotate",
                       color: "text-[#FF9500]",
                       bg: "bg-[#FF9500]/10",
-                    },
-                    {
-                      to: "/app/transcribe",
-                      icon: Mic,
-                      label: "Transcribe",
-                      sub: "Audio, video, YouTube",
-                      color: "text-[#AF52DE]",
-                      bg: "bg-[#AF52DE]/10",
-                    },
-                    {
-                      to: "/app/feeds",
-                      icon: Rss,
-                      label: "Subscribe",
-                      sub: "RSS from arXiv, Nature",
-                      color: "text-[#34C759]",
-                      bg: "bg-[#34C759]/10",
                     },
                     {
                       to: "/app/ai-assistant",
@@ -249,7 +231,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                       <div className="text-sm font-semibold text-gray-900 dark:text-white">
                         {action.label}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <div className="text-xs text-gray-500 dark:text-gray-450 mt-0.5">
                         {action.sub}
                       </div>
                     </Link>

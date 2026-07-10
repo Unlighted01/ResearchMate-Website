@@ -38,6 +38,8 @@ export const getHighlightColorClasses = (color?: string): string => {
 export const SOURCE_COLORS: Record<string, string> = {
   extension: "#007AFF",
   mobile: "#5856D6",
+  mobile_scanner: "#5856D6",
+  tablet_sync: "#AF52DE",
   smart_pen: "#FF9500",
   web: "#34C759",
 };
