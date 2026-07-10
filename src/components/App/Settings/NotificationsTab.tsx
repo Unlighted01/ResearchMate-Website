@@ -21,6 +21,8 @@ interface NotificationsTabProps {
   setWeeklyDigest: (v: boolean) => void;
   aiSuggestions: boolean;
   setAiSuggestions: (v: boolean) => void;
+  inAppNotifications: boolean;
+  setInAppNotifications: (v: boolean) => void;
 }
 
 // ============================================
@@ -34,6 +36,8 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
   setWeeklyDigest,
   aiSuggestions,
   setAiSuggestions,
+  inAppNotifications,
+  setInAppNotifications,
 }) => {
   return (
     <div className="space-y-6">
@@ -83,6 +87,18 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
               </p>
             </div>
             <Toggle checked={aiSuggestions} onChange={setAiSuggestions} />
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">
+                In-App Activity Notifications
+              </p>
+              <p className="text-sm text-gray-500">
+                Receive live notifications for synced scans, copied text, and mobile connections
+              </p>
+            </div>
+            <Toggle checked={inAppNotifications} onChange={setInAppNotifications} />
           </div>
         </div>
       </Card>

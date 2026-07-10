@@ -221,11 +221,6 @@ export function useDashboardData(
           if (payload.eventType === "INSERT" && payload.new) {
             setItems((prev) => [payload.new!, ...prev]);
             setLastSyncTime(syncTime);
-            showToast("New item synced!", "success");
-            addNotification(
-              "sync",
-              `New item "${payload.new!.sourceTitle || "Untitled"}" synced from ${payload.new!.deviceSource || "web"}`,
-            );
           } else if (payload.eventType === "UPDATE" && payload.new) {
             setItems((prev) =>
               prev.map((item) =>

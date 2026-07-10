@@ -36,6 +36,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const addNotification = useCallback(
     (type: Notification["type"], message: string) => {
+      const isAllowed = localStorage.getItem("researchmate_in_app_notifications") !== "false";
+      if (!isAllowed) return;
+
       const newNotification: Notification = {
         id: Date.now().toString(),
         type,

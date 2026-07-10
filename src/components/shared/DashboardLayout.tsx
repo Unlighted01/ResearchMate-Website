@@ -34,6 +34,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
+import { getAllItems, subscribeToItems } from "../../services/storageService";
 
 // ============================================
 // PART 2: CONSTANTS
@@ -101,9 +102,18 @@ const formatTimeAgo = (date: Date) => {
 // PART 4: COMPONENT
 // ============================================
 
-export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+  useToast?: () => {
+    showToast: (msg: string, type: "success" | "error" | "info") => void;
+  };
+}
+
+export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   children,
+  useToast,
 }) => {
+  const { showToast } = useToast ? useToast() : { showToast: undefined };
   const { visualTheme } = useTheme();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -129,7 +139,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
   // ---------- PART 4A: EFFECTS ----------
 
-  // Load user and sidebar state
+  // Load user and sidebar state and generate AI suggestion
   useEffect(() => {
     const isGuest = localStorage.getItem("rm_guest_mode") === "true";
     
@@ -143,6 +153,30 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
             "login",
             `Welcome back, ${data.user.email?.split("@")[0] || "researcher"}!`,
           );
+          
+          // Generate AI recommendation/suggestion based on saved items
+          getAllItems(50).then((items) => {
+            if (items && items.length > 0) {
+              const itemWithoutSummary = items.find((item) => !item.aiSummary);
+              if (itemWithoutSummary) {
+                addNotification(
+                  "info",
+                  `💡 AI Recommendation: Try summarizing "${itemWithoutSummary.sourceTitle || "Untitled"}" to extract key insights.`,
+                );
+              } else {
+                const randomItem = items[Math.floor(Math.random() * items.length)];
+                addNotification(
+                  "info",
+                  `💡 AI Tip: Use the Editor to draft a report referencing "${randomItem.sourceTitle || "Untitled"}".`,
+                );
+              }
+            } else {
+              addNotification(
+                "info",
+                "💡 Get Started: Save a webpage or upload a PDF to build your library!",
+              );
+            }
+          }).catch(() => {});
         }
       }
     });
@@ -152,6 +186,60 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
       setSidebarCollapsed(true);
     }
   }, [navigate, addNotification]);
+
+  // Global Realtime Activity Notifications Listener
+  useEffect(() => {
+    let unsubscribeItems: (() => void) | null = null;
+    let syncChannel: any = null;
+
+    const setupGlobalRealtime = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const userId = session.user.id;
+
+      // 1. Listen to item creations
+      unsubscribeItems = subscribeToItems(userId, (payload) => {
+        if (payload.eventType === "INSERT" && payload.new) {
+          const device = payload.new.deviceSource || "web";
+          let message = `New item "${payload.new.sourceTitle || "Untitled"}" saved to library.`;
+          
+          if (device === "extension") {
+            message = `Copied text saved via Chrome Extension: "${payload.new.sourceTitle || "Untitled"}"`;
+          } else if (device === "mobile_scanner" || device === "mobile") {
+            message = `New document scanned and saved via Mobile Sync: "${payload.new.sourceTitle || "Untitled"}"`;
+          } else if (device === "tablet_sync") {
+            message = `New tablet sync note saved: "${payload.new.sourceTitle || "Untitled"}"`;
+          }
+          
+          addNotification("sync", message);
+          if (showToast) showToast("New item synced!", "success");
+        }
+      });
+
+      // 2. Listen to mobile connection & scans
+      const channel = supabase.channel(`user-sync:${userId}`);
+      channel
+        .on("broadcast", { event: "mobile-connected" }, () => {
+          addNotification("sync", "Mobile scanner connected successfully.");
+          if (showToast) showToast("Mobile scanner connected!", "success");
+        })
+        .on("broadcast", { event: "new-scan" }, () => {
+          addNotification("sync", "New scan synced from mobile device.");
+          if (showToast) showToast("New note synced from mobile!", "success");
+        })
+        .subscribe();
+      
+      syncChannel = channel;
+    };
+
+    setupGlobalRealtime();
+
+    return () => {
+      if (unsubscribeItems) unsubscribeItems();
+      if (syncChannel) supabase.removeChannel(syncChannel);
+    };
+  }, [addNotification, showToast]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {

@@ -425,7 +425,7 @@ export default function App() {
                 path="/app/*"
                 element={
                   <RequireAuth>
-                    <DashboardLayout>
+                    <DashboardLayout useToast={() => ({ showToast, ToastComponent })}>
                       <Routes>
                         <Route
                           path="dashboard"

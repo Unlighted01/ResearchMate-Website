@@ -126,12 +126,10 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
     syncChannel
       .on("broadcast", { event: "new-scan" }, () => {
         loadScans();
-        showToast("New note synced from mobile!", "success");
       })
       .on("broadcast", { event: "mobile-connected" }, () => {
         loadPairedPens(userId);
         loadPairedDevices(userId);
-        showToast("Mobile scanner connected!", "success");
       })
       .subscribe();
 

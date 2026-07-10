@@ -157,6 +157,8 @@ const SettingsPage: React.FC = () => {
           setWeeklyDigest={data.setWeeklyDigest}
           aiSuggestions={data.aiSuggestions}
           setAiSuggestions={data.setAiSuggestions}
+          inAppNotifications={data.inAppNotifications}
+          setInAppNotifications={data.setInAppNotifications}
         />
       )}
 

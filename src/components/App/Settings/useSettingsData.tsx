@@ -65,6 +65,8 @@ export interface UseSettingsDataReturn {
   setWeeklyDigest: (v: boolean) => void;
   aiSuggestions: boolean;
   setAiSuggestions: (v: boolean) => void;
+  inAppNotifications: boolean;
+  setInAppNotifications: (v: boolean) => void;
 
   // Password
   newPassword: string;
@@ -129,6 +131,9 @@ export const useSettingsData = (showToast: ShowToast): UseSettingsDataReturn => 
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [aiSuggestions, setAiSuggestions] = useState(true);
+  const [inAppNotifications, setInAppNotifications] = useState(() => {
+    return localStorage.getItem("researchmate_in_app_notifications") !== "false";
+  });
 
   // Password change
   const [newPassword, setNewPassword] = useState("");
@@ -485,6 +490,11 @@ export const useSettingsData = (showToast: ShowToast): UseSettingsDataReturn => 
     setWeeklyDigest,
     aiSuggestions,
     setAiSuggestions,
+    inAppNotifications,
+    setInAppNotifications: (v: boolean) => {
+      setInAppNotifications(v);
+      localStorage.setItem("researchmate_in_app_notifications", String(v));
+    },
 
     // Password
     newPassword,
