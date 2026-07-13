@@ -4,6 +4,7 @@
 // ============================================
 
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { PenTool, Check, Loader2, X, Wifi, Smartphone, Tablet, Upload } from "lucide-react";
 import { supabase } from "../../services/supabaseClient";
 
@@ -303,8 +304,15 @@ const SmartPenPairing: React.FC<SmartPenPairingProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
+    >
       <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-scale-in border border-slate-200/50 dark:border-slate-800/50">
         
         {/* Header */}
@@ -585,7 +593,8 @@ const SmartPenPairing: React.FC<SmartPenPairingProps> = ({
 
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
