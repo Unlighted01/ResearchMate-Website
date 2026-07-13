@@ -333,6 +333,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           overflow-hidden
           rounded-3xl shadow-xl border border-white/10 dark:border-white/[0.06]
           bg-[var(--glass-bg)]
+          transition-transform duration-300 ease-in-out
           ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
         `}

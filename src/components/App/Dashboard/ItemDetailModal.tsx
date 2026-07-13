@@ -163,7 +163,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 220 }}
-            className="fixed top-0 right-0 h-full w-[85vw] max-w-7xl bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200/50 dark:border-slate-800/50 z-50 flex flex-col overflow-hidden"
+            className="fixed top-0 right-0 h-full w-full sm:w-[85vw] max-w-7xl bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200/50 dark:border-slate-800/50 z-50 flex flex-col overflow-hidden"
           >
             {/* Header Control Panel */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50 dark:border-slate-800/50 bg-slate-50/60 dark:bg-slate-900/60 backdrop-blur-md">
@@ -199,10 +199,10 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             </div>
 
             {/* Split Screen Double-Pane Workspace */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
               
               {/* LEFT PANE: Premium Editorial Writing Sheet (55% width) */}
-              <div className="w-[55%] border-r border-slate-200/50 dark:border-slate-800/50 flex flex-col bg-slate-50/20 dark:bg-slate-950/10 overflow-hidden">
+              <div className="w-full lg:w-[55%] lg:border-r border-slate-200/50 dark:border-slate-800/50 flex flex-col shrink-0 lg:shrink bg-slate-50/20 dark:bg-slate-950/10 overflow-visible lg:overflow-hidden border-b lg:border-b-0">
                 
                 {/* Tab Switcher & Quick Actions Strip */}
                 <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200/30 dark:border-slate-800/30 bg-white/40 dark:bg-slate-900/30 backdrop-blur-sm z-10">
@@ -397,7 +397,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               </div>
 
               {/* RIGHT PANE: Context-Bound AI Chat Console (45% width) */}
-              <div className="w-[45%] flex flex-col bg-slate-50/50 dark:bg-slate-950/20 overflow-hidden">
+              <div className="w-full lg:w-[45%] flex flex-col bg-slate-50/50 dark:bg-slate-950/20 overflow-visible lg:overflow-hidden min-h-[400px] lg:min-h-0">
                 
                 {/* AI Banner */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50 dark:border-slate-800/50 bg-gradient-to-r from-indigo-500/5 to-purple-500/5">
