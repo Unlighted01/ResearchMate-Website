@@ -31,7 +31,7 @@ import SettingsPage from "./components/App/Settings";
 import Dashboard from "./components/App/Dashboard";
 import CollectionsPage from "./components/App/CollectionsPage";
 import { CitationGenerator } from "./components/App/Citations";
-import MobileSync from "./components/MobileSync";
+import MobileSync from "./components/Mobile/MobileSync";
 
 // ============================================
 // PART 2: TOAST NOTIFICATION COMPONENT
@@ -173,9 +173,9 @@ const AuthCallback = () => {
           );
           window.close();
         } else {
-          const savedRedirect = sessionStorage.getItem("mobile_sync_redirect");
+          const savedRedirect = localStorage.getItem("mobile_sync_redirect");
           if (savedRedirect) {
-            sessionStorage.removeItem("mobile_sync_redirect");
+            localStorage.removeItem("mobile_sync_redirect");
             const path = savedRedirect.startsWith("#") ? savedRedirect.slice(1) : savedRedirect;
             navigate(path, { replace: true });
           } else {
@@ -198,9 +198,9 @@ const AuthCallback = () => {
           );
           window.close();
         } else {
-          const savedRedirect = sessionStorage.getItem("mobile_sync_redirect");
+          const savedRedirect = localStorage.getItem("mobile_sync_redirect");
           if (savedRedirect) {
-            sessionStorage.removeItem("mobile_sync_redirect");
+            localStorage.removeItem("mobile_sync_redirect");
             const path = savedRedirect.startsWith("#") ? savedRedirect.slice(1) : savedRedirect;
             navigate(path, { replace: true });
           } else {

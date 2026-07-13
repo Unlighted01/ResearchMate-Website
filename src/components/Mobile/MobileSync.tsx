@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { supabase } from "../services/supabaseClient";
+import { supabase } from "../../services/supabaseClient";
 import { 
   Camera, 
   Loader2, 
@@ -54,8 +54,8 @@ const MobileSync: React.FC = () => {
       // 1. Check if user is logged in
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        // Save current location (hash and params) to redirect back after login
-        sessionStorage.setItem("mobile_sync_redirect", window.location.hash || window.location.pathname + window.location.search);
+        // Save current location (hash and params) in localStorage to redirect back after login
+        localStorage.setItem("mobile_sync_redirect", window.location.hash || window.location.pathname + window.location.search);
         setErrorMessage("Authentication required. Redirecting to login...");
         setVerifying(false);
         setTimeout(() => navigate("/login"), 1500);
@@ -248,7 +248,6 @@ const MobileSync: React.FC = () => {
       setTimeout(() => setUploadStatus("idle"), 4000);
     } finally {
       setUploading(false);
-      // Reset input value so same file can be scanned sequentially
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
