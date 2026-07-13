@@ -198,7 +198,14 @@ const AuthCallback = () => {
           );
           window.close();
         } else {
-          navigate("/app/dashboard");
+          const savedRedirect = sessionStorage.getItem("mobile_sync_redirect");
+          if (savedRedirect) {
+            sessionStorage.removeItem("mobile_sync_redirect");
+            const path = savedRedirect.startsWith("#") ? savedRedirect.slice(1) : savedRedirect;
+            navigate(path, { replace: true });
+          } else {
+            navigate("/app/dashboard");
+          }
         }
       }
     });
