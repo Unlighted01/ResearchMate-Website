@@ -424,11 +424,10 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
           </p>
         </div>
 
-        {/* Actions & Stats */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowPairing(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#FF9500] to-[#FF6B00] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-orange-500/25 transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-indigo-500/25 transition-all"
           >
             <Plus className="w-4 h-4" />
             Pair New Device
@@ -580,7 +579,7 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
           <p className="text-gray-500 dark:text-gray-400 text-center max-w-md mb-8">
             {searchQuery
               ? "Try adjusting your search terms"
-              : "Connect your smart pen to start digitizing your handwritten notes with OCR."}
+              : "Connect your mobile phone scanner or tablet to start digitizing and syncing your handwritten notes with AI OCR."}
           </p>
 
           {!searchQuery && (
@@ -588,10 +587,10 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
               {/* Pair Button for Empty State */}
               <button
                 onClick={() => setShowPairing(true)}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#FF9500] to-[#FF6B00] text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-orange-500/25 transition-all mb-8"
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-indigo-500/25 transition-all mb-8"
               >
                 <Plus className="w-5 h-5" />
-                Pair Your Smart Pen
+                Sync Mobile / Tablet
               </button>
 
               <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 border border-gray-200/50 dark:border-gray-800 max-w-md w-full">
@@ -600,13 +599,13 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
                 </h4>
                 <div className="space-y-3">
                   {[
-                    "Power on your ResearchMate Smart Pen",
-                    "Connect to the pen's WiFi and open its web interface",
-                    "Click 'Pair New Pen' and enter the 6-digit code",
-                    "Start scanning - notes sync automatically!",
+                    "Pair your mobile scanner via QR code in the pairing modal",
+                    "Scan handwritten notebook pages with your phone camera",
+                    "Drag & drop drawing exports from your tablet directly into the tab",
+                    "Or pair the hardware Smart Pen using its 6-digit WiFi code",
                   ].map((step, idx) => (
                     <div key={idx} className="flex items-center gap-3">
-                      <div className="w-6 h-6 bg-[#FF9500]/10 rounded-full flex items-center justify-center text-xs font-bold text-[#FF9500]">
+                      <div className="w-6 h-6 bg-indigo-500/10 rounded-full flex items-center justify-center text-xs font-bold text-indigo-500">
                         {idx + 1}
                       </div>
                       <span className="text-sm text-gray-600 dark:text-gray-400">

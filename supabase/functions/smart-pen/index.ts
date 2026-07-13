@@ -447,7 +447,7 @@ serve(async (req) => {
 
     // Mobile Portal handwriting scan upload
     if (action === "mobile-upload") {
-      const { image, user_id, title, collection_id } = body;
+      const { image, user_id, title, collection_id, device_source } = body;
       if (!image || !user_id) {
         return new Response(
           JSON.stringify({ success: false, error: "Missing image payload or user_id" }),
@@ -524,7 +524,7 @@ serve(async (req) => {
         user_id: user_id,
         text: ocrText || "",
         source_title: title || `Scan ${new Date().toLocaleString()}`,
-        device_source: "mobile_scanner",
+        device_source: device_source || "mobile_scanner",
         image_url: imageUrl,
         ocr_text: ocrText,
         ocr_failed: ocrFailed,
