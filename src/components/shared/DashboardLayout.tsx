@@ -134,6 +134,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const navigate = useNavigate();
   const location = useLocation();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const isCollapsed = sidebarCollapsed && !isMobile;
   const isBubbleTheme = visualTheme === "bubble";
   const isGlassTheme = visualTheme === "glass";
 
@@ -320,10 +332,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         onClose={() => setCommandPaletteOpen(false)}
       />
 
+      {/* Mobile Sidebar Overlay */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-20 lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
       {/* ========== SIDEBAR ========== */}
       <motion.aside
         animate={{
-          width: sidebarCollapsed ? 76 : 260
+          width: isCollapsed ? 76 : 260
         }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className={`
@@ -334,7 +354,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           rounded-3xl shadow-xl border border-white/10 dark:border-white/[0.06]
           bg-[var(--glass-bg)]
           transition-transform duration-300 ease-in-out
-          ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
+          ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-[calc(100%+2rem)]"}
           lg:translate-x-0
         `}
       >
@@ -342,13 +362,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {/* Header: Logo */}
           <div
             className={`theme-divider h-14 flex items-center border-b border-white/5 dark:border-white/[0.06] ${
-              sidebarCollapsed ? "justify-center px-2" : "px-5"
+              isCollapsed ? "justify-center px-2" : "px-5"
             }`}
           >
             <Link
               to="/app/dashboard"
               className={`flex items-center gap-3 ${
-                sidebarCollapsed ? "justify-center" : ""
+                isCollapsed ? "justify-center" : ""
               }`}
             >
               <img
@@ -357,7 +377,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 className="w-8 h-8 hover:scale-105 transition-transform"
               />
               <AnimatePresence mode="wait">
-                {!sidebarCollapsed && (
+                {!isCollapsed && (
                   <motion.span
                     initial={{ opacity: 0, width: 0 }}
                     animate={{ opacity: 1, width: "auto" }}
@@ -383,7 +403,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 className={groupIdx === 0 ? "" : "mt-2"}
               >
                 <AnimatePresence mode="wait">
-                  {!sidebarCollapsed && (
+                  {!isCollapsed && (
                     <motion.div
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -395,7 +415,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {sidebarCollapsed && groupIdx > 0 && (
+                {isCollapsed && groupIdx > 0 && (
                   <div className="theme-divider mx-2 my-2 h-px border-t border-white/5 dark:border-white/[0.06]" />
                 )}
                 <ul className="space-y-1">
@@ -417,7 +437,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                                 ? "theme-sidebar-item-active text-cyan-600 dark:text-cyan-400 font-semibold"
                                 : "theme-hover-surface text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                             }
-                            ${sidebarCollapsed ? "justify-center" : ""}
+                            ${isCollapsed ? "justify-center" : ""}
                           `}
                         >
                           {isActive && (
@@ -433,7 +453,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                           )}
                           <item.icon className={`w-5 h-5 flex-shrink-0 relative z-10 transition-colors duration-300 ${isActive ? "text-cyan-500 dark:text-cyan-400" : "text-[var(--text-muted)] group-hover:text-[var(--text-primary)]"}`} />
                           <AnimatePresence mode="wait">
-                            {!sidebarCollapsed && (
+                            {!isCollapsed && (
                               <motion.span
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
@@ -449,7 +469,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                           </AnimatePresence>
 
                           {/* Tooltip */}
-                          {sidebarCollapsed && (
+                          {isCollapsed && (
                             <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
                               {item.label}
                             </div>
@@ -474,12 +494,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     theme-sidebar-item theme-hover-surface
                     flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
                     transition-all duration-200 group relative
-                    ${sidebarCollapsed ? "justify-center" : ""}
+                    ${isCollapsed ? "justify-center" : ""}
                   `}
                 >
                   <Search className="theme-nav-icon w-5 h-5 flex-shrink-0" />
                   <AnimatePresence mode="wait">
-                    {!sidebarCollapsed && (
+                    {!isCollapsed && (
                       <motion.div
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -496,7 +516,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       </motion.div>
                     )}
                   </AnimatePresence>
-                  {sidebarCollapsed && (
+                  {isCollapsed && (
                     <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
                       Search (⌘K)
                     </div>
@@ -517,7 +537,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                         ? "theme-sidebar-item-active text-cyan-600 dark:text-cyan-400 font-semibold"
                         : "theme-hover-surface text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                     }
-                    ${sidebarCollapsed ? "justify-center" : ""}
+                    ${isCollapsed ? "justify-center" : ""}
                   `}
                 >
                   {location.pathname === "/app/settings" && (
@@ -533,7 +553,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   )}
                   <Settings className={`w-5 h-5 flex-shrink-0 relative z-10 transition-colors duration-300 ${location.pathname === "/app/settings" ? "text-cyan-500 dark:text-cyan-400" : "text-[var(--text-muted)] group-hover:text-[var(--text-primary)]"}`} />
                   <AnimatePresence mode="wait">
-                    {!sidebarCollapsed && (
+                    {!isCollapsed && (
                       <motion.span
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -549,7 +569,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       </motion.span>
                     )}
                   </AnimatePresence>
-                  {sidebarCollapsed && (
+                  {isCollapsed && (
                     <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
                       Settings
                     </div>
@@ -560,7 +580,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
             {/* Device Status (only when expanded) */}
             <AnimatePresence>
-              {!sidebarCollapsed && (
+              {!isCollapsed && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
