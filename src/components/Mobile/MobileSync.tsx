@@ -13,7 +13,8 @@ import {
   FileText, 
   ChevronRight,
   Sparkles,
-  Smartphone
+  Smartphone,
+  LayoutDashboard
 } from "lucide-react";
 
 // ============================================
@@ -50,25 +51,51 @@ const MobileSync: React.FC = () => {
   // ============================================
 
   useEffect(() => {
-    const verifyPairing = async () => {
-      // 1. Check if user is logged in
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        // Save current location (hash and params) in localStorage to redirect back after login
-        localStorage.setItem("mobile_sync_redirect", window.location.hash || window.location.pathname + window.location.search);
-        setErrorMessage("Authentication required. Redirecting to login...");
-        setVerifying(false);
-        setTimeout(() => navigate("/login"), 1500);
-        return;
-      }
+    let mounted = true;
+    let authCheckTimeout: any = null;
 
+    const checkAuth = async () => {
+      // 1. Get initial session
+      const { data: { session: initialSession } } = await supabase.auth.getSession();
+      
+      if (initialSession) {
+        if (mounted) runSyncPortal(initialSession);
+      } else {
+        // Wait up to 800ms for Supabase async restore before redirecting
+        authCheckTimeout = setTimeout(async () => {
+          const { data: { session: delayedSession } } = await supabase.auth.getSession();
+          if (mounted) {
+            if (delayedSession) {
+              runSyncPortal(delayedSession);
+            } else {
+              // Redirect to login
+              localStorage.setItem("mobile_sync_redirect", window.location.hash || window.location.pathname + window.location.search);
+              setErrorMessage("Authentication required. Redirecting to login...");
+              setVerifying(false);
+              setTimeout(() => navigate("/login"), 1500);
+            }
+          }
+        }, 800);
+      }
+    };
+
+    const runSyncPortal = async (session: any) => {
+      if (authCheckTimeout) clearTimeout(authCheckTimeout);
+      
+      // If parameters are missing, run in direct mode
       if (!uid || !token) {
-        setErrorMessage("Invalid pairing parameters.");
-        setVerifying(false);
-        setTimeout(() => navigate("/login"), 3000);
+        if (mounted) {
+          setUserId(session.user.id);
+          setDeviceName("Mobile Scanner");
+          setVerified(true);
+          setVerifying(false);
+          await loadCollections(session.user.id);
+          connectRealtime(session.user.id, "Mobile Scanner");
+        }
         return;
       }
 
+      // Verify token
       try {
         const { data, error } = await supabase.functions.invoke("smart-pen", {
           body: {
@@ -77,56 +104,85 @@ const MobileSync: React.FC = () => {
           },
         });
 
+        if (!mounted) return;
+
         if (error || !data?.success) {
-          setErrorMessage(data?.error || "Pairing code expired or invalid.");
+          // Token expired/invalid, but user is logged in: fallback to direct mode
+          setUserId(session.user.id);
+          setDeviceName("Mobile Scanner");
+          setVerified(true);
           setVerifying(false);
-          setTimeout(() => navigate("/login"), 3500);
+          await loadCollections(session.user.id);
+          connectRealtime(session.user.id, "Mobile Scanner");
           return;
         }
 
         setUserId(data.user_id);
         setDeviceName(data.device_name || "Mobile Scanner");
         setVerified(true);
-
-        // Connect to Realtime Channel
-        const ch = supabase.channel(`user-sync:${data.user_id}`);
-        ch.subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            ch.send({
-              type: "broadcast",
-              event: "mobile-connected",
-              payload: {
-                deviceId: "mobile_device",
-                deviceName: data.device_name || "Mobile Scanner",
-              },
-            });
-          }
-        });
-        channelRef.current = ch;
-
-        // Fetch User Collections
-        const { data: cols } = await supabase
-          .from("collections")
-          .select("id, name")
-          .eq("user_id", data.user_id)
-          .order("name", { ascending: true });
-
-        if (cols) {
-          setCollections(cols);
-          if (cols.length > 0) {
-            setSelectedCollectionId(cols[0].id);
-          }
-        }
-      } catch (err) {
-        console.error("Pairing verification exception:", err);
-        setErrorMessage("Network error during pairing verification.");
-        setTimeout(() => navigate("/login"), 3000);
-      } finally {
         setVerifying(false);
+        await loadCollections(data.user_id);
+        connectRealtime(data.user_id, data.device_name || "Mobile Scanner", true);
+
+      } catch (err) {
+        if (mounted) {
+          // Network error: fallback to direct mode
+          setUserId(session.user.id);
+          setDeviceName("Mobile Scanner");
+          setVerified(true);
+          setVerifying(false);
+          await loadCollections(session.user.id);
+          connectRealtime(session.user.id, "Mobile Scanner");
+        }
       }
     };
 
-    verifyPairing();
+    const loadCollections = async (uId: string) => {
+      const { data: cols } = await supabase
+        .from("collections")
+        .select("id, name")
+        .eq("user_id", uId)
+        .order("name", { ascending: true });
+
+      if (mounted && cols) {
+        setCollections(cols);
+        if (cols.length > 0) {
+          setSelectedCollectionId(cols[0].id);
+        }
+      }
+    };
+
+    const connectRealtime = (uId: string, devName: string, broadcastConnected = false) => {
+      const ch = supabase.channel(`user-sync:${uId}`);
+      ch.subscribe((status) => {
+        if (status === "SUBSCRIBED" && broadcastConnected) {
+          ch.send({
+            type: "broadcast",
+            event: "mobile-connected",
+            payload: {
+              deviceId: "mobile_device",
+              deviceName: devName,
+            },
+          });
+        }
+      });
+      channelRef.current = ch;
+    };
+
+    checkAuth();
+
+    // Listen for auth state changes to catch slow loads
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && mounted && verifying) {
+        runSyncPortal(session);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      if (authCheckTimeout) clearTimeout(authCheckTimeout);
+      subscription.unsubscribe();
+    };
   }, [uid, token, navigate]);
 
   // Cleanup Realtime Channel on unmount
@@ -284,17 +340,25 @@ const MobileSync: React.FC = () => {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-4 max-w-md mx-auto relative overflow-x-hidden font-sans">
       
       {/* Top paired info */}
-      <header className="flex justify-between items-center py-4 px-2 border-b border-slate-900 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Paired</span>
-        </div>
-        <div className="text-right">
-          <h1 className="text-sm font-bold text-slate-200">{deviceName}</h1>
-          <p className="text-[10px] text-slate-500">Secure sync portal</p>
+      <header className="flex justify-between items-center py-4 px-2 border-b border-slate-900 shrink-0 bg-slate-950 sticky top-0 z-10">
+        <button
+          onClick={() => navigate("/app/dashboard")}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-xs font-semibold text-slate-300 transition-colors"
+        >
+          <LayoutDashboard className="w-3.5 h-3.5 text-blue-400" />
+          Go to Dashboard
+        </button>
+        <div className="flex items-center gap-2.5 text-right">
+          <div>
+            <h1 className="text-xs font-bold text-slate-300">{deviceName}</h1>
+            <div className="flex items-center gap-1.5 justify-end mt-0.5">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Paired</span>
+            </div>
+          </div>
         </div>
       </header>
 
