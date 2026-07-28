@@ -164,8 +164,9 @@ const AuthCallback = () => {
       const isPopup = window.opener && window.opener !== window;
 
       if (session) {
+        sessionStorage.setItem("researchmate_session_active", "true");
+        localStorage.setItem("researchmate_remember", "true");
         if (isPopup) {
-          // Send message to parent window and close popup
           window.opener.postMessage(
             { type: "AUTH_SUCCESS", session },
             window.location.origin,
@@ -183,6 +184,8 @@ const AuthCallback = () => {
       const isPopup = window.opener && window.opener !== window;
 
       if (event === "SIGNED_IN" || session) {
+        sessionStorage.setItem("researchmate_session_active", "true");
+        localStorage.setItem("researchmate_remember", "true");
         if (isPopup) {
           window.opener.postMessage(
             { type: "AUTH_SUCCESS", session },
@@ -223,24 +226,6 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
         } = await supabase.auth.getSession();
 
         if (currentSession) {
-          const shouldRemember = localStorage.getItem("researchmate_remember");
-          const sessionActive = sessionStorage.getItem(
-            "researchmate_session_active",
-          );
-
-          // Only force sign out if they explicitly did NOT want to be remembered
-          // AND this is a brand new browser session.
-          // Otherwise, we trust the valid Supabase session.
-          if (shouldRemember !== "true" && !sessionActive) {
-            await supabase.auth.signOut();
-            if (mounted) {
-              setSession(null);
-              setLoading(false);
-            }
-            return;
-          }
-
-          // Mark this tab's session as active
           sessionStorage.setItem("researchmate_session_active", "true");
         }
 
@@ -306,55 +291,19 @@ import KnowledgeGraphPage from "./components/App/KnowledgeGraph/KnowledgeGraphPa
 // PART 5: MAIN APP COMPONENT
 // ============================================
 
-// Handles OAuth popup flow regardless of which HashRouter route matched.
-// Google strips the hash fragment from redirect URIs, so the popup often
-// lands on "/" (MarketingHome) instead of "/auth/callback". This component
-// detects the OAuth `code` param in the URL and the `window.opener` to
-// close the popup correctly after Supabase exchanges the code.
+// Handles OAuth flow (both popup and full-page redirect)
 const OAuthPopupHandler: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
+    if (!code) return;
+
     const isPopup = !!(window.opener && window.opener !== window);
 
-    if (!code || !isPopup) return;
-
-    // Show a minimal loading UI in the popup
-    document.body.innerHTML = `
-      <div style="
-        min-height:100vh;display:flex;align-items:center;
-        justify-content:center;font-family:system-ui,sans-serif;
-        background:#000;color:#fff;flex-direction:column;gap:16px
-      ">
-        <div style="width:40px;height:40px;border:3px solid #333;
-          border-top-color:#22d3ee;border-radius:50%;
-          animation:spin 0.8s linear infinite"></div>
-        <p style="color:#94a3b8;font-size:14px">Completing sign in...</p>
-        <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
-      </div>`;
-
-    // Wait for Supabase to exchange the code and fire SIGNED_IN
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
-          subscription.unsubscribe();
-          try {
-            window.opener.postMessage(
-              { type: "AUTH_SUCCESS", session },
-              window.location.origin
-            );
-          } catch (_) {
-            // opener may have navigated away — that's okay
-          }
-          window.close();
-        }
-      }
-    );
-
-    // Fallback: if session is already established (race condition)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        subscription.unsubscribe();
+    const redirectUser = (session: any) => {
+      sessionStorage.setItem("researchmate_session_active", "true");
+      localStorage.setItem("researchmate_remember", "true");
+      if (isPopup) {
         try {
           window.opener.postMessage(
             { type: "AUTH_SUCCESS", session },
@@ -362,8 +311,28 @@ const OAuthPopupHandler: React.FC = () => {
           );
         } catch (_) {}
         window.close();
+      } else {
+        // Clean code query parameter from URL and navigate to dashboard
+        window.location.replace(`${window.location.origin}/#/app/dashboard`);
+      }
+    };
+
+    // Check existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        redirectUser(session);
       }
     });
+
+    // Listen for auth state change after PKCE code exchange
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+          subscription.unsubscribe();
+          redirectUser(session);
+        }
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, []);
