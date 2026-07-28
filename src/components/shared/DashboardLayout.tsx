@@ -14,6 +14,8 @@ import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import CommandPalette from "./CommandPalette";
 import ClockWidget from "./ClockWidget";
+import { hasDTREntryForToday, getTodayDateString } from "../../services/dtrService";
+import { audioService } from "../../services/audioService";
 import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard,
@@ -216,6 +218,28 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
     return () =>
       window.removeEventListener("clockWidgetToggle", handleClockToggle);
   }, []);
+
+  // Check for missed DTR log once per session / day
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const today = getTodayDateString();
+      const lastRemindedKey = `dtr_reminder_sent_${today}`;
+      const alreadyReminded = sessionStorage.getItem(lastRemindedKey);
+
+      if (!alreadyReminded && !hasDTREntryForToday()) {
+        sessionStorage.setItem(lastRemindedKey, "true");
+        addNotification(
+          "info",
+          "📋 Reminder: Don't forget to log what you researched or accomplished today in your DTR!"
+        );
+        if (localStorage.getItem("pomodoroAudioEnabled") !== "false") {
+          audioService.playDTRReminderRingtone();
+        }
+      }
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [addNotification]);
 
   // ---------- PART 4B: HANDLERS ----------
 

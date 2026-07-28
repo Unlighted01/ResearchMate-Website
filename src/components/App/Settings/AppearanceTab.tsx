@@ -7,8 +7,9 @@
 // ============================================
 
 import React from "react";
-import { Palette, Sun, Moon, Monitor, Clock } from "lucide-react";
+import { Palette, Sun, Moon, Monitor, Clock, Volume2 } from "lucide-react";
 import { Card, Select, Toggle } from "../../shared/ui";
+import { audioService } from "../../../services/audioService";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -131,21 +132,23 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
         </div>
       </Card>
 
-      {/* Clock Widget */}
+      {/* Clock & Focus Hub Widget */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-          <Clock className="w-5 h-5 text-primary-600" /> Clock Widget
+          <Clock className="w-5 h-5 text-primary-600" /> Focus Hub & Clock Widget
         </h3>
         <p className="text-gray-500 text-sm mb-4">
-          Display a floating clock widget on your dashboard
+          Configure your floating clock, Pomodoro focus timer, DTR daily log, and audio alerts.
         </p>
-        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
+
+        {/* 1. Toggle Show Widget */}
+        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl mb-4">
           <div>
             <p className="font-medium text-gray-900 dark:text-white">
-              Show Clock Widget
+              Show Floating Widget
             </p>
             <p className="text-sm text-gray-500">
-              Glassmorphism clock with progress bars
+              Glassmorphism widget on dashboard with Clock, Pomodoro & DTR
             </p>
           </div>
           <Toggle
@@ -154,14 +157,47 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
               localStorage.setItem("showClockWidget", String(checked));
               window.dispatchEvent(new Event("clockWidgetToggle"));
               showToast(
-                checked ? "Clock widget enabled" : "Clock widget disabled",
-                "info",
+                checked ? "Focus widget enabled" : "Focus widget disabled",
+                "info"
               );
             }}
           />
         </div>
 
-        {/* Time Format Selection */}
+        {/* 2. Audio Ringtone Chime Settings */}
+        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl mb-4">
+          <div>
+            <p className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-primary-500" /> Audio Ringtone Alarms
+            </p>
+            <p className="text-sm text-gray-500">
+              Play browser chime sound when Pomodoro sessions or breaks finish
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                audioService.playPomodoroCompleteRingtone();
+                showToast("Playing test ringtone sound...", "info");
+              }}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/40 text-primary-600 dark:text-primary-300 hover:bg-primary-200 transition-colors"
+            >
+              Test Sound
+            </button>
+            <Toggle
+              checked={localStorage.getItem("pomodoroAudioEnabled") !== "false"}
+              onChange={(checked) => {
+                localStorage.setItem("pomodoroAudioEnabled", String(checked));
+                showToast(
+                  checked ? "Ringtone sound enabled" : "Ringtone sound muted",
+                  "info"
+                );
+              }}
+            />
+          </div>
+        </div>
+
+        {/* 3. Time Format Selection */}
         <div className="mt-4">
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Time Format
