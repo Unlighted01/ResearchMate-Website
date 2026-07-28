@@ -154,51 +154,101 @@ export const useToast = () => {
 
 const AuthCallback = () => {
   const navigate = useNavigate();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   useEffect(() => {
-    const checkSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    let handled = false;
+    const isPopup = window.opener && window.opener !== window;
 
-      // Check if this is a popup window
-      const isPopup = window.opener && window.opener !== window;
-
-      if (session) {
-        sessionStorage.setItem("researchmate_session_active", "true");
-        localStorage.setItem("researchmate_remember", "true");
-        if (isPopup) {
+    const handleSuccess = (session: any) => {
+      if (handled) return;
+      handled = true;
+      sessionStorage.setItem("researchmate_session_active", "true");
+      localStorage.setItem("researchmate_remember", "true");
+      if (isPopup) {
+        try {
           window.opener.postMessage(
             { type: "AUTH_SUCCESS", session },
-            window.location.origin,
+            window.location.origin
           );
-          window.close();
-        } else {
-          navigate("/app/dashboard");
-        }
+        } catch (_) {}
+        window.close();
+      } else {
+        navigate("/app/dashboard", { replace: true });
       }
     };
+
+    const checkSession = async () => {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (session) {
+          handleSuccess(session);
+        } else if (error) {
+          console.error("Auth session error:", error);
+          setErrorMsg(error.message || "Failed to complete sign in.");
+        }
+      } catch (e: any) {
+        console.error("Auth exception:", e);
+        setErrorMsg(e?.message || "Connection failed during sign in.");
+      }
+    };
+
     checkSession();
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      const isPopup = window.opener && window.opener !== window;
-
-      if (event === "SIGNED_IN" || session) {
-        sessionStorage.setItem("researchmate_session_active", "true");
-        localStorage.setItem("researchmate_remember", "true");
-        if (isPopup) {
-          window.opener.postMessage(
-            { type: "AUTH_SUCCESS", session },
-            window.location.origin,
-          );
-          window.close();
-        } else {
-          navigate("/app/dashboard");
-        }
+      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+        handleSuccess(session);
       }
     });
-    return () => subscription.unsubscribe();
+
+    // Timeout safety net (4 seconds): redirect to login if session isn't established
+    const timeout = setTimeout(() => {
+      if (!handled) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) {
+            handleSuccess(session);
+          } else {
+            navigate("/login", { replace: true });
+          }
+        });
+      }
+    }, 4000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, [navigate]);
+
+  if (errorMsg) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-4">
+        <div className="text-center max-w-sm p-6 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800">
+          <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mx-auto mb-4 font-bold text-xl">
+            !
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Sign In Issue
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+            {errorMsg}
+          </p>
+          <button
+            onClick={() => navigate("/login", { replace: true })}
+            className="w-full py-2.5 px-4 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-medium text-sm transition-colors"
+          >
+            Back to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
@@ -312,19 +362,16 @@ const OAuthPopupHandler: React.FC = () => {
         } catch (_) {}
         window.close();
       } else {
-        // Clean code query parameter from URL and navigate to dashboard
         window.location.replace(`${window.location.origin}/#/app/dashboard`);
       }
     };
 
-    // Check existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         redirectUser(session);
       }
     });
 
-    // Listen for auth state change after PKCE code exchange
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
@@ -334,7 +381,24 @@ const OAuthPopupHandler: React.FC = () => {
       }
     );
 
-    return () => subscription.unsubscribe();
+    // Timeout safety net (4 seconds) for full page OAuth redirects
+    const timeout = setTimeout(() => {
+      if (!isPopup) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) {
+            redirectUser(session);
+          } else {
+            // Clean code query param and fallback to login
+            window.location.replace(`${window.location.origin}/#/login`);
+          }
+        });
+      }
+    }, 4000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   return null;
