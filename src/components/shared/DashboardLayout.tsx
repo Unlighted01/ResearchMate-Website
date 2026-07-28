@@ -27,6 +27,7 @@ import {
   LogOut,
   Menu,
   Bell,
+  Clock,
   User,
   Search,
   Laptop,
@@ -134,7 +135,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
   const [searchFocused, setSearchFocused] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [showClockWidget, setShowClockWidget] = useState(
-    () => localStorage.getItem("showClockWidget") === "true",
+    () => localStorage.getItem("showClockWidget") !== "false",
   );
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const {
@@ -627,6 +628,22 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
 
             {/* Right: Actions */}
             <div className="flex items-center gap-2">
+              {/* Focus Hub & Pomodoro Clock Toggle */}
+              <button
+                onClick={() => {
+                  const newState = !showClockWidget;
+                  setShowClockWidget(newState);
+                  localStorage.setItem("showClockWidget", String(newState));
+                }}
+                aria-label="Toggle Focus & Pomodoro Hub"
+                title={showClockWidget ? "Hide Focus & Pomodoro Hub" : "Show Focus & Pomodoro Hub"}
+                className={`theme-icon-button theme-hover-surface p-2.5 rounded-xl transition-all relative ${
+                  showClockWidget ? "text-[#007AFF] bg-[#007AFF]/10 dark:bg-[#007AFF]/20" : ""
+                }`}
+              >
+                <Clock className="w-5 h-5" />
+              </button>
+
               {/* Notifications */}
               <div className="relative">
                 <button
