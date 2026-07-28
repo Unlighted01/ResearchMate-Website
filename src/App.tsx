@@ -158,13 +158,19 @@ const AuthCallback = () => {
 
   useEffect(() => {
     let handled = false;
-    const isPopup = window.opener && window.opener !== window;
+    const isPopup = !!(window.opener && window.opener !== window);
 
     const handleSuccess = (session: any) => {
       if (handled) return;
       handled = true;
       sessionStorage.setItem("researchmate_session_active", "true");
       localStorage.setItem("researchmate_remember", "true");
+
+      // Clean search query parameters (e.g., ?code=...) from URL
+      if (window.location.search) {
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+      }
+
       if (isPopup) {
         try {
           window.opener.postMessage(
@@ -188,12 +194,12 @@ const AuthCallback = () => {
         if (session) {
           handleSuccess(session);
         } else if (error) {
-          console.error("Auth session error:", error);
-          setErrorMsg(error.message || "Failed to complete sign in.");
+          console.error("Auth session error:", error.message);
+          setErrorMsg(error.message);
         }
       } catch (e: any) {
         console.error("Auth exception:", e);
-        setErrorMsg(e?.message || "Connection failed during sign in.");
+        setErrorMsg(e?.message || "Authentication error occurred.");
       }
     };
 
@@ -207,18 +213,21 @@ const AuthCallback = () => {
       }
     });
 
-    // Timeout safety net (4 seconds): redirect to login if session isn't established
+    // 3-second safety fallback: if no session, clean URL and navigate to login
     const timeout = setTimeout(() => {
       if (!handled) {
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (session) {
             handleSuccess(session);
           } else {
+            if (window.location.search) {
+              window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+            }
             navigate("/login", { replace: true });
           }
         });
       }
-    }, 4000);
+    }, 3000);
 
     return () => {
       subscription.unsubscribe();
@@ -275,29 +284,30 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
           data: { session: currentSession },
         } = await supabase.auth.getSession();
 
-        if (currentSession) {
+        if (currentSession && mounted) {
           sessionStorage.setItem("researchmate_session_active", "true");
-        }
-
-        if (mounted) {
           setSession(currentSession);
-          setLoading(false);
         }
       } catch (err) {
+        console.error("RequireAuth session init error:", err);
+      } finally {
         if (mounted) setLoading(false);
       }
     };
     initSession();
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (mounted) {
         setSession(newSession);
-        if (event === "SIGNED_IN" && newSession)
+        if (newSession) {
           sessionStorage.setItem("researchmate_session_active", "true");
+        }
         setLoading(false);
       }
     });
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
@@ -312,17 +322,13 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
     );
 
   const isGuest = localStorage.getItem("rm_guest_mode") === "true";
-  if (!session && !isGuest) return <Navigate to="/" state={{ from: location }} replace />;
+  if (!session && !isGuest) return <Navigate to="/login" state={{ from: location }} replace />;
   return <>{children}</>;
 };
 
 // ============================================
 // PART 4: TEMPORARY PLACEHOLDERS
 // ============================================
-// NOTE: Please move LandingPage, LoginPage, SignupPage, AIAssistant, etc.
-// to their own files in /src/components/ just like I did for Dashboard.tsx.
-// For now, I assume you have them or will paste the old code back here if you don't move them.
-// For the code to compile, you must either create the files or uncomment your old code here.
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import AIAssistant from "./components/App/AIAssistant";
@@ -337,80 +343,12 @@ import TranscribePage from "./components/App/Transcribe";
 import SupportPage from "./components/marketing/SupportPage";
 import KnowledgeGraphPage from "./components/App/KnowledgeGraph/KnowledgeGraphPage";
 
-// ============================================
-// PART 5: MAIN APP COMPONENT
-// ============================================
-
-// Handles OAuth flow (both popup and full-page redirect)
-const OAuthPopupHandler: React.FC = () => {
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    if (!code) return;
-
-    const isPopup = !!(window.opener && window.opener !== window);
-
-    const redirectUser = (session: any) => {
-      sessionStorage.setItem("researchmate_session_active", "true");
-      localStorage.setItem("researchmate_remember", "true");
-      if (isPopup) {
-        try {
-          window.opener.postMessage(
-            { type: "AUTH_SUCCESS", session },
-            window.location.origin
-          );
-        } catch (_) {}
-        window.close();
-      } else {
-        window.location.replace(`${window.location.origin}/#/app/dashboard`);
-      }
-    };
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        redirectUser(session);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
-          subscription.unsubscribe();
-          redirectUser(session);
-        }
-      }
-    );
-
-    // Timeout safety net (4 seconds) for full page OAuth redirects
-    const timeout = setTimeout(() => {
-      if (!isPopup) {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          if (session) {
-            redirectUser(session);
-          } else {
-            // Clean code query param and fallback to login
-            window.location.replace(`${window.location.origin}/#/login`);
-          }
-        });
-      }
-    }, 4000);
-
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timeout);
-    };
-  }, []);
-
-  return null;
-};
-
 export default function App() {
   const { showToast, ToastComponent } = useToast();
 
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <OAuthPopupHandler />
         {ToastComponent}
         <OfflineDetector />
         <NotificationProvider>

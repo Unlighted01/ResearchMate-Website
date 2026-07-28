@@ -145,6 +145,8 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
       showToast(error.message, "error");
       setLoading(false);
     } else {
+      sessionStorage.setItem("researchmate_session_active", "true");
+      localStorage.setItem("researchmate_remember", rememberMe ? "true" : "false");
       showToast("Welcome back!", "success");
       navigate(from, { replace: true });
     }
