@@ -2,10 +2,6 @@
 // PRODUCTS SECTION - Product showcase cards + extension spotlight
 // ============================================
 
-// ============================================
-// PART 1: IMPORTS & DEPENDENCIES
-// ============================================
-
 import React from "react";
 import { Link } from "react-router-dom";
 import {
@@ -22,12 +18,9 @@ import {
   Download,
   ExternalLink,
   Star,
+  Sparkles,
 } from "lucide-react";
 import { AnimateOnScroll } from "../shared/AnimateOnScroll";
-
-// ============================================
-// PART 2: TYPE DEFINITIONS
-// ============================================
 
 interface Product {
   id: string;
@@ -49,10 +42,6 @@ interface FeatureBar {
   description: string;
 }
 
-// ============================================
-// PART 3: CONSTANTS
-// ============================================
-
 const PRODUCTS: Product[] = [
   {
     id: "extension",
@@ -61,8 +50,8 @@ const PRODUCTS: Product[] = [
     description:
       "Capture highlights, save articles, and generate AI summaries directly from any webpage. Works seamlessly with Chrome, Firefox, and Edge.",
     icon: Chrome,
-    color: "#007AFF",
-    gradient: "from-[#007AFF] to-[#0051D5]",
+    color: "#38BDF8",
+    gradient: "from-blue-600 to-indigo-600",
     status: "Available",
     features: [
       "One-click save from any website",
@@ -78,40 +67,40 @@ const PRODUCTS: Product[] = [
   },
   {
     id: "mobile",
-    name: "Mobile App",
+    name: "Mobile App & Camera Sync",
     tagline: "Research on the go",
     description:
-      "Access your entire research library from your pocket. Capture content, take photos, and sync seamlessly with your other devices.",
+      "Access your entire research library from your phone. Capture handwritten notes via OCR camera mode and sync instantly with your workspace.",
     icon: Smartphone,
-    color: "#5856D6",
-    gradient: "from-[#5856D6] to-[#AF52DE]",
-    status: "Coming Soon",
+    color: "#A78BFA",
+    gradient: "from-indigo-600 to-purple-600",
+    status: "Available",
     features: [
       "Full research library access",
-      "Offline mode support",
+      "Standalone PWA & offline mode",
       "Camera capture with OCR",
-      "Push notifications",
-      "Share extension integration",
-      "Widget for quick access",
+      "Real-time pair code sync",
+      "Direct inbox upload",
+      "Mobile quick widgets",
     ],
-    cta: "Join Waitlist",
-    ctaLink: "#",
+    cta: "Open Mobile Portal",
+    ctaLink: "/mobile-sync",
   },
   {
     id: "smartpen",
-    name: "Smart Pen",
+    name: "Smart Pen Integration",
     tagline: "Handwriting meets digital",
     description:
-      "Bridge the gap between paper and digital. Your handwritten notes are automatically digitized, transcribed, and synced to your library.",
+      "Bridge the gap between physical paper and digital notes. Your handwritten notes are transcribed and synthesized into your library.",
     icon: PenTool,
-    color: "#FF9500",
-    gradient: "from-[#FF9500] to-[#FF6B00]",
+    color: "#F59E0B",
+    gradient: "from-amber-500 to-orange-600",
     status: "Beta",
     features: [
       "Real-time sync while writing",
       "OCR text recognition",
-      "Sketch and diagram support",
-      "Multiple pen compatibility",
+      "Sketch & diagram indexing",
+      "Multiple smart pens supported",
       "Cloud backup",
       "Search handwritten notes",
     ],
@@ -123,18 +112,18 @@ const PRODUCTS: Product[] = [
     name: "Web Dashboard",
     tagline: "Your research command center",
     description:
-      "The central hub for all your research. Organize, search, and analyze your entire library with powerful tools and AI assistance.",
+      "The central hub for all your research. Organize, search, and analyze your entire library with powerful tools, PDF readers, and AI assistance.",
     icon: Globe,
-    color: "#34C759",
-    gradient: "from-[#34C759] to-[#30D158]",
+    color: "#34D399",
+    gradient: "from-emerald-500 to-teal-600",
     status: "Available",
     features: [
       "Unified research library",
       "Advanced search & filters",
-      "Collections & tags",
+      "Collections & smart tags",
       "AI assistant chat",
       "Citation generator",
-      "Statistics & insights",
+      "Focus Pomodoro timer",
     ],
     cta: "Open Dashboard",
     ctaLink: "/app/dashboard",
@@ -144,129 +133,132 @@ const PRODUCTS: Product[] = [
 const FEATURE_BARS: FeatureBar[] = [
   {
     icon: RefreshCw,
-    title: "Real-time Sync",
-    description: "Changes sync instantly across all your devices",
+    title: "Real-Time Sync",
+    description: "Changes sync instantly across all your connected devices",
   },
   {
     icon: Zap,
     title: "AI Powered",
-    description: "Intelligent summaries and insights from your research",
+    description: "Intelligent summaries and context extractions powered by Gemini",
   },
   {
     icon: Shield,
     title: "Privacy First",
-    description: "Your data is encrypted and never shared",
+    description: "Your research is encrypted and never sold or shared",
   },
   {
     icon: Cloud,
-    title: "Cloud Storage",
-    description: "Access your research from anywhere, anytime",
+    title: "Cloud Backup",
+    description: "Access your research from anywhere, anytime with full uptime",
   },
 ];
 
-// ============================================
-// PART 4: COMPONENT
-// ============================================
-
 const ProductsSection: React.FC = () => {
   return (
-    <section id="products" className="scroll-mt-12">
-      {/* Hero */}
-      <div className="relative pt-24 pb-16 px-6">
-        <div className="relative z-10 max-w-4xl mx-auto text-center">
-          <h2 className="theme-title text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-gray-900 mb-6">
-            One ecosystem.
-            <br />
-            <span className="bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE] bg-clip-text text-transparent">
-              Every device.
-            </span>
-          </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
-            ResearchMate works seamlessly across your browser, phone, and desk.
-            Your research flows with you.
-          </p>
+    <section id="products" className="scroll-mt-12 bg-[#030712] text-slate-100 py-24 px-6 relative overflow-hidden">
+      {/* Background Ambient Glow */}
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[700px] bg-purple-600/10 blur-[150px] rounded-full pointer-events-none" />
 
-          <div className="flex flex-wrap justify-center gap-8 text-center">
-            {[
-              { value: "4", label: "Products" },
-              { value: "10K+", label: "Users" },
-              { value: "99.9%", label: "Uptime" },
-            ].map((stat, idx) => (
-              <div
-                key={idx}
-                className="bg-white/50 backdrop-blur-md rounded-2xl px-6 py-4 border border-white/50"
-              >
-                <p className="theme-stat text-3xl font-bold text-gray-900">{stat.value}</p>
-                <p className="text-sm text-gray-500">{stat.label}</p>
-              </div>
-            ))}
-          </div>
+      {/* Hero Header */}
+      <div className="relative z-10 max-w-4xl mx-auto text-center mb-20">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 border border-slate-800 rounded-full text-xs font-semibold text-cyan-400 mb-4 shadow-lg">
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Product Ecosystem</span>
+        </div>
+
+        <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white mb-6 font-title">
+          One ecosystem.
+          <br />
+          <span className="bg-gradient-to-r from-cyan-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
+            Every device connected.
+          </span>
+        </h2>
+
+        <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+          ResearchMate works seamlessly across your browser, phone, and desk. Your research flows with you everywhere.
+        </p>
+
+        {/* Stats */}
+        <div className="flex flex-wrap justify-center gap-6 text-center">
+          {[
+            { value: "4", label: "Core Products" },
+            { value: "10K+", label: "Active Researchers" },
+            { value: "99.9%", label: "Cloud Uptime" },
+          ].map((stat, idx) => (
+            <div
+              key={idx}
+              className="bg-slate-900/80 backdrop-blur-xl rounded-2xl px-8 py-5 border border-slate-800 shadow-xl"
+            >
+              <p className="text-3xl font-extrabold text-white font-mono">{stat.value}</p>
+              <p className="text-xs font-semibold text-slate-400 mt-1">{stat.label}</p>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Products Grid */}
-      <div className="py-20 px-6 bg-white/40 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-6">
-            {PRODUCTS.map((product, idx) => (
-              <AnimateOnScroll key={product.id} delay={idx * 150}>
-                <div className="group bg-white/50 backdrop-blur-md rounded-3xl p-8 hover:bg-white/70 hover:shadow-2xl hover:shadow-gray-200/50 transition-all duration-500 border border-white/50 hover-lift">
+      <div className="max-w-6xl mx-auto mb-20 relative z-10">
+        <div className="grid md:grid-cols-2 gap-8">
+          {PRODUCTS.map((product, idx) => (
+            <AnimateOnScroll key={product.id} delay={idx * 120}>
+              <div className="group h-full bg-slate-900/60 backdrop-blur-2xl rounded-3xl p-8 hover:bg-slate-900/90 transition-all duration-500 border border-slate-800 hover:border-slate-700 shadow-2xl hover:shadow-[0_0_35px_rgba(79,70,229,0.15)] flex flex-col justify-between">
+                <div>
                   <div className="flex items-start justify-between mb-6">
                     <div
                       className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${product.gradient} flex items-center justify-center shadow-lg`}
-                      style={{ boxShadow: `0 8px 24px ${product.color}30` }}
+                      style={{ boxShadow: `0 8px 24px ${product.color}40` }}
                     >
                       <product.icon className="w-7 h-7 text-white" />
                     </div>
                     <span
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
+                      className={`text-xs font-bold px-3 py-1.5 rounded-full ${
                         product.status === "Available"
-                          ? "bg-[#34C759]/10 text-[#34C759]"
-                          : product.status === "Beta"
-                            ? "bg-[#FF9500]/10 text-[#FF9500]"
-                            : "bg-gray-500/10 text-gray-600"
+                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                          : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
                       }`}
                     >
                       {product.status}
                     </span>
                   </div>
 
-                  <h3 className="theme-title text-2xl font-bold text-gray-900 mb-2">
+                  <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors">
                     {product.name}
                   </h3>
                   <p
-                    className="text-sm font-medium mb-3"
+                    className="text-xs font-bold uppercase tracking-wider mb-3"
                     style={{ color: product.color }}
                   >
                     {product.tagline}
                   </p>
-                  <p className="text-gray-600 mb-6 leading-relaxed">
+                  <p className="text-slate-400 text-sm leading-relaxed mb-6">
                     {product.description}
                   </p>
 
-                  <div className="grid grid-cols-2 gap-2 mb-6">
-                    {product.features.map((feature, idx) => (
+                  <div className="grid grid-cols-2 gap-2.5 mb-8">
+                    {product.features.map((feature, fIdx) => (
                       <div
-                        key={idx}
-                        className="flex items-center gap-2 text-sm text-gray-600"
+                        key={fIdx}
+                        className="flex items-center gap-2 text-xs text-slate-300"
                       >
                         <Check
-                          className="w-4 h-4 flex-shrink-0"
+                          className="w-4 h-4 shrink-0"
                           style={{ color: product.color }}
                         />
                         <span className="truncate">{feature}</span>
                       </div>
                     ))}
                   </div>
+                </div>
 
+                {/* CTA Button */}
+                <div>
                   {product.status === "Available" ? (
-                    product.id === "web" ? (
+                    product.ctaLink.startsWith("/") ? (
                       <Link to={product.ctaLink}>
                         <button
-                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-white transition-all active:scale-[0.98]"
-                          style={{ backgroundColor: product.color }}
+                          className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl font-bold text-white transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98] bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:shadow-[0_0_25px_rgba(79,70,229,0.5)] border border-white/20"
                         >
-                          {product.cta}
+                          <span>{product.cta}</span>
                           <ArrowRight className="w-4 h-4" />
                         </button>
                       </Link>
@@ -277,116 +269,98 @@ const ProductsSection: React.FC = () => {
                         rel="noopener noreferrer"
                       >
                         <button
-                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-white transition-all active:scale-[0.98]"
-                          style={{ backgroundColor: product.color }}
+                          className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl font-bold text-white transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98] bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:shadow-[0_0_25px_rgba(79,70,229,0.5)] border border-white/20"
                         >
-                          {product.cta}
+                          <span>{product.cta}</span>
                           <ExternalLink className="w-4 h-4" />
                         </button>
                       </a>
                     )
                   ) : (
-                    <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium bg-gray-500/10 text-gray-600 transition-all active:scale-[0.98]">
-                      {product.cta}
+                    <button className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold bg-slate-800/80 text-slate-500 border border-slate-700 cursor-not-allowed">
+                      <span>{product.cta}</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   )}
                 </div>
-              </AnimateOnScroll>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Features Bar */}
-      <div className="py-16 px-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {FEATURE_BARS.map((feature, idx) => (
-              <div key={idx} className="text-center">
-                <div className="w-12 h-12 bg-white/50 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-white/50">
-                  <feature.icon className="w-6 h-6 text-[#007AFF]" />
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-1">
-                  {feature.title}
-                </h4>
-                <p className="text-sm text-gray-500">{feature.description}</p>
               </div>
-            ))}
-          </div>
+            </AnimateOnScroll>
+          ))}
         </div>
       </div>
 
-      {/* Extension Spotlight */}
-      <div className="py-20 px-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-3xl p-8 md:p-12 text-white relative overflow-hidden">
-            <div className="absolute inset-0 opacity-10">
-              <div className="absolute top-0 right-0 w-96 h-96 bg-white rounded-full blur-3xl" />
-              <div className="absolute bottom-0 left-0 w-64 h-64 bg-white rounded-full blur-3xl" />
+      {/* Feature Bars */}
+      <div className="max-w-6xl mx-auto mb-20 relative z-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {FEATURE_BARS.map((feature, idx) => (
+            <div key={idx} className="bg-slate-900/60 backdrop-blur-xl p-6 rounded-2xl border border-slate-800 text-center shadow-lg">
+              <div className="w-12 h-12 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-cyan-400">
+                <feature.icon className="w-6 h-6" />
+              </div>
+              <h4 className="font-bold text-white text-sm mb-1">
+                {feature.title}
+              </h4>
+              <p className="text-xs text-slate-400">{feature.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Extension Spotlight Banner */}
+      <div className="max-w-6xl mx-auto relative z-10">
+        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-3xl p-8 md:p-12 text-white relative overflow-hidden shadow-2xl border border-white/20">
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="flex-1 text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold mb-4">
+                <Star className="w-4 h-4 fill-amber-300 text-amber-300" />
+                <span>Featured Chrome Extension</span>
+              </div>
+              <h3 className="text-3xl md:text-4xl font-extrabold mb-4 font-title">
+                Get the Browser Extension
+              </h3>
+              <p className="text-base text-slate-100 mb-6 max-w-lg leading-relaxed">
+                The fastest way to capture, highlight, and summarize web content. One click adds any paper or article directly into your workspace.
+              </p>
+              <a
+                href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <button className="flex items-center gap-2.5 px-8 py-4 bg-white text-blue-700 font-bold rounded-full hover:bg-slate-100 hover:scale-105 active:scale-95 transition-all shadow-xl">
+                  <Download className="w-5 h-5" />
+                  <span>Add to Chrome - Free</span>
+                </button>
+              </a>
             </div>
 
-            <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-4">
-                  <Star className="w-5 h-5 fill-current" />
-                  <span className="text-sm font-medium opacity-90">
-                    Featured Product
-                  </span>
+            <div className="w-full md:w-80 bg-black/30 backdrop-blur-2xl rounded-2xl p-6 border border-white/20 text-left">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow">
+                  <span className="text-blue-600 font-black text-lg">R</span>
                 </div>
-                <h3 className="theme-title text-3xl md:text-4xl font-bold mb-4">
-                  Get the Browser Extension
-                </h3>
-                <p className="text-lg opacity-90 mb-6 max-w-lg">
-                  The fastest way to save and organize research. One click to
-                  capture any content from the web.
-                </p>
-                <a
-                  href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <button className="flex items-center gap-2 px-6 py-3 bg-white text-[#007AFF] font-semibold rounded-full hover:bg-gray-100 transition-all active:scale-95">
-                    <Download className="w-5 h-5" />
-                    Download for Chrome
-                  </button>
-                </a>
+                <div>
+                  <p className="font-bold text-sm text-white">ResearchMate</p>
+                  <p className="text-xs text-slate-300">Chrome Store Extension</p>
+                </div>
               </div>
-
-              <div className="w-full md:w-80 bg-white/10 backdrop-blur rounded-2xl p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
-                    <span className="text-[#007AFF] font-bold">R</span>
+              <div className="space-y-2">
+                {["1-Click Web Capture", "Instant AI Summaries", "Auto-Tag & Highlight"].map((action, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2 px-3 py-2 bg-white/10 rounded-xl text-xs font-semibold"
+                  >
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>{action}</span>
                   </div>
-                  <div>
-                    <p className="font-semibold">ResearchMate</p>
-                    <p className="text-xs opacity-75">Chrome Extension</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {["Save to library", "Generate summary", "Add tags"].map(
-                    (action, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2 px-3 py-2 bg-white/10 rounded-lg text-sm"
-                      >
-                        <Check className="w-4 h-4" />
-                        {action}
-                      </div>
-                    )
-                  )}
-                </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </div>
+
     </section>
   );
 };
-
-// ============================================
-// PART 5: EXPORTS
-// ============================================
 
 export default ProductsSection;
