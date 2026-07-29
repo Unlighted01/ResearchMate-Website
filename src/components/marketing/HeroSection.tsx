@@ -23,6 +23,7 @@ import {
   Zap,
   MousePointer,
   Layers,
+  Undo2,
 } from "lucide-react";
 
 // ============================================
@@ -150,6 +151,8 @@ const HeroSection: React.FC = () => {
   const dropzoneRef = useRef<HTMLDivElement | null>(null);
   // Use a ref to track hover state reliably — React state batching can lose it in onDragEnd
   const isOverDropzoneRef = useRef(false);
+  // Track each card's dropped position — cards that miss the dropzone stay where they land
+  const [cardPositions, setCardPositions] = useState<Record<string, { x: number; y: number }>>({}); 
 
   // Mouse Spotlight Effect for Hero Background
   const mouseX = useMotionValue(0);
@@ -214,12 +217,13 @@ const HeroSection: React.FC = () => {
     }, 1800);
   };
 
-  // Real-time drag pointer tracking — updates both ref (for reliable onDragEnd) and state (for UI)
-  const handleDrag = (_event: any, info: any) => {
+  // Real-time drag pointer tracking — uses raw event.clientX (viewport coords) to match getBoundingClientRect
+  const handleDrag = (event: any, _info: any) => {
     if (!dropzoneRef.current) return;
     const dropzoneRect = dropzoneRef.current.getBoundingClientRect();
-    const pointerX = info.point.x;
-    const pointerY = info.point.y;
+    // Use raw PointerEvent clientX/clientY — always viewport coords, matching getBoundingClientRect
+    const pointerX = event.clientX;
+    const pointerY = event.clientY;
 
     const margin = 40;
     const isOver =
@@ -232,7 +236,7 @@ const HeroSection: React.FC = () => {
     setIsHoveringDropzone(isOver);
   };
 
-  // Drag End — uses the ref (always up-to-date) instead of stale React state
+  // Drag End — if dropped on dropzone → synthesize & reset. If missed → card stays stuck where it landed.
   const handleDragEnd = (_event: any, info: any, item: SourceItem) => {
     const dragDistance = Math.hypot(info?.offset?.x || 0, info?.offset?.y || 0);
     const wasOverDropzone = isOverDropzoneRef.current;
@@ -242,20 +246,37 @@ const HeroSection: React.FC = () => {
     setIsHoveringDropzone(false);
     isOverDropzoneRef.current = false;
 
-    // Short drag = click/tap
+    // Short drag = click/tap → trigger synthesis and snap card home
     if (dragDistance < 6) {
+      setCardPositions((prev) => ({ ...prev, [item.id]: { x: 0, y: 0 } }));
       triggerProcessing(item);
       return;
     }
 
-    // Real drag — check if pointer was over the dropzone
+    // Real drag — dropped on dropzone → synthesize & reset card position
     if (wasOverDropzone) {
+      setCardPositions((prev) => ({ ...prev, [item.id]: { x: 0, y: 0 } }));
       triggerProcessing(item);
     } else {
+      // TROLL: Card missed! Save its landed position — it stays stuck there
+      const offsetX = info?.offset?.x || 0;
+      const offsetY = info?.offset?.y || 0;
+      const prevPos = cardPositions[item.id] || { x: 0, y: 0 };
+      setCardPositions((prev) => ({
+        ...prev,
+        [item.id]: { x: prevPos.x + offsetX, y: prevPos.y + offsetY },
+      }));
       if (processingState !== "synthesized" && processingState !== "processing") {
         setProcessingState("idle");
       }
     }
+  };
+
+  // Click a "lost" card to snap it home and trigger synthesis
+  const handleCardClick = (item: SourceItem) => {
+    if (processingState === "processing") return;
+    setCardPositions((prev) => ({ ...prev, [item.id]: { x: 0, y: 0 } }));
+    triggerProcessing(item);
   };
 
   const resetPlayground = () => {
@@ -265,6 +286,8 @@ const HeroSection: React.FC = () => {
     setIsHoveringDropzone(false);
     setIsDragging(false);
     isOverDropzoneRef.current = false;
+    // Snap all escaped cards back home
+    setCardPositions({});
   };
 
   return (
@@ -404,12 +427,12 @@ const HeroSection: React.FC = () => {
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 50, damping: 15, delay: 0.4 }}
-          className="w-full max-w-4xl relative"
+          className="w-full max-w-4xl relative overflow-visible"
         >
           {/* Glass Board Soft Shadow Backdrop */}
           <div className="absolute inset-0 bg-gradient-to-br from-blue-400/10 via-purple-400/10 to-indigo-400/10 rounded-[36px] blur-3xl z-0 pointer-events-none" />
 
-          <div className="relative z-10 w-full bg-white/90 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-6 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.08)] overflow-hidden text-left">
+          <div className="relative z-10 w-full bg-white/90 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-6 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.08)] overflow-visible text-left">
             
             {/* Header Bar */}
             <div className="flex items-center justify-between border-b border-slate-200/80 pb-4 mb-6">
@@ -442,10 +465,10 @@ const HeroSection: React.FC = () => {
             </div>
 
             {/* Layout Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center overflow-visible">
               
               {/* Left Column: Source Items (Clickable & Draggable) */}
-              <div className="lg:col-span-5 flex flex-col gap-3.5">
+              <div className="lg:col-span-5 flex flex-col gap-3.5 overflow-visible">
                 <div className="mb-1">
                   <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
                     1. Select Research Source
@@ -459,20 +482,33 @@ const HeroSection: React.FC = () => {
                   const Icon = source.icon;
                   const isSelected = activeItem?.id === source.id;
                   const isProcessingThis = isSelected && processingState === "processing";
+                  const pos = cardPositions[source.id] || { x: 0, y: 0 };
+                  const isLost = pos.x !== 0 || pos.y !== 0;
 
                   return (
                     <motion.div
                       key={source.id}
                       drag={processingState !== "processing"}
-                      dragSnapToOrigin
-                      dragElastic={0.18}
-                      dragTransition={{ bounceStiffness: 300, bounceDamping: 20 }}
+                      dragMomentum={false}
+                      dragElastic={0}
                       onDrag={handleDrag}
                       onDragStart={() => {
                         setIsDragging(true);
                         setActiveItem(source);
                       }}
                       onDragEnd={(e, info) => handleDragEnd(e, info, source)}
+                      onClick={() => isLost && handleCardClick(source)}
+                      animate={{
+                        x: pos.x,
+                        y: pos.y,
+                        rotate: isLost ? (pos.x > 0 ? 3 : -3) : 0,
+                        opacity: isLost ? 0.85 : 1,
+                      }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 200,
+                        damping: 22,
+                      }}
                       whileDrag={{
                         scale: 1.12,
                         zIndex: 50,
@@ -480,15 +516,19 @@ const HeroSection: React.FC = () => {
                         cursor: "grabbing",
                         boxShadow: `0 20px 50px -8px ${source.glowColor}, 0 0 0 2px rgba(255,255,255,0.4)`,
                       }}
-                      whileHover={{ scale: 1.03, y: -2 }}
+                      whileHover={{ scale: 1.03, y: isLost ? pos.y - 3 : -2 }}
                       whileTap={{ scale: 0.97 }}
                       className={`relative flex items-center justify-between px-4 py-3.5 bg-gradient-to-r ${
                         source.gradient
                       } text-white rounded-2xl shadow-lg select-none cursor-grab active:cursor-grabbing transition-shadow border border-white/20 ${
                         isSelected ? "ring-4 ring-blue-400/50 shadow-blue-500/30" : ""
+                      } ${
+                        isLost ? "z-40" : ""
                       }`}
                       style={{
-                        boxShadow: `0 8px 24px -6px ${source.glowColor}`,
+                        boxShadow: isLost
+                          ? `0 16px 40px -4px ${source.glowColor}, 0 0 0 1px rgba(255,255,255,0.3)`
+                          : `0 8px 24px -6px ${source.glowColor}`,
                       }}
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -506,9 +546,16 @@ const HeroSection: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/25 text-white">
-                          {isProcessingThis ? "Synthesizing..." : "Click / Drag →"}
-                        </span>
+                        {isLost ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/30 text-white flex items-center gap-1">
+                            <Undo2 className="w-3 h-3" />
+                            Click to return
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/25 text-white">
+                            {isProcessingThis ? "Synthesizing..." : "Click / Drag →"}
+                          </span>
+                        )}
                       </div>
                     </motion.div>
                   );
