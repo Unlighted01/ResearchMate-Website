@@ -142,11 +142,14 @@ const HeroSection: React.FC = () => {
 
   // Playground States
   const [activeItem, setActiveItem] = useState<SourceItem | null>(null);
-  const [processingState, setProcessingState] = useState<"idle" | "dragging" | "processing" | "synthesized">("idle");
+  const [processingState, setProcessingState] = useState<"idle" | "processing" | "synthesized">("idle");
   const [isHoveringDropzone, setIsHoveringDropzone] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [progressText, setProgressText] = useState("");
   const [activeResultTab, setActiveResultTab] = useState<"summary" | "qa">("summary");
   const dropzoneRef = useRef<HTMLDivElement | null>(null);
+  // Use a ref to track hover state reliably — React state batching can lose it in onDragEnd
+  const isOverDropzoneRef = useRef(false);
 
   // Mouse Spotlight Effect for Hero Background
   const mouseX = useMotionValue(0);
@@ -190,6 +193,8 @@ const HeroSection: React.FC = () => {
     setActiveResultTab("summary");
     setProcessingState("processing");
     setIsHoveringDropzone(false);
+    setIsDragging(false);
+    isOverDropzoneRef.current = false;
 
     const stages = [
       { text: "Reading raw byte stream...", delay: 0 },
@@ -209,51 +214,42 @@ const HeroSection: React.FC = () => {
     }, 1800);
   };
 
-  // Real-time drag pointer tracking
-  const handleDrag = (event: any, info: any) => {
+  // Real-time drag pointer tracking — updates both ref (for reliable onDragEnd) and state (for UI)
+  const handleDrag = (_event: any, info: any) => {
     if (!dropzoneRef.current) return;
     const dropzoneRect = dropzoneRef.current.getBoundingClientRect();
-    const pointerX = info?.point?.x ?? (event?.clientX || event?.touches?.[0]?.clientX || 0);
-    const pointerY = info?.point?.y ?? (event?.clientY || event?.touches?.[0]?.clientY || 0);
+    const pointerX = info.point.x;
+    const pointerY = info.point.y;
 
-    const margin = 35;
+    const margin = 40;
     const isOver =
       pointerX >= dropzoneRect.left - margin &&
       pointerX <= dropzoneRect.right + margin &&
       pointerY >= dropzoneRect.top - margin &&
       pointerY <= dropzoneRect.bottom + margin;
 
+    isOverDropzoneRef.current = isOver;
     setIsHoveringDropzone(isOver);
   };
 
-  // Drag End handler with unified click & drag detection
-  const handleDragEnd = (event: any, info: any, item: SourceItem) => {
-    setIsHoveringDropzone(false);
-
-    // Calculate drag distance
+  // Drag End — uses the ref (always up-to-date) instead of stale React state
+  const handleDragEnd = (_event: any, info: any, item: SourceItem) => {
     const dragDistance = Math.hypot(info?.offset?.x || 0, info?.offset?.y || 0);
+    const wasOverDropzone = isOverDropzoneRef.current;
 
-    // If offset is small (< 6px), treat as click/tap and trigger synthesis
+    // Clean up drag visual state
+    setIsDragging(false);
+    setIsHoveringDropzone(false);
+    isOverDropzoneRef.current = false;
+
+    // Short drag = click/tap
     if (dragDistance < 6) {
       triggerProcessing(item);
       return;
     }
 
-    // Otherwise it's a real drag operation: check dropzone bounds
-    if (!dropzoneRef.current) return;
-
-    const dropzoneRect = dropzoneRef.current.getBoundingClientRect();
-    const pointerX = info?.point?.x ?? (event?.clientX || event?.changedTouches?.[0]?.clientX || 0);
-    const pointerY = info?.point?.y ?? (event?.clientY || event?.changedTouches?.[0]?.clientY || 0);
-
-    const margin = 40; // 40px padded margin for effortless dropping
-    const isInside =
-      pointerX >= dropzoneRect.left - margin &&
-      pointerX <= dropzoneRect.right + margin &&
-      pointerY >= dropzoneRect.top - margin &&
-      pointerY <= dropzoneRect.bottom + margin;
-
-    if (isInside) {
+    // Real drag — check if pointer was over the dropzone
+    if (wasOverDropzone) {
       triggerProcessing(item);
     } else {
       if (processingState !== "synthesized" && processingState !== "processing") {
@@ -267,6 +263,8 @@ const HeroSection: React.FC = () => {
     setProcessingState("idle");
     setProgressText("");
     setIsHoveringDropzone(false);
+    setIsDragging(false);
+    isOverDropzoneRef.current = false;
   };
 
   return (
@@ -467,17 +465,26 @@ const HeroSection: React.FC = () => {
                       key={source.id}
                       drag={processingState !== "processing"}
                       dragSnapToOrigin
-                      dragElastic={0.3}
+                      dragElastic={0.18}
+                      dragTransition={{ bounceStiffness: 300, bounceDamping: 20 }}
                       onDrag={handleDrag}
                       onDragStart={() => {
+                        setIsDragging(true);
                         setActiveItem(source);
                       }}
                       onDragEnd={(e, info) => handleDragEnd(e, info, source)}
-                      whileDrag={{ scale: 1.06, zIndex: 50, cursor: "grabbing" }}
-                      whileHover={{ scale: 1.02 }}
+                      whileDrag={{
+                        scale: 1.12,
+                        zIndex: 50,
+                        rotate: 2,
+                        cursor: "grabbing",
+                        boxShadow: `0 20px 50px -8px ${source.glowColor}, 0 0 0 2px rgba(255,255,255,0.4)`,
+                      }}
+                      whileHover={{ scale: 1.03, y: -2 }}
+                      whileTap={{ scale: 0.97 }}
                       className={`relative flex items-center justify-between px-4 py-3.5 bg-gradient-to-r ${
                         source.gradient
-                      } text-white rounded-2xl shadow-lg select-none cursor-pointer transition-all border border-white/20 ${
+                      } text-white rounded-2xl shadow-lg select-none cursor-grab active:cursor-grabbing transition-shadow border border-white/20 ${
                         isSelected ? "ring-4 ring-blue-400/50 shadow-blue-500/30" : ""
                       }`}
                       style={{
@@ -500,7 +507,7 @@ const HeroSection: React.FC = () => {
 
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/25 text-white">
-                          {isProcessingThis ? "Synthesizing..." : "Click / Drag"}
+                          {isProcessingThis ? "Synthesizing..." : "Click / Drag →"}
                         </span>
                       </div>
                     </motion.div>
@@ -512,56 +519,78 @@ const HeroSection: React.FC = () => {
               <div className="lg:col-span-7 h-80 flex items-center justify-center">
                 <div
                   ref={dropzoneRef}
-                  className={`relative w-full h-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-5 transition-all duration-300 ${
+                  className={`relative w-full h-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-5 transition-all duration-300 overflow-hidden ${
                     isHoveringDropzone
-                      ? "border-[#007AFF] bg-blue-500/10 scale-[1.02] shadow-xl shadow-blue-500/10"
+                      ? "border-[#007AFF] bg-blue-50 scale-[1.03] shadow-[0_0_40px_rgba(0,122,255,0.15)]"
+                      : isDragging
+                      ? "border-blue-400/60 bg-blue-50/40 scale-[1.01]"
                       : processingState === "idle"
                       ? "border-slate-300 bg-slate-50/70"
-                      : processingState === "dragging"
-                      ? "border-blue-400 bg-blue-50/80"
                       : "border-slate-200 bg-white"
                   }`}
                 >
+                  {/* Animated ring pulse when user is dragging */}
+                  {isDragging && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className={`absolute inset-2 rounded-xl border-2 border-dashed transition-colors duration-300 ${
+                        isHoveringDropzone ? "border-[#007AFF] animate-pulse" : "border-blue-300/50"
+                      }`} />
+                    </div>
+                  )}
                   <AnimatePresence mode="wait">
                     
-                    {/* IDLE State */}
+                    {/* IDLE State — shows different content when user is dragging */}
                     {processingState === "idle" && (
                       <motion.div
                         key="idle-view"
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
-                        className="text-center max-w-sm flex flex-col items-center gap-3"
-                      >
-                        <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#007AFF] shadow-md animate-pulse">
-                          <Brain className="w-7 h-7 text-[#007AFF]" />
-                        </div>
-                        <h4 className="text-sm font-bold text-slate-900">
-                          2. Synthesizer Dropzone
-                        </h4>
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Drag any research card from the left (or click it) to test real-time AI OCR extraction.
-                        </p>
-                      </motion.div>
-                    )}
-
-                    {/* DRAGGING State */}
-                    {processingState === "dragging" && (
-                      <motion.div
-                        key="dragging-view"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
                         className="text-center max-w-sm flex flex-col items-center gap-3 pointer-events-none"
                       >
-                        <div className="w-14 h-14 rounded-2xl bg-blue-100 border border-blue-400 flex items-center justify-center text-[#007AFF] shadow-lg">
-                          <Cpu className="w-7 h-7 animate-spin" />
-                        </div>
-                        <h4 className="text-sm font-bold text-[#007AFF]">
-                          Release mouse to synthesise
+                        <motion.div
+                          animate={isHoveringDropzone
+                            ? { scale: [1, 1.15, 1], borderColor: "#007AFF" }
+                            : isDragging
+                            ? { scale: [1, 1.05, 1] }
+                            : { scale: 1 }
+                          }
+                          transition={{ duration: 0.8, repeat: isHoveringDropzone || isDragging ? Infinity : 0, ease: "easeInOut" }}
+                          className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-md transition-colors duration-300 ${
+                            isHoveringDropzone
+                              ? "bg-[#007AFF] border-2 border-[#007AFF] text-white"
+                              : isDragging
+                              ? "bg-blue-100 border-2 border-blue-400 text-[#007AFF]"
+                              : "bg-blue-50 border border-blue-200 text-[#007AFF]"
+                          }`}
+                        >
+                          {isHoveringDropzone ? (
+                            <Plus className="w-7 h-7 text-white" />
+                          ) : isDragging ? (
+                            <Cpu className="w-7 h-7 animate-spin" />
+                          ) : (
+                            <Brain className="w-7 h-7" />
+                          )}
+                        </motion.div>
+                        <h4 className={`text-sm font-bold transition-colors duration-200 ${
+                          isHoveringDropzone ? "text-[#007AFF]" : "text-slate-900"
+                        }`}>
+                          {isHoveringDropzone
+                            ? "Release to synthesize!"
+                            : isDragging
+                            ? "Drop it here →"
+                            : "2. Synthesizer Dropzone"
+                          }
                         </h4>
-                        <p className="text-xs text-blue-600/80">
-                          Dropping will trigger instant Gemini context extraction.
+                        <p className={`text-xs leading-relaxed ${
+                          isHoveringDropzone ? "text-[#007AFF]" : "text-slate-500"
+                        }`}>
+                          {isHoveringDropzone
+                            ? "Gemini will instantly extract key context from this source."
+                            : isDragging
+                            ? "Move the card over this area and release."
+                            : "Drag any research card from the left (or click it) to test real-time AI OCR extraction."
+                          }
                         </p>
                       </motion.div>
                     )}
