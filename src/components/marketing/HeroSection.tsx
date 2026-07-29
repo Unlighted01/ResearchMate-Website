@@ -1,5 +1,6 @@
 // ============================================
 // HERO SECTION - High-Fidelity Marketing Hero & Interactive Playground
+// Clean Light Theme & Fixed Drag-and-Drop Synthesizer
 // ============================================
 
 import React, { useState, useRef } from "react";
@@ -21,7 +22,7 @@ import {
   MessageSquare,
   Zap,
   MousePointer,
-  ListFilter,
+  Layers,
 } from "lucide-react";
 
 // ============================================
@@ -51,8 +52,8 @@ const PLAYGROUND_SOURCES: SourceItem[] = [
     name: "quantum_computing_nature.pdf",
     size: "4.2 MB",
     icon: FileText,
-    color: "from-purple-500 to-indigo-600",
-    glowColor: "rgba(139, 92, 246, 0.4)",
+    color: "from-purple-600 to-indigo-600",
+    glowColor: "rgba(124, 58, 237, 0.25)",
     gradient: "from-purple-600 via-indigo-600 to-blue-600",
     summary: {
       title: "Quantum Supremacy via Superconducting Qubits",
@@ -80,9 +81,9 @@ const PLAYGROUND_SOURCES: SourceItem[] = [
     name: "neuroscience_lecture_12.mp3",
     size: "18.5 MB",
     icon: Mic,
-    color: "from-cyan-500 to-blue-600",
-    glowColor: "rgba(6, 182, 212, 0.4)",
-    gradient: "from-cyan-500 via-blue-600 to-indigo-600",
+    color: "from-[#007AFF] to-[#5856D6]",
+    glowColor: "rgba(0, 122, 255, 0.25)",
+    gradient: "from-[#007AFF] via-blue-600 to-indigo-600",
     summary: {
       title: "Deep Sleep & Synaptic Re-normalization",
       bullets: [
@@ -110,7 +111,7 @@ const PLAYGROUND_SOURCES: SourceItem[] = [
     size: "Web Link",
     icon: Globe,
     color: "from-amber-500 to-orange-600",
-    glowColor: "rgba(245, 158, 11, 0.4)",
+    glowColor: "rgba(245, 158, 11, 0.25)",
     gradient: "from-amber-500 via-orange-600 to-red-600",
     summary: {
       title: "Attention Is All You Need (Transformer)",
@@ -142,6 +143,7 @@ const HeroSection: React.FC = () => {
   // Playground States
   const [activeItem, setActiveItem] = useState<SourceItem | null>(null);
   const [processingState, setProcessingState] = useState<"idle" | "dragging" | "processing" | "synthesized">("idle");
+  const [isHoveringDropzone, setIsHoveringDropzone] = useState(false);
   const [progressText, setProgressText] = useState("");
   const [activeResultTab, setActiveResultTab] = useState<"summary" | "qa">("summary");
   const dropzoneRef = useRef<HTMLDivElement | null>(null);
@@ -158,7 +160,7 @@ const HeroSection: React.FC = () => {
 
   const bgSpotlight = useTransform(
     [mouseX, mouseY],
-    ([x, y]) => `radial-gradient(900px circle at ${x}px ${y}px, rgba(99, 102, 241, 0.12), transparent 80%)`
+    ([x, y]) => `radial-gradient(900px circle at ${x}px ${y}px, rgba(0, 122, 255, 0.06), transparent 80%)`
   );
 
   const handleMagnetMove = (e: React.MouseEvent<HTMLButtonElement>, btnIdx: number) => {
@@ -181,18 +183,19 @@ const HeroSection: React.FC = () => {
     }
   };
 
-  // Trigger processing for a selected source (works via click OR drag drop)
+  // Trigger processing pipeline for a selected source (works via click OR drag)
   const triggerProcessing = (item: SourceItem) => {
     if (processingState === "processing") return;
     setActiveItem(item);
     setActiveResultTab("summary");
     setProcessingState("processing");
+    setIsHoveringDropzone(false);
 
     const stages = [
       { text: "Reading raw byte stream...", delay: 0 },
-      { text: "Extracting semantic entities via OCR...", delay: 400 },
-      { text: "Mapping logical context vectors...", delay: 900 },
-      { text: "Synthesizing dynamic summaries...", delay: 1400 },
+      { text: "Extracting semantic entities via OCR...", delay: 350 },
+      { text: "Mapping logical context vectors...", delay: 800 },
+      { text: "Synthesizing dynamic summaries...", delay: 1300 },
     ];
 
     stages.forEach((stage) => {
@@ -203,27 +206,41 @@ const HeroSection: React.FC = () => {
 
     setTimeout(() => {
       setProcessingState("synthesized");
-    }, 1900);
+    }, 1800);
   };
 
-  // Drag handlers
-  const handleDragStart = () => {
-    if (processingState !== "processing" && processingState !== "synthesized") {
-      setProcessingState("dragging");
-    }
-  };
-
-  const handleDragEnd = (event: any, info: any, item: SourceItem) => {
+  // Real-time drag pointer tracking
+  const handleDrag = (event: any, info: any) => {
     if (!dropzoneRef.current) return;
     const dropzoneRect = dropzoneRef.current.getBoundingClientRect();
-    const dragX = info.point.x;
-    const dragY = info.point.y;
+    const pointerX = info?.point?.x ?? (event?.clientX || event?.touches?.[0]?.clientX || 0);
+    const pointerY = info?.point?.y ?? (event?.clientY || event?.touches?.[0]?.clientY || 0);
 
+    const margin = 35;
+    const isOver =
+      pointerX >= dropzoneRect.left - margin &&
+      pointerX <= dropzoneRect.right + margin &&
+      pointerY >= dropzoneRect.top - margin &&
+      pointerY <= dropzoneRect.bottom + margin;
+
+    setIsHoveringDropzone(isOver);
+  };
+
+  // Drag End handler with expanded hit-box calculation
+  const handleDragEnd = (event: any, info: any, item: SourceItem) => {
+    setIsHoveringDropzone(false);
+    if (!dropzoneRef.current) return;
+
+    const dropzoneRect = dropzoneRef.current.getBoundingClientRect();
+    const pointerX = info?.point?.x ?? (event?.clientX || event?.changedTouches?.[0]?.clientX || 0);
+    const pointerY = info?.point?.y ?? (event?.clientY || event?.changedTouches?.[0]?.clientY || 0);
+
+    const margin = 40; // 40px padded margin for effortless dropping
     const isInside =
-      dragX >= dropzoneRect.left &&
-      dragX <= dropzoneRect.right &&
-      dragY >= dropzoneRect.top &&
-      dragY <= dropzoneRect.bottom;
+      pointerX >= dropzoneRect.left - margin &&
+      pointerX <= dropzoneRect.right + margin &&
+      pointerY >= dropzoneRect.top - margin &&
+      pointerY <= dropzoneRect.bottom + margin;
 
     if (isInside) {
       triggerProcessing(item);
@@ -238,52 +255,44 @@ const HeroSection: React.FC = () => {
     setActiveItem(null);
     setProcessingState("idle");
     setProgressText("");
+    setIsHoveringDropzone(false);
   };
 
   return (
     <div
       onMouseMove={handleGlobalMouseMove}
-      className="relative min-h-screen flex flex-col items-center justify-start px-6 pt-28 pb-24 overflow-hidden bg-[#030712] text-slate-100 transition-colors duration-500"
+      className="relative min-h-screen flex flex-col items-center justify-start px-6 pt-28 pb-24 overflow-hidden bg-[#FAFBFD] text-slate-900 transition-colors duration-500"
     >
-      {/* Background Mesh & Ambient Glows */}
+      {/* Background Soft Mesh & Pastel Glows */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         <motion.div
           className="absolute inset-0 hidden md:block"
           style={{ background: bgSpotlight }}
         />
 
-        {/* Glowing Ambient Blobs */}
+        {/* Ambient Pastel Glow Blobs (Eye-pleasing) */}
         <motion.div
           animate={{
-            x: [0, 90, -50, 0],
-            y: [0, -70, 50, 0],
-            scale: [1, 1.2, 0.9, 1],
+            x: [0, 80, -40, 0],
+            y: [0, -60, 40, 0],
+            scale: [1, 1.15, 0.9, 1],
           }}
-          transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -top-32 -left-32 w-[650px] h-[650px] rounded-full bg-indigo-600/20 blur-[140px]"
+          transition={{ duration: 24, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -top-32 -left-32 w-[650px] h-[650px] rounded-full bg-blue-200/40 blur-[130px]"
         />
 
         <motion.div
           animate={{
-            x: [0, -100, 80, 0],
-            y: [0, 60, -90, 0],
-            scale: [1, 0.85, 1.15, 1],
+            x: [0, -90, 70, 0],
+            y: [0, 50, -80, 0],
+            scale: [1, 0.85, 1.1, 1],
           }}
           transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -right-20 -bottom-20 w-[600px] h-[600px] rounded-full bg-cyan-500/20 blur-[130px]"
+          className="absolute -right-20 -bottom-20 w-[600px] h-[600px] rounded-full bg-purple-200/40 blur-[120px]"
         />
 
-        <motion.div
-          animate={{
-            x: [0, 60, -60, 0],
-            y: [0, 80, -40, 0],
-          }}
-          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] rounded-full bg-purple-600/15 blur-[150px]"
-        />
-
-        {/* High-Tech Grid Backdrop */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:32px_32px]" />
+        {/* Light Subtly Grid Backdrop */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000006_1px,transparent_1px),linear-gradient(to_bottom,#00000006_1px,transparent_1px)] bg-[size:32px_32px]" />
       </div>
 
       {/* ================= HERO CONTENT ================= */}
@@ -294,10 +303,10 @@ const HeroSection: React.FC = () => {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 100, damping: 15 }}
-          className="inline-flex items-center gap-2.5 px-4 py-2 bg-slate-900/80 backdrop-blur-2xl rounded-full border border-indigo-500/30 shadow-[0_0_20px_rgba(99,102,241,0.25)] mb-8 hover:scale-[1.04] transition-all duration-300 cursor-default"
+          className="inline-flex items-center gap-2.5 px-4 py-2 bg-white/80 backdrop-blur-2xl rounded-full border border-blue-200/80 shadow-md shadow-blue-500/5 mb-8 hover:scale-[1.04] transition-all duration-300 cursor-default"
         >
-          <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
-          <span className="text-xs font-bold tracking-wider uppercase bg-gradient-to-r from-cyan-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
+          <Sparkles className="w-4 h-4 text-[#007AFF] animate-pulse" />
+          <span className="text-xs font-bold tracking-wider uppercase bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE] bg-clip-text text-transparent">
             Powered by Gemini AI & Realtime Sync Engine
           </span>
         </motion.div>
@@ -307,11 +316,11 @@ const HeroSection: React.FC = () => {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="font-title text-5xl sm:text-6xl md:text-8xl font-black tracking-tight leading-[1.05] mb-6 text-white"
+          className="font-title text-5xl sm:text-6xl md:text-8xl font-black tracking-tight leading-[1.05] mb-6 text-slate-900"
         >
           Your Research.
           <br />
-          <span className="bg-gradient-to-r from-cyan-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE] bg-clip-text text-transparent">
             Everywhere, Instantly.
           </span>
         </motion.h1>
@@ -321,13 +330,13 @@ const HeroSection: React.FC = () => {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="text-lg sm:text-xl md:text-2xl text-slate-300 max-w-3xl mx-auto mb-10 leading-relaxed font-sans font-normal"
+          className="text-lg sm:text-xl md:text-2xl text-slate-600 max-w-3xl mx-auto mb-10 leading-relaxed font-sans font-medium"
         >
           Capture, synthesize, and reference notes across all devices. 
           Experience a beautiful workspace built for academic synthesis, active recall, and knowledge graph mapping.
         </motion.p>
 
-        {/* High-Impact CTA Buttons */}
+        {/* High-Visibility Light-Theme CTA Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -340,7 +349,7 @@ const HeroSection: React.FC = () => {
               onMouseMove={(e) => handleMagnetMove(e, 1)}
               onMouseLeave={() => handleMagnetLeave(1)}
               style={{ transform: `translate(${btn1Translate.x}px, ${btn1Translate.y}px)` }}
-              className="relative group overflow-hidden flex items-center gap-3 px-9 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:via-indigo-500 hover:to-violet-500 text-white font-bold text-base rounded-full shadow-[0_0_25px_rgba(79,70,229,0.4)] hover:shadow-[0_0_40px_rgba(79,70,229,0.7)] hover:scale-[1.05] active:scale-[0.97] transition-all duration-300 border border-white/20"
+              className="relative group overflow-hidden flex items-center gap-3 px-9 py-4 bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#0051D5] hover:from-[#0066DD] hover:via-[#4A48C8] hover:to-[#0044B8] text-white font-bold text-base rounded-full shadow-[0_10px_30px_rgba(0,122,255,0.4)] hover:shadow-[0_15px_45px_rgba(0,122,255,0.65)] hover:scale-[1.05] active:scale-[0.97] transition-all duration-300 border border-white/30"
             >
               {/* Shimmer Light Sweep Effect */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none" />
@@ -359,10 +368,9 @@ const HeroSection: React.FC = () => {
                 .getElementById("products")
                 ?.scrollIntoView({ behavior: "smooth" })
             }
-            className="relative group overflow-hidden flex items-center gap-3 px-8 py-4 bg-slate-900/80 backdrop-blur-2xl text-white font-bold text-base rounded-full border border-cyan-500/30 hover:border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:shadow-[0_0_30px_rgba(6,182,212,0.35)] hover:scale-[1.05] active:scale-[0.97] transition-all duration-300"
+            className="relative group overflow-hidden flex items-center gap-3 px-8 py-4 bg-white/90 backdrop-blur-2xl text-slate-900 font-bold text-base rounded-full border-2 border-slate-200 shadow-lg shadow-slate-200/50 hover:border-[#007AFF] hover:text-[#007AFF] hover:shadow-[0_10px_30px_rgba(0,122,255,0.25)] hover:scale-[1.05] active:scale-[0.97] transition-all duration-300"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <Chrome className="w-5 h-5 text-cyan-400 relative z-10 group-hover:rotate-12 transition-transform" />
+            <Chrome className="w-5 h-5 text-[#007AFF] relative z-10 group-hover:rotate-12 transition-transform" />
             <span className="relative z-10">Download Extension</span>
           </button>
         </motion.div>
@@ -372,11 +380,11 @@ const HeroSection: React.FC = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 0.3 }}
-          className="flex flex-wrap items-center justify-center gap-8 text-sm font-semibold text-slate-400 mb-20"
+          className="flex flex-wrap items-center justify-center gap-8 text-sm font-semibold text-slate-500 mb-20"
         >
           {["Free to start", "No credit card required", "Cancel anytime"].map((text, idx) => (
             <div key={idx} className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
               <span>{text}</span>
             </div>
           ))}
@@ -389,33 +397,33 @@ const HeroSection: React.FC = () => {
           transition={{ type: "spring", stiffness: 50, damping: 15, delay: 0.4 }}
           className="w-full max-w-4xl relative"
         >
-          {/* Glass Board Backdrop Glow */}
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-purple-500/15 to-cyan-500/20 rounded-[36px] blur-3xl z-0 pointer-events-none" />
+          {/* Glass Board Soft Shadow Backdrop */}
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-400/10 via-purple-400/10 to-indigo-400/10 rounded-[36px] blur-3xl z-0 pointer-events-none" />
 
-          <div className="relative z-10 w-full bg-slate-900/70 backdrop-blur-2xl border border-slate-700/60 rounded-3xl p-6 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden">
+          <div className="relative z-10 w-full bg-white/90 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-6 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.08)] overflow-hidden text-left">
             
             {/* Header Bar */}
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-4 mb-6">
+            <div className="flex items-center justify-between border-b border-slate-200/80 pb-4 mb-6">
               <div className="flex items-center gap-2.5">
-                <div className="w-3 h-3 rounded-full bg-red-500" />
-                <div className="w-3 h-3 rounded-full bg-amber-500" />
-                <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="text-xs font-mono font-bold text-slate-300 ml-2 uppercase tracking-widest flex items-center gap-2">
-                  <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                <div className="w-3 h-3 rounded-full bg-red-400" />
+                <div className="w-3 h-3 rounded-full bg-amber-400" />
+                <div className="w-3 h-3 rounded-full bg-emerald-400" />
+                <span className="text-xs font-mono font-bold text-slate-600 ml-2 uppercase tracking-widest flex items-center gap-2">
+                  <Zap className="w-3.5 h-3.5 text-[#007AFF]" />
                   Interactive AI Playground
                 </span>
               </div>
-              
+
               <div className="flex items-center gap-3">
-                <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-cyan-400/90 bg-cyan-500/10 px-2.5 py-1 rounded-full border border-cyan-500/20">
+                <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold text-[#007AFF] bg-blue-50 px-3 py-1 rounded-full border border-blue-200/80">
                   <MousePointer className="w-3 h-3" />
-                  Click or Drag Source
+                  Drag or Click Source
                 </span>
 
                 {processingState !== "idle" && (
                   <button
                     onClick={resetPlayground}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition-colors border border-slate-700"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors border border-slate-200"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     Reset
@@ -429,12 +437,12 @@ const HeroSection: React.FC = () => {
               
               {/* Left Column: Source Items (Clickable & Draggable) */}
               <div className="lg:col-span-5 flex flex-col gap-3.5">
-                <div className="text-left mb-1">
-                  <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                    <span>1. Select Research Source</span>
+                <div className="mb-1">
+                  <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                    1. Select Research Source
                   </h3>
-                  <p className="text-[11px] text-slate-400">
-                    Click any card below or drag it into the synthesizer.
+                  <p className="text-[11px] text-slate-500">
+                    Drag card into synthesizer box or simply click it.
                   </p>
                 </div>
 
@@ -449,25 +457,29 @@ const HeroSection: React.FC = () => {
                       drag={processingState !== "processing"}
                       dragSnapToOrigin
                       dragElastic={0.3}
-                      onDragStart={handleDragStart}
+                      onDrag={handleDrag}
+                      onDragStart={() => {
+                        handleDragStart();
+                        setActiveItem(source);
+                      }}
                       onDragEnd={(e, info) => handleDragEnd(e, info, source)}
                       onClick={() => triggerProcessing(source)}
-                      whileDrag={{ scale: 1.05, cursor: "grabbing" }}
+                      whileDrag={{ scale: 1.06, zIndex: 50, cursor: "grabbing" }}
                       whileHover={{ scale: 1.02 }}
                       className={`relative flex items-center justify-between px-4 py-3.5 bg-gradient-to-r ${
                         source.gradient
-                      } text-white rounded-2xl shadow-lg border border-white/20 select-none cursor-pointer transition-all ${
-                        isSelected ? "ring-2 ring-cyan-400 ring-offset-2 ring-offset-slate-900" : ""
+                      } text-white rounded-2xl shadow-lg select-none cursor-pointer transition-all border border-white/20 ${
+                        isSelected ? "ring-4 ring-blue-400/50 shadow-blue-500/30" : ""
                       }`}
                       style={{
                         boxShadow: `0 8px 24px -6px ${source.glowColor}`,
                       }}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="p-2 bg-white/15 rounded-xl shrink-0">
+                        <div className="p-2 bg-white/20 backdrop-blur-md rounded-xl shrink-0">
                           <Icon className="w-4 h-4 text-white" />
                         </div>
-                        <div className="text-left min-w-0">
+                        <div className="min-w-0">
                           <p className="text-xs font-bold truncate max-w-[170px]">
                             {source.name}
                           </p>
@@ -478,7 +490,7 @@ const HeroSection: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/30 text-white/90">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/25 text-white">
                           {isProcessingThis ? "Synthesizing..." : "Click / Drag"}
                         </span>
                       </div>
@@ -487,16 +499,18 @@ const HeroSection: React.FC = () => {
                 })}
               </div>
 
-              {/* Right Column: Active Synthesizer / Result Display */}
+              {/* Right Column: Active Synthesizer Dropzone / Result Display */}
               <div className="lg:col-span-7 h-80 flex items-center justify-center">
                 <div
                   ref={dropzoneRef}
                   className={`relative w-full h-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-5 transition-all duration-300 ${
-                    processingState === "idle"
-                      ? "border-slate-700 bg-slate-950/40"
+                    isHoveringDropzone
+                      ? "border-[#007AFF] bg-blue-500/10 scale-[1.02] shadow-xl shadow-blue-500/10"
+                      : processingState === "idle"
+                      ? "border-slate-300 bg-slate-50/70"
                       : processingState === "dragging"
-                      ? "border-cyan-400 bg-cyan-500/10 scale-[1.01]"
-                      : "border-slate-800 bg-slate-950/70"
+                      ? "border-blue-400 bg-blue-50/80"
+                      : "border-slate-200 bg-white"
                   }`}
                 >
                   <AnimatePresence mode="wait">
@@ -510,14 +524,14 @@ const HeroSection: React.FC = () => {
                         exit={{ opacity: 0, scale: 0.95 }}
                         className="text-center max-w-sm flex flex-col items-center gap-3"
                       >
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 animate-pulse shadow-lg">
-                          <Brain className="w-7 h-7 text-cyan-400" />
+                        <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#007AFF] shadow-md animate-pulse">
+                          <Brain className="w-7 h-7 text-[#007AFF]" />
                         </div>
-                        <h4 className="text-sm font-bold text-white">
+                        <h4 className="text-sm font-bold text-slate-900">
                           2. Synthesizer Dropzone
                         </h4>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                          Click any source on the left (or drag it here) to witness real-time AI context extraction.
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Drag any research card from the left (or click it) to test real-time AI OCR extraction.
                         </p>
                       </motion.div>
                     )}
@@ -531,14 +545,14 @@ const HeroSection: React.FC = () => {
                         exit={{ opacity: 0, scale: 0.95 }}
                         className="text-center max-w-sm flex flex-col items-center gap-3 pointer-events-none"
                       >
-                        <div className="w-14 h-14 rounded-2xl bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-400 shadow-lg">
+                        <div className="w-14 h-14 rounded-2xl bg-blue-100 border border-blue-400 flex items-center justify-center text-[#007AFF] shadow-lg">
                           <Cpu className="w-7 h-7 animate-spin" />
                         </div>
-                        <h4 className="text-sm font-bold text-cyan-400">
-                          Release to auto-synthesise
+                        <h4 className="text-sm font-bold text-[#007AFF]">
+                          Release mouse to synthesise
                         </h4>
-                        <p className="text-xs text-cyan-300/80">
-                          Dropping will trigger instant Gemini OCR extraction.
+                        <p className="text-xs text-blue-600/80">
+                          Dropping will trigger instant Gemini context extraction.
                         </p>
                       </motion.div>
                     )}
@@ -553,16 +567,16 @@ const HeroSection: React.FC = () => {
                         className="text-center flex flex-col items-center gap-4"
                       >
                         <div className="relative">
-                          <div className="w-16 h-16 rounded-full border-4 border-slate-800 border-t-cyan-400 animate-spin" />
+                          <div className="w-16 h-16 rounded-full border-4 border-slate-200 border-t-[#007AFF] animate-spin" />
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <Brain className="w-6 h-6 text-cyan-400 animate-pulse" />
+                            <Brain className="w-6 h-6 text-[#007AFF] animate-pulse" />
                           </div>
                         </div>
                         <div className="space-y-1">
-                          <p className="text-sm font-bold text-white">
+                          <p className="text-sm font-bold text-slate-900">
                             Synthesizing Context...
                           </p>
-                          <p className="text-xs font-mono text-cyan-400 animate-pulse">
+                          <p className="text-xs font-mono text-[#007AFF] animate-pulse">
                             {progressText}
                           </p>
                         </div>
@@ -577,27 +591,27 @@ const HeroSection: React.FC = () => {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
                         transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                        className="w-full h-full flex flex-col text-left p-4 justify-between bg-slate-900 rounded-xl border border-slate-700/80 shadow-2xl relative overflow-hidden group/card"
+                        className="w-full h-full flex flex-col text-left p-4 justify-between bg-white rounded-xl border border-slate-200 shadow-xl relative overflow-hidden group/card"
                       >
                         {/* Glowing Header Accent */}
-                        <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-500 animate-pulse" />
+                        <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE]" />
 
                         {/* Top Bar: Status + Result Tabs */}
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] uppercase font-mono font-bold tracking-wider px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                              Synthesized in 1.9s
+                            <span className="text-[10px] uppercase font-mono font-bold tracking-wider px-2 py-0.5 rounded bg-blue-50 text-[#007AFF] border border-blue-200">
+                              Synthesized in 1.8s
                             </span>
                           </div>
 
                           {/* Result Tabs */}
-                          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
                             <button
                               onClick={() => setActiveResultTab("summary")}
                               className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
                                 activeResultTab === "summary"
-                                  ? "bg-indigo-600 text-white shadow-sm"
-                                  : "text-slate-400 hover:text-white"
+                                  ? "bg-white text-[#007AFF] shadow-sm"
+                                  : "text-slate-500 hover:text-slate-900"
                               }`}
                             >
                               Summary
@@ -606,8 +620,8 @@ const HeroSection: React.FC = () => {
                               onClick={() => setActiveResultTab("qa")}
                               className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
                                 activeResultTab === "qa"
-                                  ? "bg-indigo-600 text-white shadow-sm"
-                                  : "text-slate-400 hover:text-white"
+                                  ? "bg-white text-[#007AFF] shadow-sm"
+                                  : "text-slate-500 hover:text-slate-900"
                               }`}
                             >
                               Ask AI Q&A
@@ -616,7 +630,7 @@ const HeroSection: React.FC = () => {
                         </div>
 
                         {/* Title */}
-                        <h4 className="text-sm font-bold text-white mt-2 leading-snug truncate">
+                        <h4 className="text-sm font-bold text-slate-900 mt-2 leading-snug truncate">
                           {activeItem.summary.title}
                         </h4>
 
@@ -629,9 +643,9 @@ const HeroSection: React.FC = () => {
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ duration: 0.25, delay: idx * 0.08 }}
-                                className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed"
+                                className="text-xs text-slate-700 flex items-start gap-2 leading-relaxed"
                               >
-                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0 mt-1.5" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#007AFF] shrink-0 mt-1.5" />
                                 <span>{bullet}</span>
                               </motion.li>
                             ))}
@@ -642,12 +656,12 @@ const HeroSection: React.FC = () => {
                         {activeResultTab === "qa" && (
                           <div className="space-y-2 my-2 flex-1 overflow-y-auto pr-1">
                             {activeItem.summary.qa.map((qaItem, idx) => (
-                              <div key={idx} className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 space-y-1">
-                                <p className="text-[11px] font-bold text-cyan-400 flex items-center gap-1.5">
+                              <div key={idx} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1">
+                                <p className="text-[11px] font-bold text-[#007AFF] flex items-center gap-1.5">
                                   <MessageSquare className="w-3 h-3" />
                                   {qaItem.question}
                                 </p>
-                                <p className="text-[11px] text-slate-300 leading-relaxed">
+                                <p className="text-[11px] text-slate-600 leading-relaxed">
                                   {qaItem.answer}
                                 </p>
                               </div>
@@ -656,13 +670,13 @@ const HeroSection: React.FC = () => {
                         )}
 
                         {/* Bottom Metadata & Citation */}
-                        <div className="flex items-center justify-between border-t border-slate-800 pt-2.5">
-                          <p className="text-[10px] font-mono text-slate-400 truncate max-w-[240px]">
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-2.5">
+                          <p className="text-[10px] font-mono text-slate-500 truncate max-w-[240px]">
                             🎓 {activeItem.summary.citation}
                           </p>
                           <Link
                             to="/signup"
-                            className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 hover:underline"
+                            className="text-[10px] font-bold text-[#007AFF] hover:text-[#0051D5] flex items-center gap-1 hover:underline"
                           >
                             Save to Library
                             <ArrowRight className="w-3 h-3" />
