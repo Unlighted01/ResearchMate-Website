@@ -470,7 +470,6 @@ const HeroSection: React.FC = () => {
                       dragElastic={0.3}
                       onDrag={handleDrag}
                       onDragStart={() => {
-                        handleDragStart();
                         setActiveItem(source);
                       }}
                       onDragEnd={(e, info) => handleDragEnd(e, info, source)}
