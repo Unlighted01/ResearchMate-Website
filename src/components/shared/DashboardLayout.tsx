@@ -32,6 +32,7 @@ import {
   FileEdit,
   ChevronLeft,
   BookOpen,
+  Timer,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { getAllItems, subscribeToItems } from "../../services/storageService";
@@ -122,7 +123,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [searchFocused, setSearchFocused] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [showClockWidget, setShowClockWidget] = useState(
-    () => localStorage.getItem("showClockWidget") === "true",
+    () => localStorage.getItem("showClockWidget") !== "false",
   );
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const {
@@ -290,7 +291,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Listen for clock widget toggle from settings
   useEffect(() => {
     const handleClockToggle = () => {
-      setShowClockWidget(localStorage.getItem("showClockWidget") === "true");
+      setShowClockWidget(localStorage.getItem("showClockWidget") !== "false");
     };
     window.addEventListener("clockWidgetToggle", handleClockToggle);
     return () =>
@@ -728,8 +729,33 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <span className="hidden sm:inline font-sans">Synced</span>
               </div>
 
-              {/* Streamlined Glass Action Bar (Notifications + Profile) */}
+              {/* Streamlined Glass Action Bar (Timer + Notifications + Profile) */}
               <div className="flex items-center gap-1 p-1 rounded-2xl bg-white/40 dark:bg-[#09090b]/40 backdrop-blur-xl border border-white/10 dark:border-white/[0.06] shadow-md z-20">
+                {/* Clock & Pomodoro Quick Toggle */}
+                <button
+                  onClick={() => {
+                    const nextState = !(localStorage.getItem("showClockWidget") !== "false");
+                    setShowClockWidget(nextState);
+                    localStorage.setItem("showClockWidget", String(nextState));
+                    window.dispatchEvent(new Event("clockWidgetToggle"));
+                    if (showToast) {
+                      showToast(
+                        nextState ? "Clock & Pomodoro widget shown" : "Clock & Pomodoro widget hidden",
+                        "info",
+                      );
+                    }
+                  }}
+                  aria-label="Toggle Clock & Pomodoro Widget"
+                  title={showClockWidget ? "Hide Clock & Pomodoro Widget" : "Show Clock & Pomodoro Widget"}
+                  className={`theme-icon-button theme-hover-surface p-2 rounded-xl transition-all relative flex items-center justify-center hover:scale-[1.03] active:scale-[0.97] ${
+                    showClockWidget
+                      ? "text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 dark:bg-cyan-500/20"
+                      : "text-[var(--text-primary)]"
+                  }`}
+                >
+                  <Timer className="w-4 h-4" />
+                </button>
+
                 {/* Notifications */}
                 <div className="relative flex items-center justify-center">
                   <button
