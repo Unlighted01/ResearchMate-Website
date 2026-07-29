@@ -5,7 +5,7 @@ import { Input } from "../shared/ui";
 import BubbleBackground from "../shared/BubbleBackground";
 import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
-import { Mail, Lock, Check, X, ArrowRight } from "lucide-react";
+import { Mail, Lock, Check, X, ArrowRight, ArrowLeft } from "lucide-react";
 
 // Apple-style icons for OAuth
 const GoogleIcon = () => (
@@ -178,8 +178,19 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
       <div className={`fixed inset-0 z-0 ${authBackgroundClass}`} />
       <BubbleBackground bubbleCount={10} enabled={isBubbleTheme} />
       <div className="w-full max-w-sm content-above-bubbles">
+        {/* Back Link */}
+        <div className="mb-4 text-left">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#007AFF] transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Home</span>
+          </Link>
+        </div>
+
         <div className="text-center mb-8">
-          <Link to="/" className="inline-block mb-6">
+          <Link to="/" className="inline-block mb-4">
             <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
               <span className="text-2xl font-bold text-white">R</span>
             </div>

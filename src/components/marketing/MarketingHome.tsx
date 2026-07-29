@@ -21,34 +21,29 @@ import CTASection from "./CTASection";
 
 const MarketingHome: React.FC = () => {
   const navigate = useNavigate();
-  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     const checkAuth = async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession();
-        if (session) navigate("/app/dashboard", { replace: true });
+        if (session && mounted) {
+          navigate("/app/dashboard", { replace: true });
+        }
       } catch (error) {
         console.error("Auth check error:", error);
-      } finally {
-        setCheckingAuth(false);
       }
     };
     checkAuth();
+    return () => {
+      mounted = false;
+    };
   }, [navigate]);
 
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7]">
-        <div className="w-8 h-8 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#FAFBFD]">
       <section id="home" className="scroll-mt-12">
         <HeroSection />
         <FeaturesSection />

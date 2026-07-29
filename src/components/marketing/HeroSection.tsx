@@ -226,9 +226,20 @@ const HeroSection: React.FC = () => {
     setIsHoveringDropzone(isOver);
   };
 
-  // Drag End handler with expanded hit-box calculation
+  // Drag End handler with unified click & drag detection
   const handleDragEnd = (event: any, info: any, item: SourceItem) => {
     setIsHoveringDropzone(false);
+
+    // Calculate drag distance
+    const dragDistance = Math.hypot(info?.offset?.x || 0, info?.offset?.y || 0);
+
+    // If offset is small (< 6px), treat as click/tap and trigger synthesis
+    if (dragDistance < 6) {
+      triggerProcessing(item);
+      return;
+    }
+
+    // Otherwise it's a real drag operation: check dropzone bounds
     if (!dropzoneRef.current) return;
 
     const dropzoneRect = dropzoneRef.current.getBoundingClientRect();
@@ -245,7 +256,7 @@ const HeroSection: React.FC = () => {
     if (isInside) {
       triggerProcessing(item);
     } else {
-      if (processingState !== "synthesized") {
+      if (processingState !== "synthesized" && processingState !== "processing") {
         setProcessingState("idle");
       }
     }
@@ -463,7 +474,6 @@ const HeroSection: React.FC = () => {
                         setActiveItem(source);
                       }}
                       onDragEnd={(e, info) => handleDragEnd(e, info, source)}
-                      onClick={() => triggerProcessing(source)}
                       whileDrag={{ scale: 1.06, zIndex: 50, cursor: "grabbing" }}
                       whileHover={{ scale: 1.02 }}
                       className={`relative flex items-center justify-between px-4 py-3.5 bg-gradient-to-r ${
