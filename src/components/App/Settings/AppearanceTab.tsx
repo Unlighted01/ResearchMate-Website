@@ -7,7 +7,7 @@
 // ============================================
 
 import React from "react";
-import { Palette, Sun, Moon, Monitor, Clock } from "lucide-react";
+import { Palette, Sun, Moon, Monitor, Clock, Timer, Zap } from "lucide-react";
 import { Card, Select, Toggle } from "../../shared/ui";
 
 // ============================================
