@@ -1,8 +1,3 @@
-// ============================================
-// HERO SECTION - High-Fidelity Marketing Hero & Interactive Playground
-// Clean Light Theme & Fixed Drag-and-Drop Synthesizer
-// ============================================
-
 import React, { useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
@@ -14,6 +9,8 @@ import {
   FileText,
   Mic,
   Globe,
+  Video,
+  FileSpreadsheet,
   Plus,
   RefreshCw,
   Cpu,
@@ -24,6 +21,8 @@ import {
   MousePointer,
   Layers,
   Undo2,
+  Tag,
+  Activity,
 } from "lucide-react";
 
 // ============================================
@@ -31,7 +30,7 @@ import {
 // ============================================
 interface SourceItem {
   id: string;
-  type: "pdf" | "audio" | "web";
+  type: "pdf" | "audio" | "web" | "video" | "dataset";
   name: string;
   size: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -43,6 +42,7 @@ interface SourceItem {
     bullets: string[];
     citation: string;
     qa: { question: string; answer: string }[];
+    entities: string[];
   };
 }
 
@@ -51,7 +51,7 @@ const PLAYGROUND_SOURCES: SourceItem[] = [
     id: "pdf-1",
     type: "pdf",
     name: "quantum_computing_nature.pdf",
-    size: "4.2 MB",
+    size: "PDF Reader • 4.2 MB",
     icon: FileText,
     color: "from-purple-600 to-indigo-600",
     glowColor: "rgba(124, 58, 237, 0.25)",
@@ -63,7 +63,7 @@ const PLAYGROUND_SOURCES: SourceItem[] = [
         "System handles complex tensor contractions in 200 seconds vs 10,000 years classically.",
         "Establishes foundation for fault-tolerant physical quantum execution gates.",
       ],
-      citation: "Google Quantum AI, Nature (2019)",
+      citation: "Google Quantum AI, Nature Journal (2019)",
       qa: [
         {
           question: "What is the key benchmark result?",
@@ -74,13 +74,14 @@ const PLAYGROUND_SOURCES: SourceItem[] = [
           answer: "Enables multi-scale molecular simulation and cryptographic prime factorization research.",
         },
       ],
+      entities: ["Superconducting Qubits", "Quantum Supremacy", "Sycamore Processor", "Cross-Entropy Benchmarking"],
     },
   },
   {
     id: "audio-1",
     type: "audio",
     name: "neuroscience_lecture_12.mp3",
-    size: "18.5 MB",
+    size: "Smart Pen Voice • 18.5 MB",
     icon: Mic,
     color: "from-[#007AFF] to-[#5856D6]",
     glowColor: "rgba(0, 122, 255, 0.25)",
@@ -103,35 +104,97 @@ const PLAYGROUND_SOURCES: SourceItem[] = [
           answer: "Flushes beta-amyloid and tau proteins out of the central nervous system during NREM sleep.",
         },
       ],
+      entities: ["Synaptic Scaling", "Glymphatic System", "Sharp-Wave Ripples", "NREM Slow-Wave Sleep"],
     },
   },
   {
     id: "web-1",
     type: "web",
-    name: "https://arxiv.org/abs/attention-is-all-you-need",
-    size: "Web Link",
+    name: "arxiv.org/abs/attention-is-all-you-need",
+    size: "Web Extension • ArXiv",
     icon: Globe,
     color: "from-amber-500 to-orange-600",
     glowColor: "rgba(245, 158, 11, 0.25)",
     gradient: "from-amber-500 via-orange-600 to-red-600",
     summary: {
-      title: "Attention Is All You Need (Transformer)",
+      title: "Attention Is All You Need (Transformer Architecture)",
       bullets: [
         "Replaces recurrent layers with self-attention networks for massive parallelism.",
         "Achieves state-of-the-art BLEU scores with 10x lower training latency.",
         "Introduces multi-head dot-product attention scales for token association mapping.",
       ],
-      citation: "Vaswani et al., arXiv (2017)",
+      citation: "Vaswani et al., arXiv:1706.03762 (2017)",
       qa: [
         {
           question: "Why drop recurrent layers?",
-          answer: "Recurrent networks prevent sequence parallelization during training; self-attention allows global sequence computation in O(1) sequential steps.",
+          answer: "Recurrent networks prevent sequence parallelization during training; self-attention allows global sequence computation in O(1) steps.",
         },
         {
           question: "What is multi-head attention?",
           answer: "Allows the model to jointly attend to information from different representation subspaces at different positions.",
         },
       ],
+      entities: ["Self-Attention", "Multi-Head Attention", "Positional Encoding", "Transformer Layer"],
+    },
+  },
+  {
+    id: "video-1",
+    type: "video",
+    name: "handwritten_lab_notes_scan.png",
+    size: "Camera OCR Scan • Image",
+    icon: Video,
+    color: "from-rose-500 to-pink-600",
+    glowColor: "rgba(244, 63, 94, 0.25)",
+    gradient: "from-rose-500 via-pink-600 to-purple-600",
+    summary: {
+      title: "Handwritten Optics Lab Equations Scan",
+      bullets: [
+        "Digitizes handwritten mathematical derivations & optical interference equations.",
+        "Extracts spatial formulas into TeX formatted LaTeX mathematical expressions.",
+        "Auto-links parsed variables directly to central notes library.",
+      ],
+      citation: "Smart Pen Camera Capture (Lab Notebook Vol. 4)",
+      qa: [
+        {
+          question: "How accurate is the LaTeX formula recognition?",
+          answer: "Achieves 99.1% character accuracy on handwritten mathematical symbols and subscripts.",
+        },
+        {
+          question: "Can I edit extracted equations?",
+          answer: "Yes, equations save directly into Document Editor with raw LaTeX and rendered preview.",
+        },
+      ],
+      entities: ["LaTeX Math OCR", "Optical Interference", "Smart Pen Sync", "Digital Lab Notebook"],
+    },
+  },
+  {
+    id: "dataset-1",
+    type: "dataset",
+    name: "clinical_trial_phase3_data.csv",
+    size: "Knowledge Graph • Dataset",
+    icon: FileSpreadsheet,
+    color: "from-emerald-500 to-teal-600",
+    glowColor: "rgba(16, 185, 129, 0.25)",
+    gradient: "from-emerald-500 via-teal-600 to-cyan-600",
+    summary: {
+      title: "Oncology Phase III Double-Blind Trial",
+      bullets: [
+        "Cohort N=4,200 patients evaluated over a 24-month longitudinal observation period.",
+        "Targeted immunotherapy arm yielded a 34% increase in overall survival (p < 0.001).",
+        "Adverse event incidence was statistically non-inferior to baseline chemotherapy.",
+      ],
+      citation: "New England Journal of Oncology (2025)",
+      qa: [
+        {
+          question: "What was the sample size?",
+          answer: "4,200 randomized patients across 82 international clinical research sites.",
+        },
+        {
+          question: "Was the survival benefit statistically significant?",
+          answer: "Yes, overall survival hazard ratio HR=0.66 with p-value < 0.001 demonstrating strong efficacy.",
+        },
+      ],
+      entities: ["Hazard Ratio (HR)", "Longitudinal Cohort", "Double-Blind Control", "Kaplan-Meier Survival Curve"],
     },
   },
 ];
@@ -147,7 +210,7 @@ const HeroSection: React.FC = () => {
   const [isHoveringDropzone, setIsHoveringDropzone] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [progressText, setProgressText] = useState("");
-  const [activeResultTab, setActiveResultTab] = useState<"summary" | "qa">("summary");
+  const [activeResultTab, setActiveResultTab] = useState<"summary" | "qa" | "entities">("summary");
   const dropzoneRef = useRef<HTMLDivElement | null>(null);
   // Use a ref to track hover state reliably — React state batching can lose it in onDragEnd
   const isOverDropzoneRef = useRef(false);
@@ -189,7 +252,7 @@ const HeroSection: React.FC = () => {
     }
   };
 
-  // Trigger processing pipeline for a selected source (works via click OR drag)
+  // Trigger processing pipeline for a selected source (works via click OR drop inside dropzone)
   const triggerProcessing = (item: SourceItem) => {
     if (processingState === "processing") return;
     setActiveItem(item);
@@ -199,11 +262,14 @@ const HeroSection: React.FC = () => {
     setIsDragging(false);
     isOverDropzoneRef.current = false;
 
+    // Reset this card's position so it spring-animates smoothly back to its left-column slot
+    setCardPositions((prev) => ({ ...prev, [item.id]: { x: 0, y: 0 } }));
+
     const stages = [
-      { text: "Reading raw byte stream...", delay: 0 },
-      { text: "Extracting semantic entities via OCR...", delay: 350 },
+      { text: "Reading raw byte stream & metadata...", delay: 0 },
+      { text: "Extracting semantic entities & multimodal OCR...", delay: 350 },
       { text: "Mapping logical context vectors...", delay: 800 },
-      { text: "Synthesizing dynamic summaries...", delay: 1300 },
+      { text: "Synthesizing dynamic summaries & citations...", delay: 1300 },
     ];
 
     stages.forEach((stage) => {
@@ -221,7 +287,6 @@ const HeroSection: React.FC = () => {
   const handleDrag = (event: any, _info: any) => {
     if (!dropzoneRef.current) return;
     const dropzoneRect = dropzoneRef.current.getBoundingClientRect();
-    // Use raw PointerEvent clientX/clientY — always viewport coords, matching getBoundingClientRect
     const pointerX = event.clientX;
     const pointerY = event.clientY;
 
@@ -236,29 +301,27 @@ const HeroSection: React.FC = () => {
     setIsHoveringDropzone(isOver);
   };
 
-  // Drag End — if dropped on dropzone → synthesize & reset. If missed → card stays stuck where it landed.
+  // Drag End — if dropped on dropzone → item animates back to original slot & proceeds to synthesize.
+  // If dropped OUTSIDE dropzone → item stays stuck on that spot and does NOT synthesize!
   const handleDragEnd = (_event: any, info: any, item: SourceItem) => {
     const dragDistance = Math.hypot(info?.offset?.x || 0, info?.offset?.y || 0);
     const wasOverDropzone = isOverDropzoneRef.current;
 
-    // Clean up drag visual state
     setIsDragging(false);
     setIsHoveringDropzone(false);
     isOverDropzoneRef.current = false;
 
     // Short drag = click/tap → trigger synthesis and snap card home
     if (dragDistance < 6) {
-      setCardPositions((prev) => ({ ...prev, [item.id]: { x: 0, y: 0 } }));
       triggerProcessing(item);
       return;
     }
 
-    // Real drag — dropped on dropzone → synthesize & reset card position
+    // Real drag — dropped INSIDE dropzone → trigger synthesis (triggerProcessing animates card back home)
     if (wasOverDropzone) {
-      setCardPositions((prev) => ({ ...prev, [item.id]: { x: 0, y: 0 } }));
       triggerProcessing(item);
     } else {
-      // TROLL: Card missed! Save its landed position — it stays stuck there
+      // Dropped OUTSIDE dropzone → save offset, card STAYS STUCK on that spot, no synthesis!
       const offsetX = info?.offset?.x || 0;
       const offsetY = info?.offset?.y || 0;
       const prevPos = cardPositions[item.id] || { x: 0, y: 0 };
@@ -266,16 +329,12 @@ const HeroSection: React.FC = () => {
         ...prev,
         [item.id]: { x: prevPos.x + offsetX, y: prevPos.y + offsetY },
       }));
-      if (processingState !== "synthesized" && processingState !== "processing") {
-        setProcessingState("idle");
-      }
     }
   };
 
   // Click a "lost" card to snap it home and trigger synthesis
   const handleCardClick = (item: SourceItem) => {
     if (processingState === "processing") return;
-    setCardPositions((prev) => ({ ...prev, [item.id]: { x: 0, y: 0 } }));
     triggerProcessing(item);
   };
 
@@ -427,7 +486,7 @@ const HeroSection: React.FC = () => {
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 50, damping: 15, delay: 0.4 }}
-          className="w-full max-w-4xl relative overflow-visible"
+          className="w-full max-w-6xl relative overflow-visible"
         >
           {/* Glass Board Soft Shadow Backdrop */}
           <div className="absolute inset-0 bg-gradient-to-br from-blue-400/10 via-purple-400/10 to-indigo-400/10 rounded-[36px] blur-3xl z-0 pointer-events-none" />
@@ -465,16 +524,16 @@ const HeroSection: React.FC = () => {
             </div>
 
             {/* Layout Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center overflow-visible">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch overflow-visible">
               
               {/* Left Column: Source Items (Clickable & Draggable) */}
-              <div className="lg:col-span-5 flex flex-col gap-3.5 overflow-visible">
+              <div className="lg:col-span-5 flex flex-col gap-3 overflow-visible justify-center">
                 <div className="mb-1">
                   <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
                     1. Select Research Source
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Drag card into synthesizer box or simply click it.
+                    Drag card into synthesizer box (or click it) to process.
                   </p>
                 </div>
 
@@ -497,7 +556,7 @@ const HeroSection: React.FC = () => {
                         setActiveItem(source);
                       }}
                       onDragEnd={(e, info) => handleDragEnd(e, info, source)}
-                      onClick={() => isLost && handleCardClick(source)}
+                      onClick={() => (isLost ? handleCardClick(source) : triggerProcessing(source))}
                       animate={{
                         x: pos.x,
                         y: pos.y,
@@ -506,21 +565,21 @@ const HeroSection: React.FC = () => {
                       }}
                       transition={{
                         type: "spring",
-                        stiffness: 200,
-                        damping: 22,
+                        stiffness: 220,
+                        damping: 24,
                       }}
                       whileDrag={{
-                        scale: 1.12,
+                        scale: 1.1,
                         zIndex: 50,
                         rotate: 2,
                         cursor: "grabbing",
                         boxShadow: `0 20px 50px -8px ${source.glowColor}, 0 0 0 2px rgba(255,255,255,0.4)`,
                       }}
-                      whileHover={{ scale: 1.03, y: isLost ? pos.y - 3 : -2 }}
-                      whileTap={{ scale: 0.97 }}
-                      className={`relative flex items-center justify-between px-4 py-3.5 bg-gradient-to-r ${
+                      whileHover={{ scale: 1.02, y: isLost ? pos.y - 2 : -2 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`relative flex items-center justify-between px-3.5 py-3 bg-gradient-to-r ${
                         source.gradient
-                      } text-white rounded-2xl shadow-lg select-none cursor-grab active:cursor-grabbing transition-shadow border border-white/20 ${
+                      } text-white rounded-xl shadow-md select-none cursor-grab active:cursor-grabbing transition-shadow border border-white/20 ${
                         isSelected ? "ring-4 ring-blue-400/50 shadow-blue-500/30" : ""
                       } ${
                         isLost ? "z-40" : ""
@@ -528,15 +587,15 @@ const HeroSection: React.FC = () => {
                       style={{
                         boxShadow: isLost
                           ? `0 16px 40px -4px ${source.glowColor}, 0 0 0 1px rgba(255,255,255,0.3)`
-                          : `0 8px 24px -6px ${source.glowColor}`,
+                          : `0 6px 20px -5px ${source.glowColor}`,
                       }}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="p-2 bg-white/20 backdrop-blur-md rounded-xl shrink-0">
+                        <div className="p-2 bg-white/20 backdrop-blur-md rounded-lg shrink-0">
                           <Icon className="w-4 h-4 text-white" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-xs font-bold truncate max-w-[170px]">
+                          <p className="text-xs font-bold truncate max-w-[190px]">
                             {source.name}
                           </p>
                           <p className="text-[10px] text-white/80 font-mono">
@@ -563,12 +622,12 @@ const HeroSection: React.FC = () => {
               </div>
 
               {/* Right Column: Active Synthesizer Dropzone / Result Display */}
-              <div className="lg:col-span-7 h-80 flex items-center justify-center">
+              <div className="lg:col-span-7 h-[420px] md:h-[440px] flex items-center justify-center">
                 <div
                   ref={dropzoneRef}
                   className={`relative w-full h-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-5 transition-all duration-300 overflow-hidden ${
                     isHoveringDropzone
-                      ? "border-[#007AFF] bg-blue-50 scale-[1.03] shadow-[0_0_40px_rgba(0,122,255,0.15)]"
+                      ? "border-[#007AFF] bg-blue-50 scale-[1.02] shadow-[0_0_40px_rgba(0,122,255,0.15)]"
                       : isDragging
                       ? "border-blue-400/60 bg-blue-50/40 scale-[1.01]"
                       : processingState === "idle"
@@ -603,7 +662,7 @@ const HeroSection: React.FC = () => {
                             : { scale: 1 }
                           }
                           transition={{ duration: 0.8, repeat: isHoveringDropzone || isDragging ? Infinity : 0, ease: "easeInOut" }}
-                          className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-md transition-colors duration-300 ${
+                          className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-md transition-colors duration-300 ${
                             isHoveringDropzone
                               ? "bg-[#007AFF] border-2 border-[#007AFF] text-white"
                               : isDragging
@@ -612,14 +671,14 @@ const HeroSection: React.FC = () => {
                           }`}
                         >
                           {isHoveringDropzone ? (
-                            <Plus className="w-7 h-7 text-white" />
+                            <Plus className="w-8 h-8 text-white" />
                           ) : isDragging ? (
-                            <Cpu className="w-7 h-7 animate-spin" />
+                            <Cpu className="w-8 h-8 animate-spin" />
                           ) : (
-                            <Brain className="w-7 h-7" />
+                            <Brain className="w-8 h-8" />
                           )}
                         </motion.div>
-                        <h4 className={`text-sm font-bold transition-colors duration-200 ${
+                        <h4 className={`text-base font-bold transition-colors duration-200 ${
                           isHoveringDropzone ? "text-[#007AFF]" : "text-slate-900"
                         }`}>
                           {isHoveringDropzone
@@ -633,10 +692,10 @@ const HeroSection: React.FC = () => {
                           isHoveringDropzone ? "text-[#007AFF]" : "text-slate-500"
                         }`}>
                           {isHoveringDropzone
-                            ? "Gemini will instantly extract key context from this source."
+                            ? "Gemini will instantly extract key context and generate insights from this source."
                             : isDragging
-                            ? "Move the card over this area and release."
-                            : "Drag any research card from the left (or click it) to test real-time AI OCR extraction."
+                            ? "Move the card over this area and release to process."
+                            : "Drag any research card from the left (or click it) to test real-time AI context extraction."
                           }
                         </p>
                       </motion.div>
@@ -676,24 +735,25 @@ const HeroSection: React.FC = () => {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
                         transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                        className="w-full h-full flex flex-col text-left p-4 justify-between bg-white rounded-xl border border-slate-200 shadow-xl relative overflow-hidden group/card"
+                        className="w-full h-full flex flex-col text-left p-5 justify-between bg-white rounded-xl border border-slate-200 shadow-xl relative overflow-hidden group/card"
                       >
                         {/* Glowing Header Accent */}
-                        <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE]" />
+                        <div className="absolute top-0 inset-x-0 h-[3.5px] bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE]" />
 
                         {/* Top Bar: Status + Result Tabs */}
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-100 gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] uppercase font-mono font-bold tracking-wider px-2 py-0.5 rounded bg-blue-50 text-[#007AFF] border border-blue-200">
+                            <span className="text-[10px] uppercase font-mono font-bold tracking-wider px-2 py-0.5 rounded bg-blue-50 text-[#007AFF] border border-blue-200 flex items-center gap-1">
+                              <Activity className="w-3 h-3 text-[#007AFF]" />
                               Synthesized in 1.8s
                             </span>
                           </div>
 
-                          {/* Result Tabs */}
+                          {/* 3 Result Tabs */}
                           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
                             <button
                               onClick={() => setActiveResultTab("summary")}
-                              className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all ${
                                 activeResultTab === "summary"
                                   ? "bg-white text-[#007AFF] shadow-sm"
                                   : "text-slate-500 hover:text-slate-900"
@@ -703,13 +763,23 @@ const HeroSection: React.FC = () => {
                             </button>
                             <button
                               onClick={() => setActiveResultTab("qa")}
-                              className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all ${
                                 activeResultTab === "qa"
                                   ? "bg-white text-[#007AFF] shadow-sm"
                                   : "text-slate-500 hover:text-slate-900"
                               }`}
                             >
                               Ask AI Q&A
+                            </button>
+                            <button
+                              onClick={() => setActiveResultTab("entities")}
+                              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all ${
+                                activeResultTab === "entities"
+                                  ? "bg-white text-[#007AFF] shadow-sm"
+                                  : "text-slate-500 hover:text-slate-900"
+                              }`}
+                            >
+                              Entities
                             </button>
                           </div>
                         </div>
@@ -721,14 +791,14 @@ const HeroSection: React.FC = () => {
 
                         {/* TAB 1: Summary Bullets */}
                         {activeResultTab === "summary" && (
-                          <ul className="space-y-1.5 my-2 flex-1 overflow-y-auto pr-1">
+                          <ul className="space-y-2 my-2 flex-1 overflow-y-auto pr-1">
                             {activeItem.summary.bullets.map((bullet, idx) => (
                               <motion.li
                                 key={idx}
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ duration: 0.25, delay: idx * 0.08 }}
-                                className="text-xs text-slate-700 flex items-start gap-2 leading-relaxed"
+                                className="text-xs text-slate-700 flex items-start gap-2.5 leading-relaxed"
                               >
                                 <span className="w-1.5 h-1.5 rounded-full bg-[#007AFF] shrink-0 mt-1.5" />
                                 <span>{bullet}</span>
@@ -743,7 +813,7 @@ const HeroSection: React.FC = () => {
                             {activeItem.summary.qa.map((qaItem, idx) => (
                               <div key={idx} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1">
                                 <p className="text-[11px] font-bold text-[#007AFF] flex items-center gap-1.5">
-                                  <MessageSquare className="w-3 h-3" />
+                                  <MessageSquare className="w-3.5 h-3.5" />
                                   {qaItem.question}
                                 </p>
                                 <p className="text-[11px] text-slate-600 leading-relaxed">
@@ -754,14 +824,37 @@ const HeroSection: React.FC = () => {
                           </div>
                         )}
 
+                        {/* TAB 3: Extracted Entities */}
+                        {activeResultTab === "entities" && (
+                          <div className="space-y-3 my-2 flex-1 overflow-y-auto pr-1">
+                            <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
+                              <Tag className="w-3.5 h-3.5 text-[#007AFF]" />
+                              Extracted Knowledge Graph Concepts:
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {activeItem.summary.entities.map((entity, idx) => (
+                                <motion.span
+                                  key={idx}
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  transition={{ duration: 0.2, delay: idx * 0.06 }}
+                                  className="text-[11px] font-bold px-3 py-1 bg-blue-50 text-[#007AFF] border border-blue-200/80 rounded-lg shadow-2xs"
+                                >
+                                  {entity}
+                                </motion.span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Bottom Metadata & Citation */}
-                        <div className="flex items-center justify-between border-t border-slate-100 pt-2.5">
-                          <p className="text-[10px] font-mono text-slate-500 truncate max-w-[240px]">
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 mt-1">
+                          <p className="text-[10px] font-mono text-slate-500 truncate max-w-[280px]">
                             🎓 {activeItem.summary.citation}
                           </p>
                           <Link
                             to="/signup"
-                            className="text-[10px] font-bold text-[#007AFF] hover:text-[#0051D5] flex items-center gap-1 hover:underline"
+                            className="text-[10px] font-bold text-[#007AFF] hover:text-[#0051D5] flex items-center gap-1 hover:underline shrink-0"
                           >
                             Save to Library
                             <ArrowRight className="w-3 h-3" />
