@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "motion/react";
 import {
   Sparkles,
   ArrowRight,
@@ -212,10 +212,29 @@ const HeroSection: React.FC = () => {
   const [progressText, setProgressText] = useState("");
   const [activeResultTab, setActiveResultTab] = useState<"summary" | "qa" | "entities">("summary");
   const dropzoneRef = useRef<HTMLDivElement | null>(null);
-  // Use a ref to track hover state reliably — React state batching can lose it in onDragEnd
   const isOverDropzoneRef = useRef(false);
-  // Track each card's dropped position — cards that miss the dropzone stay where they land
-  const [cardPositions, setCardPositions] = useState<Record<string, { x: number; y: number }>>({}); 
+  // Tracks which cards have escaped outside the dropzone (stuck outside)
+  const [lostCards, setLostCards] = useState<Record<string, boolean>>({});
+  // Blocks the spurious onClick that fires after every drag-end pointer-up
+  const dragJustEndedRef = useRef(false);
+
+  // ── Per-card motion values (hooks must be at top level, not in .map()) ──
+  // These are the actual x/y values Framer Motion's drag gesture writes to,
+  // so calling animate(mv, 0) genuinely springs the card back to its slot.
+  const mv0x = useMotionValue(0); const mv0y = useMotionValue(0);
+  const mv1x = useMotionValue(0); const mv1y = useMotionValue(0);
+  const mv2x = useMotionValue(0); const mv2y = useMotionValue(0);
+  const mv3x = useMotionValue(0); const mv3y = useMotionValue(0);
+  const mv4x = useMotionValue(0); const mv4y = useMotionValue(0);
+  const cardMVX = [mv0x, mv1x, mv2x, mv3x, mv4x];
+  const cardMVY = [mv0y, mv1y, mv2y, mv3y, mv4y];
+
+  const springConfig = { type: "spring" as const, stiffness: 260, damping: 26 };
+
+  const snapCardHome = (idx: number) => {
+    animate(cardMVX[idx], 0, springConfig);
+    animate(cardMVY[idx], 0, springConfig);
+  };
 
   // Mouse Spotlight Effect for Hero Background
   const mouseX = useMotionValue(0);
@@ -252,18 +271,18 @@ const HeroSection: React.FC = () => {
     }
   };
 
-  // Trigger processing pipeline for a selected source (works via click OR drop inside dropzone)
-  const triggerProcessing = (item: SourceItem) => {
+  // Trigger processing pipeline — springs the card back to its slot, then synthesizes
+  const triggerProcessing = (item: SourceItem, idx: number) => {
     if (processingState === "processing") return;
+    // Snap card back to original left-column slot
+    snapCardHome(idx);
+    setLostCards((prev) => ({ ...prev, [item.id]: false }));
     setActiveItem(item);
     setActiveResultTab("summary");
     setProcessingState("processing");
     setIsHoveringDropzone(false);
     setIsDragging(false);
     isOverDropzoneRef.current = false;
-
-    // Reset this card's position so it spring-animates smoothly back to its left-column slot
-    setCardPositions((prev) => ({ ...prev, [item.id]: { x: 0, y: 0 } }));
 
     const stages = [
       { text: "Reading raw byte stream & metadata...", delay: 0 },
@@ -283,59 +302,49 @@ const HeroSection: React.FC = () => {
     }, 1800);
   };
 
-  // Real-time drag pointer tracking — uses raw event.clientX (viewport coords) to match getBoundingClientRect
+  // Real-time drag tracking — raw event.clientX is always viewport coords
   const handleDrag = (event: any, _info: any) => {
     if (!dropzoneRef.current) return;
-    const dropzoneRect = dropzoneRef.current.getBoundingClientRect();
-    const pointerX = event.clientX;
-    const pointerY = event.clientY;
-
+    const rect = dropzoneRef.current.getBoundingClientRect();
     const margin = 40;
     const isOver =
-      pointerX >= dropzoneRect.left - margin &&
-      pointerX <= dropzoneRect.right + margin &&
-      pointerY >= dropzoneRect.top - margin &&
-      pointerY <= dropzoneRect.bottom + margin;
-
+      event.clientX >= rect.left - margin &&
+      event.clientX <= rect.right + margin &&
+      event.clientY >= rect.top - margin &&
+      event.clientY <= rect.bottom + margin;
     isOverDropzoneRef.current = isOver;
     setIsHoveringDropzone(isOver);
   };
 
-  // Drag End — if dropped on dropzone → item animates back to original slot & proceeds to synthesize.
-  // If dropped OUTSIDE dropzone → item stays stuck on that spot and does NOT synthesize!
-  const handleDragEnd = (_event: any, info: any, item: SourceItem) => {
+  // Drag End:
+  //   • Dropped INSIDE dropzone  → spring card back to slot, then synthesize
+  //   • Dropped OUTSIDE dropzone → card stays stuck wherever it landed, no synthesis
+  //   • Short drag (< 6px)       → treated as a click, handled by onClick
+  const handleDragEnd = (_event: any, info: any, item: SourceItem, idx: number) => {
     const dragDistance = Math.hypot(info?.offset?.x || 0, info?.offset?.y || 0);
     const wasOverDropzone = isOverDropzoneRef.current;
+
+    // Mark that a drag just finished so onClick is ignored for this pointer-up cycle
+    dragJustEndedRef.current = true;
+    setTimeout(() => { dragJustEndedRef.current = false; }, 50);
 
     setIsDragging(false);
     setIsHoveringDropzone(false);
     isOverDropzoneRef.current = false;
 
-    // Short drag = click/tap → trigger synthesis and snap card home
+    // Short drag = accidental move, not a real drag — let onClick handle it
     if (dragDistance < 6) {
-      triggerProcessing(item);
+      snapCardHome(idx);
       return;
     }
 
-    // Real drag — dropped INSIDE dropzone → trigger synthesis (triggerProcessing animates card back home)
     if (wasOverDropzone) {
-      triggerProcessing(item);
+      // Dropped INSIDE → spring back to slot and synthesize
+      triggerProcessing(item, idx);
     } else {
-      // Dropped OUTSIDE dropzone → save offset, card STAYS STUCK on that spot, no synthesis!
-      const offsetX = info?.offset?.x || 0;
-      const offsetY = info?.offset?.y || 0;
-      const prevPos = cardPositions[item.id] || { x: 0, y: 0 };
-      setCardPositions((prev) => ({
-        ...prev,
-        [item.id]: { x: prevPos.x + offsetX, y: prevPos.y + offsetY },
-      }));
+      // Dropped OUTSIDE → stays stuck, motion values already at dropped position
+      setLostCards((prev) => ({ ...prev, [item.id]: true }));
     }
-  };
-
-  // Click a "lost" card to snap it home and trigger synthesis
-  const handleCardClick = (item: SourceItem) => {
-    if (processingState === "processing") return;
-    triggerProcessing(item);
   };
 
   const resetPlayground = () => {
@@ -345,8 +354,9 @@ const HeroSection: React.FC = () => {
     setIsHoveringDropzone(false);
     setIsDragging(false);
     isOverDropzoneRef.current = false;
-    // Snap all escaped cards back home
-    setCardPositions({});
+    setLostCards({});
+    // Spring all escaped cards back to their list slots
+    PLAYGROUND_SOURCES.forEach((_, idx) => snapCardHome(idx));
   };
 
   return (
@@ -537,12 +547,11 @@ const HeroSection: React.FC = () => {
                   </p>
                 </div>
 
-                {PLAYGROUND_SOURCES.map((source) => {
+                {PLAYGROUND_SOURCES.map((source, idx) => {
                   const Icon = source.icon;
                   const isSelected = activeItem?.id === source.id;
                   const isProcessingThis = isSelected && processingState === "processing";
-                  const pos = cardPositions[source.id] || { x: 0, y: 0 };
-                  const isLost = pos.x !== 0 || pos.y !== 0;
+                  const isLost = !!lostCards[source.id];
 
                   return (
                     <motion.div
@@ -550,24 +559,32 @@ const HeroSection: React.FC = () => {
                       drag={processingState !== "processing"}
                       dragMomentum={false}
                       dragElastic={0}
+                      // style x/y are the motion values that Framer Motion's drag writes to.
+                      // animate() on these same values springs the card back to its slot.
+                      style={{
+                        x: cardMVX[idx],
+                        y: cardMVY[idx],
+                        boxShadow: isLost
+                          ? `0 16px 40px -4px ${source.glowColor}, 0 0 0 1px rgba(255,255,255,0.3)`
+                          : `0 6px 20px -5px ${source.glowColor}`,
+                      }}
                       onDrag={handleDrag}
                       onDragStart={() => {
                         setIsDragging(true);
                         setActiveItem(source);
                       }}
-                      onDragEnd={(e, info) => handleDragEnd(e, info, source)}
-                      onClick={() => (isLost ? handleCardClick(source) : triggerProcessing(source))}
+                      onDragEnd={(e, info) => handleDragEnd(e, info, source, idx)}
+                      onClick={() => {
+                        // Block the spurious onClick that always fires after pointer-up from a drag
+                        if (dragJustEndedRef.current) return;
+                        if (processingState === "processing") return;
+                        triggerProcessing(source, idx);
+                      }}
                       animate={{
-                        x: pos.x,
-                        y: pos.y,
-                        rotate: isLost ? (pos.x > 0 ? 3 : -3) : 0,
-                        opacity: isLost ? 0.85 : 1,
+                        rotate: isLost ? -2 : 0,
+                        opacity: isLost ? 0.82 : 1,
                       }}
-                      transition={{
-                        type: "spring",
-                        stiffness: 220,
-                        damping: 24,
-                      }}
+                      transition={{ type: "spring", stiffness: 220, damping: 24 }}
                       whileDrag={{
                         scale: 1.1,
                         zIndex: 50,
@@ -575,20 +592,15 @@ const HeroSection: React.FC = () => {
                         cursor: "grabbing",
                         boxShadow: `0 20px 50px -8px ${source.glowColor}, 0 0 0 2px rgba(255,255,255,0.4)`,
                       }}
-                      whileHover={{ scale: 1.02, y: isLost ? pos.y - 2 : -2 }}
+                      whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       className={`relative flex items-center justify-between px-3.5 py-3 bg-gradient-to-r ${
                         source.gradient
-                      } text-white rounded-xl shadow-md select-none cursor-grab active:cursor-grabbing transition-shadow border border-white/20 ${
-                        isSelected ? "ring-4 ring-blue-400/50 shadow-blue-500/30" : ""
+                      } text-white rounded-xl shadow-md select-none cursor-grab active:cursor-grabbing border border-white/20 ${
+                        isSelected ? "ring-4 ring-blue-400/50" : ""
                       } ${
                         isLost ? "z-40" : ""
                       }`}
-                      style={{
-                        boxShadow: isLost
-                          ? `0 16px 40px -4px ${source.glowColor}, 0 0 0 1px rgba(255,255,255,0.3)`
-                          : `0 6px 20px -5px ${source.glowColor}`,
-                      }}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="p-2 bg-white/20 backdrop-blur-md rounded-lg shrink-0">
