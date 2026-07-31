@@ -215,8 +215,6 @@ const HeroSection: React.FC = () => {
   const isOverDropzoneRef = useRef(false);
   // Tracks which cards have escaped outside the dropzone (stuck outside)
   const [lostCards, setLostCards] = useState<Record<string, boolean>>({});
-  // Blocks the spurious onClick that fires after every drag-end pointer-up
-  const dragJustEndedRef = useRef(false);
 
   // ── Per-card motion values (hooks must be at top level, not in .map()) ──
   // These are the actual x/y values Framer Motion's drag gesture writes to,
@@ -319,24 +317,17 @@ const HeroSection: React.FC = () => {
   // Drag End:
   //   • Dropped INSIDE dropzone  → spring card back to slot, then synthesize
   //   • Dropped OUTSIDE dropzone → card stays stuck wherever it landed, no synthesis
-  //   • Short drag (< 6px)       → treated as a click, handled by onClick
-  const handleDragEnd = (_event: any, info: any, item: SourceItem, idx: number) => {
-    const dragDistance = Math.hypot(info?.offset?.x || 0, info?.offset?.y || 0);
+  //
+  // NOTE: We do NOT call triggerProcessing here for taps/clicks.
+  // Framer Motion's onTap (on the card) handles that case — it is gesture-aware
+  // and is automatically suppressed when a real drag occurs, so there is no
+  // spurious synthesis from clicking after a drag.
+  const handleDragEnd = (_event: any, _info: any, item: SourceItem, idx: number) => {
     const wasOverDropzone = isOverDropzoneRef.current;
-
-    // Mark that a drag just finished so onClick is ignored for this pointer-up cycle
-    dragJustEndedRef.current = true;
-    setTimeout(() => { dragJustEndedRef.current = false; }, 50);
 
     setIsDragging(false);
     setIsHoveringDropzone(false);
     isOverDropzoneRef.current = false;
-
-    // Short drag = accidental move, not a real drag — let onClick handle it
-    if (dragDistance < 6) {
-      snapCardHome(idx);
-      return;
-    }
 
     if (wasOverDropzone) {
       // Dropped INSIDE → spring back to slot and synthesize
@@ -574,9 +565,10 @@ const HeroSection: React.FC = () => {
                         setActiveItem(source);
                       }}
                       onDragEnd={(e, info) => handleDragEnd(e, info, source, idx)}
-                      onClick={() => {
-                        // Block the spurious onClick that always fires after pointer-up from a drag
-                        if (dragJustEndedRef.current) return;
+                      // onTap is Framer Motion's gesture-aware tap handler.
+                      // Unlike onClick, it is automatically suppressed after a real drag,
+                      // so it will NEVER fire when the user finishes a drag gesture.
+                      onTap={() => {
                         if (processingState === "processing") return;
                         triggerProcessing(source, idx);
                       }}
