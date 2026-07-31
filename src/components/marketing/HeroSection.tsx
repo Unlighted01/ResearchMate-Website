@@ -212,7 +212,6 @@ const HeroSection: React.FC = () => {
   const [progressText, setProgressText] = useState("");
   const [activeResultTab, setActiveResultTab] = useState<"summary" | "qa" | "entities">("summary");
   const dropzoneRef = useRef<HTMLDivElement | null>(null);
-  const isOverDropzoneRef = useRef(false);
   // Tracks which cards have escaped outside the dropzone (stuck outside)
   const [lostCards, setLostCards] = useState<Record<string, boolean>>({});
 
@@ -280,7 +279,6 @@ const HeroSection: React.FC = () => {
     setProcessingState("processing");
     setIsHoveringDropzone(false);
     setIsDragging(false);
-    isOverDropzoneRef.current = false;
 
     const stages = [
       { text: "Reading raw byte stream & metadata...", delay: 0 },
@@ -300,7 +298,8 @@ const HeroSection: React.FC = () => {
     }, 1800);
   };
 
-  // Real-time drag tracking — raw event.clientX is always viewport coords
+  // Real-time drag tracking — used ONLY for visual hover feedback on the dropzone.
+  // The actual drop decision is made in handleDragEnd using info.point.
   const handleDrag = (event: any, _info: any) => {
     if (!dropzoneRef.current) return;
     const rect = dropzoneRef.current.getBoundingClientRect();
@@ -310,30 +309,38 @@ const HeroSection: React.FC = () => {
       event.clientX <= rect.right + margin &&
       event.clientY >= rect.top - margin &&
       event.clientY <= rect.bottom + margin;
-    isOverDropzoneRef.current = isOver;
     setIsHoveringDropzone(isOver);
   };
 
-  // Drag End:
-  //   • Dropped INSIDE dropzone  → spring card back to slot, then synthesize
-  //   • Dropped OUTSIDE dropzone → card stays stuck wherever it landed, no synthesis
+  // Drag End: check final pointer position directly from info.point.
+  // This avoids ALL async timing races — info.point is Framer Motion's
+  // guaranteed final coordinate at the exact moment the pointer was released.
   //
-  // NOTE: We do NOT call triggerProcessing here for taps/clicks.
-  // Framer Motion's onTap (on the card) handles that case — it is gesture-aware
-  // and is automatically suppressed when a real drag occurs, so there is no
-  // spurious synthesis from clicking after a drag.
-  const handleDragEnd = (_event: any, _info: any, item: SourceItem, idx: number) => {
-    const wasOverDropzone = isOverDropzoneRef.current;
-
+  // onTap (not onDragEnd) handles clicks/taps — it is suppressed for real drags.
+  const handleDragEnd = (_event: any, info: any, item: SourceItem, idx: number) => {
     setIsDragging(false);
     setIsHoveringDropzone(false);
-    isOverDropzoneRef.current = false;
 
-    if (wasOverDropzone) {
-      // Dropped INSIDE → spring back to slot and synthesize
+    if (!dropzoneRef.current) {
+      // No dropzone in DOM — treat as outside
+      setLostCards((prev) => ({ ...prev, [item.id]: true }));
+      return;
+    }
+
+    const rect = dropzoneRef.current.getBoundingClientRect();
+    // info.point uses clientX/clientY (viewport coords), same as getBoundingClientRect()
+    const px = info.point.x;
+    const py = info.point.y;
+    const isOverDropzone =
+      px >= rect.left &&
+      px <= rect.right &&
+      py >= rect.top &&
+      py <= rect.bottom;
+
+    if (isOverDropzone) {
       triggerProcessing(item, idx);
     } else {
-      // Dropped OUTSIDE → stays stuck, motion values already at dropped position
+      // Card stays stuck at wherever the motion values currently are
       setLostCards((prev) => ({ ...prev, [item.id]: true }));
     }
   };
@@ -344,7 +351,6 @@ const HeroSection: React.FC = () => {
     setProgressText("");
     setIsHoveringDropzone(false);
     setIsDragging(false);
-    isOverDropzoneRef.current = false;
     setLostCards({});
     // Spring all escaped cards back to their list slots
     PLAYGROUND_SOURCES.forEach((_, idx) => snapCardHome(idx));
