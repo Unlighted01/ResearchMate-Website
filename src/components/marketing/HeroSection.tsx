@@ -212,6 +212,9 @@ const HeroSection: React.FC = () => {
   const [progressText, setProgressText] = useState("");
   const [activeResultTab, setActiveResultTab] = useState<"summary" | "qa" | "entities">("summary");
   const dropzoneRef = useRef<HTMLDivElement | null>(null);
+  // DOM refs for each card — getBoundingClientRect() on these gives the card's actual
+  // rendered position after drag transform, which is the most reliable drop check.
+  const cardRefs = useRef<Array<HTMLDivElement | null>>([null, null, null, null, null]);
   // Tracks which cards have escaped outside the dropzone (stuck outside)
   const [lostCards, setLostCards] = useState<Record<string, boolean>>({});
 
@@ -312,35 +315,38 @@ const HeroSection: React.FC = () => {
     setIsHoveringDropzone(isOver);
   };
 
-  // Drag End: check final pointer position directly from info.point.
-  // This avoids ALL async timing races — info.point is Framer Motion's
-  // guaranteed final coordinate at the exact moment the pointer was released.
-  //
-  // onTap (not onDragEnd) handles clicks/taps — it is suppressed for real drags.
-  const handleDragEnd = (_event: any, info: any, item: SourceItem, idx: number) => {
+  // Drag End: compare the card's actual rendered bounding box against the dropzone.
+  // Using getBoundingClientRect() on the card element is the most reliable method —
+  // it always returns viewport-relative coordinates including the drag transform,
+  // with no coordinate-system mismatches or async timing races.
+  const handleDragEnd = (_event: any, _info: any, item: SourceItem, idx: number) => {
     setIsDragging(false);
     setIsHoveringDropzone(false);
 
-    if (!dropzoneRef.current) {
-      // No dropzone in DOM — treat as outside
+    const cardEl = cardRefs.current[idx];
+    const dzEl = dropzoneRef.current;
+
+    if (!cardEl || !dzEl) {
       setLostCards((prev) => ({ ...prev, [item.id]: true }));
       return;
     }
 
-    const rect = dropzoneRef.current.getBoundingClientRect();
-    // info.point uses clientX/clientY (viewport coords), same as getBoundingClientRect()
-    const px = info.point.x;
-    const py = info.point.y;
-    const isOverDropzone =
-      px >= rect.left &&
-      px <= rect.right &&
-      py >= rect.top &&
-      py <= rect.bottom;
+    const cRect = cardEl.getBoundingClientRect();
+    const dRect = dzEl.getBoundingClientRect();
 
-    if (isOverDropzone) {
+    // Check if the card's CENTER lands inside the dropzone
+    const cardCX = cRect.left + cRect.width / 2;
+    const cardCY = cRect.top + cRect.height / 2;
+    const isOver =
+      cardCX >= dRect.left &&
+      cardCX <= dRect.right &&
+      cardCY >= dRect.top &&
+      cardCY <= dRect.bottom;
+
+    if (isOver) {
       triggerProcessing(item, idx);
     } else {
-      // Card stays stuck at wherever the motion values currently are
+      // Card stays stuck — motion values are already at the dropped position
       setLostCards((prev) => ({ ...prev, [item.id]: true }));
     }
   };
@@ -553,14 +559,19 @@ const HeroSection: React.FC = () => {
                   return (
                     <motion.div
                       key={source.id}
+                      // Collect the card's DOM element so handleDragEnd can read
+                      // its actual rendered position via getBoundingClientRect()
+                      ref={(el) => { cardRefs.current[idx] = el as HTMLDivElement; }}
                       drag={processingState !== "processing"}
                       dragMomentum={false}
                       dragElastic={0}
-                      // style x/y are the motion values that Framer Motion's drag writes to.
-                      // animate() on these same values springs the card back to its slot.
                       style={{
                         x: cardMVX[idx],
                         y: cardMVY[idx],
+                        // Keep visual state in style (not animate) so Framer Motion's
+                        // animation engine never touches x/y when these values change
+                        opacity: isLost ? 0.82 : 1,
+                        rotate: isLost ? -2 : 0,
                         boxShadow: isLost
                           ? `0 16px 40px -4px ${source.glowColor}, 0 0 0 1px rgba(255,255,255,0.3)`
                           : `0 6px 20px -5px ${source.glowColor}`,
@@ -578,11 +589,6 @@ const HeroSection: React.FC = () => {
                         if (processingState === "processing") return;
                         triggerProcessing(source, idx);
                       }}
-                      animate={{
-                        rotate: isLost ? -2 : 0,
-                        opacity: isLost ? 0.82 : 1,
-                      }}
-                      transition={{ type: "spring", stiffness: 220, damping: 24 }}
                       whileDrag={{
                         scale: 1.1,
                         zIndex: 50,
