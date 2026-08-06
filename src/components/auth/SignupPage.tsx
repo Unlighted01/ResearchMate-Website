@@ -446,7 +446,7 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
             <div className="flex justify-center">
               <HCaptcha
                 ref={hcaptchaRef}
-                sitekey="31085048-2d38-461e-8b5e-d9a656ec518a"
+                sitekey="929422de-6362-416c-bdd4-6498f74ce3a0"
                 onVerify={(token) => setCaptchaToken(token)}
                 onExpire={() => setCaptchaToken(null)}
                 onError={() => setCaptchaToken(null)}
