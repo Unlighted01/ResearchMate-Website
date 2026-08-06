@@ -26,7 +26,7 @@ const CTASection: React.FC = () => {
         </h2>
 
         <p className="text-lg sm:text-xl text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed font-medium">
-          Join thousands of students, academics, and researchers who have upgraded their knowledge workflow with ResearchMate.
+          Join early students, academics, and researchers who are upgrading their knowledge workflow with ResearchMate.
         </p>
 
         {/* High-Visibility Light-Theme CTA Buttons */}

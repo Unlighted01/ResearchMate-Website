@@ -68,24 +68,24 @@ const ProductsPage = () => {
     },
     {
       id: "smartpen",
-      name: "Smart Pen",
+      name: "Handwriting OCR & Vision",
       tagline: "Handwriting meets digital",
       description:
-        "Bridge the gap between paper and digital. Your handwritten notes are automatically digitized, transcribed, and synced to your library.",
+        "Bridge the gap between paper and digital. Your handwritten notes and physical textbook pages are automatically digitized, transcribed, and synced to your library.",
       icon: PenTool,
       color: "#FF9500",
       gradient: "from-[#FF9500] to-[#FF6B00]",
-      status: "Beta",
+      status: "Available",
       features: [
-        "Real-time sync while writing",
+        "Camera scan capture",
         "OCR text recognition",
-        "Sketch and diagram support",
-        "Multiple pen compatibility",
+        "Sketch and diagram indexing",
+        "Mobile pair code sync",
         "Cloud backup",
         "Search handwritten notes",
       ],
-      cta: "Join Beta",
-      ctaLink: "#",
+      cta: "Scan Notes",
+      ctaLink: "/mobile-sync",
     },
     {
       id: "web",
@@ -150,12 +150,12 @@ const ProductsPage = () => {
             Your research flows with you.
           </p>
 
-          {/* Quick Stats */}
+          {/* Quick Stats / Highlights */}
           <div className="flex flex-wrap justify-center gap-8 text-center">
             {[
-              { value: "4", label: "Products" },
-              { value: "10K+", label: "Users" },
-              { value: "99.9%", label: "Uptime" },
+              { value: "4", label: "Core Products" },
+              { value: "Beta", label: "Early Access" },
+              { value: "24/7", label: "Cloud Workspace" },
             ].map((stat, idx) => (
               <div
                 key={idx}

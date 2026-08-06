@@ -107,9 +107,9 @@ const DEVICES: DeviceItem[] = [
   },
   {
     icon: PenTool,
-    name: "Smart Pen OCR",
+    name: "OCR Camera Scanner",
     desc: "Digitize handwritten notes into structured text",
-    status: "Beta",
+    status: "Available",
   },
 ];
 

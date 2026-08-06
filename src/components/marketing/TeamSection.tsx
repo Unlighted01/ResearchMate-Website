@@ -245,8 +245,7 @@ const TeamSection: React.FC = () => {
                 </p>
                 <p>
                   Today, ResearchMate is that dream realized. Our ecosystem
-                  includes a browser extension, web platform, mobile app, and
-                  even smart pen integration — all synced in real-time.
+                  includes a browser extension, web platform, and mobile camera OCR scanner — all synced in real-time.
                 </p>
               </div>
 

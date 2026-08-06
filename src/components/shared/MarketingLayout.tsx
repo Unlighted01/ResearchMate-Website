@@ -113,12 +113,12 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
               <button
                 onClick={() =>
                   document
-                    .getElementById("team")
+                    .getElementById("how-it-works")
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
                 className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors"
               >
-                Team
+                How It Works
               </button>
             </div>
 
@@ -183,12 +183,12 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
                 onClick={() => {
                   setIsMobileMenuOpen(false);
                   document
-                    .getElementById("team")
+                    .getElementById("how-it-works")
                     ?.scrollIntoView({ behavior: "smooth" });
                 }}
                 className="block py-3 text-base font-medium text-gray-900 w-full text-left"
               >
-                Team
+                How It Works
               </button>
               <div className="pt-4 flex gap-3">
                 <Link to="/login" className="flex-1">

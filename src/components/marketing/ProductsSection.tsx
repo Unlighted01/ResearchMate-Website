@@ -89,24 +89,24 @@ const PRODUCTS: Product[] = [
   },
   {
     id: "smartpen",
-    name: "Smart Pen Integration",
+    name: "Handwriting OCR & Vision",
     tagline: "Handwriting meets digital",
     description:
-      "Bridge the gap between physical paper and digital notes. Your handwritten notes are transcribed and synthesized into your library.",
+      "Bridge the gap between physical paper and digital notes. Your handwritten notes and physical textbooks are transcribed and synthesized into your library.",
     icon: PenTool,
     color: "#FF9500",
     gradient: "from-[#FF9500] to-[#FF6B00]",
-    status: "Beta",
+    status: "Available",
     features: [
-      "Real-time sync while writing",
+      "Camera scan upload",
       "OCR text recognition",
-      "Sketch & diagram indexing",
-      "Multiple smart pens supported",
+      "Diagram & math indexing",
+      "Mobile pair code sync",
       "Cloud backup",
       "Search handwritten notes",
     ],
-    cta: "Join Beta",
-    ctaLink: "#",
+    cta: "Scan Notes",
+    ctaLink: "/mobile-sync",
   },
   {
     id: "web",
@@ -183,8 +183,8 @@ const ProductsSection: React.FC = () => {
         <div className="flex flex-wrap justify-center gap-6 text-center">
           {[
             { value: "4", label: "Core Products" },
-            { value: "10K+", label: "Active Researchers" },
-            { value: "99.9%", label: "Cloud Uptime" },
+            { value: "Beta", label: "Public Testing" },
+            { value: "24/7", label: "Real-time Sync" },
           ].map((stat, idx) => (
             <div
               key={idx}

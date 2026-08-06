@@ -81,7 +81,7 @@ const PLAYGROUND_SOURCES: SourceItem[] = [
     id: "audio-1",
     type: "audio",
     name: "neuroscience_lecture_12.mp3",
-    size: "Smart Pen Voice • 18.5 MB",
+    size: "Audio Recording • 18.5 MB",
     icon: Mic,
     color: "from-[#007AFF] to-[#5856D6]",
     glowColor: "rgba(0, 122, 255, 0.25)",
@@ -153,7 +153,7 @@ const PLAYGROUND_SOURCES: SourceItem[] = [
         "Extracts spatial formulas into TeX formatted LaTeX mathematical expressions.",
         "Auto-links parsed variables directly to central notes library.",
       ],
-      citation: "Smart Pen Camera Capture (Lab Notebook Vol. 4)",
+      citation: "Mobile Camera OCR Capture (Lab Notebook Vol. 4)",
       qa: [
         {
           question: "How accurate is the LaTeX formula recognition?",
@@ -164,7 +164,7 @@ const PLAYGROUND_SOURCES: SourceItem[] = [
           answer: "Yes, equations save directly into Document Editor with raw LaTeX and rendered preview.",
         },
       ],
-      entities: ["LaTeX Math OCR", "Optical Interference", "Smart Pen Sync", "Digital Lab Notebook"],
+      entities: ["LaTeX Math OCR", "Optical Interference", "Camera OCR Sync", "Digital Lab Notebook"],
     },
   },
   {

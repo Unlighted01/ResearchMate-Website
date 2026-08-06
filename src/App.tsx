@@ -407,7 +407,7 @@ export default function App() {
                 path="/products"
                 element={<Navigate to="/#products" replace />}
               />
-              <Route path="/team" element={<Navigate to="/#team" replace />} />
+              <Route path="/team" element={<Navigate to="/#how-it-works" replace />} />
               <Route path="/support" element={<SupportPage />} />
 
               <Route

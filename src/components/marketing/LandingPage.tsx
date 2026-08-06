@@ -69,8 +69,8 @@ const LandingPage = () => {
     },
     {
       icon: PenTool,
-      title: "Smart Pen Ready",
-      desc: "Digitize handwritten notes with OCR-powered smart pen support.",
+      title: "Mobile OCR Scanner",
+      desc: "Digitize handwritten notes and physical textbooks with camera OCR.",
       color: "#FF9500",
     },
     {
@@ -96,7 +96,7 @@ const LandingPage = () => {
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/60 backdrop-blur-md rounded-full border border-white/50 shadow-lg mb-8 animate-fade-in-up">
             <Sparkles className="w-4 h-4 text-[#007AFF]" />
             <span className="text-sm font-medium text-gray-700">
-              Now with Smart Pen Integration
+              AI-Powered Research Workspace
             </span>
           </div>
 
@@ -237,9 +237,9 @@ const LandingPage = () => {
                   },
                   {
                     icon: PenTool,
-                    name: "Smart Pen",
-                    desc: "Digitize handwritten notes instantly",
-                    status: "Beta",
+                    name: "Mobile Camera OCR",
+                    desc: "Digitize handwritten notes & textbooks instantly",
+                    status: "Available",
                   },
                 ].map((device, idx) => (
                   <div
@@ -295,8 +295,7 @@ const LandingPage = () => {
             Ready to transform your research?
           </h2>
           <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
-            Join thousands of researchers who've already upgraded their
-            workflow.
+            Join early researchers and students who are upgrading their workflow.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/signup">

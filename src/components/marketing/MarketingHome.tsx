@@ -12,7 +12,7 @@ import { supabase } from "../../services/supabaseClient";
 import HeroSection from "./HeroSection";
 import FeaturesSection from "./FeaturesSection";
 import ProductsSection from "./ProductsSection";
-import TeamSection from "./TeamSection";
+import HowItWorksSection from "./HowItWorksSection";
 import CTASection from "./CTASection";
 
 // ============================================
@@ -49,7 +49,7 @@ const MarketingHome: React.FC = () => {
         <FeaturesSection />
       </section>
       <ProductsSection />
-      <TeamSection />
+      <HowItWorksSection />
       <CTASection />
     </div>
   );
