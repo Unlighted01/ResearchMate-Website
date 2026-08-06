@@ -123,8 +123,8 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
       return;
     }
 
-    // ── Security layer 3: Disposable email blocklist (client-side, instant) ───
-    if (isDisposableEmail(email)) {
+    // ── Security layer 3: Disposable email blocklist & live API check ────────
+    if (await isDisposableEmail(email)) {
       showToast(
         "Temporary or disposable email addresses are not accepted. Please use a permanent email.",
         "error"

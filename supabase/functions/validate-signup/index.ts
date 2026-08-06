@@ -5,11 +5,9 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// Restrict CORS to your production origin.
-// The ALLOWED_ORIGIN secret can override this for staging environments.
 const getAllowedOrigin = () =>
   Deno.env.get("ALLOWED_ORIGIN") ||
-  "https://researchmate.vercel.app";
+  "*";
 
 const makeCorsHeaders = () => ({
   "Access-Control-Allow-Origin": getAllowedOrigin(),
@@ -17,12 +15,11 @@ const makeCorsHeaders = () => ({
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Edge-side disposable domain blocklist (supplementary to the frontend list).
-// The frontend blocklist catches Tier 1 providers instantly.
-// This list adds less-common ones that may not be on the client bundle.
-// ─────────────────────────────────────────────────────────────────────────────
 const EDGE_BLOCKED_DOMAINS = new Set([
+  "copawoke.com",
+  "vafab.com",
+  "baxob.com",
+  "xzsnh.com",
   "mailnull.com",
   "spamgourmet.com",
   "spamgourmet.net",
@@ -42,9 +39,6 @@ const EDGE_BLOCKED_DOMAINS = new Set([
   "tafmail.com",
 ]);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main handler
-// ─────────────────────────────────────────────────────────────────────────────
 serve(async (req) => {
   const corsHeaders = makeCorsHeaders();
 
@@ -69,7 +63,9 @@ serve(async (req) => {
       );
     }
 
-    const domain = email.split("@")[1]?.toLowerCase().trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const domain = cleanEmail.split("@")[1];
+
     if (!domain) {
       return new Response(
         JSON.stringify({ valid: false, reason: "invalid_format" }),
@@ -77,7 +73,7 @@ serve(async (req) => {
       );
     }
 
-    // ── Step 1: Edge-side blocklist (instant, no external call) ───────────────
+    // ── Step 1: Edge-side blocklist ──────────────────────────────────────────
     if (EDGE_BLOCKED_DOMAINS.has(domain)) {
       console.log(`validate-signup: blocked domain '${domain}' (edge blocklist)`);
       return new Response(
@@ -86,43 +82,58 @@ serve(async (req) => {
       );
     }
 
-    // ── Step 2: Mailcheck.ai API (optional, catches unknown providers) ─────────
-    const mailcheckKey = Deno.env.get("MAILCHECK_API_KEY") || "";
-    if (mailcheckKey) {
-      try {
-        const res = await fetch(
-          `https://api.mailcheck.ai/email/${encodeURIComponent(email)}`,
-          {
-            headers: { "x-api-key": mailcheckKey },
-            signal: AbortSignal.timeout(3000), // 3s max — don't block signup if slow
-          }
-        );
-
-        if (res.ok) {
-          const data = await res.json();
-
-          if (data.disposable === true) {
-            console.log(`validate-signup: blocked '${domain}' via Mailcheck.ai`);
-            return new Response(
-              JSON.stringify({ valid: false, reason: "disposable" }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-
-          // If deliverable check fails (no valid MX record), flag the email
-          if (data.deliverable === false) {
-            console.log(`validate-signup: undeliverable email '${domain}'`);
-            return new Response(
-              JSON.stringify({ valid: false, reason: "undeliverable" }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
+    // ── Step 2: Free Public API check (Debounce.io) ──────────────────────────
+    try {
+      const res = await fetch(
+        `https://disposable.debounce.io/?email=${encodeURIComponent(cleanEmail)}`,
+        { signal: AbortSignal.timeout(2500) }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.disposable === "true" || data?.disposable === true) {
+          console.log(`validate-signup: blocked '${cleanEmail}' via Debounce.io`);
+          return new Response(
+            JSON.stringify({ valid: false, reason: "disposable" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
-      } catch (apiErr) {
-        // API timeout or network error — fail OPEN so signup is never blocked
-        // by a third-party outage
-        console.warn("validate-signup: Mailcheck.ai unavailable, failing open:", apiErr);
       }
+    } catch (debounceErr) {
+      console.warn("validate-signup: Debounce API timeout/error:", debounceErr);
+    }
+
+    // ── Step 3: Mailcheck.ai API (fallback/secondary) ──────────────────────
+    try {
+      const mailcheckKey = Deno.env.get("MAILCHECK_API_KEY") || "";
+      const res = await fetch(
+        `https://api.mailcheck.ai/email/${encodeURIComponent(cleanEmail)}`,
+        {
+          headers: mailcheckKey ? { "x-api-key": mailcheckKey } : {},
+          signal: AbortSignal.timeout(2500),
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+
+        if (data.disposable === true) {
+          console.log(`validate-signup: blocked '${cleanEmail}' via Mailcheck.ai`);
+          return new Response(
+            JSON.stringify({ valid: false, reason: "disposable" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data.deliverable === false) {
+          console.log(`validate-signup: undeliverable email '${cleanEmail}'`);
+          return new Response(
+            JSON.stringify({ valid: false, reason: "undeliverable" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    } catch (mcErr) {
+      console.warn("validate-signup: Mailcheck API timeout/error:", mcErr);
     }
 
     // ── All checks passed ──────────────────────────────────────────────────────
@@ -132,7 +143,6 @@ serve(async (req) => {
     );
 
   } catch (e) {
-    // Fail open — a server error should never block a real user from signing up
     console.error("validate-signup: unhandled error:", e);
     return new Response(
       JSON.stringify({ valid: true }),

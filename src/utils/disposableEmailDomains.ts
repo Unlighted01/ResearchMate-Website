@@ -1,11 +1,23 @@
 /**
- * Disposable / temporary email domain blocklist.
- * Sources: disposable-email-domains (MIT), manual additions.
- *
- * This catches the vast majority of throwaway inbox usage at zero latency.
- * The validate-signup Edge Function provides a second layer for less-known providers.
+ * Disposable / temporary email domain blocklist & live validator.
+ * Sources: static blocklist + free live APIs (debounce.io, mailcheck.ai).
  */
 export const DISPOSABLE_DOMAINS = new Set([
+  // ── Temp-Mail.org / TempMail active domains ────────────────────────────────
+  "copawoke.com",
+  "vafab.com",
+  "baxob.com",
+  "xzsnh.com",
+  "vxcp.com",
+  "mohmal.com",
+  "gufum.com",
+  "tafmail.com",
+  "claycal.com",
+  "ymail.ink",
+  "dmail.ink",
+  "tmail.ws",
+  "disposable.com",
+
   // ── Tier 1 – Most common disposable providers ──────────────────────────────
   "mailinator.com",
   "guerrillamail.com",
@@ -23,7 +35,6 @@ export const DISPOSABLE_DOMAINS = new Set([
   "temp-mail.io",
   "throwam.com",
   "throwaway.email",
-  "throwam.com",
   "spamgourmet.com",
   "trashmail.com",
   "trashmail.at",
@@ -249,11 +260,56 @@ export const DISPOSABLE_DOMAINS = new Set([
 ]);
 
 /**
- * Returns true if the email's domain is a known disposable / temporary provider.
- * Case-insensitive. Returns false for unknown domains (fail open — not false negative).
+ * Fast synchronous check against known disposable domains.
  */
-export function isDisposableEmail(email: string): boolean {
+export function isDisposableEmailSync(email: string): boolean {
   if (!email || !email.includes("@")) return false;
   const domain = email.split("@")[1]?.toLowerCase().trim();
   return domain ? DISPOSABLE_DOMAINS.has(domain) : false;
+}
+
+/**
+ * Comprehensive async check: checks static list + free public APIs (debounce.io / mailcheck.ai)
+ * with a 2-second timeout so user experience stays fast.
+ */
+export async function isDisposableEmail(email: string): Promise<boolean> {
+  // 1. Instant local check
+  if (isDisposableEmailSync(email)) {
+    return true;
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  // 2. Free live API check (debounce.io & mailcheck.ai in parallel with 2s timeout)
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+
+    const debouncePromise = fetch(
+      `https://disposable.debounce.io/?email=${encodeURIComponent(cleanEmail)}`,
+      { signal: controller.signal }
+    )
+      .then((res) => res.json())
+      .then((data) => data?.disposable === "true" || data?.disposable === true)
+      .catch(() => false);
+
+    const mailcheckPromise = fetch(
+      `https://api.mailcheck.ai/email/${encodeURIComponent(cleanEmail)}`,
+      { signal: controller.signal }
+    )
+      .then((res) => res.json())
+      .then((data) => data?.disposable === true)
+      .catch(() => false);
+
+    const [isDebounceDisposable, isMailcheckDisposable] = await Promise.all([
+      debouncePromise,
+      mailcheckPromise,
+    ]);
+
+    clearTimeout(timer);
+
+    return isDebounceDisposable || isMailcheckDisposable;
+  } catch {
+    return false; // Fail open if APIs timeout
+  }
 }
