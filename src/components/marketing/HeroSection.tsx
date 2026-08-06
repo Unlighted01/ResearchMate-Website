@@ -212,9 +212,15 @@ const HeroSection: React.FC = () => {
   const [progressText, setProgressText] = useState("");
   const [activeResultTab, setActiveResultTab] = useState<"summary" | "qa" | "entities">("summary");
   const dropzoneRef = useRef<HTMLDivElement | null>(null);
-  // DOM refs for each card — getBoundingClientRect() on these gives the card's actual
-  // rendered position after drag transform, which is the most reliable drop check.
+  // DOM refs for each card element
   const cardRefs = useRef<Array<HTMLDivElement | null>>([null, null, null, null, null]);
+  // Card's bounding rect captured at onDragStart (before any movement — always accurate).
+  // Used with info.offset in onDragEnd to compute the final drop position without
+  // relying on getBoundingClientRect() at drag-end (which can be one RAF behind).
+  const dragStartRects = useRef<Array<DOMRect | null>>([null, null, null, null, null]);
+  // True while a drag gesture is active — used to guard onTap from firing
+  // on the same pointer-up event that just completed a drag.
+  const isDragGestureRef = useRef(false);
   // Tracks which cards have escaped outside the dropzone (stuck outside)
   const [lostCards, setLostCards] = useState<Record<string, boolean>>({});
 
@@ -315,33 +321,43 @@ const HeroSection: React.FC = () => {
     setIsHoveringDropzone(isOver);
   };
 
-  // Drag End: compare the card's actual rendered bounding box against the dropzone.
-  // Using getBoundingClientRect() on the card element is the most reliable method —
-  // it always returns viewport-relative coordinates including the drag transform,
-  // with no coordinate-system mismatches or async timing races.
-  const handleDragEnd = (_event: any, _info: any, item: SourceItem, idx: number) => {
+  // Drag End: compute final card-center using the rect captured at drag-START
+  // plus info.offset (Framer Motion's own pointer-delta, always reliable).
+  //
+  // Why not getBoundingClientRect() here? Framer Motion writes transforms via
+  // requestAnimationFrame, so onDragEnd (fired synchronously on pointerup) may
+  // read the DOM one frame BEFORE the final position has been painted.
+  //
+  // startRect + info.offset avoids both the RAF lag and coordinate-system
+  // mismatches (info.offset is a relative pixel delta, same space as viewport rects).
+  const handleDragEnd = (_event: any, info: any, item: SourceItem, idx: number) => {
+    // Delay clearing the drag flag so onTap (fired on same pointer-up) is blocked
+    setTimeout(() => { isDragGestureRef.current = false; }, 100);
+
     setIsDragging(false);
     setIsHoveringDropzone(false);
 
-    const cardEl = cardRefs.current[idx];
+    const startRect = dragStartRects.current[idx];
     const dzEl = dropzoneRef.current;
 
-    if (!cardEl || !dzEl) {
+    if (!startRect || !dzEl) {
       setLostCards((prev) => ({ ...prev, [item.id]: true }));
       return;
     }
 
-    const cRect = cardEl.getBoundingClientRect();
     const dRect = dzEl.getBoundingClientRect();
+    const offsetX = info?.offset?.x ?? 0;
+    const offsetY = info?.offset?.y ?? 0;
 
-    // Check if the card's CENTER lands inside the dropzone
-    const cardCX = cRect.left + cRect.width / 2;
-    const cardCY = cRect.top + cRect.height / 2;
+    // Card center at drop = (start position) + (how far pointer moved during drag)
+    const finalCX = startRect.left + startRect.width / 2 + offsetX;
+    const finalCY = startRect.top + startRect.height / 2 + offsetY;
+
     const isOver =
-      cardCX >= dRect.left &&
-      cardCX <= dRect.right &&
-      cardCY >= dRect.top &&
-      cardCY <= dRect.bottom;
+      finalCX >= dRect.left &&
+      finalCX <= dRect.right &&
+      finalCY >= dRect.top &&
+      finalCY <= dRect.bottom;
 
     if (isOver) {
       triggerProcessing(item, idx);
@@ -578,14 +594,19 @@ const HeroSection: React.FC = () => {
                       }}
                       onDrag={handleDrag}
                       onDragStart={() => {
+                        // Mark drag active and snapshot card position BEFORE it moves.
+                        // This rect is used in handleDragEnd to compute final drop position.
+                        isDragGestureRef.current = true;
+                        const el = cardRefs.current[idx];
+                        if (el) dragStartRects.current[idx] = el.getBoundingClientRect();
                         setIsDragging(true);
                         setActiveItem(source);
                       }}
                       onDragEnd={(e, info) => handleDragEnd(e, info, source, idx)}
-                      // onTap is Framer Motion's gesture-aware tap handler.
-                      // Unlike onClick, it is automatically suppressed after a real drag,
-                      // so it will NEVER fire when the user finishes a drag gesture.
                       onTap={() => {
+                        // Block onTap if a drag gesture just fired on this same pointer-up.
+                        // isDragGestureRef stays true for 100 ms after onDragEnd.
+                        if (isDragGestureRef.current) return;
                         if (processingState === "processing") return;
                         triggerProcessing(source, idx);
                       }}
