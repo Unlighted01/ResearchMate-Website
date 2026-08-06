@@ -6,6 +6,7 @@ import BubbleBackground from "../shared/BubbleBackground";
 import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
 import { isDisposableEmail } from "../../utils/disposableEmailDomains";
+import HCaptcha from "@hcaptcha/react-hcaptcha";
 import { Mail, Lock, Check, ArrowRight, ArrowLeft } from "lucide-react";
 
 // Apple-style icons for OAuth
@@ -55,6 +56,9 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const [honeypot, setHoneypot] = useState("");
   // ── Security: submission timing (bots submit instantly; real users take ≥3s) ──
   const formMountTime = useRef(Date.now());
+  // ── Security: hCaptcha token (validated server-side by Supabase) ────────────
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const hcaptchaRef = useRef<HCaptcha>(null);
 
   const { visualTheme } = useTheme();
   const isBubbleTheme = visualTheme === "bubble";
@@ -137,6 +141,13 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
 
     setLoading(true);
 
+    // ── Security layer 5: hCaptcha token (must be verified before signUp) ────
+    if (!captchaToken) {
+      showToast("Please complete the CAPTCHA verification.", "error");
+      setLoading(false);
+      return;
+    }
+
     // ── Security layer 4: Server-side email validation (Edge Function) ────────
     // Catches disposable providers not on the client-side list.
     // Fails open on error so real users are never blocked by a service outage.
@@ -168,7 +179,14 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
     const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      options: {
+        captchaToken,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
+    // Reset CAPTCHA after every attempt (success or fail)
+    hcaptchaRef.current?.resetCaptcha();
+    setCaptchaToken(null);
     if (error) {
       showToast(error.message, "error");
     } else {
@@ -424,9 +442,22 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
               </a>
             </p>
 
+            {/* hCaptcha widget — token validated server-side by Supabase */}
+            <div className="flex justify-center">
+              <HCaptcha
+                ref={hcaptchaRef}
+                sitekey="31085048-2d38-461e-8b5e-d9a656ec518a"
+                onVerify={(token) => setCaptchaToken(token)}
+                onExpire={() => setCaptchaToken(null)}
+                onError={() => setCaptchaToken(null)}
+                theme="light"
+                size="normal"
+              />
+            </div>
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !captchaToken}
               className="theme-btn theme-btn-primary w-full py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center"
             >
               {loading ? (

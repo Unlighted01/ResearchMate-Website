@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hcaptcha/react-hcaptcha": "^2.1.0",
     "@supabase/supabase-js": "^2.86.0",
     "@tiptap/extension-color": "^3.22.2",
     "@tiptap/extension-font-family": "^3.22.2",
