@@ -7,7 +7,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
 import { isDisposableEmail } from "../../utils/disposableEmailDomains";
 import HCaptcha from "@hcaptcha/react-hcaptcha";
-import { Mail, Lock, Check, ArrowRight, ArrowLeft } from "lucide-react";
+import { Mail, Lock, Check, X, Eye, EyeOff, ArrowRight, ArrowLeft } from "lucide-react";
 
 // Apple-style icons for OAuth
 const GoogleIcon = () => (
@@ -47,6 +47,9 @@ interface SignupProps {
 const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(
@@ -136,6 +139,12 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.valid) {
       showToast(passwordValidation.errors[0], "error");
+      return;
+    }
+
+    // ── Validate confirm password match ──────────────────────────────────────
+    if (password !== confirmPassword) {
+      showToast("Passwords do not match. Please check and try again.", "error");
       return;
     }
 
@@ -333,14 +342,29 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
               icon={<Mail className="w-5 h-5" />}
             />
 
-            <div>
+            <div className="space-y-4">
               <Input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 icon={<Lock className="w-5 h-5" />}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="p-1 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                    tabIndex={-1}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                }
               />
 
               {/* Password Strength */}
@@ -399,6 +423,48 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
                   </div>
                 </div>
               )}
+
+              {/* Confirm Password Field */}
+              <div>
+                <Input
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Confirm Password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  icon={<Lock className="w-5 h-5" />}
+                  rightElement={
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="p-1 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                      tabIndex={-1}
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="w-5 h-5" />
+                      ) : (
+                        <Eye className="w-5 h-5" />
+                      )}
+                    </button>
+                  }
+                />
+
+                {/* Match indicator */}
+                {confirmPassword.length > 0 && (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs">
+                    {password === confirmPassword ? (
+                      <span className="text-[#34C759] flex items-center gap-1 font-medium">
+                        <Check className="w-3.5 h-3.5" /> Passwords match
+                      </span>
+                    ) : (
+                      <span className="text-red-500 flex items-center gap-1 font-medium">
+                        <X className="w-3.5 h-3.5" /> Passwords do not match
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Remember Me */}

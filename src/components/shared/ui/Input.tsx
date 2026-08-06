@@ -16,6 +16,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   icon?: React.ReactNode;
+  rightElement?: React.ReactNode;
 }
 
 // ============================================
@@ -26,6 +27,7 @@ export const Input: React.FC<InputProps> = ({
   label,
   error,
   icon,
+  rightElement,
   className = "",
   ...props
 }) => (
@@ -53,11 +55,17 @@ export const Input: React.FC<InputProps> = ({
           transition-all duration-200
           focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 focus:bg-white dark:focus:bg-[#3A3A3C]
           ${icon ? "pl-11" : ""}
+          ${rightElement ? "pr-11" : ""}
           ${error ? "ring-2 ring-red-500/50" : ""}
           ${className}
         `}
         {...props}
       />
+      {rightElement && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 flex items-center justify-center">
+          {rightElement}
+        </div>
+      )}
     </div>
     {error && (
       <p className="mt-2 text-sm text-red-500 flex items-center gap-1">

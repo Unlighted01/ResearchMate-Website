@@ -6,7 +6,7 @@ import BubbleBackground from "../shared/BubbleBackground";
 import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
 
-import { Mail, Lock, ArrowLeft, ArrowRight } from "lucide-react";
+import { Mail, Lock, ArrowLeft, ArrowRight, Eye, EyeOff } from "lucide-react";
 
 // Apple-style icons for OAuth
 const GoogleIcon = () => (
@@ -46,6 +46,7 @@ interface LoginProps {
 const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [rememberMe, setRememberMe] = useState(true);
@@ -402,12 +403,27 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
             />
             <div>
               <Input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 icon={<Lock className="w-5 h-5" />}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="p-1 hover:text-gray-600 dark:hover:text-gray-200 transition-colors text-gray-400"
+                    tabIndex={-1}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                }
               />
               <button
                 type="button"
