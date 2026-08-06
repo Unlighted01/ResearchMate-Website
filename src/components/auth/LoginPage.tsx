@@ -55,6 +55,9 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
     null
   );
   const oauthCleanupRef = useRef<(() => void) | null>(null);
+  // ── Security: progressive login lockout ──────────────────────────────────
+  const failedAttempts = useRef(0);
+  const lockoutUntil = useRef<number | null>(null);
 
   // Cleanup OAuth listeners on unmount
   useEffect(() => {
@@ -125,6 +128,16 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // ── Security: check lockout before anything else ──────────────────────
+    if (lockoutUntil.current && Date.now() < lockoutUntil.current) {
+      const remaining = Math.ceil((lockoutUntil.current - Date.now()) / 1000);
+      showToast(
+        `Too many failed attempts. Please wait ${remaining} second${remaining !== 1 ? "s" : ""} before trying again.`,
+        "error"
+      );
+      return;
+    }
+
     // Validate email
     if (!isValidEmail(email)) {
       showToast("Please enter a valid email address", "error");
@@ -149,9 +162,23 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
       password,
     });
     if (error) {
-      showToast(error.message, "error");
+      // ── Security: increment failed attempts and apply lockout if needed ──
+      failedAttempts.current += 1;
+      const attempts = failedAttempts.current;
+      if (attempts >= 10) {
+        lockoutUntil.current = Date.now() + 5 * 60 * 1000; // 5 minutes
+        showToast("Too many failed attempts. Account temporarily locked for 5 minutes.", "error");
+      } else if (attempts >= 5) {
+        lockoutUntil.current = Date.now() + 30 * 1000; // 30 seconds
+        showToast(`Too many failed attempts. Please wait 30 seconds before trying again.`, "error");
+      } else {
+        showToast(error.message, "error");
+      }
       setLoading(false);
     } else {
+      // ── Reset lockout on successful login ─────────────────────────────────
+      failedAttempts.current = 0;
+      lockoutUntil.current = null;
       showToast("Welcome back!", "success");
       const savedRedirect = localStorage.getItem("mobile_sync_redirect");
       if (savedRedirect) {

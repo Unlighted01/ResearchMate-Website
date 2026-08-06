@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Input } from "../shared/ui";
 import BubbleBackground from "../shared/BubbleBackground";
 import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
-import { Mail, Lock, Check, X, ArrowRight, ArrowLeft } from "lucide-react";
+import { isDisposableEmail } from "../../utils/disposableEmailDomains";
+import { Mail, Lock, Check, ArrowRight, ArrowLeft } from "lucide-react";
 
 // Apple-style icons for OAuth
 const GoogleIcon = () => (
@@ -50,6 +51,11 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(
     null,
   );
+  // ── Security: honeypot (bots fill hidden fields; real users never see it) ──
+  const [honeypot, setHoneypot] = useState("");
+  // ── Security: submission timing (bots submit instantly; real users take ≥3s) ──
+  const formMountTime = useRef(Date.now());
+
   const { visualTheme } = useTheme();
   const isBubbleTheme = visualTheme === "bubble";
   const authBackgroundClass =
@@ -94,13 +100,35 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate email
+    // ── Security layer 1: Honeypot — bots fill hidden fields, humans never do ──
+    if (honeypot) {
+      // Silently reject; never tell a bot why it failed
+      return;
+    }
+
+    // ── Security layer 2: Timing check — bots submit in milliseconds ──────────
+    const timeTaken = Date.now() - formMountTime.current;
+    if (timeTaken < 3000) {
+      showToast("Something went wrong. Please try again.", "error");
+      return;
+    }
+
+    // ── Validate email format ─────────────────────────────────────────────────
     if (!isValidEmail(email)) {
       showToast("Please enter a valid email address", "error");
       return;
     }
 
-    // Validate password
+    // ── Security layer 3: Disposable email blocklist (client-side, instant) ───
+    if (isDisposableEmail(email)) {
+      showToast(
+        "Temporary or disposable email addresses are not accepted. Please use a permanent email.",
+        "error"
+      );
+      return;
+    }
+
+    // ── Validate password ─────────────────────────────────────────────────────
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.valid) {
       showToast(passwordValidation.errors[0], "error");
@@ -108,6 +136,30 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
     }
 
     setLoading(true);
+
+    // ── Security layer 4: Server-side email validation (Edge Function) ────────
+    // Catches disposable providers not on the client-side list.
+    // Fails open on error so real users are never blocked by a service outage.
+    try {
+      const { data: validationData } = await supabase.functions.invoke(
+        "validate-signup",
+        { body: { email: email.trim() } }
+      );
+      if (validationData?.valid === false) {
+        const reason = validationData.reason;
+        showToast(
+          reason === "undeliverable"
+            ? "This email address does not appear to exist. Please check it and try again."
+            : "Temporary or disposable email addresses are not accepted. Please use a permanent email.",
+          "error"
+        );
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // Fail open — never block a real user due to an Edge Function error
+    }
+
     localStorage.setItem(
       "researchmate_remember",
       rememberMe ? "true" : "false",
@@ -120,9 +172,8 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
     if (error) {
       showToast(error.message, "error");
     } else {
-      showToast("Account created successfully! Redirecting...", "success");
-      // Redirect to login page where they can sign in
-      setTimeout(() => navigate("/login"), 1500);
+      showToast("Account created! Please check your email to verify your address.", "success");
+      setTimeout(() => navigate("/login"), 2000);
     }
     setLoading(false);
   };
@@ -244,6 +295,17 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
               Or sign up with Email
             </h3>
             <form onSubmit={handleSignup} className="space-y-4">
+            {/* Honeypot — visually hidden, only bots fill this */}
+            <input
+              name="website"
+              type="text"
+              autoComplete="off"
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{ position: "absolute", left: "-9999px", opacity: 0, height: 0, width: 0, overflow: "hidden" }}
+              value={honeypot}
+              onChange={(e) => setHoneypot(e.target.value)}
+            />
             <Input
               type="email"
               placeholder="Email address"
