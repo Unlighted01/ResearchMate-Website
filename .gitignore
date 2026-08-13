@@ -40,6 +40,15 @@ lerna-debug.log*
 *.sln
 *.sw?
 
+# AI Agent configs (local tooling — do NOT push)
+.agents/
+.claude/
+CLAUDE.md
+CLAUDE_CODE_SETUP.md
+api/AGENTS.md
+src/components/AGENTS.md
+src/services/AGENTS.md
+
 # Testing
 coverage
 .nyc_output
