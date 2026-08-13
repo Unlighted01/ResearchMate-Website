@@ -598,6 +598,8 @@ export async function getItemStats(): Promise<{
     smart_pen: 0,
     web: 0,
     transcription: 0,
+    mobile_scanner: 0,
+    tablet_sync: 0,
   };
 
   const byMonth: Record<string, number> = {};

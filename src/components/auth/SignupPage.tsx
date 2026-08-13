@@ -64,7 +64,7 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const hcaptchaRef = useRef<HCaptcha>(null);
 
   const { visualTheme } = useTheme();
-  const isBubbleTheme = visualTheme === "bubble";
+  const isBubbleTheme = false;
   const authBackgroundClass =
     visualTheme === "glass"
       ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"

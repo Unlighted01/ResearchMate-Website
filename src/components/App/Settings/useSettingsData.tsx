@@ -56,7 +56,7 @@ export interface UseSettingsDataReturn {
   theme: string;
   setTheme: (t: "light" | "dark" | "system") => void;
   visualTheme: string;
-  setVisualTheme: (t: "minimalist" | "bubble" | "glass") => void;
+  setVisualTheme: (t: "minimalist" | "glass") => void;
 
   // Notifications
   emailNotifications: boolean;

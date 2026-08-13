@@ -22,7 +22,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
   const { visualTheme } = useTheme();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const isBubbleTheme = visualTheme === "bubble";
+  const isBubbleTheme = false;
   const isGlassTheme = visualTheme === "glass";
 
   // Force light mode for marketing pages

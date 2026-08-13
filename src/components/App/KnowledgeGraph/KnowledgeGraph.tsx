@@ -71,7 +71,7 @@ const getGroupColor = (group: number, isDark: boolean) => {
 };
 
 export const KnowledgeGraph: React.FC = () => {
-  const fgRef = useRef<ForceGraphMethods>();
+  const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
   const isDark = theme === "dark";

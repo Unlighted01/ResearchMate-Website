@@ -147,7 +147,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, []);
 
   const isCollapsed = sidebarCollapsed && !isMobile;
-  const isBubbleTheme = visualTheme === "bubble";
+  const isBubbleTheme = false;
   const isGlassTheme = visualTheme === "glass";
 
   // ---------- PART 4A: EFFECTS ----------
