@@ -73,7 +73,7 @@ const defaultContent = {
   "no-items": {
     title: "No research items yet",
     description:
-      "Start by clipping content from websites or uploading documents. Your research journey begins here!",
+      "Ingest research papers, upload PDFs, or scan STEM whiteboard derivations to build your synthesis library.",
   },
   "no-search": {
     title: "No results found",

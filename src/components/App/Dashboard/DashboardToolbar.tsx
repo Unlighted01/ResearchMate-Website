@@ -1,18 +1,10 @@
 // ============================================
-// DASHBOARD TOOLBAR - Search, filters, view toggle
-// ============================================
-
-// ============================================
-// PART 1: IMPORTS & DEPENDENCIES
+// DASHBOARD TOOLBAR - Academic Workstation Search & Controls
 // ============================================
 
 import React from "react";
 import { Search, Filter, Grid3X3, List } from "lucide-react";
 import { SearchFilters } from "../../shared/AdvancedSearchFilter";
-
-// ============================================
-// PART 2: TYPE DEFINITIONS
-// ============================================
 
 interface DashboardToolbarProps {
   searchQuery: string;
@@ -23,10 +15,6 @@ interface DashboardToolbarProps {
   advancedFilters: SearchFilters;
   onShowAdvancedFilters: () => void;
 }
-
-// ============================================
-// PART 3: COMPONENT
-// ============================================
 
 const DashboardToolbar: React.FC<DashboardToolbarProps> = ({
   searchQuery,
@@ -44,17 +32,17 @@ const DashboardToolbar: React.FC<DashboardToolbarProps> = ({
     (advancedFilters.tags && advancedFilters.tags.length > 0);
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3">
+    <div className="flex flex-col sm:flex-row gap-2.5">
       <div className="flex-1 relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <input
           ref={searchInputRef}
           type="text"
-          placeholder="Search research items..."
+          placeholder="Filter corpus by title, quote text, or author..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="theme-search theme-input w-full pl-11 pr-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 transition-all"
-          aria-label="Search research items"
+          className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors shadow-xs"
+          aria-label="Filter library items"
           aria-describedby="search-hint"
         />
         <span id="search-hint" className="sr-only">
@@ -64,29 +52,33 @@ const DashboardToolbar: React.FC<DashboardToolbarProps> = ({
       <div className="flex items-center gap-2">
         <button
           onClick={onShowAdvancedFilters}
-          className="theme-surface theme-btn theme-btn-outline flex items-center gap-2 px-4 py-3 bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          className={`inline-flex items-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-medium transition-colors shadow-xs ${
+            hasActiveFilters
+              ? "bg-indigo-50 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300"
+              : "bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+          }`}
           aria-label="Advanced filters"
         >
-          <Filter className="w-4 h-4" />
-          Filter
+          <Filter className="w-3.5 h-3.5 text-slate-400" />
+          <span>Filters</span>
           {hasActiveFilters && (
-            <span className="ml-1 w-2 h-2 bg-purple-500 rounded-full" />
+            <span className="w-1.5 h-1.5 bg-indigo-600 dark:bg-indigo-400 rounded-full" />
           )}
         </button>
-        <div className="flex bg-white dark:bg-[#1C1C1E] border border-gray-200/50 dark:border-gray-800 rounded-xl p-1">
+        <div className="flex bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-lg p-0.5 shadow-xs">
           <button
             onClick={() => {
               onViewModeChange("grid");
               localStorage.setItem("researchMate_viewMode", "grid");
             }}
             aria-label="Grid view"
-            className={`p-2 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-md transition-colors ${
               viewMode === "grid"
-                ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
-                : "text-gray-400 hover:text-gray-600"
+                ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
             }`}
           >
-            <Grid3X3 className="w-4 h-4" />
+            <Grid3X3 className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => {
@@ -94,22 +86,18 @@ const DashboardToolbar: React.FC<DashboardToolbarProps> = ({
               localStorage.setItem("researchMate_viewMode", "list");
             }}
             aria-label="List view"
-            className={`p-2 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-md transition-colors ${
               viewMode === "list"
-                ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
-                : "text-gray-400 hover:text-gray-600"
+                ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
             }`}
           >
-            <List className="w-4 h-4" />
+            <List className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
     </div>
   );
 };
-
-// ============================================
-// PART 4: EXPORTS
-// ============================================
 
 export default DashboardToolbar;

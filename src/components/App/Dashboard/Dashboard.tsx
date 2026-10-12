@@ -10,7 +10,9 @@
 import React from "react";
 import {
   Sparkles,
-  Chrome,
+  Upload,
+  Calculator,
+  FileEdit,
   FolderPlus,
   BookOpen,
   MessageSquare,
@@ -215,70 +217,78 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
       ) : data.filteredItems.length === 0 ? (
         /* Empty State */
         <div className="flex flex-col items-center justify-center py-20 px-4 animate-fade-up">
-          <div className="w-20 h-20 bg-gradient-to-br from-[#007AFF]/10 to-[#5856D6]/10 rounded-3xl flex items-center justify-center mb-6">
-            <Sparkles className="w-10 h-10 text-[#007AFF]" />
+          <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/50 dark:border-indigo-800/40 rounded-3xl flex items-center justify-center mb-6 shadow-xs">
+            <Sparkles className="w-10 h-10 text-indigo-600 dark:text-indigo-400" />
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+          <h3
+            className="text-xl font-bold text-gray-900 dark:text-white mb-2"
+            style={{ fontFamily: "var(--font-title, 'Fraunces', serif)" }}
+          >
             {data.searchQuery
               ? "No results found"
-              : "Start your research journey"}
+              : "Synthesize your research"}
           </h3>
-          <p className="text-gray-500 dark:text-gray-400 text-center max-w-md mb-8">
+          <p className="text-gray-500 dark:text-gray-400 text-center max-w-md mb-8 text-sm">
             {data.searchQuery
-              ? "Try adjusting your search terms"
-              : "Install the browser extension to capture content from any website instantly."}
+              ? "Try adjusting your search terms or active filters."
+              : "Drop PDFs to compare methodologies, transcribe whiteboard derivations to LaTeX, or import your papers."}
           </p>
           {!data.searchQuery && (
             <>
-              <a
-                href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={actions.handleImport}
+                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-full transition-all shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 active:scale-95 text-sm"
               >
-                <button className="flex items-center gap-2 px-6 py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-full transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-95 hover-lift">
-                  <Chrome className="w-5 h-5" />
-                  Get Extension
-                </button>
-              </a>
+                <Upload className="w-4 h-4" />
+                <span>Import Papers or PDFs</span>
+              </button>
 
-              {/* Quick-action grid — expose other capture/discover entry points */}
+              {/* Quick-action grid — 3 core pillars */}
               <div className="mt-10 w-full max-w-xl mx-auto">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 text-center">
-                  Or jump straight in
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 text-center font-mono">
+                  Or start with a workflow
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     {
                       to: "/app/pdf-reader",
                       icon: BookOpen,
-                      label: "Read a PDF",
-                      sub: "Upload and annotate",
-                      color: "text-[#FF9500]",
-                      bg: "bg-[#FF9500]/10",
+                      label: "Ingest PDF",
+                      sub: "Automated analysis",
+                      color: "text-indigo-600 dark:text-indigo-400",
+                      bg: "bg-indigo-500/10",
                     },
                     {
-                      to: "/app/ai-assistant",
-                      icon: MessageSquare,
-                      label: "Ask AI",
-                      sub: "Chat about your library",
-                      color: "text-[#007AFF]",
-                      bg: "bg-[#007AFF]/10",
+                      to: "/app/smart-pen",
+                      icon: Calculator,
+                      label: "STEM Math OCR",
+                      sub: "Transcribe to LaTeX",
+                      color: "text-amber-600 dark:text-amber-400",
+                      bg: "bg-amber-500/10",
+                    },
+                    {
+                      to: "/app/editor",
+                      icon: FileEdit,
+                      label: "Manuscript Draft",
+                      sub: "TipTap + Overleaf export",
+                      color: "text-emerald-600 dark:text-emerald-400",
+                      bg: "bg-emerald-500/10",
                     },
                   ].map((action) => (
                     <Link
                       key={action.to}
                       to={action.to}
-                      className="theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10 p-4 hover:border-[#007AFF]/40 hover:scale-[1.02] active:scale-[0.98] transition-all group text-left"
+                      className="theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10 p-4 hover:border-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all group text-left"
                     >
                       <div
-                        className={`w-10 h-10 rounded-xl ${action.bg} flex items-center justify-center mb-2`}
+                        className={`w-9 h-9 rounded-xl ${action.bg} flex items-center justify-center mb-2`}
                       >
-                        <action.icon className={`w-5 h-5 ${action.color}`} />
+                        <action.icon className={`w-4 h-4 ${action.color}`} />
                       </div>
-                      <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                      <div className="text-xs font-semibold text-gray-900 dark:text-white">
                         {action.label}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-450 mt-0.5">
+                      <div className="text-[11px] text-gray-500 dark:text-gray-450 mt-0.5">
                         {action.sub}
                       </div>
                     </Link>

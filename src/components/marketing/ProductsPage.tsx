@@ -6,7 +6,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import {
-  Chrome,
+  TableProperties,
   Smartphone,
   PenTool,
   Globe,
@@ -16,7 +16,7 @@ import {
   Cloud,
   ArrowRight,
   Check,
-  Download,
+  Sparkles,
   ExternalLink,
   Star,
 } from "lucide-react";
@@ -24,26 +24,25 @@ import {
 const ProductsPage = () => {
   const products = [
     {
-      id: "extension",
-      name: "Browser Extension",
-      tagline: "Research while you browse",
+      id: "matrix",
+      name: "Literature Review Matrix",
+      tagline: "Comparative multi-paper synthesis",
       description:
-        "Capture highlights, save articles, and generate AI summaries directly from any webpage. Works seamlessly with Chrome, Firefox, and Edge.",
-      icon: Chrome,
+        "Automatically extract methodology, benchmark metrics, sample sizes, and empirical findings across research papers into a structured matrix with cross-paper research gap identification.",
+      icon: TableProperties,
       color: "#007AFF",
       gradient: "from-[#007AFF] to-[#0051D5]",
       status: "Available",
       features: [
-        "One-click save from any website",
-        "Highlight and annotate text",
-        "AI-powered summaries",
-        "Auto-sync to cloud",
-        "Keyboard shortcuts",
-        "Context menu integration",
+        "Multi-paper comparative table",
+        "Automated methodology extraction",
+        "Benchmark & dataset identification",
+        "Synthesis draft generator",
+        "BibTeX citation integration",
+        "CSV & LaTeX table export",
       ],
-      cta: "Add to Chrome",
-      ctaLink:
-        "https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh",
+      cta: "Open Matrix",
+      ctaLink: "/app/literature-matrix",
     },
     {
       id: "mobile",
@@ -60,7 +59,7 @@ const ProductsPage = () => {
         "Offline mode support",
         "Camera capture with OCR",
         "Push notifications",
-        "Share extension integration",
+        "Mobile scanner integration",
         "Widget for quick access",
       ],
       cta: "Join Waitlist",
@@ -68,24 +67,24 @@ const ProductsPage = () => {
     },
     {
       id: "smartpen",
-      name: "Handwriting OCR & Vision",
-      tagline: "Handwriting meets digital",
+      name: "STEM Math & LaTeX OCR",
+      tagline: "Whiteboard derivations to LaTeX",
       description:
-        "Bridge the gap between paper and digital. Your handwritten notes and physical textbook pages are automatically digitized, transcribed, and synced to your library.",
+        "Instantly transcribes handwritten formulas, whiteboard derivations, and textbook equations into clean, publication-ready KaTeX/LaTeX ($$...$$) for your manuscript.",
       icon: PenTool,
       color: "#FF9500",
       gradient: "from-[#FF9500] to-[#FF6B00]",
       status: "Available",
       features: [
-        "Camera scan capture",
-        "OCR text recognition",
-        "Sketch and diagram indexing",
-        "Mobile pair code sync",
-        "Cloud backup",
-        "Search handwritten notes",
+        "Handwritten equation OCR",
+        "Publication-ready LaTeX ($$...$$)",
+        "One-click copy or manuscript import",
+        "KaTeX real-time rendering",
+        "Whiteboard & notebook photo intake",
+        "Cloud synchronization",
       ],
-      cta: "Scan Notes",
-      ctaLink: "/mobile-sync",
+      cta: "Scan Equations",
+      ctaLink: "/app/smart-pen",
     },
     {
       id: "web",
@@ -231,7 +230,7 @@ const ProductsPage = () => {
 
                 {/* CTA */}
                 {product.status === "Available" ? (
-                  product.id === "web" ? (
+                  product.ctaLink.startsWith("/") ? (
                     <Link to={product.ctaLink}>
                       <button
                         className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-white transition-all active:scale-[0.98]"
@@ -287,7 +286,7 @@ const ProductsPage = () => {
         </div>
       </section>
 
-      {/* ========== EXTENSION SPOTLIGHT ========== */}
+      {/* ========== LITERATURE MATRIX SPOTLIGHT ========== */}
       <section className="py-20 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-3xl p-8 md:p-12 text-white relative overflow-hidden">
@@ -302,51 +301,49 @@ const ProductsPage = () => {
                 <div className="flex items-center gap-2 mb-4">
                   <Star className="w-5 h-5 fill-current" />
                   <span className="text-sm font-medium opacity-90">
-                    Featured Product
+                    Flagship Engine
                   </span>
                 </div>
                 <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                  Get the Browser Extension
+                  Automated Literature Review Matrix
                 </h2>
                 <p className="text-lg opacity-90 mb-6 max-w-lg">
-                  The fastest way to save and organize research. One click to
-                  capture any content from the web.
+                  Synthesize dozens of papers in minutes. Extract methodologies, datasets, benchmarks, and research gaps into a publication-ready comparative matrix.
                 </p>
-                <a
-                  href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <button className="flex items-center gap-2 px-6 py-3 bg-white text-[#007AFF] font-semibold rounded-full hover:bg-gray-100 transition-all active:scale-95">
-                    <Download className="w-5 h-5" />
-                    Download for Chrome
+                <Link to="/app/literature-matrix">
+                  <button className="flex items-center gap-2 px-6 py-3 bg-white text-[#007AFF] font-semibold rounded-full hover:bg-gray-100 transition-all active:scale-95 shadow-md">
+                    <Sparkles className="w-5 h-5 text-indigo-600" />
+                    Launch Literature Matrix
                   </button>
-                </a>
+                </Link>
               </div>
 
-              {/* Extension Preview */}
-              <div className="w-full md:w-80 bg-white/10 backdrop-blur rounded-2xl p-6">
+              {/* Matrix Preview */}
+              <div className="w-full md:w-80 bg-white/10 backdrop-blur rounded-2xl p-6 border border-white/20">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
-                    <span className="text-[#007AFF] font-bold">R</span>
+                    <span className="text-[#007AFF] font-bold">M</span>
                   </div>
                   <div>
-                    <p className="font-semibold">ResearchMate</p>
-                    <p className="text-xs opacity-75">Chrome Extension</p>
+                    <p className="font-semibold">Synthesis Matrix</p>
+                    <p className="text-xs opacity-75">Multi-Paper Engine</p>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {["Save to library", "Generate summary", "Add tags"].map(
-                    (action, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2 px-3 py-2 bg-white/10 rounded-lg text-sm"
-                      >
-                        <Check className="w-4 h-4" />
-                        {action}
-                      </div>
-                    )
-                  )}
+                  {[
+                    "Methodology extraction",
+                    "Benchmark & metrics compare",
+                    "Cross-paper gap detection",
+                    "Related Work section draft",
+                  ].map((action, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 px-3 py-2 bg-white/10 rounded-lg text-sm"
+                    >
+                      <Check className="w-4 h-4 text-emerald-300" />
+                      {action}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

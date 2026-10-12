@@ -29,7 +29,7 @@ const DashboardStatsBar: React.FC<DashboardStatsBarProps> = ({ stats }) => {
   const statItems = [
     { label: "Total Documents", value: stats.total },
     { label: "Synthesized", value: stats.withAiSummary },
-    { label: "Browser Ingested", value: stats.fromExtension },
+    { label: "STEM & LaTeX", value: stats.fromExtension },
     { label: "Added This Week", value: stats.thisWeek },
   ];
 

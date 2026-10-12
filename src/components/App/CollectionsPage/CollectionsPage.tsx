@@ -356,12 +356,14 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
   // Main list view
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Collections
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white font-title tracking-tight">
+            Research Collections
           </h1>
-          <p className="text-gray-500 mt-1">Organize your research projects</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-sans">
+            Group related papers, field notes, and matrices into structured research projects.
+          </p>
         </div>
         <Button
           onClick={() => {
@@ -370,8 +372,9 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
             setFormColor(DEFAULT_COLOR);
             setIsCreateModalOpen(true);
           }}
+          className="bg-slate-900 hover:bg-slate-850 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs"
         >
-          <FolderPlus className="w-4 h-4 mr-2" /> New Collection
+          <FolderPlus className="w-3.5 h-3.5 mr-1.5" /> New Collection
         </Button>
       </div>
 

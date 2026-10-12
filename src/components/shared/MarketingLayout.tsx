@@ -226,7 +226,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
             {[
               {
                 title: "Product",
-                links: ["Features", "Extension", "Mobile App", "Pricing"],
+                links: ["Features", "Literature Matrix", "Mobile OCR", "Pricing"],
               },
               {
                 title: "Company",

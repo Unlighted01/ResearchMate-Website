@@ -8,7 +8,7 @@ import {
   Mail,
   MessageCircle,
   FileText,
-  Chrome,
+  TableProperties,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -23,9 +23,9 @@ const SupportPage = () => {
 
   const faqs = [
     {
-      question: "How do I install the browser extension?",
+      question: "How do I ingest research papers into ResearchMate?",
       answer:
-        "Visit the Chrome Web Store and search for 'ResearchMate' or click the 'Add to Chrome' button on our Products page. Once installed, you'll see the ResearchMate icon in your browser toolbar.",
+        "You can import PDFs directly into our Reader, enter an ArXiv/PubMed URL or DOI, or snap whiteboard equations using the STEM Math scanner. Everything is automatically parsed and organized in your workspace.",
     },
     {
       question: "Is my data secure?",
@@ -33,19 +33,19 @@ const SupportPage = () => {
         "Yes! Your data is encrypted and stored securely using Supabase. We never sell or share your personal information. You can delete your data at any time from the Settings page.",
     },
     {
-      question: "How does AI summarization work?",
+      question: "How does the Literature Review Matrix work?",
       answer:
-        "Our AI analyzes the text you've saved and generates concise summaries highlighting key points. The AI runs on secure servers and doesn't store your content after processing.",
+        "Select multiple papers from your library and click 'Generate Matrix'. Our AI extracts methodologies, benchmark metrics, sample sizes, and empirical findings into a comparative table and highlights cross-paper research gaps.",
     },
     {
       question: "Can I use ResearchMate offline?",
       answer:
-        "The browser extension supports offline mode for viewing previously saved items. New saves will sync automatically once you're back online.",
+        "The web app caches your active manuscripts and reading material locally. Any edits or imported drafts sync automatically once you re-establish an internet connection.",
     },
     {
       question: "How do I sync across devices?",
       answer:
-        "Simply sign in with the same account on all your devices. Your research library syncs automatically in real-time across the browser extension, web dashboard, and mobile app.",
+        "Simply sign in with the same account across your laptop, desktop workstation, and mobile scanner. Your papers, LaTeX OCR derivations, and literature matrices sync in real-time.",
     },
     {
       question: "Is there a free plan?",
@@ -119,21 +119,19 @@ const SupportPage = () => {
       <div className="py-12 px-6">
         <div className="max-w-4xl mx-auto">
           <div className="grid md:grid-cols-3 gap-4">
-            <a
-              href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              to="/app/literature-matrix"
               className="flex items-center gap-4 p-4 bg-white/50 backdrop-blur-md rounded-xl border border-white/50 hover:bg-white/70 hover:shadow-lg transition-all"
             >
               <div className="w-10 h-10 bg-[#007AFF]/10 rounded-xl flex items-center justify-center">
-                <Chrome className="w-5 h-5 text-[#007AFF]" />
+                <TableProperties className="w-5 h-5 text-[#007AFF]" />
               </div>
               <div>
-                <p className="font-medium text-gray-900">Get Extension</p>
-                <p className="text-sm text-gray-500">Chrome Web Store</p>
+                <p className="font-medium text-gray-900">Literature Matrix</p>
+                <p className="text-sm text-gray-500">Comparative Synthesis</p>
               </div>
-              <ExternalLink className="w-4 h-4 text-gray-400 ml-auto" />
-            </a>
+              <ArrowLeft className="w-4 h-4 text-gray-400 ml-auto rotate-180" />
+            </Link>
 
             <Link
               to="/app/dashboard"

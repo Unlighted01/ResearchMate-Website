@@ -6,7 +6,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Download,
-  Chrome,
+  Globe,
   Smartphone,
   Check,
   FileText,
@@ -174,7 +174,7 @@ const FeaturesSection: React.FC = () => {
           <div>
             <div className="flex items-center gap-2.5 mb-4">
               <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200/60 dark:border-blue-900/60">
-                <Chrome className="w-4 h-4" />
+                <Globe className="w-4 h-4" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 font-title">
                 Automated Ingestion (Zero Highlighting)
@@ -189,7 +189,7 @@ const FeaturesSection: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80">
               <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-1.5">
-                <Chrome className="w-4 h-4" />
+                <Globe className="w-4 h-4" />
                 <span className="text-xs font-semibold">1-Click ArXiv/PubMed</span>
               </div>
               <p className="text-[11px] text-slate-500">Auto-downloads open-access PDF & BibTeX.</p>

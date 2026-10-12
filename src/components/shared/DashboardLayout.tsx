@@ -15,10 +15,12 @@ import CommandPalette from "./CommandPalette";
 import ClockWidget from "./ClockWidget";
 import { motion, AnimatePresence } from "motion/react";
 import {
+  Table2,
   LayoutDashboard,
   FolderOpen,
   MessageSquare,
   PenTool,
+  Calculator,
   Settings,
   LogOut,
   Menu,
@@ -32,6 +34,7 @@ import {
   ChevronLeft,
   BookOpen,
   Timer,
+  Sliders,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { getAllItems, subscribeToItems } from "../../services/storageService";
@@ -43,28 +46,34 @@ import { getAllItems, subscribeToItems } from "../../services/storageService";
 // Grouped sidebar nav. Flat list is derived below for legacy consumers.
 const NAV_GROUPS: {
   label: string;
-  items: { icon: React.ComponentType<{ className?: string }>; label: string; path: string }[];
+  items: {
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+    path: string;
+    badge?: string;
+  }[];
 }[] = [
   {
-    label: "Library",
+    label: "Synthesis & Library",
     items: [
-      { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
+      { icon: Table2, label: "Literature Matrix", path: "/app/literature-matrix", badge: "Core" },
+      { icon: LayoutDashboard, label: "Library Overview", path: "/app/dashboard" },
       { icon: FolderOpen, label: "Collections", path: "/app/collections" },
     ],
   },
   {
-    label: "Reading & Capture",
+    label: "Capture & Ingest",
     items: [
       { icon: BookOpen, label: "PDF Reader", path: "/app/pdf-reader" },
-      { icon: PenTool, label: "Sync & Scanner", path: "/app/smart-pen" },
+      { icon: Calculator, label: "STEM Math OCR", path: "/app/smart-pen" },
     ],
   },
   {
-    label: "Write & Assist",
+    label: "Manuscript & Writing",
     items: [
-      { icon: FileEdit, label: "Editor", path: "/app/editor" },
-      { icon: Quote, label: "Citations", path: "/app/citations" },
-      { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
+      { icon: FileEdit, label: "Manuscript Editor", path: "/app/editor" },
+      { icon: Quote, label: "Citations & BibTeX", path: "/app/citations" },
+      { icon: MessageSquare, label: "Research Assistant", path: "/app/ai-assistant" },
     ],
   },
 ];
@@ -217,7 +226,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           let message = `New item "${payload.new.sourceTitle || "Untitled"}" saved to library.`;
           
           if (device === "extension") {
-            message = `Copied text saved via Chrome Extension: "${payload.new.sourceTitle || "Untitled"}"`;
+            message = `New paper ingested: "${payload.new.sourceTitle || "Untitled"}"`;
           } else if (device === "mobile_scanner" || device === "mobile") {
             message = `New document scanned and saved via Mobile Sync: "${payload.new.sourceTitle || "Untitled"}"`;
           } else if (device === "tablet_sync") {
@@ -336,12 +345,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className={`
-          theme-sidebar
-          fixed top-4 bottom-4 left-4 z-30
-          backdrop-blur-2xl backdrop-saturate-200
+          fixed top-3 bottom-3 left-3 z-30
           overflow-hidden
-          rounded-3xl shadow-xl border border-white/10 dark:border-white/[0.06]
-          bg-[var(--glass-bg)]
+          rounded-2xl border border-slate-200/80 dark:border-slate-800
+          bg-white dark:bg-slate-950 shadow-xs
           transition-transform duration-300 ease-in-out
           ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-[calc(100%+2rem)]"}
           lg:translate-x-0
@@ -350,32 +357,37 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <div className="h-full flex flex-col">
           {/* Header: Logo */}
           <div
-            className={`theme-divider h-14 flex items-center border-b border-white/5 dark:border-white/[0.06] ${
-              isCollapsed ? "justify-center px-2" : "px-5"
+            className={`h-14 flex items-center border-b border-slate-100 dark:border-slate-800/80 ${
+              isCollapsed ? "justify-center px-2" : "px-4"
             }`}
           >
             <Link
               to="/app/dashboard"
-              className={`flex items-center gap-3 ${
+              className={`flex items-center gap-2.5 ${
                 isCollapsed ? "justify-center" : ""
               }`}
             >
               <img
                 src="/logo.svg"
                 alt="Logo"
-                className="w-8 h-8 hover:scale-105 transition-transform"
+                className="w-7 h-7 shrink-0"
               />
               <AnimatePresence mode="wait">
                 {!isCollapsed && (
-                  <motion.span
+                  <motion.div
                     initial={{ opacity: 0, width: 0 }}
                     animate={{ opacity: 1, width: "auto" }}
                     exit={{ opacity: 0, width: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="theme-title font-title text-base font-semibold whitespace-nowrap overflow-hidden tracking-tight text-[var(--text-primary)]"
+                    transition={{ duration: 0.15 }}
+                    className="flex items-baseline gap-2 overflow-hidden whitespace-nowrap"
                   >
-                    ResearchMate
-                  </motion.span>
+                    <span className="font-title text-base font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
+                      ResearchMate
+                    </span>
+                    <span className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-200/40 dark:border-indigo-800/40">
+                      STUDIO
+                    </span>
+                  </motion.div>
                 )}
               </AnimatePresence>
             </Link>
@@ -383,31 +395,28 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
           {/* Navigation */}
           <nav
-            className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-3"
+            className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2.5 space-y-3"
             aria-label="Primary"
           >
             {NAV_GROUPS.map((group, groupIdx) => (
-              <div
-                key={group.label}
-                className={groupIdx === 0 ? "" : "mt-2"}
-              >
+              <div key={group.label} className={groupIdx === 0 ? "" : "pt-1"}>
                 <AnimatePresence mode="wait">
                   {!isCollapsed && (
                     <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="theme-sidebar-section-label font-title font-bold text-xs uppercase tracking-wider text-[var(--text-muted)] opacity-80 px-4 py-2 mt-4 whitespace-nowrap"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-1 mb-1 whitespace-nowrap"
                     >
                       {group.label}
                     </motion.div>
                   )}
                 </AnimatePresence>
                 {isCollapsed && groupIdx > 0 && (
-                  <div className="theme-divider mx-2 my-2 h-px border-t border-white/5 dark:border-white/[0.06]" />
+                  <div className="mx-2 my-2 h-px border-t border-slate-100 dark:border-slate-800" />
                 )}
-                <ul className="space-y-1">
+                <ul className="space-y-0.5">
                   {group.items.map((item) => {
                     const isActive = location.pathname === item.path;
                     return (
@@ -415,51 +424,41 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                         <Link
                           to={item.path}
                           onClick={() => setMobileSidebarOpen(false)}
-                          style={isActive ? { background: "transparent", boxShadow: "none" } : undefined}
                           className={`
-                            theme-sidebar-item
-                            flex items-center gap-3 px-3 py-2 rounded-xl
-                            transition-all duration-300 group relative
-                            hover:scale-[1.02] active:scale-[0.98]
+                            flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium
+                            transition-colors duration-150 relative group
                             ${
                               isActive
-                                ? "theme-sidebar-item-active text-cyan-600 dark:text-cyan-400 font-semibold"
-                                : "theme-hover-surface text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                                ? "bg-slate-100 dark:bg-slate-800/80 text-slate-950 dark:text-slate-50 font-semibold"
+                                : "text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900/60"
                             }
-                            ${isCollapsed ? "justify-center" : ""}
+                            ${isCollapsed ? "justify-center px-2" : ""}
                           `}
                         >
                           {isActive && (
-                            <motion.div
-                              layoutId="activeSidebarNavIndicator"
-                              transition={{
-                                type: "spring",
-                                stiffness: 380,
-                                damping: 30,
-                              }}
-                              className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-indigo-500/10 to-violet-500/10 dark:from-cyan-500/15 dark:via-indigo-500/10 dark:to-violet-500/15 rounded-xl border border-cyan-500/20 dark:border-cyan-400/30 shadow-[0_0_15px_rgba(6,182,212,0.12)] z-0 animate-pulse-soft"
-                            />
+                            <div className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-indigo-600 dark:bg-indigo-400 rounded-r-full" />
                           )}
-                          <item.icon className={`w-5 h-5 flex-shrink-0 relative z-10 transition-colors duration-300 ${isActive ? "text-cyan-500 dark:text-cyan-400" : "text-[var(--text-muted)] group-hover:text-[var(--text-primary)]"}`} />
-                          <AnimatePresence mode="wait">
-                            {!isCollapsed && (
-                              <motion.span
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -10 }}
-                                transition={{ duration: 0.15 }}
-                                className={`text-sm font-medium whitespace-nowrap relative z-10 ${
-                                  isActive ? "" : "theme-muted-text"
-                                }`}
-                              >
-                                {item.label}
-                              </motion.span>
-                            )}
-                          </AnimatePresence>
+                          <item.icon
+                            className={`w-4 h-4 flex-shrink-0 transition-colors ${
+                              isActive
+                                ? "text-indigo-600 dark:text-indigo-400"
+                                : "text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300"
+                            }`}
+                          />
+                          {!isCollapsed && (
+                            <div className="flex-1 flex items-center justify-between min-w-0">
+                              <span className="truncate">{item.label}</span>
+                              {item.badge && (
+                                <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">
+                                  {item.badge}
+                                </span>
+                              )}
+                            </div>
+                          )}
 
                           {/* Tooltip */}
                           {isCollapsed && (
-                            <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
+                            <div className="absolute left-full ml-2 px-2.5 py-1 text-xs font-medium rounded-md bg-slate-900 text-white shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible pointer-events-none whitespace-nowrap z-50">
                               {item.label}
                             </div>
                           )}
@@ -567,54 +566,32 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </li>
             </ul>
 
-            {/* Device Status (only when expanded) */}
+            {/* Pipeline Status (only when expanded) */}
             <AnimatePresence>
               {!isCollapsed && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="mt-4 mb-1 mx-1 overflow-hidden"
+                  transition={{ duration: 0.15 }}
+                  className="mt-3 mb-1 mx-1 overflow-hidden"
                 >
-                  <div className="theme-panel-muted rounded-2xl p-3 bg-white/30 dark:bg-white/[0.01] border border-white/5 dark:border-white/[0.04] backdrop-blur-md">
-                    <h4 className="theme-muted-text text-xs font-bold uppercase tracking-wider mb-2 font-title">
-                      Devices
-                    </h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3">
-                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm bg-white/50 dark:bg-black/30 border border-white/10 dark:border-white/[0.06]">
-                          <Laptop className="w-4 h-4 text-cyan-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-[var(--text-primary)] truncate">
-                            Extension
-                          </p>
-                        </div>
-                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm bg-white/50 dark:bg-black/30 border border-white/10 dark:border-white/[0.06]">
-                          <Smartphone className="w-4 h-4 text-violet-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-[var(--text-primary)] truncate">
-                            Mobile
-                          </p>
-                        </div>
-                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="theme-panel-elevated w-8 h-8 rounded-lg flex items-center justify-center shadow-sm bg-white/50 dark:bg-black/30 border border-white/10 dark:border-white/[0.06]">
-                          <PenTool className="w-4 h-4 text-amber-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-[var(--text-primary)] truncate">
-                            Smart Pen
-                          </p>
-                        </div>
-                        <div className="w-1.5 h-1.5 bg-zinc-300 dark:bg-zinc-600 rounded-full" />
-                      </div>
+                  <div className="rounded-xl p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        Workstation Sync
+                      </span>
+                      <span className="flex items-center gap-1 font-mono text-[10px] text-emerald-600 dark:text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        Active
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 font-sans">
+                      <span className="flex items-center gap-1.5">
+                        <Laptop className="w-3.5 h-3.5 text-slate-400" />
+                        Desktop Workstation
+                      </span>
+                      <span className="font-mono text-[10px] text-slate-400">Ready</span>
                     </div>
                   </div>
                 </motion.div>
@@ -623,37 +600,27 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </nav>
 
           {/* Collapse Toggle */}
-          <div className="theme-divider p-3 border-t border-white/5 dark:border-white/[0.06]">
+          <div className="p-2 border-t border-slate-100 dark:border-slate-800/80">
             <button
               onClick={toggleSidebar}
               aria-label={
                 sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
               }
               className={`
-                theme-sidebar-item theme-hover-surface
-                hidden lg:flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
-                transition-all duration-200 text-[var(--text-muted)] hover:text-[var(--text-primary)]
+                hidden lg:flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium
+                text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900/60
+                transition-colors
                 ${sidebarCollapsed ? "justify-center" : ""}
               `}
             >
               <ChevronLeft
-                className={`w-5 h-5 transition-transform duration-300 ${
+                className={`w-4 h-4 transition-transform duration-200 ${
                   sidebarCollapsed ? "rotate-180" : ""
                 }`}
               />
-              <AnimatePresence mode="wait">
-                {!sidebarCollapsed && (
-                  <motion.span
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    transition={{ duration: 0.15 }}
-                    className="text-sm font-medium whitespace-nowrap"
-                  >
-                    Collapse
-                  </motion.span>
-                )}
-              </AnimatePresence>
+              {!sidebarCollapsed && (
+                <span className="text-xs">Collapse Sidebar</span>
+              )}
             </button>
           </div>
         </div>
@@ -669,16 +636,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         `}
       >
         {/* Header */}
-        <header className="theme-headerbar theme-divider sticky top-0 z-20 backdrop-blur-2xl bg-white/40 dark:bg-[#09090b]/40 rounded-2xl border border-white/10 dark:border-white/[0.05] shadow-[0_4px_30px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.2)] mb-4 lg:mb-6">
+        <header className="sticky top-0 z-20 bg-white/85 dark:bg-[#0d1017]/85 backdrop-blur-md rounded-xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs mb-4 lg:mb-6">
           <div className="h-14 px-4 lg:px-6 flex items-center justify-between gap-4">
             {/* Left: Mobile Menu + Search */}
             <div className="flex items-center gap-4 flex-1">
               <button
-                className="theme-icon-button theme-hover-surface lg:hidden p-2 rounded-xl transition-colors border border-white/10 dark:border-white/[0.06] bg-[var(--glass-bg)]"
+                className="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors"
                 onClick={() => setMobileSidebarOpen(true)}
                 aria-label="Open sidebar"
               >
-                <Menu className="w-5 h-5 text-[var(--text-primary)]" />
+                <Menu className="w-5 h-5" />
               </button>
 
               {/* Search - Hide on Dashboard to avoid duplication */}
@@ -689,16 +656,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   ${searchFocused ? "max-w-lg" : ""}
                 `}
                 >
-                  <Search className="text-[var(--text-muted)] absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" />
+                  <Search className="text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" />
                   <input
                     type="text"
-                    placeholder="Search..."
-                    className="theme-search theme-input w-full pl-11 pr-4 py-2 rounded-xl text-sm text-[var(--text-primary)] bg-[var(--glass-bg)] border border-white/10 dark:border-white/[0.06] placeholder-gray-500/80 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/50 transition-all shadow-inner"
+                    placeholder="Search library, notes, matrices..."
+                    className="w-full pl-10 pr-12 py-2 rounded-lg text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setSearchFocused(false)}
                   />
-                  <div className="text-[var(--text-muted)] absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs">
-                    <kbd className="theme-kbd px-1.5 py-0.5 rounded text-xs bg-black/5 dark:bg-white/5 border border-white/10 dark:border-white/[0.06]">
+                  <div className="text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs">
+                    <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500">
                       ⌘K
                     </kbd>
                   </div>
@@ -707,18 +674,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </div>
 
             {/* Right: Actions */}
-            <div className="flex items-center gap-4">
-              {/* Supabase Real-time Sync activity sparkler */}
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 dark:bg-cyan-500/15 border border-cyan-500/20 text-cyan-600 dark:text-cyan-400 text-sm font-semibold select-none shadow-[0_0_10px_rgba(6,182,212,0.1)]">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-gradient-to-r from-cyan-400 to-emerald-400"></span>
-                </span>
-                <span className="hidden sm:inline font-sans">Synced</span>
+            <div className="flex items-center gap-3">
+              {/* Real-time Sync activity badge */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/25 text-emerald-700 dark:text-emerald-400 text-xs font-mono font-medium select-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="hidden sm:inline">SYNCED</span>
               </div>
 
-              {/* Streamlined Glass Action Bar (Timer + Notifications + Profile) */}
-              <div className="flex items-center gap-1 p-1 rounded-2xl bg-white/40 dark:bg-[#09090b]/40 backdrop-blur-xl border border-white/10 dark:border-white/[0.06] shadow-md z-20">
+              {/* Restrained Action Bar (Timer + Notifications + Profile) */}
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800">
                 {/* Clock & Pomodoro Quick Toggle */}
                 <button
                   onClick={() => {
@@ -728,17 +692,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     window.dispatchEvent(new Event("clockWidgetToggle"));
                     if (showToast) {
                       showToast(
-                        nextState ? "Clock & Pomodoro widget shown" : "Clock & Pomodoro widget hidden",
+                        nextState ? "Workstation timer displayed" : "Workstation timer hidden",
                         "info",
                       );
                     }
                   }}
                   aria-label="Toggle Clock & Pomodoro Widget"
-                  title={showClockWidget ? "Hide Clock & Pomodoro Widget" : "Show Clock & Pomodoro Widget"}
-                  className={`theme-icon-button theme-hover-surface p-2 rounded-xl transition-all relative flex items-center justify-center hover:scale-[1.03] active:scale-[0.97] ${
+                  title={showClockWidget ? "Hide Workstation Timer" : "Show Workstation Timer"}
+                  className={`p-2 rounded-md transition-colors relative flex items-center justify-center ${
                     showClockWidget
-                      ? "text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 dark:bg-cyan-500/20"
-                      : "text-[var(--text-primary)]"
+                      ? "text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   <Timer className="w-4 h-4" />
@@ -752,11 +716,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       setProfileOpen(false);
                     }}
                     aria-label="Notifications"
-                    className="theme-icon-button theme-hover-surface notifications-trigger p-2 rounded-xl transition-colors relative flex items-center justify-center hover:scale-[1.03] active:scale-[0.97]"
+                    className="notifications-trigger p-2 rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors relative flex items-center justify-center"
                   >
-                    <Bell className="w-4 h-4 text-[var(--text-primary)]" />
+                    <Bell className="w-4 h-4" />
                     {unreadCount > 0 && (
-                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF3B30] rounded-full animate-pulse" />
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-600 dark:bg-indigo-400 rounded-full" />
                     )}
                   </button>
 
@@ -764,68 +728,68 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   <AnimatePresence>
                     {notificationsOpen && (
                       <motion.div
-                        initial={{ opacity: 0, y: 15, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                        className="theme-surface notifications-dropdown absolute right-[-50px] sm:right-0 top-full mt-3 w-80 rounded-2xl shadow-2xl border border-white/10 dark:border-white/[0.06] bg-[var(--surface-overlay)] backdrop-blur-2xl overflow-hidden"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 6 }}
+                        transition={{ duration: 0.15 }}
+                        className="notifications-dropdown absolute right-[-50px] sm:right-0 top-full mt-2 w-80 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden z-30"
                       >
-                      <div className="theme-divider px-4 py-3 border-b border-white/5 dark:border-white/[0.06] flex items-center justify-between">
-                        <h3 className="font-semibold text-[var(--text-primary)] font-title text-sm">
-                          Notifications
-                        </h3>
-                        {unreadCount > 0 && (
-                          <button
-                            onClick={markAllAsRead}
-                            className="text-xs text-cyan-500 hover:text-cyan-400 font-medium transition-colors"
-                          >
-                            Mark all read
-                          </button>
-                        )}
-                      </div>
-                      <div className="max-h-80 overflow-y-auto">
-                        {activities.length === 0 ? (
-                          <div className="px-4 py-8 text-center">
-                            <Bell className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2 opacity-60" />
-                            <p className="text-sm text-[var(--text-muted)]">
-                              No notifications
-                            </p>
-                          </div>
-                        ) : (
-                          activities.map((activity) => (
-                            <div
-                              key={activity.id}
-                              className={`theme-hover-surface px-4 py-3 transition-colors ${
-                                !activity.read ? "bg-cyan-500/5 dark:bg-cyan-400/5" : ""
-                              }`}
+                        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-900/50">
+                          <h3 className="font-semibold text-slate-900 dark:text-slate-100 font-title text-sm">
+                            Activity & Updates
+                          </h3>
+                          {unreadCount > 0 && (
+                            <button
+                              onClick={markAllAsRead}
+                              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
                             >
-                              <div className="flex gap-3">
-                                <div className="theme-panel-muted w-8 h-8 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center flex-shrink-0">
-                                  {getActivityIcon(activity.type)}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm text-[var(--text-primary)]">
-                                    {activity.message}
-                                  </p>
-                                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                                    {formatTimeAgo(activity.time)}
-                                  </p>
-                                </div>
-                                {!activity.read && (
-                                  <div className="w-2 h-2 bg-cyan-500 rounded-full flex-shrink-0 mt-2 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
-                                )}
-                              </div>
+                              Mark all read
+                            </button>
+                          )}
+                        </div>
+                        <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-900">
+                          {activities.length === 0 ? (
+                            <div className="px-4 py-8 text-center">
+                              <Bell className="w-6 h-6 text-slate-400 mx-auto mb-2 opacity-50" />
+                              <p className="text-xs text-slate-500">
+                                No recent activity
+                              </p>
                             </div>
-                          ))
-                        )}
-                      </div>
+                          ) : (
+                            activities.map((activity) => (
+                              <div
+                                key={activity.id}
+                                className={`px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-colors ${
+                                  !activity.read ? "bg-indigo-50/40 dark:bg-indigo-950/20" : ""
+                                }`}
+                              >
+                                <div className="flex gap-3 items-start">
+                                  <div className="w-7 h-7 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0 text-slate-600 dark:text-slate-400 mt-0.5">
+                                    {getActivityIcon(activity.type)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                                      {activity.message}
+                                    </p>
+                                    <p className="text-[10px] font-mono text-slate-400 mt-1">
+                                      {formatTimeAgo(activity.time)}
+                                    </p>
+                                  </div>
+                                  {!activity.read && (
+                                    <div className="w-1.5 h-1.5 bg-indigo-600 dark:bg-indigo-400 rounded-full flex-shrink-0 mt-1.5" />
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
 
                 {/* Vertical Divider */}
-                <div className="w-px h-5 bg-black/10 dark:bg-white/10 self-center mx-1" />
+                <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 self-center mx-0.5" />
 
                 {/* Profile */}
                 <div className="relative flex items-center justify-center">
@@ -835,9 +799,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       setNotificationsOpen(false);
                     }}
                     aria-label="User profile menu"
-                    className="theme-icon-button theme-hover-surface profile-trigger flex items-center gap-2 p-1 rounded-xl transition-colors hover:scale-[1.03] active:scale-[0.97]"
+                    className="profile-trigger flex items-center gap-2 p-1 rounded-md hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
                   >
-                    <div className="w-7 h-7 bg-gradient-to-br from-cyan-400 via-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-xs overflow-hidden relative group/avatar shadow-[0_0_8px_rgba(99,102,241,0.2)]">
+                    <div className="w-6 h-6 rounded-md bg-slate-800 dark:bg-slate-700 text-white flex items-center justify-center text-xs font-semibold overflow-hidden">
                       {user?.identities?.[0]?.identity_data?.avatar_url ? (
                         <img
                           src={user.identities[0].identity_data.avatar_url}
@@ -849,11 +813,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                           <User className="w-3 h-3" />
                         )
                       )}
-                      {localStorage.getItem("rm_guest_mode") === "true" && (
-                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                          <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse shadow-sm" />
-                        </div>
-                      )}
                     </div>
                   </button>
 
@@ -861,93 +820,93 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   <AnimatePresence>
                     {profileOpen && (
                       <motion.div
-                        initial={{ opacity: 0, y: 15, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                      className="theme-surface profile-dropdown absolute right-0 top-full mt-2 w-64 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-black/50 border overflow-hidden"
-                    >
-                    <div className="theme-divider px-4 py-4 border-b">
-                      {localStorage.getItem("rm_guest_mode") === "true" ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 flex items-center justify-center text-lg font-bold">
-                              G
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 6 }}
+                        transition={{ duration: 0.15 }}
+                        className="profile-dropdown absolute right-0 top-full mt-2 w-64 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden z-30"
+                      >
+                        <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50">
+                          {localStorage.getItem("rm_guest_mode") === "true" ? (
+                            <div className="space-y-2.5">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 flex items-center justify-center text-sm font-semibold font-mono">
+                                  G
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-slate-900 dark:text-white">
+                                    Guest Workstation
+                                  </p>
+                                  <p className="text-[10px] font-mono text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                                    Ephemeral Session
+                                  </p>
+                                </div>
+                              </div>
+                              <Link
+                                to="/signup"
+                                className="block w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium text-center rounded-lg transition-colors shadow-xs"
+                              >
+                                Create Free Account
+                              </Link>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                                Guest Account
-                              </p>
-                              <p className="text-xs text-yellow-600 dark:text-yellow-500 font-semibold uppercase tracking-wider">
-                                Limited Access
-                              </p>
+                          ) : (
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-md bg-indigo-600 text-white flex items-center justify-center text-sm font-semibold">
+                                {user?.identities?.[0]?.identity_data?.avatar_url ? (
+                                  <img
+                                    src={user.identities[0].identity_data.avatar_url}
+                                    alt={user.email}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  user?.email?.charAt(0).toUpperCase() || "U"
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-slate-900 dark:text-white truncate">
+                                  {user?.email}
+                                </p>
+                                <span className="inline-block mt-0.5 text-[10px] font-mono font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-900">
+                                  Academic Tier
+                                </span>
+                              </div>
                             </div>
-                          </div>
+                          )}
+                        </div>
+                        <div className="p-1.5 space-y-0.5">
+                          {NAV_ITEMS.slice(0, 4).map((item) => (
+                            <Link
+                              key={item.path}
+                              to={item.path}
+                              onClick={() => setProfileOpen(false)}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors"
+                            >
+                              <item.icon className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{item.label}</span>
+                            </Link>
+                          ))}
+                        </div>
+                        <div className="p-1.5 border-t border-slate-200 dark:border-slate-800 space-y-0.5">
                           <Link
-                            to="/signup"
-                            className="block w-full py-2 px-3 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-semibold text-center rounded-lg transition-colors"
+                            to="/app/settings"
+                            onClick={() => setProfileOpen(false)}
+                            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors"
                           >
-                            Sign up to save progress
+                            <Settings className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Settings</span>
                           </Link>
+                          <button
+                            onClick={handleLogout}
+                            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors w-full"
+                          >
+                            <LogOut className="w-3.5 h-3.5" />
+                            <span>Sign Out</span>
+                          </button>
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-white flex items-center justify-center text-lg font-bold overflow-hidden">
-                            {user?.identities?.[0]?.identity_data?.avatar_url ? (
-                              <img
-                                src={user.identities[0].identity_data.avatar_url}
-                                alt={user.email}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              user?.email?.charAt(0).toUpperCase() || "U"
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {user?.email}
-                            </p>
-                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                              <span>Free Plan</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-2">
-                      {NAV_ITEMS.slice(0, 4).map((item) => (
-                        <Link
-                          key={item.path}
-                          to={item.path}
-                          onClick={() => setProfileOpen(false)}
-                          className="theme-sidebar-item theme-hover-surface flex items-center gap-3 px-3 py-2 rounded-xl transition-colors"
-                        >
-                          <item.icon className="w-4 h-4" />
-                          <span className="text-sm">{item.label}</span>
-                        </Link>
-                      ))}
-                    </div>
-                    <div className="theme-divider p-2 border-t">
-                      <Link
-                        to="/app/settings"
-                        onClick={() => setProfileOpen(false)}
-                        className="theme-sidebar-item theme-hover-surface flex items-center gap-3 px-3 py-2 rounded-xl transition-colors"
-                      >
-                        <Settings className="w-4 h-4" />
-                        <span className="text-sm">Settings</span>
-                      </Link>
-                      <button
-                        onClick={handleLogout}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl text-[#FF3B30] hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors w-full"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span className="text-sm">Sign Out</span>
-                      </button>
-                    </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
           </div>

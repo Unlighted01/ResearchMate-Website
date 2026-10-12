@@ -67,49 +67,47 @@ const Toast: React.FC<ToastProps> = ({ message, type, onClose }) => {
 
   const config = {
     success: {
-      bg: "bg-gradient-to-r from-green-500 to-emerald-600",
-      icon: <CheckCircle2 className="w-5 h-5" />,
-      progressColor: "bg-white/30",
+      border: "border-emerald-500/30",
+      icon: <CheckCircle2 className="w-4 h-4 text-emerald-400" />,
+      progressColor: "bg-emerald-500/60",
     },
     error: {
-      bg: "bg-gradient-to-r from-red-500 to-rose-600",
-      icon: <span className="text-lg">⚠️</span>,
-      progressColor: "bg-white/30",
+      border: "border-rose-500/30",
+      icon: <span className="text-sm">⚠️</span>,
+      progressColor: "bg-rose-500/60",
     },
     info: {
-      bg: "bg-gradient-to-r from-blue-500 to-indigo-600",
-      icon: <Bell className="w-5 h-5" />,
-      progressColor: "bg-white/30",
+      border: "border-indigo-500/30",
+      icon: <Bell className="w-4 h-4 text-indigo-400" />,
+      progressColor: "bg-indigo-500/60",
     },
   }[type];
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 50, scale: 0.9 }}
+      initial={{ opacity: 0, y: 30, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 20, scale: 0.9 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className={`fixed bottom-4 right-4 ${config.bg} text-white px-5 py-3 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[280px]`}
+      exit={{ opacity: 0, y: 15, scale: 0.95 }}
+      transition={{ duration: 0.2 }}
+      className={`fixed bottom-5 right-5 bg-slate-950/95 dark:bg-slate-900/95 text-slate-100 border ${config.border} px-4 py-3 rounded-xl shadow-xl z-50 backdrop-blur-md overflow-hidden min-w-[280px] max-w-sm`}
     >
-      <div className="flex items-center gap-3">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.1, type: "spring", stiffness: 400 }}
-        >
+      <div className="flex items-center gap-2.5">
+        <div className="shrink-0">
           {config.icon}
-        </motion.div>
-        <span className="font-medium text-sm">{message}</span>
+        </div>
+        <span className="font-sans text-xs font-medium leading-relaxed flex-1 text-slate-200">
+          {message}
+        </span>
         <button
           onClick={onClose}
-          className="ml-auto p-1 hover:bg-white/20 rounded-full transition-colors"
+          className="ml-2 p-1 text-slate-400 hover:text-white rounded-lg transition-colors"
           aria-label="Close toast"
         >
-          <X className="w-4 h-4" />
+          <X className="w-3.5 h-3.5" />
         </button>
       </div>
       {/* Progress bar */}
-      <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
+      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/10">
         <motion.div
           className={config.progressColor}
           initial={{ width: "100%" }}
@@ -311,6 +309,7 @@ import PairSmartPen from "./components/App/PairSmartPen";
 import DocumentEditor from "./components/App/DocumentEditor";
 import PdfReader from "./components/App/PdfReader";
 import SupportPage from "./components/marketing/SupportPage";
+import LiteratureMatrixPage from "./components/App/LiteratureMatrix/LiteratureMatrixPage";
 
 // ============================================
 // PART 5: MAIN APP COMPONENT
@@ -434,6 +433,14 @@ export default function App() {
                   <RequireAuth>
                     <DashboardLayout useToast={() => ({ showToast, ToastComponent })}>
                       <Routes>
+                        <Route
+                          path="literature-matrix"
+                          element={
+                            <LiteratureMatrixPage
+                              useToast={() => ({ showToast, ToastComponent })}
+                            />
+                          }
+                        />
                         <Route
                           path="dashboard"
                           element={

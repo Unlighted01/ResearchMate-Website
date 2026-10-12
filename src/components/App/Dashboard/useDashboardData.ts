@@ -331,7 +331,12 @@ export function useDashboardData(
     return {
       total: items.length,
       withAiSummary: items.filter((i) => i.aiSummary).length,
-      fromExtension: items.filter((i) => i.deviceSource === "extension").length,
+      fromExtension: items.filter(
+        (i) =>
+          i.deviceSource === "smart_pen" ||
+          Boolean(i.ocrText) ||
+          (i.text && (i.text.includes("$") || i.text.includes("\\begin{")))
+      ).length,
       thisWeek: items.filter((i) => new Date(i.createdAt) > oneWeekAgo).length,
     };
   }, [items]);

@@ -160,7 +160,7 @@ const VALUES: Value[] = [
 
 const MILESTONES: Milestone[] = [
   { year: "2024", event: "ResearchMate founded", color: "#007AFF" },
-  { year: "2024", event: "Browser extension launched", color: "#34C759" },
+  { year: "2024", event: "Synthesis engines launched", color: "#34C759" },
   { year: "2024", event: "AI summaries released", color: "#5856D6" },
   { year: "2025", event: "Mobile app (Coming)", color: "#FF9500" },
 ];
@@ -245,7 +245,7 @@ const TeamSection: React.FC = () => {
                 </p>
                 <p>
                   Today, ResearchMate is that dream realized. Our ecosystem
-                  includes a browser extension, web platform, and mobile camera OCR scanner — all synced in real-time.
+                  includes an automated synthesis engine, STEM LaTeX OCR scanner, and desktop workstation — all synced in real-time.
                 </p>
               </div>
 

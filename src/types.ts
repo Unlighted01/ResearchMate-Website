@@ -20,7 +20,7 @@ export const DEVICE_SOURCES: Record<
   DeviceSource,
   { label: string; icon: string }
 > = {
-  extension: { label: "Browser Extension", icon: "Laptop" },
+  extension: { label: "Workstation Ingestion", icon: "Laptop" },
   mobile: { label: "Mobile App", icon: "Smartphone" },
   smart_pen: { label: "Smart Pen", icon: "PenTool" },
   web: { label: "Web App", icon: "Globe" },

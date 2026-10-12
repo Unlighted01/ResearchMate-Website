@@ -4,10 +4,10 @@ import {
   Table2,
   PenTool,
   ArrowRight,
-  Chrome,
+  FileText,
   FileEdit,
   Check,
-  Download,
+  Sparkles,
   ExternalLink,
 } from "lucide-react";
 
@@ -79,23 +79,22 @@ const PRODUCTS: Product[] = [
     ctaLink: "/app/editor",
   },
   {
-    id: "extension",
-    name: "Preprint Ingestion Extension",
-    tagline: "Zero-Highlight Automated Downloader",
+    id: "ingestor",
+    name: "Automated Paper & PDF Ingestor",
+    tagline: "Zero-Highlight Document Pipeline",
     description:
-      "Ingest papers from ArXiv, PubMed, and Nature without copy-pasting snippets. Automatically downloads the open-access PDF and BibTeX metadata.",
-    icon: Chrome,
+      "Ingest preprints, PDFs, and DOI references from ArXiv, PubMed, and open repositories without manual snippet copying. Automatically parses full-text documents and BibTeX citations.",
+    icon: FileText,
     status: "Available",
     features: [
-      "1-Click ArXiv & PubMed ingestion",
-      "Auto-downloads open-access PDFs",
+      "1-Click ArXiv & PubMed paper ingestion",
+      "Full-text open-access PDF extraction",
       "BibTeX metadata auto-parsing",
-      "Real-time cloud library sync",
-      "Keyboard shortcut capture (Cmd+Shift+S)",
+      "Real-time library synchronization",
+      "Direct import into Literature Review Matrix",
     ],
-    cta: "Add to Chrome",
-    ctaLink:
-      "https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh",
+    cta: "Import on Web",
+    ctaLink: "/app/pdf-reader",
   },
 ];
 
@@ -181,35 +180,33 @@ const ProductsSection: React.FC = () => {
         })}
       </div>
 
-      {/* Extension Spotlight Banner */}
+      {/* Literature Matrix Spotlight Banner */}
       <div className="bg-slate-900 text-slate-100 rounded-2xl p-8 sm:p-10 border border-slate-800 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
         <div className="max-w-xl">
           <h3 className="text-2xl font-title font-semibold mb-3 text-white">
             Auto-ingest without manual highlighting.
           </h3>
           <p className="text-sm text-slate-300 leading-relaxed font-sans mb-6">
-            The ResearchMate extension automatically parses open-access PDFs, grabs verified BibTeX citations, and queues papers directly into your synthesis matrix.
+            ResearchMate automatically parses open-access PDFs, grabs verified BibTeX citations, and queues papers directly into your synthesis matrix.
           </p>
-          <a
-            href="https://chromewebstore.google.com/detail/researchmate/decekloddlffcnegkfbkfngkjikfchoh"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            to="/app/literature-matrix"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-white text-slate-950 font-medium text-xs hover:bg-slate-100 active:scale-[0.98] transition-all shadow-sm"
           >
-            <Download className="w-4 h-4" />
-            <span>Install Extension (Chrome, Edge, Brave)</span>
-          </a>
+            <Sparkles className="w-4 h-4 text-indigo-600" />
+            <span>Launch Literature Matrix Engine</span>
+          </Link>
         </div>
 
         <div className="w-full md:w-72 bg-slate-800/80 rounded-xl p-5 border border-slate-700/80 font-mono text-xs space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-slate-700">
-            <span className="text-slate-400">Extension Integration</span>
-            <span className="text-emerald-400">v1.4 Ready</span>
+            <span className="text-slate-400">Automated Pipeline</span>
+            <span className="text-emerald-400">Active</span>
           </div>
           <div className="space-y-1.5 text-[11px] text-slate-300">
             <p className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              ArXiv auto-ingestion pipeline
+              ArXiv & PDF auto-ingestion
             </p>
             <p className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />

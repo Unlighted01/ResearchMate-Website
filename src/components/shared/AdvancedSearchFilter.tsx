@@ -74,7 +74,7 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
   if (!isOpen) return null;
 
   const deviceSources = [
-    { id: "extension", label: "Browser Extension", icon: Laptop },
+    { id: "extension", label: "Workstation / PDF Ingest", icon: Laptop },
     { id: "mobile", label: "Mobile App", icon: Smartphone },
     { id: "mobile_scanner", label: "Mobile Scanner", icon: Smartphone },
     { id: "tablet_sync", label: "Tablet Sync", icon: Smartphone },

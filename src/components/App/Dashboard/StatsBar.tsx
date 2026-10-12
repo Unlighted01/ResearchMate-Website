@@ -30,7 +30,7 @@ interface StatsBarProps {
 const STAT_CONFIG = [
   { label: "Total Items", key: "total" as const, color: "#007AFF" },
   { label: "With AI Summary", key: "withAiSummary" as const, color: "#5856D6" },
-  { label: "From Extension", key: "fromExtension" as const, color: "#34C759" },
+  { label: "STEM & LaTeX", key: "fromExtension" as const, color: "#34C759" },
   { label: "This Week", key: "thisWeek" as const, color: "#FF9500" },
 ];
 

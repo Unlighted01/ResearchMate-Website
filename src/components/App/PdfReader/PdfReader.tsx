@@ -571,77 +571,77 @@ const PdfReader: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pb-1">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            PDF Reader
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white font-title tracking-tight">
+            PDF Reader & Ingest
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
-            {documentTitle || "Upload a PDF or open one from Discover"}
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate font-sans">
+            {documentTitle || "Upload a research paper, preprint, or lab manual for high-fidelity reading"}
           </p>
         </div>
-        <FileText className="w-8 h-8 text-[#007AFF] opacity-50 flex-shrink-0" />
+        <FileText className="w-6 h-6 text-indigo-600 dark:text-indigo-400 opacity-60 flex-shrink-0" />
       </div>
 
       {/* Empty State — Upload prompt */}
       {loadState === "idle" && (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10">
-          <div className="w-16 h-16 rounded-2xl bg-[#007AFF]/10 flex items-center justify-center">
-            <FileText className="w-8 h-8 text-[#007AFF]" />
+        <div className="flex flex-col items-center justify-center py-20 gap-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-xs">
+          <div className="w-14 h-14 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+            <FileText className="w-7 h-7" />
           </div>
           <div className="text-center">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Open a PDF
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white font-title">
+              Open Research PDF
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-md">
-              Upload a PDF file from your computer, or open papers directly
-              from the Discover page.
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md font-sans leading-relaxed">
+              Upload a scientific PDF from your workstation, or open papers directly
+              from your literature matrix and library.
             </p>
           </div>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium text-sm rounded-full shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all active:scale-95"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-850 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-medium text-xs rounded-lg transition-colors shadow-xs"
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-3.5 h-3.5" />
             Upload PDF
           </button>
           <button
-            onClick={() => navigate("/app/discover")}
-            className="text-xs text-gray-500 dark:text-gray-400 hover:text-[#007AFF] transition-colors"
+            onClick={() => navigate("/app/literature-matrix")}
+            className="text-xs text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-mono"
           >
-            Or browse papers on Discover →
+            Or extract comparisons on Literature Matrix →
           </button>
         </div>
       )}
 
       {/* Loading State */}
       {loadState === "loading" && (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 theme-surface rounded-2xl border border-gray-200/60 dark:border-white/10">
-          <Loader2 className="w-10 h-10 text-[#007AFF] animate-spin" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Loading PDF...
+        <div className="flex flex-col items-center justify-center py-20 gap-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/90 dark:border-slate-800">
+          <Loader2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin" />
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+            Loading document pages...
           </p>
         </div>
       )}
 
       {/* Error State */}
       {loadState === "error" && (
-        <div className="flex flex-col items-center justify-center py-16 gap-3 theme-surface rounded-2xl border border-red-200/60 dark:border-red-900/30">
-          <AlertCircle className="w-10 h-10 text-red-500" />
-          <p className="text-sm text-gray-700 dark:text-gray-300 max-w-md text-center">
+        <div className="flex flex-col items-center justify-center py-16 gap-3 bg-white dark:bg-slate-900 rounded-xl border border-rose-200 dark:border-rose-900/40">
+          <AlertCircle className="w-8 h-8 text-rose-500" />
+          <p className="text-xs text-slate-700 dark:text-slate-300 max-w-md text-center font-sans">
             {error || "Failed to load PDF"}
           </p>
           <div className="flex gap-2 mt-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-4 py-2 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-medium rounded-full transition-all active:scale-95"
+              className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-850 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"
             >
-              <Upload className="w-4 h-4" />
+              <Upload className="w-3.5 h-3.5" />
               Upload PDF
             </button>
             <button
               onClick={handleClose}
-              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="px-3.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
               Cancel
             </button>

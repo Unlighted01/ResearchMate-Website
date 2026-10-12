@@ -14,10 +14,11 @@ import {
   Shield,
   RefreshCw,
   ArrowRight,
-  Chrome,
   Sparkles,
   Globe,
   CheckCircle2,
+  TableProperties,
+  Laptop,
 } from "lucide-react";
 
 const LandingPage = () => {
@@ -64,7 +65,7 @@ const LandingPage = () => {
     {
       icon: Smartphone,
       title: "Multi-Platform",
-      desc: "Access from browser extension, mobile app, or web dashboard.",
+      desc: "Access seamlessly across your desktop workstation, tablet, and web dashboard.",
       color: "#5856D6",
     },
     {
@@ -134,8 +135,8 @@ const LandingPage = () => {
             </Link>
             <Link to="/products">
               <button className="flex items-center gap-2 px-8 py-4 bg-white/70 backdrop-blur-md text-gray-900 font-medium rounded-full border border-white/50 shadow-lg hover:bg-white/90 hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
-                <Chrome className="w-4 h-4" />
-                Download Extension
+                <TableProperties className="w-4 h-4 text-indigo-600" />
+                Explore Literature Matrix
               </button>
             </Link>
           </div>
@@ -224,9 +225,9 @@ const LandingPage = () => {
               <div className="space-y-4">
                 {[
                   {
-                    icon: Chrome,
-                    name: "Browser Extension",
-                    desc: "Save and highlight while you browse",
+                    icon: Laptop,
+                    name: "Automated Paper Ingestion",
+                    desc: "Drop preprints or enter DOIs to extract structured data",
                     status: "Available",
                   },
                   {

@@ -71,7 +71,7 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ items }) => {
         ) : (
           recentItems.map((item) => {
             const sourceLabel = item.deviceSource === "extension"
-              ? "Browser Extension"
+              ? "Workstation Ingestion"
               : item.deviceSource === "mobile"
               ? "Mobile App"
               : item.deviceSource === "smart_pen"
