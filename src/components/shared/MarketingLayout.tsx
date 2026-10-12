@@ -9,7 +9,6 @@
 
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import BubbleBackground from "../shared/BubbleBackground";
 import { useTheme } from "../../context/ThemeContext";
 
 // ============================================
@@ -53,37 +52,25 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <div className="theme-page theme-marketing min-h-screen text-gray-900 font-sans relative">
-      {/* Fixed Background Layer - z-index 0 */}
-      <div
-        className={`fixed inset-0 z-0 ${
-          isGlassTheme
-            ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"
-            : "bg-[#F5F5F7]"
-        }`}
-      />
-
-      {/* Interactive Bubble Background - z-index 5 */}
-      <BubbleBackground bubbleCount={12} enabled={isBubbleTheme} />
-
+    <div className="min-h-screen bg-[#FAFBFD] text-slate-900 font-sans relative">
       {/* Navigation */}
       <nav
-        className={`fixed top-0 w-full z-50 transition-all duration-500 bubble-clickthrough ${
+        className={`fixed top-0 w-full z-50 transition-all duration-300 ${
           isScrolled
-            ? "bg-white/80 backdrop-blur-xl backdrop-saturate-150 border-b border-gray-200/50"
+            ? "bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-2xs"
             : "bg-transparent"
         }`}
       >
         <div className="max-w-6xl mx-auto px-6">
-          <div className="flex justify-between h-12 items-center">
+          <div className="flex justify-between h-14 items-center">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2 group">
+            <Link to="/" className="flex items-center gap-2.5 group">
               <img
                 src="/logo.svg"
                 alt="ResearchMate Logo"
-                className="w-8 h-8 group-hover:scale-105 transition-transform"
+                className="w-7 h-7 group-hover:scale-105 transition-transform"
               />
-              <span className="text-base font-semibold text-gray-900">
+              <span className="text-base font-semibold font-title text-slate-900">
                 ResearchMate
               </span>
             </Link>
@@ -96,9 +83,19 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
                     .getElementById("home")
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
-                className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
               >
-                Home
+                Overview
+              </button>
+              <button
+                onClick={() =>
+                  document
+                    .getElementById("features")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                Features
               </button>
               <button
                 onClick={() =>
@@ -106,9 +103,9 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
                     .getElementById("products")
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
-                className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
               >
-                Products
+                Platform
               </button>
               <button
                 onClick={() =>
@@ -116,22 +113,22 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
                     .getElementById("how-it-works")
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
-                className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
               >
-                How It Works
+                Workflow
               </button>
             </div>
 
             {/* CTA Buttons */}
             <div className="hidden md:flex items-center gap-3">
               <Link to="/login">
-                <button className="theme-btn theme-btn-ghost text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5">
+                <button className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors px-3 py-1.5">
                   Sign In
                 </button>
               </Link>
               <Link to="/signup">
-                <button className="theme-btn theme-btn-primary text-xs font-medium bg-[#007AFF] hover:bg-[#0066DD] text-white px-4 py-1.5 transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-95">
-                  Get Started
+                <button className="text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg transition-all active:scale-[0.98] shadow-2xs">
+                  Start Free
                 </button>
               </Link>
             </div>

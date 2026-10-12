@@ -1,53 +1,51 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import {
-  Chrome,
-  Sparkles,
-  Network,
-  Download,
-  BookOpen,
+  UploadCloud,
+  Table2,
+  FileEdit,
   GraduationCap,
-  FileText,
-  ArrowRight,
+  BookOpen,
+  FileCode,
   CheckCircle2,
 } from "lucide-react";
 
 const WORKFLOW_STEPS = [
   {
-    icon: Chrome,
-    title: "1-Click Web & Preprint Ingestion",
-    desc: "Save papers from ArXiv, PubMed, and Nature directly into your encrypted library. The extension automatically detects and downloads the open-access PDF.",
+    icon: UploadCloud,
+    title: "1. Ingest Without Manual Highlighting",
+    desc: "Drop a folder of 5–15 PDFs, paste ArXiv IDs, or snap a photo of a whiteboard math derivation. No tedious copy-pasting or line-by-line highlighting required.",
   },
   {
-    icon: Sparkles,
-    title: "AI Synthesis & LaTeX Parsing",
-    desc: "Extract mathematical formulas, research methodologies, and core findings into structured markdown without hallucinated claims.",
+    icon: Table2,
+    title: "2. Generate Comparative Literature Matrix",
+    desc: "Gemini Vision & Synthesis extracts core methodologies, benchmark datasets, quantitative findings, and conflicting gaps into an interactive side-by-side matrix.",
   },
   {
-    icon: Network,
-    title: "Topological Knowledge Graph",
-    desc: "Trace co-citations, shared authors, and thematic clusters automatically. Your library becomes a living map of your research domain.",
+    icon: FileEdit,
+    title: "3. 1-Click Synthesis to Manuscript Draft",
+    desc: "The matrix synthesizes into a cohesive, structured Related Work section with verified in-text citations. Export directly to Overleaf (.tex) or Microsoft Word (.docx).",
   },
 ];
 
 const USE_CASES = [
   {
     icon: GraduationCap,
-    title: "Graduate Researchers & PhDs",
-    desc: "Accelerate literature reviews, track hundreds of citations across multiple thesis chapters, and verify benchmark equations.",
-    perks: ["Automated BibTeX exports", "LaTeX math parsing", "Co-citation mapping"],
+    title: "PhD Candidates & Graduate Students",
+    desc: "Slash 3 weeks of manual reading off your literature review. Instantly spot the research gaps and conflicting findings needed to justify your thesis contribution.",
+    perks: ["Automated Literature Matrix", "Related Work draft generation", "BibTeX auto-indexing"],
+  },
+  {
+    icon: FileCode,
+    title: "STEM Researchers (Math, Physics, AI)",
+    desc: "Stop retyping equations. Transcribe physical lab notebook derivations and blackboard proofs into clean mathematical LaTeX ready for Overleaf.",
+    perks: ["Handwritten Math OCR ($$...$$)", "Proof derivation tracking", "Direct Overleaf (.tex) export"],
   },
   {
     icon: BookOpen,
     title: "Principal Investigators & Academics",
-    desc: "Maintain unified lab references, digitize whiteboard meeting notes, and synthesize multi-paper meta-analyses.",
-    perks: ["Cross-device sync", "Multi-paper indexing", "Distraction-free reader"],
-  },
-  {
-    icon: FileText,
-    title: "Independent Scholars & Analysts",
-    desc: "Synthesize dense regulatory filings, technical preprints, and industry documentation with verifiable source attribution.",
-    perks: ["Browser side panel assistant", "Custom export formats", "End-to-end privacy"],
+    desc: "Synthesize multi-paper meta-analyses across dozens of submissions and maintain synchronized reference libraries across the entire lab team.",
+    perks: ["Zero-highlight multi-PDF ingestion", "Comparative methodology tables", "End-to-end data encryption"],
   },
 ];
 
@@ -57,10 +55,10 @@ const HowItWorksSection: React.FC = () => {
       {/* Editorial Section Header */}
       <div className="max-w-3xl mb-14">
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-title font-semibold tracking-tight text-slate-900 dark:text-slate-50 leading-[1.1] mb-4">
-          From unread PDFs to connected literature intelligence.
+          From scattered PDFs to a finished thesis section.
         </h2>
         <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 font-sans leading-relaxed max-w-[65ch]">
-          A streamlined three-stage pipeline transforms fragmented documents and physical notebook sketches into an interconnected knowledge base.
+          A specialized 3-stage synthesis pipeline designed to replace manual highlighting with automated comparative analysis.
         </p>
       </div>
 
@@ -96,10 +94,10 @@ const HowItWorksSection: React.FC = () => {
         })}
       </div>
 
-      {/* Domain Use Cases */}
+      {/* Domain Disciplines */}
       <div>
         <h3 className="text-2xl font-title font-semibold text-slate-900 dark:text-slate-100 mb-8">
-          Built for rigorous academic disciplines
+          Engineered for academic rigor
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

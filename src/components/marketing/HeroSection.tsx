@@ -6,115 +6,65 @@ import {
   FileText,
   Copy,
   Check,
-  Share2,
-  Network,
-  BookOpen,
+  Table2,
+  PenTool,
+  FileEdit,
   Sparkles,
-  Layers,
+  Download,
 } from "lucide-react";
 
-type SynthesizerMode = "findings" | "bibtex" | "graph";
+type SynthesizerMode = "matrix" | "math_ocr" | "draft";
 
-interface PaperSample {
-  id: string;
-  title: string;
-  authors: string;
-  journal: string;
-  doi: string;
-  excerpt: string;
-  formula: string;
-  formulaLabel: string;
-  findings: string[];
-  bibtex: string;
-  graphNodes: { label: string; group: string; connections: number }[];
-}
-
-const SAMPLE_PAPERS: PaperSample[] = [
+const MATRIX_DATA = [
   {
-    id: "transformer",
+    paper: "Vaswani et al. (2017)",
     title: "Attention Is All You Need",
-    authors: "Vaswani et al. (Google Brain)",
-    journal: "Advances in Neural Information Processing Systems, 2017",
-    doi: "arXiv:1706.03762",
-    excerpt:
-      "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks. We propose the Transformer, a model architecture eschewing recurrence and entirely relying on an attention mechanism to draw global dependencies between input and output.",
-    formulaLabel: "Scaled Dot-Product Attention",
-    formula: "Attention(Q, K, V) = softmax((Q K^T) / sqrt(d_k)) V",
-    findings: [
-      "Replaces recurrence with multi-head self-attention, enabling O(1) parallel sequence steps.",
-      "Achieves 28.4 BLEU on WMT 2014 English-to-German, improving existing best results by >2 BLEU.",
-      "Reduces training compute requirements by an order of magnitude compared to recurrent baselines.",
-    ],
-    bibtex: `@article{vaswani2017attention,
-  author    = {Vaswani, Ashish and Shazeer, Noam and Parmar, Niki},
-  title     = {Attention Is All You Need},
-  journal   = {Advances in Neural Information Processing Systems},
-  volume    = {30},
-  year      = {2017}
-}`,
-    graphNodes: [
-      { label: "Self-Attention", group: "Mechanism", connections: 14 },
-      { label: "Multi-Head Attention", group: "Architecture", connections: 9 },
-      { label: "Positional Encoding", group: "Input", connections: 6 },
-      { label: "BERT & GPT", group: "Downstream", connections: 28 },
-    ],
+    method: "Multi-Head Self-Attention",
+    dataset: "WMT 2014 En-De / En-Fr",
+    finding: "28.4 BLEU; O(1) sequential training step",
+    gap: "Quadratic O(N²) memory scaling on long contexts",
   },
   {
-    id: "quantum",
-    title: "Quantum Computational Supremacy Using Superconducting Qubits",
-    authors: "Arute et al. (Google Quantum AI)",
-    journal: "Nature 574, 505–510, 2019",
-    doi: "10.1038/s41586-019-1666-5",
-    excerpt:
-      "The promise of quantum computers is that certain computational tasks might be executed exponentially faster on a quantum processor than on a classical processor. We demonstrate computational supremacy using a programmable superconducting processor.",
-    formulaLabel: "Cross-Entropy Benchmarking Fidelity",
-    formula: "F_XEB = 2^n * <P(x_i)> - 1",
-    findings: [
-      "Programmable superconducting processor with 53 active qubits executes target circuit in ~200 seconds.",
-      "Classical simulation on summit supercomputer estimated to require ~10,000 years for equivalent task.",
-      "Validates quantum mechanics in computational Hilbert space dimension of 2^53 (~9 × 10^15).",
-    ],
-    bibtex: `@article{arute2019quantum,
-  author  = {Arute, Frank and Arya, Kunal and Babbush, Ryan},
-  title   = {Quantum computational supremacy using a programmable superconducting processor},
-  journal = {Nature},
-  volume  = {574},
-  pages   = {505--510},
-  year    = {2019}
-}`,
-    graphNodes: [
-      { label: "Sycamore Processor", group: "Hardware", connections: 12 },
-      { label: "Cross-Entropy Benchmark", group: "Metric", connections: 7 },
-      { label: "Hilbert Space 2^53", group: "Theory", connections: 18 },
-      { label: "Fault-Tolerant Gates", group: "Roadmap", connections: 11 },
-    ],
+    paper: "Devlin et al. (2018)",
+    title: "BERT: Pre-training Deep Bidirectional",
+    method: "Masked Language Modeling (MLM)",
+    dataset: "BooksCorpus (800M) + Wikipedia",
+    finding: "SOTA on 11 NLP tasks; bidirectional representations",
+    gap: "Pretrain-finetune mismatch due to [MASK] token",
+  },
+  {
+    paper: "Brown et al. (2020)",
+    title: "Language Models are Few-Shot Learners",
+    method: "Autoregressive 175B Transformer",
+    dataset: "Common Crawl + WebText2 (300B tokens)",
+    finding: "Competitive few-shot without gradient updates",
+    gap: "Extremely high inference compute; hallucinations",
   },
 ];
 
 const HeroSection: React.FC = () => {
-  const [selectedPaperIndex, setSelectedPaperIndex] = useState(0);
-  const [activeMode, setActiveMode] = useState<SynthesizerMode>("findings");
-  const [copiedBibtex, setCopiedBibtex] = useState(false);
+  const [activeMode, setActiveMode] = useState<SynthesizerMode>("matrix");
+  const [copiedDraft, setCopiedDraft] = useState(false);
 
-  const paper = SAMPLE_PAPERS[selectedPaperIndex];
+  const sampleDraft = `While Vaswani et al. (2017) demonstrated that replacing recurrent networks with multi-head self-attention eliminates sequential dependency, the architecture remains constrained by quadratic memory complexity O(N²). Subsequent developments in bidirectional representation learning (Devlin et al., 2018) addressed contextual grounding via masked language modeling, yet retained token discrepancy artifacts. More recently, autoregressive scaling approaches (Brown et al., 2020) demonstrated emergent few-shot task adaptation across 300B tokens, though real-time deployment remains severely bottlenecked by compute intensity and lack of grounded verification.`;
 
-  const handleCopyBibtex = () => {
-    navigator.clipboard.writeText(paper.bibtex);
-    setCopiedBibtex(true);
-    setTimeout(() => setCopiedBibtex(false), 2000);
+  const handleCopyDraft = () => {
+    navigator.clipboard.writeText(sampleDraft);
+    setCopiedDraft(true);
+    setTimeout(() => setCopiedDraft(false), 2000);
   };
 
   return (
     <section className="pt-12 sm:pt-16 lg:pt-20 pb-16 px-4 sm:px-6 max-w-7xl mx-auto">
-      {/* Editorial Header Stack (Max 4 text elements: Headline, Subtext, CTAs) */}
+      {/* Editorial Header Stack (Max 4 elements: Headline, Subtext, CTAs) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start mb-14">
         <div className="lg:col-span-7 space-y-6">
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-title font-semibold tracking-tight text-slate-900 dark:text-slate-50 leading-[1.08] max-w-[22ch]">
-            The unified workspace for literature, notes, and citations.
+            From unread PDFs and lab derivations to a cited research draft.
           </h1>
 
           <p className="text-lg text-slate-600 dark:text-slate-400 font-sans leading-relaxed max-w-[55ch]">
-            Synthesize dense academic papers, extract formulas, digitize handwritten lab notes, and map connections in one distraction-free canvas.
+            Stop highlighting PDFs manually. Drop 10 papers to generate a comparative literature matrix, transcribe whiteboard derivations to LaTeX, and export publication-ready drafts in seconds.
           </p>
 
           <div className="flex flex-wrap items-center gap-4 pt-2">
@@ -122,7 +72,7 @@ const HeroSection: React.FC = () => {
               to="/signup"
               className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-lg bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 transition-all active:scale-[0.98] shadow-sm"
             >
-              <span>Start Researching Free</span>
+              <span>Try Early Access Free</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
 
@@ -130,46 +80,58 @@ const HeroSection: React.FC = () => {
               href="#features"
               className="inline-flex items-center gap-2 px-5 py-3.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-medium text-sm border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-[0.98]"
             >
-              <BookOpen className="w-4 h-4 text-slate-500" />
-              <span>Explore Architecture</span>
+              <Table2 className="w-4 h-4 text-slate-500" />
+              <span>Preview Core Features</span>
             </a>
           </div>
         </div>
 
-        {/* Paper Quick Selector Bar */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
+        {/* Feature Highlights Card */}
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <span className="text-xs font-mono text-slate-500 uppercase tracking-wider">
-              Selected Literature
+              New Research Engine
             </span>
-            <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/50 dark:border-emerald-800/50">
-              Verified Source
+            <span className="text-xs font-mono text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-200/50 dark:border-indigo-800/50">
+              Pivot Preview
             </span>
           </div>
 
-          <div className="space-y-2">
-            {SAMPLE_PAPERS.map((item, index) => {
-              const isSelected = index === selectedPaperIndex;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedPaperIndex(index)}
-                  className={`w-full text-left p-3 rounded-lg border transition-all text-xs ${
-                    isSelected
-                      ? "bg-slate-50 dark:bg-slate-800/80 border-slate-900/20 dark:border-slate-700 text-slate-900 dark:text-slate-100 shadow-2xs"
-                      : "border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40"
-                  }`}
-                >
-                  <p className="font-medium truncate">{item.title}</p>
-                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.authors} • {item.journal.split(",")[0]}</p>
-                </button>
-              );
-            })}
+          <div className="space-y-2.5">
+            <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
+              <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Table2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                Automated Literature Matrix
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Drop 10 PDFs: extract methodologies, datasets, quantitative findings & gaps in one table.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
+              <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <PenTool className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                Handwritten Math to LaTeX
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Snap whiteboard equations or lab notebooks; get clean, copyable LaTeX blocks.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
+              <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <FileEdit className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                Synthesized Related Work Draft
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Turn comparison matrices straight into cited prose ready for Overleaf (.tex) or Word (.docx).
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Interactive Research Synthesizer Bento Console */}
+      {/* Interactive Core Engine Console */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         {/* Console Header Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/80">
@@ -179,10 +141,10 @@ const HeroSection: React.FC = () => {
             </div>
             <div>
               <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Research Synthesizer
+                Interactive Engine Preview
               </p>
               <p className="text-xs text-slate-500 font-mono">
-                {paper.doi}
+                Compare Papers • OCR Derivations • Generate Draft
               </p>
             </div>
           </div>
@@ -190,185 +152,203 @@ const HeroSection: React.FC = () => {
           {/* Mode Switcher Tabs */}
           <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium border border-slate-200/80 dark:border-slate-700">
             <button
-              onClick={() => setActiveMode("findings")}
+              onClick={() => setActiveMode("matrix")}
               className={`px-3 py-1.5 rounded-md transition-all ${
-                activeMode === "findings"
+                activeMode === "matrix"
                   ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               }`}
             >
-              Key Findings & LaTeX
+              1. Literature Matrix (Option A)
             </button>
             <button
-              onClick={() => setActiveMode("bibtex")}
+              onClick={() => setActiveMode("math_ocr")}
               className={`px-3 py-1.5 rounded-md transition-all ${
-                activeMode === "bibtex"
+                activeMode === "math_ocr"
                   ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               }`}
             >
-              BibTeX Citation
+              2. Lab Math to LaTeX (Option B)
             </button>
             <button
-              onClick={() => setActiveMode("graph")}
+              onClick={() => setActiveMode("draft")}
               className={`px-3 py-1.5 rounded-md transition-all ${
-                activeMode === "graph"
+                activeMode === "draft"
                   ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               }`}
             >
-              Knowledge Nodes
+              3. Synthesized Draft
             </button>
           </div>
         </div>
 
-        {/* Console Workspace: Source Excerpt + Synthesis Canvas */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
-          {/* Left Column: Primary Literature Ingestion Excerpt */}
-          <div className="lg:col-span-5 p-6 sm:p-8 space-y-4 bg-slate-50/30 dark:bg-slate-900/30">
-            <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
-              <FileText className="w-3.5 h-3.5 text-slate-400" />
-              <span>ORIGINAL DOCUMENT EXCERPT</span>
-            </div>
-
-            <h3 className="font-title text-xl font-semibold text-slate-900 dark:text-slate-100 leading-snug">
-              {paper.title}
-            </h3>
-
-            <p className="text-xs text-slate-500 font-mono">
-              {paper.authors} • {paper.journal}
-            </p>
-
-            <blockquote className="text-sm text-slate-600 dark:text-slate-400 italic leading-relaxed border-l-2 border-slate-300 dark:border-slate-700 pl-4 py-1">
-              "{paper.excerpt}"
-            </blockquote>
-
-            <div className="pt-2 text-xs text-slate-500 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>Extracted directly from indexed publication</span>
-            </div>
-          </div>
-
-          {/* Right Column: Dynamic Academic Synthesizer View */}
-          <div className="lg:col-span-7 p-6 sm:p-8">
-            <AnimatePresence mode="wait">
-              {activeMode === "findings" && (
-                <motion.div
-                  key="findings"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2 }}
-                  className="space-y-6"
-                >
+        {/* Console Workspace */}
+        <div className="p-6 sm:p-8">
+          <AnimatePresence mode="wait">
+            {activeMode === "matrix" && (
+              <motion.div
+                key="matrix"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-4"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <h4 className="text-xs font-mono text-slate-500 uppercase tracking-wider mb-3">
-                      Synthesized Takeaways
-                    </h4>
-                    <ul className="space-y-3">
-                      {paper.findings.map((finding, idx) => (
-                        <li key={idx} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-mono shrink-0 mt-0.5 border border-indigo-200/40">
-                            {idx + 1}
-                          </span>
-                          <span>{finding}</span>
-                        </li>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      Multi-Paper Synthesis Matrix (3 Papers Ingested)
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Auto-extracted without manual highlighting. Compare findings and identify literature gaps.
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded border border-indigo-200/50 self-start">
+                    Zero-Highlight Automation
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                  <table className="w-full text-left text-xs font-sans">
+                    <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-semibold">
+                      <tr>
+                        <th className="p-3">Paper / Citation</th>
+                        <th className="p-3">Methodology</th>
+                        <th className="p-3">Dataset / Benchmarks</th>
+                        <th className="p-3">Key Quant Finding</th>
+                        <th className="p-3">Identified Limitation / Gap</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                      {MATRIX_DATA.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="p-3 font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                            <p>{row.paper}</p>
+                            <p className="text-[10px] text-slate-400 italic">{row.title}</p>
+                          </td>
+                          <td className="p-3">{row.method}</td>
+                          <td className="p-3 text-slate-500 font-mono text-[11px]">{row.dataset}</td>
+                          <td className="p-3 text-emerald-700 dark:text-emerald-400 font-medium">{row.finding}</td>
+                          <td className="p-3 text-amber-700 dark:text-amber-400">{row.gap}</td>
+                        </tr>
                       ))}
-                    </ul>
-                  </div>
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            )}
 
-                  <div className="p-4 rounded-xl bg-slate-900 text-slate-100 dark:bg-slate-950 border border-slate-800">
-                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 text-[11px] font-mono text-slate-400">
-                      <span>{paper.formulaLabel}</span>
-                      <span className="text-indigo-400">LaTeX Mathematical Extraction</span>
+            {activeMode === "math_ocr" && (
+              <motion.div
+                key="math_ocr"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+                className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch"
+              >
+                {/* Left: Handwritten Whiteboard Input */}
+                <div className="p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-amber-50/30 dark:bg-amber-950/10 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between pb-2 mb-3 border-b border-amber-200/60 dark:border-amber-900/40 text-xs font-mono text-amber-800 dark:text-amber-400">
+                      <span>Camera / Smart Pen Ingestion</span>
+                      <span>Raw Handwritten Ink</span>
                     </div>
-                    <code className="text-xs sm:text-sm font-mono text-emerald-400 block break-all">
-                      {paper.formula}
-                    </code>
+                    <div className="font-serif italic text-base sm:text-lg text-slate-800 dark:text-slate-200 p-4 border border-dashed border-amber-300 dark:border-amber-800 rounded-lg bg-white/60 dark:bg-slate-900/40 space-y-2">
+                      <p>∮_∂Σ E · dl = - d/dt ∬_Σ B · dA</p>
+                      <p className="text-xs text-slate-500 font-sans not-italic">
+                        Derivation: Maxwell-Faraday equation evaluated over cryogenic cavity boundary ∂Σ.
+                      </p>
+                    </div>
                   </div>
-                </motion.div>
-              )}
+                  <p className="text-[11px] text-slate-500 mt-4">
+                    Captured from physical lab notebook via mobile camera sync.
+                  </p>
+                </div>
 
-              {activeMode === "bibtex" && (
-                <motion.div
-                  key="bibtex"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2 }}
-                  className="space-y-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-mono text-slate-500 uppercase tracking-wider">
-                      Standardized BibTeX Record
-                    </h4>
+                {/* Right: Parsed LaTeX Math Block */}
+                <div className="p-5 rounded-xl border border-slate-800 bg-slate-900 text-slate-100 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-800 text-xs font-mono text-slate-400">
+                      <span>Standard LaTeX Transcribed</span>
+                      <span className="text-emerald-400">Confidence: 99.8%</span>
+                    </div>
+                    <code className="text-xs font-mono text-emerald-400 block p-3 rounded-lg bg-slate-950 border border-slate-800 overflow-x-auto leading-relaxed">
+                      {"\\oint_{\\partial \\Sigma} \\mathbf{E} \\cdot d\\boldsymbol{\\ell} = -\\frac{d}{dt} \\iint_{\\Sigma} \\mathbf{B} \\cdot d\\mathbf{A}"}
+                    </code>
+                    <div className="mt-3 p-2 rounded bg-slate-800/60 text-xs text-slate-300 flex items-center justify-between">
+                      <span>Rendered Form:</span>
+                      <span className="font-mono text-indigo-300">{"$$\\oint \\mathbf{E} \\cdot d\\boldsymbol{\\ell} = -\\dot{\\Phi}_B$$"}</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Export target: Overleaf (.tex)</span>
                     <button
-                      onClick={handleCopyBibtex}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                      onClick={() => navigator.clipboard.writeText("\\oint_{\\partial \\Sigma} \\mathbf{E} \\cdot d\\boldsymbol{\\ell} = -\\frac{d}{dt} \\iint_{\\Sigma} \\mathbf{B} \\cdot d\\mathbf{A}")}
+                      className="px-2.5 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 text-[11px]"
                     >
-                      {copiedBibtex ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy BibTeX</span>
-                        </>
-                      )}
+                      Copy LaTeX
                     </button>
                   </div>
+                </div>
+              </motion.div>
+            )}
 
-                  <pre className="p-4 rounded-xl bg-slate-900 dark:bg-slate-950 text-slate-200 text-xs font-mono overflow-x-auto border border-slate-800 leading-relaxed">
-                    {paper.bibtex}
-                  </pre>
-                </motion.div>
-              )}
-
-              {activeMode === "graph" && (
-                <motion.div
-                  key="graph"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2 }}
-                  className="space-y-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-mono text-slate-500 uppercase tracking-wider">
-                      Knowledge Graph Inferred Associations
-                    </h4>
-                    <div className="flex items-center gap-1 text-xs text-slate-500">
-                      <Network className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Co-citation Mapping</span>
-                    </div>
+            {activeMode === "draft" && (
+              <motion.div
+                key="draft"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      Synthesized Related Work Draft
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Synthesized from the Literature Matrix with verifiable in-text citations.
+                    </p>
                   </div>
+                  <button
+                    onClick={handleCopyDraft}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    {copiedDraft ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Copied Draft</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy to Clipboard</span>
+                      </>
+                    )}
+                  </button>
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {paper.graphNodes.map((node, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-indigo-400 dark:hover:border-indigo-600 transition-colors"
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded">
-                            {node.group}
-                          </span>
-                          <span className="text-[11px] text-slate-400 font-mono">
-                            {node.connections} edges
-                          </span>
-                        </div>
-                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mt-2">
-                          {node.label}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                <div className="p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/60 font-sans text-sm text-slate-800 dark:text-slate-200 leading-relaxed space-y-3">
+                  <p>{sampleDraft}</p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs text-slate-500 font-mono">
+                  <span>Export: TipTap Editor • Overleaf (.tex) • Microsoft Word (.docx)</span>
+                  <Link
+                    to="/signup"
+                    className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline flex items-center gap-1"
+                  >
+                    Generate your own synthesis
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </section>

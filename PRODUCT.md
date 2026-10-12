@@ -7,24 +7,24 @@
 web
 
 ## Users
-Academic researchers, PhD candidates, university students, and scientists who read dense literature, capture notes from physical and digital sources, and need a distraction-free, unified research workspace.
+Graduate students, PhD candidates, university researchers, and STEM scientists (physics, math, computer science, engineering) who must synthesize 20–50 papers for literature reviews and transcribe handwritten math/derivations into publication-ready manuscripts.
 
 ## Product Purpose
-ResearchMate unifies reading, note-taking, AI synthesis, citation tracking, and handwriting OCR into an integrated academic workspace, replacing fragmented browser tabs and ad-hoc folders.
+Eliminate manual highlighting and fragmented tool-hopping. ResearchMate automatically turns multi-paper literature and physical whiteboard/lab derivations into comparative synthesis matrices and cited manuscript drafts.
 
 ## Positioning
-An integrated academic knowledge engine that bridges physical handwriting (Smart Pen / mobile camera OCR) with digital PDF annotation, LaTeX extraction, citation graph connectivity, and distraction-free document synthesis.
+"From Raw Ingestion to Finished Draft in One Tab." Unifies multi-paper literature review matrices (Option A) with STEM handwritten math & derivation OCR to LaTeX (Option B), directly feeding an integrated TipTap manuscript editor with Overleaf (.tex) and Word (.docx) export.
 
 ## Operating Context
-Literature reviews, paper annotation, thesis drafting, seminar prep, and lab experiments. Operates on desktop browsers and mobile web with cloud sync across devices.
+Thesis and dissertation literature reviews, seminar preparation, research grant proposals, and STEM manuscript drafting. Operates on desktop web with mobile camera OCR capture and cloud sync.
 
 ## Capabilities and Constraints
-- High-performance PDF reader with margin annotations and citation extraction.
-- AI research synthesis (paper summarization, LaTeX formula extraction, interactive Q&A).
-- Mobile OCR capture of handwritten notes and paper literature.
-- Interactive citation and knowledge graph visualizer.
-- Rich-text academic document editor (TipTap) with LaTeX math and export options.
-- Supabase-backed authentication, real-time sync, and storage.
+- Automated Multi-Paper Literature Review Matrix (extracts methodology, datasets, findings, and research gaps).
+- STEM Handwritten Math & Formula OCR to standard LaTeX ($$...$$).
+- One-click Synthesis-to-Draft Bridge into integrated TipTap editor with in-text citation pins.
+- 1-Click Preprint ingestion from ArXiv, PubMed, and Nature via browser extension.
+- Export to Overleaf (.tex), Microsoft Word (.docx), and BibTeX (.bib).
+- Supabase-backed authentication, encrypted storage, and real-time synchronization.
 
 ## Brand Commitments
 - Name: ResearchMate
@@ -34,13 +34,13 @@ Literature reviews, paper annotation, thesis drafting, seminar prep, and lab exp
 ## Evidence on Hand
 - Working full-stack repository in Vite 6 + React 19 + TypeScript + Tailwind CSS v4.
 - Supabase database and authentication integration.
-- Custom PDF annotation engine and TipTap document editor.
+- Custom PDF reader, TipTap document editor with LaTeX support, and Gemini Vision OCR.
 
 ## Product Principles
-1. Focus over spectacle: Every visual element serves comprehension and scannability, not decoration.
-2. Bridge physical and digital: Treat handwritten notes with the same first-class rigor as digital PDFs.
-3. Trust through precision: Show exact citations, formulas, and metadata without hallucinated claims.
-4. Restrained motion: Micro-interactions communicate state changes; zero ambient distraction.
+1. Eliminate manual labor: Never force the user to highlight line-by-line when AI can synthesize comparative matrices.
+2. Deliverable over container: Don't just store PDFs; generate the finished literature review and LaTeX formulas.
+3. Bridge physical and digital: Treat handwritten whiteboard and notebook derivations with the same first-class rigor as digital PDFs.
+4. Non-hallucinated precision: Ground every assertion in verifiable in-text citations linked to exact source documents.
 
 ## Accessibility & Inclusion
 - WCAG AA contrast standards (minimum 4.5:1 for body copy).
