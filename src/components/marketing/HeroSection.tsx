@@ -1,912 +1,377 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import {
-  Sparkles,
   ArrowRight,
-  Chrome,
-  CheckCircle2,
   FileText,
-  Mic,
-  Globe,
-  Video,
-  FileSpreadsheet,
-  Plus,
-  RefreshCw,
-  Cpu,
-  Brain,
-  Quote,
-  MessageSquare,
-  Zap,
-  MousePointer,
+  Copy,
+  Check,
+  Share2,
+  Network,
+  BookOpen,
+  Sparkles,
   Layers,
-  Undo2,
-  Tag,
-  Activity,
 } from "lucide-react";
 
-// ============================================
-// SOURCE ITEMS SPEC
-// ============================================
-interface SourceItem {
+type SynthesizerMode = "findings" | "bibtex" | "graph";
+
+interface PaperSample {
   id: string;
-  type: "pdf" | "audio" | "web" | "video" | "dataset";
-  name: string;
-  size: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  glowColor: string;
-  gradient: string;
-  summary: {
-    title: string;
-    bullets: string[];
-    citation: string;
-    qa: { question: string; answer: string }[];
-    entities: string[];
-  };
+  title: string;
+  authors: string;
+  journal: string;
+  doi: string;
+  excerpt: string;
+  formula: string;
+  formulaLabel: string;
+  findings: string[];
+  bibtex: string;
+  graphNodes: { label: string; group: string; connections: number }[];
 }
 
-const PLAYGROUND_SOURCES: SourceItem[] = [
+const SAMPLE_PAPERS: PaperSample[] = [
   {
-    id: "pdf-1",
-    type: "pdf",
-    name: "quantum_computing_nature.pdf",
-    size: "PDF Reader • 4.2 MB",
-    icon: FileText,
-    color: "from-purple-600 to-indigo-600",
-    glowColor: "rgba(124, 58, 237, 0.25)",
-    gradient: "from-purple-600 via-indigo-600 to-blue-600",
-    summary: {
-      title: "Quantum Supremacy via Superconducting Qubits",
-      bullets: [
-        "Demonstrates computational advantage using 53 active physical qubits.",
-        "System handles complex tensor contractions in 200 seconds vs 10,000 years classically.",
-        "Establishes foundation for fault-tolerant physical quantum execution gates.",
-      ],
-      citation: "Google Quantum AI, Nature Journal (2019)",
-      qa: [
-        {
-          question: "What is the key benchmark result?",
-          answer: "The 53-qubit processor performed a target sampling task in 200 seconds that would take a supercomputer 10,000 years.",
-        },
-        {
-          question: "How does this apply to research?",
-          answer: "Enables multi-scale molecular simulation and cryptographic prime factorization research.",
-        },
-      ],
-      entities: ["Superconducting Qubits", "Quantum Supremacy", "Sycamore Processor", "Cross-Entropy Benchmarking"],
-    },
+    id: "transformer",
+    title: "Attention Is All You Need",
+    authors: "Vaswani et al. (Google Brain)",
+    journal: "Advances in Neural Information Processing Systems, 2017",
+    doi: "arXiv:1706.03762",
+    excerpt:
+      "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks. We propose the Transformer, a model architecture eschewing recurrence and entirely relying on an attention mechanism to draw global dependencies between input and output.",
+    formulaLabel: "Scaled Dot-Product Attention",
+    formula: "Attention(Q, K, V) = softmax((Q K^T) / sqrt(d_k)) V",
+    findings: [
+      "Replaces recurrence with multi-head self-attention, enabling O(1) parallel sequence steps.",
+      "Achieves 28.4 BLEU on WMT 2014 English-to-German, improving existing best results by >2 BLEU.",
+      "Reduces training compute requirements by an order of magnitude compared to recurrent baselines.",
+    ],
+    bibtex: `@article{vaswani2017attention,
+  author    = {Vaswani, Ashish and Shazeer, Noam and Parmar, Niki},
+  title     = {Attention Is All You Need},
+  journal   = {Advances in Neural Information Processing Systems},
+  volume    = {30},
+  year      = {2017}
+}`,
+    graphNodes: [
+      { label: "Self-Attention", group: "Mechanism", connections: 14 },
+      { label: "Multi-Head Attention", group: "Architecture", connections: 9 },
+      { label: "Positional Encoding", group: "Input", connections: 6 },
+      { label: "BERT & GPT", group: "Downstream", connections: 28 },
+    ],
   },
   {
-    id: "audio-1",
-    type: "audio",
-    name: "neuroscience_lecture_12.mp3",
-    size: "Audio Recording • 18.5 MB",
-    icon: Mic,
-    color: "from-[#007AFF] to-[#5856D6]",
-    glowColor: "rgba(0, 122, 255, 0.25)",
-    gradient: "from-[#007AFF] via-blue-600 to-indigo-600",
-    summary: {
-      title: "Deep Sleep & Synaptic Re-normalization",
-      bullets: [
-        "Slow-wave sleep induces global synaptic scaling to protect neural plasticity.",
-        "Cerebrospinal fluid cleanses metabolic waste via the glymphatic system.",
-        "Memory consolidation occurs via sharp-wave ripples between hippocampus & cortex.",
-      ],
-      citation: "Dr. Walker, Stanford Neuro-Series (2025)",
-      qa: [
-        {
-          question: "What happens during slow-wave sleep?",
-          answer: "Synapses undergo global downscaling to restore baseline plasticity while consolidating long-term memories.",
-        },
-        {
-          question: "What is the glymphatic system role?",
-          answer: "Flushes beta-amyloid and tau proteins out of the central nervous system during NREM sleep.",
-        },
-      ],
-      entities: ["Synaptic Scaling", "Glymphatic System", "Sharp-Wave Ripples", "NREM Slow-Wave Sleep"],
-    },
-  },
-  {
-    id: "web-1",
-    type: "web",
-    name: "arxiv.org/abs/attention-is-all-you-need",
-    size: "Web Extension • ArXiv",
-    icon: Globe,
-    color: "from-amber-500 to-orange-600",
-    glowColor: "rgba(245, 158, 11, 0.25)",
-    gradient: "from-amber-500 via-orange-600 to-red-600",
-    summary: {
-      title: "Attention Is All You Need (Transformer Architecture)",
-      bullets: [
-        "Replaces recurrent layers with self-attention networks for massive parallelism.",
-        "Achieves state-of-the-art BLEU scores with 10x lower training latency.",
-        "Introduces multi-head dot-product attention scales for token association mapping.",
-      ],
-      citation: "Vaswani et al., arXiv:1706.03762 (2017)",
-      qa: [
-        {
-          question: "Why drop recurrent layers?",
-          answer: "Recurrent networks prevent sequence parallelization during training; self-attention allows global sequence computation in O(1) steps.",
-        },
-        {
-          question: "What is multi-head attention?",
-          answer: "Allows the model to jointly attend to information from different representation subspaces at different positions.",
-        },
-      ],
-      entities: ["Self-Attention", "Multi-Head Attention", "Positional Encoding", "Transformer Layer"],
-    },
-  },
-  {
-    id: "video-1",
-    type: "video",
-    name: "handwritten_lab_notes_scan.png",
-    size: "Camera OCR Scan • Image",
-    icon: Video,
-    color: "from-rose-500 to-pink-600",
-    glowColor: "rgba(244, 63, 94, 0.25)",
-    gradient: "from-rose-500 via-pink-600 to-purple-600",
-    summary: {
-      title: "Handwritten Optics Lab Equations Scan",
-      bullets: [
-        "Digitizes handwritten mathematical derivations & optical interference equations.",
-        "Extracts spatial formulas into TeX formatted LaTeX mathematical expressions.",
-        "Auto-links parsed variables directly to central notes library.",
-      ],
-      citation: "Mobile Camera OCR Capture (Lab Notebook Vol. 4)",
-      qa: [
-        {
-          question: "How accurate is the LaTeX formula recognition?",
-          answer: "Achieves 99.1% character accuracy on handwritten mathematical symbols and subscripts.",
-        },
-        {
-          question: "Can I edit extracted equations?",
-          answer: "Yes, equations save directly into Document Editor with raw LaTeX and rendered preview.",
-        },
-      ],
-      entities: ["LaTeX Math OCR", "Optical Interference", "Camera OCR Sync", "Digital Lab Notebook"],
-    },
-  },
-  {
-    id: "dataset-1",
-    type: "dataset",
-    name: "clinical_trial_phase3_data.csv",
-    size: "Knowledge Graph • Dataset",
-    icon: FileSpreadsheet,
-    color: "from-emerald-500 to-teal-600",
-    glowColor: "rgba(16, 185, 129, 0.25)",
-    gradient: "from-emerald-500 via-teal-600 to-cyan-600",
-    summary: {
-      title: "Oncology Phase III Double-Blind Trial",
-      bullets: [
-        "Cohort N=4,200 patients evaluated over a 24-month longitudinal observation period.",
-        "Targeted immunotherapy arm yielded a 34% increase in overall survival (p < 0.001).",
-        "Adverse event incidence was statistically non-inferior to baseline chemotherapy.",
-      ],
-      citation: "New England Journal of Oncology (2025)",
-      qa: [
-        {
-          question: "What was the sample size?",
-          answer: "4,200 randomized patients across 82 international clinical research sites.",
-        },
-        {
-          question: "Was the survival benefit statistically significant?",
-          answer: "Yes, overall survival hazard ratio HR=0.66 with p-value < 0.001 demonstrating strong efficacy.",
-        },
-      ],
-      entities: ["Hazard Ratio (HR)", "Longitudinal Cohort", "Double-Blind Control", "Kaplan-Meier Survival Curve"],
-    },
+    id: "quantum",
+    title: "Quantum Computational Supremacy Using Superconducting Qubits",
+    authors: "Arute et al. (Google Quantum AI)",
+    journal: "Nature 574, 505–510, 2019",
+    doi: "10.1038/s41586-019-1666-5",
+    excerpt:
+      "The promise of quantum computers is that certain computational tasks might be executed exponentially faster on a quantum processor than on a classical processor. We demonstrate computational supremacy using a programmable superconducting processor.",
+    formulaLabel: "Cross-Entropy Benchmarking Fidelity",
+    formula: "F_XEB = 2^n * <P(x_i)> - 1",
+    findings: [
+      "Programmable superconducting processor with 53 active qubits executes target circuit in ~200 seconds.",
+      "Classical simulation on summit supercomputer estimated to require ~10,000 years for equivalent task.",
+      "Validates quantum mechanics in computational Hilbert space dimension of 2^53 (~9 × 10^15).",
+    ],
+    bibtex: `@article{arute2019quantum,
+  author  = {Arute, Frank and Arya, Kunal and Babbush, Ryan},
+  title   = {Quantum computational supremacy using a programmable superconducting processor},
+  journal = {Nature},
+  volume  = {574},
+  pages   = {505--510},
+  year    = {2019}
+}`,
+    graphNodes: [
+      { label: "Sycamore Processor", group: "Hardware", connections: 12 },
+      { label: "Cross-Entropy Benchmark", group: "Metric", connections: 7 },
+      { label: "Hilbert Space 2^53", group: "Theory", connections: 18 },
+      { label: "Fault-Tolerant Gates", group: "Roadmap", connections: 11 },
+    ],
   },
 ];
 
 const HeroSection: React.FC = () => {
-  // Magnet button effect values
-  const [btn1Translate, setBtn1Translate] = useState({ x: 0, y: 0 });
-  const [btn2Translate, setBtn2Translate] = useState({ x: 0, y: 0 });
+  const [selectedPaperIndex, setSelectedPaperIndex] = useState(0);
+  const [activeMode, setActiveMode] = useState<SynthesizerMode>("findings");
+  const [copiedBibtex, setCopiedBibtex] = useState(false);
 
-  // Playground States
-  const [activeItem, setActiveItem] = useState<SourceItem | null>(null);
-  const [processingState, setProcessingState] = useState<"idle" | "processing" | "synthesized">("idle");
-  const [isHoveringDropzone, setIsHoveringDropzone] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [progressText, setProgressText] = useState("");
-  const [activeResultTab, setActiveResultTab] = useState<"summary" | "qa" | "entities">("summary");
-  const dropzoneRef = useRef<HTMLDivElement | null>(null);
-  // DOM refs for each card element
-  const cardRefs = useRef<Array<HTMLDivElement | null>>([null, null, null, null, null]);
-  // Card's bounding rect captured at onDragStart (before any movement — always accurate).
-  // Used with info.offset in onDragEnd to compute the final drop position without
-  // relying on getBoundingClientRect() at drag-end (which can be one RAF behind).
-  const dragStartRects = useRef<Array<DOMRect | null>>([null, null, null, null, null]);
-  // True while a drag gesture is active — used to guard onTap from firing
-  // on the same pointer-up event that just completed a drag.
-  const isDragGestureRef = useRef(false);
-  // Tracks which cards have escaped outside the dropzone (stuck outside)
-  const [lostCards, setLostCards] = useState<Record<string, boolean>>({});
+  const paper = SAMPLE_PAPERS[selectedPaperIndex];
 
-  // ── Per-card motion values (hooks must be at top level, not in .map()) ──
-  // These are the actual x/y values Framer Motion's drag gesture writes to,
-  // so calling animate(mv, 0) genuinely springs the card back to its slot.
-  const mv0x = useMotionValue(0); const mv0y = useMotionValue(0);
-  const mv1x = useMotionValue(0); const mv1y = useMotionValue(0);
-  const mv2x = useMotionValue(0); const mv2y = useMotionValue(0);
-  const mv3x = useMotionValue(0); const mv3y = useMotionValue(0);
-  const mv4x = useMotionValue(0); const mv4y = useMotionValue(0);
-  const cardMVX = [mv0x, mv1x, mv2x, mv3x, mv4x];
-  const cardMVY = [mv0y, mv1y, mv2y, mv3y, mv4y];
-
-  const springConfig = { type: "spring" as const, stiffness: 260, damping: 26 };
-
-  const snapCardHome = (idx: number) => {
-    animate(cardMVX[idx], 0, springConfig);
-    animate(cardMVY[idx], 0, springConfig);
-  };
-
-  // Mouse Spotlight Effect for Hero Background
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-
-  const handleGlobalMouseMove = (e: React.MouseEvent) => {
-    const { clientX, clientY } = e;
-    mouseX.set(clientX);
-    mouseY.set(clientY);
-  };
-
-  const bgSpotlight = useTransform(
-    [mouseX, mouseY],
-    ([x, y]) => `radial-gradient(900px circle at ${x}px ${y}px, rgba(0, 122, 255, 0.06), transparent 80%)`
-  );
-
-  const handleMagnetMove = (e: React.MouseEvent<HTMLButtonElement>, btnIdx: number) => {
-    const btn = e.currentTarget;
-    const rect = btn.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width / 2;
-    const y = e.clientY - rect.top - rect.height / 2;
-    if (btnIdx === 1) {
-      setBtn1Translate({ x: x * 0.25, y: y * 0.25 });
-    } else {
-      setBtn2Translate({ x: x * 0.25, y: y * 0.25 });
-    }
-  };
-
-  const handleMagnetLeave = (btnIdx: number) => {
-    if (btnIdx === 1) {
-      setBtn1Translate({ x: 0, y: 0 });
-    } else {
-      setBtn2Translate({ x: 0, y: 0 });
-    }
-  };
-
-  // Trigger processing pipeline — springs the card back to its slot, then synthesizes
-  const triggerProcessing = (item: SourceItem, idx: number) => {
-    if (processingState === "processing") return;
-    // Snap card back to original left-column slot
-    snapCardHome(idx);
-    setLostCards((prev) => ({ ...prev, [item.id]: false }));
-    setActiveItem(item);
-    setActiveResultTab("summary");
-    setProcessingState("processing");
-    setIsHoveringDropzone(false);
-    setIsDragging(false);
-
-    const stages = [
-      { text: "Reading raw byte stream & metadata...", delay: 0 },
-      { text: "Extracting semantic entities & multimodal OCR...", delay: 350 },
-      { text: "Mapping logical context vectors...", delay: 800 },
-      { text: "Synthesizing dynamic summaries & citations...", delay: 1300 },
-    ];
-
-    stages.forEach((stage) => {
-      setTimeout(() => {
-        setProgressText(stage.text);
-      }, stage.delay);
-    });
-
-    setTimeout(() => {
-      setProcessingState("synthesized");
-    }, 1800);
-  };
-
-  // Real-time drag tracking — used ONLY for visual hover feedback on the dropzone.
-  // The actual drop decision is made in handleDragEnd using info.point.
-  const handleDrag = (event: any, _info: any) => {
-    if (!dropzoneRef.current) return;
-    const rect = dropzoneRef.current.getBoundingClientRect();
-    const margin = 40;
-    const isOver =
-      event.clientX >= rect.left - margin &&
-      event.clientX <= rect.right + margin &&
-      event.clientY >= rect.top - margin &&
-      event.clientY <= rect.bottom + margin;
-    setIsHoveringDropzone(isOver);
-  };
-
-  // Drag End: compute final card-center using the rect captured at drag-START
-  // plus info.offset (Framer Motion's own pointer-delta, always reliable).
-  //
-  // Why not getBoundingClientRect() here? Framer Motion writes transforms via
-  // requestAnimationFrame, so onDragEnd (fired synchronously on pointerup) may
-  // read the DOM one frame BEFORE the final position has been painted.
-  //
-  // startRect + info.offset avoids both the RAF lag and coordinate-system
-  // mismatches (info.offset is a relative pixel delta, same space as viewport rects).
-  const handleDragEnd = (_event: any, info: any, item: SourceItem, idx: number) => {
-    // Delay clearing the drag flag so onTap (fired on same pointer-up) is blocked
-    setTimeout(() => { isDragGestureRef.current = false; }, 100);
-
-    setIsDragging(false);
-    setIsHoveringDropzone(false);
-
-    const startRect = dragStartRects.current[idx];
-    const dzEl = dropzoneRef.current;
-
-    if (!startRect || !dzEl) {
-      setLostCards((prev) => ({ ...prev, [item.id]: true }));
-      return;
-    }
-
-    const dRect = dzEl.getBoundingClientRect();
-    const offsetX = info?.offset?.x ?? 0;
-    const offsetY = info?.offset?.y ?? 0;
-
-    // Card center at drop = (start position) + (how far pointer moved during drag)
-    const finalCX = startRect.left + startRect.width / 2 + offsetX;
-    const finalCY = startRect.top + startRect.height / 2 + offsetY;
-
-    const isOver =
-      finalCX >= dRect.left &&
-      finalCX <= dRect.right &&
-      finalCY >= dRect.top &&
-      finalCY <= dRect.bottom;
-
-    if (isOver) {
-      triggerProcessing(item, idx);
-    } else {
-      // Card stays stuck — motion values are already at the dropped position
-      setLostCards((prev) => ({ ...prev, [item.id]: true }));
-    }
-  };
-
-  const resetPlayground = () => {
-    setActiveItem(null);
-    setProcessingState("idle");
-    setProgressText("");
-    setIsHoveringDropzone(false);
-    setIsDragging(false);
-    setLostCards({});
-    // Spring all escaped cards back to their list slots
-    PLAYGROUND_SOURCES.forEach((_, idx) => snapCardHome(idx));
+  const handleCopyBibtex = () => {
+    navigator.clipboard.writeText(paper.bibtex);
+    setCopiedBibtex(true);
+    setTimeout(() => setCopiedBibtex(false), 2000);
   };
 
   return (
-    <div
-      onMouseMove={handleGlobalMouseMove}
-      className="relative min-h-screen flex flex-col items-center justify-start px-6 pt-28 pb-24 overflow-hidden bg-[#FAFBFD] text-slate-900 transition-colors duration-500"
-    >
-      {/* Background Soft Mesh & Pastel Glows */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-        <motion.div
-          className="absolute inset-0 hidden md:block"
-          style={{ background: bgSpotlight }}
-        />
+    <section className="pt-12 sm:pt-16 lg:pt-20 pb-16 px-4 sm:px-6 max-w-7xl mx-auto">
+      {/* Editorial Header Stack (Max 4 text elements: Headline, Subtext, CTAs) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start mb-14">
+        <div className="lg:col-span-7 space-y-6">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-title font-semibold tracking-tight text-slate-900 dark:text-slate-50 leading-[1.08] max-w-[22ch]">
+            The unified workspace for literature, notes, and citations.
+          </h1>
 
-        {/* Ambient Pastel Glow Blobs (Eye-pleasing) */}
-        <motion.div
-          animate={{
-            x: [0, 80, -40, 0],
-            y: [0, -60, 40, 0],
-            scale: [1, 1.15, 0.9, 1],
-          }}
-          transition={{ duration: 24, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -top-32 -left-32 w-[650px] h-[650px] rounded-full bg-blue-200/40 blur-[130px]"
-        />
+          <p className="text-lg text-slate-600 dark:text-slate-400 font-sans leading-relaxed max-w-[55ch]">
+            Synthesize dense academic papers, extract formulas, digitize handwritten lab notes, and map connections in one distraction-free canvas.
+          </p>
 
-        <motion.div
-          animate={{
-            x: [0, -90, 70, 0],
-            y: [0, 50, -80, 0],
-            scale: [1, 0.85, 1.1, 1],
-          }}
-          transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -right-20 -bottom-20 w-[600px] h-[600px] rounded-full bg-purple-200/40 blur-[120px]"
-        />
-
-        {/* Light Subtly Grid Backdrop */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000006_1px,transparent_1px),linear-gradient(to_bottom,#00000006_1px,transparent_1px)] bg-[size:32px_32px]" />
-      </div>
-
-      {/* ================= HERO CONTENT ================= */}
-      <div className="relative z-10 max-w-5xl mx-auto text-center flex flex-col items-center">
-        
-        {/* Sparkles Badge */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 100, damping: 15 }}
-          className="inline-flex items-center gap-2.5 px-4 py-2 bg-white/80 backdrop-blur-2xl rounded-full border border-blue-200/80 shadow-md shadow-blue-500/5 mb-8 hover:scale-[1.04] transition-all duration-300 cursor-default"
-        >
-          <Sparkles className="w-4 h-4 text-[#007AFF] animate-pulse" />
-          <span className="text-xs font-bold tracking-wider uppercase bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE] bg-clip-text text-transparent">
-            Powered by Gemini AI & Realtime Sync Engine
-          </span>
-        </motion.div>
-
-        {/* Main Headline */}
-        <motion.h1
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="font-title text-5xl sm:text-6xl md:text-8xl font-black tracking-tight leading-[1.05] mb-6 text-slate-900"
-        >
-          Your Research.
-          <br />
-          <span className="bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE] bg-clip-text text-transparent">
-            Everywhere, Instantly.
-          </span>
-        </motion.h1>
-
-        {/* Subtitle */}
-        <motion.p
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="text-lg sm:text-xl md:text-2xl text-slate-600 max-w-3xl mx-auto mb-10 leading-relaxed font-sans font-medium"
-        >
-          Capture, synthesize, and reference notes across all devices. 
-          Experience a beautiful workspace built for academic synthesis, active recall, and knowledge graph mapping.
-        </motion.p>
-
-        {/* High-Visibility Light-Theme CTA Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-5 mb-16"
-        >
-          {/* Primary CTA Button */}
-          <Link to="/signup">
-            <button
-              onMouseMove={(e) => handleMagnetMove(e, 1)}
-              onMouseLeave={() => handleMagnetLeave(1)}
-              style={{ transform: `translate(${btn1Translate.x}px, ${btn1Translate.y}px)` }}
-              className="relative group overflow-hidden flex items-center gap-3 px-9 py-4 bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#0051D5] hover:from-[#0066DD] hover:via-[#4A48C8] hover:to-[#0044B8] text-white font-bold text-base rounded-full shadow-[0_10px_30px_rgba(0,122,255,0.4)] hover:shadow-[0_15px_45px_rgba(0,122,255,0.65)] hover:scale-[1.05] active:scale-[0.97] transition-all duration-300 border border-white/30"
+          <div className="flex flex-wrap items-center gap-4 pt-2">
+            <Link
+              to="/signup"
+              className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-lg bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 transition-all active:scale-[0.98] shadow-sm"
             >
-              {/* Shimmer Light Sweep Effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none" />
-              <span className="relative z-10">Get Started Free</span>
-              <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1.5 transition-transform" />
-            </button>
-          </Link>
+              <span>Start Researching Free</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
 
-          {/* Secondary CTA Button */}
-          <button
-            onMouseMove={(e) => handleMagnetMove(e, 2)}
-            onMouseLeave={() => handleMagnetLeave(2)}
-            style={{ transform: `translate(${btn2Translate.x}px, ${btn2Translate.y}px)` }}
-            onClick={() =>
-              document
-                .getElementById("products")
-                ?.scrollIntoView({ behavior: "smooth" })
-            }
-            className="relative group overflow-hidden flex items-center gap-3 px-8 py-4 bg-white/90 backdrop-blur-2xl text-slate-900 font-bold text-base rounded-full border-2 border-slate-200 shadow-lg shadow-slate-200/50 hover:border-[#007AFF] hover:text-[#007AFF] hover:shadow-[0_10px_30px_rgba(0,122,255,0.25)] hover:scale-[1.05] active:scale-[0.97] transition-all duration-300"
-          >
-            <Chrome className="w-5 h-5 text-[#007AFF] relative z-10 group-hover:rotate-12 transition-transform" />
-            <span className="relative z-10">Download Extension</span>
-          </button>
-        </motion.div>
+            <a
+              href="#features"
+              className="inline-flex items-center gap-2 px-5 py-3.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-medium text-sm border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-[0.98]"
+            >
+              <BookOpen className="w-4 h-4 text-slate-500" />
+              <span>Explore Architecture</span>
+            </a>
+          </div>
+        </div>
 
-        {/* Feature Badges */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1, delay: 0.3 }}
-          className="flex flex-wrap items-center justify-center gap-8 text-sm font-semibold text-slate-500 mb-20"
-        >
-          {["Free to start", "No credit card required", "Cancel anytime"].map((text, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              <span>{text}</span>
-            </div>
-          ))}
-        </motion.div>
+        {/* Paper Quick Selector Bar */}
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
+            <span className="text-xs font-mono text-slate-500 uppercase tracking-wider">
+              Selected Literature
+            </span>
+            <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/50 dark:border-emerald-800/50">
+              Verified Source
+            </span>
+          </div>
 
-        {/* ================= INTERACTIVE PLAYGROUND ================= */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 50, damping: 15, delay: 0.4 }}
-          className="w-full max-w-6xl relative overflow-visible"
-        >
-          {/* Glass Board Soft Shadow Backdrop */}
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-400/10 via-purple-400/10 to-indigo-400/10 rounded-[36px] blur-3xl z-0 pointer-events-none" />
-
-          <div className="relative z-10 w-full bg-white/90 backdrop-blur-2xl border border-slate-200/90 rounded-3xl p-6 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.08)] overflow-visible text-left">
-            
-            {/* Header Bar */}
-            <div className="flex items-center justify-between border-b border-slate-200/80 pb-4 mb-6">
-              <div className="flex items-center gap-2.5">
-                <div className="w-3 h-3 rounded-full bg-red-400" />
-                <div className="w-3 h-3 rounded-full bg-amber-400" />
-                <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                <span className="text-xs font-mono font-bold text-slate-600 ml-2 uppercase tracking-widest flex items-center gap-2">
-                  <Zap className="w-3.5 h-3.5 text-[#007AFF]" />
-                  Interactive AI Playground
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold text-[#007AFF] bg-blue-50 px-3 py-1 rounded-full border border-blue-200/80">
-                  <MousePointer className="w-3 h-3" />
-                  Drag or Click Source
-                </span>
-
-                {processingState !== "idle" && (
-                  <button
-                    onClick={resetPlayground}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors border border-slate-200"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Reset
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Layout Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch overflow-visible">
-              
-              {/* Left Column: Source Items (Clickable & Draggable) */}
-              <div className="lg:col-span-5 flex flex-col gap-3 overflow-visible justify-center">
-                <div className="mb-1">
-                  <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
-                    1. Select Research Source
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Drag card into synthesizer box (or click it) to process.
-                  </p>
-                </div>
-
-                {PLAYGROUND_SOURCES.map((source, idx) => {
-                  const Icon = source.icon;
-                  const isSelected = activeItem?.id === source.id;
-                  const isProcessingThis = isSelected && processingState === "processing";
-                  const isLost = !!lostCards[source.id];
-
-                  return (
-                    <motion.div
-                      key={source.id}
-                      // Collect the card's DOM element so handleDragEnd can read
-                      // its actual rendered position via getBoundingClientRect()
-                      ref={(el) => { cardRefs.current[idx] = el as HTMLDivElement; }}
-                      drag={processingState !== "processing"}
-                      dragMomentum={false}
-                      dragElastic={0}
-                      style={{
-                        x: cardMVX[idx],
-                        y: cardMVY[idx],
-                        // Keep visual state in style (not animate) so Framer Motion's
-                        // animation engine never touches x/y when these values change
-                        opacity: isLost ? 0.82 : 1,
-                        rotate: isLost ? -2 : 0,
-                        boxShadow: isLost
-                          ? `0 16px 40px -4px ${source.glowColor}, 0 0 0 1px rgba(255,255,255,0.3)`
-                          : `0 6px 20px -5px ${source.glowColor}`,
-                      }}
-                      onDrag={handleDrag}
-                      onDragStart={() => {
-                        // Mark drag active and snapshot card position BEFORE it moves.
-                        // This rect is used in handleDragEnd to compute final drop position.
-                        isDragGestureRef.current = true;
-                        const el = cardRefs.current[idx];
-                        if (el) dragStartRects.current[idx] = el.getBoundingClientRect();
-                        setIsDragging(true);
-                        setActiveItem(source);
-                      }}
-                      onDragEnd={(e, info) => handleDragEnd(e, info, source, idx)}
-                      onTap={() => {
-                        // Block onTap if a drag gesture just fired on this same pointer-up.
-                        // isDragGestureRef stays true for 100 ms after onDragEnd.
-                        if (isDragGestureRef.current) return;
-                        if (processingState === "processing") return;
-                        triggerProcessing(source, idx);
-                      }}
-                      whileDrag={{
-                        scale: 1.1,
-                        zIndex: 50,
-                        rotate: 2,
-                        cursor: "grabbing",
-                        boxShadow: `0 20px 50px -8px ${source.glowColor}, 0 0 0 2px rgba(255,255,255,0.4)`,
-                      }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={`relative flex items-center justify-between px-3.5 py-3 bg-gradient-to-r ${
-                        source.gradient
-                      } text-white rounded-xl shadow-md select-none cursor-grab active:cursor-grabbing border border-white/20 ${
-                        isSelected ? "ring-4 ring-blue-400/50" : ""
-                      } ${
-                        isLost ? "z-40" : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="p-2 bg-white/20 backdrop-blur-md rounded-lg shrink-0">
-                          <Icon className="w-4 h-4 text-white" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold truncate max-w-[190px]">
-                            {source.name}
-                          </p>
-                          <p className="text-[10px] text-white/80 font-mono">
-                            {source.size}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        {isLost ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/30 text-white flex items-center gap-1">
-                            <Undo2 className="w-3 h-3" />
-                            Click to return
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/25 text-white">
-                            {isProcessingThis ? "Synthesizing..." : "Click / Drag →"}
-                          </span>
-                        )}
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-
-              {/* Right Column: Active Synthesizer Dropzone / Result Display */}
-              <div className="lg:col-span-7 h-[420px] md:h-[440px] flex items-center justify-center">
-                <div
-                  ref={dropzoneRef}
-                  className={`relative w-full h-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-5 transition-all duration-300 overflow-hidden ${
-                    isHoveringDropzone
-                      ? "border-[#007AFF] bg-blue-50 scale-[1.02] shadow-[0_0_40px_rgba(0,122,255,0.15)]"
-                      : isDragging
-                      ? "border-blue-400/60 bg-blue-50/40 scale-[1.01]"
-                      : processingState === "idle"
-                      ? "border-slate-300 bg-slate-50/70"
-                      : "border-slate-200 bg-white"
+          <div className="space-y-2">
+            {SAMPLE_PAPERS.map((item, index) => {
+              const isSelected = index === selectedPaperIndex;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedPaperIndex(index)}
+                  className={`w-full text-left p-3 rounded-lg border transition-all text-xs ${
+                    isSelected
+                      ? "bg-slate-50 dark:bg-slate-800/80 border-slate-900/20 dark:border-slate-700 text-slate-900 dark:text-slate-100 shadow-2xs"
+                      : "border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40"
                   }`}
                 >
-                  {/* Animated ring pulse when user is dragging */}
-                  {isDragging && (
-                    <div className="absolute inset-0 pointer-events-none">
-                      <div className={`absolute inset-2 rounded-xl border-2 border-dashed transition-colors duration-300 ${
-                        isHoveringDropzone ? "border-[#007AFF] animate-pulse" : "border-blue-300/50"
-                      }`} />
-                    </div>
-                  )}
-                  <AnimatePresence mode="wait">
-                    
-                    {/* IDLE State — shows different content when user is dragging */}
-                    {processingState === "idle" && (
-                      <motion.div
-                        key="idle-view"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="text-center max-w-sm flex flex-col items-center gap-3 pointer-events-none"
-                      >
-                        <motion.div
-                          animate={isHoveringDropzone
-                            ? { scale: [1, 1.15, 1], borderColor: "#007AFF" }
-                            : isDragging
-                            ? { scale: [1, 1.05, 1] }
-                            : { scale: 1 }
-                          }
-                          transition={{ duration: 0.8, repeat: isHoveringDropzone || isDragging ? Infinity : 0, ease: "easeInOut" }}
-                          className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-md transition-colors duration-300 ${
-                            isHoveringDropzone
-                              ? "bg-[#007AFF] border-2 border-[#007AFF] text-white"
-                              : isDragging
-                              ? "bg-blue-100 border-2 border-blue-400 text-[#007AFF]"
-                              : "bg-blue-50 border border-blue-200 text-[#007AFF]"
-                          }`}
-                        >
-                          {isHoveringDropzone ? (
-                            <Plus className="w-8 h-8 text-white" />
-                          ) : isDragging ? (
-                            <Cpu className="w-8 h-8 animate-spin" />
-                          ) : (
-                            <Brain className="w-8 h-8" />
-                          )}
-                        </motion.div>
-                        <h4 className={`text-base font-bold transition-colors duration-200 ${
-                          isHoveringDropzone ? "text-[#007AFF]" : "text-slate-900"
-                        }`}>
-                          {isHoveringDropzone
-                            ? "Release to synthesize!"
-                            : isDragging
-                            ? "Drop it here →"
-                            : "2. Synthesizer Dropzone"
-                          }
-                        </h4>
-                        <p className={`text-xs leading-relaxed ${
-                          isHoveringDropzone ? "text-[#007AFF]" : "text-slate-500"
-                        }`}>
-                          {isHoveringDropzone
-                            ? "Gemini will instantly extract key context and generate insights from this source."
-                            : isDragging
-                            ? "Move the card over this area and release to process."
-                            : "Drag any research card from the left (or click it) to test real-time AI context extraction."
-                          }
-                        </p>
-                      </motion.div>
-                    )}
+                  <p className="font-medium truncate">{item.title}</p>
+                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.authors} • {item.journal.split(",")[0]}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
-                    {/* PROCESSING State */}
-                    {processingState === "processing" && (
-                      <motion.div
-                        key="processing-view"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="text-center flex flex-col items-center gap-4"
-                      >
-                        <div className="relative">
-                          <div className="w-16 h-16 rounded-full border-4 border-slate-200 border-t-[#007AFF] animate-spin" />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <Brain className="w-6 h-6 text-[#007AFF] animate-pulse" />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-sm font-bold text-slate-900">
-                            Synthesizing Context...
-                          </p>
-                          <p className="text-xs font-mono text-[#007AFF] animate-pulse">
-                            {progressText}
-                          </p>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* SYNTHESIZED State (With Interactive Result Tabs) */}
-                    {processingState === "synthesized" && activeItem && (
-                      <motion.div
-                        key="synthesized-view"
-                        initial={{ opacity: 0, y: 15, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                        className="w-full h-full flex flex-col text-left p-5 justify-between bg-white rounded-xl border border-slate-200 shadow-xl relative overflow-hidden group/card"
-                      >
-                        {/* Glowing Header Accent */}
-                        <div className="absolute top-0 inset-x-0 h-[3.5px] bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE]" />
-
-                        {/* Top Bar: Status + Result Tabs */}
-                        <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-100 gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] uppercase font-mono font-bold tracking-wider px-2 py-0.5 rounded bg-blue-50 text-[#007AFF] border border-blue-200 flex items-center gap-1">
-                              <Activity className="w-3 h-3 text-[#007AFF]" />
-                              Synthesized in 1.8s
-                            </span>
-                          </div>
-
-                          {/* 3 Result Tabs */}
-                          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
-                            <button
-                              onClick={() => setActiveResultTab("summary")}
-                              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all ${
-                                activeResultTab === "summary"
-                                  ? "bg-white text-[#007AFF] shadow-sm"
-                                  : "text-slate-500 hover:text-slate-900"
-                              }`}
-                            >
-                              Summary
-                            </button>
-                            <button
-                              onClick={() => setActiveResultTab("qa")}
-                              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all ${
-                                activeResultTab === "qa"
-                                  ? "bg-white text-[#007AFF] shadow-sm"
-                                  : "text-slate-500 hover:text-slate-900"
-                              }`}
-                            >
-                              Ask AI Q&A
-                            </button>
-                            <button
-                              onClick={() => setActiveResultTab("entities")}
-                              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all ${
-                                activeResultTab === "entities"
-                                  ? "bg-white text-[#007AFF] shadow-sm"
-                                  : "text-slate-500 hover:text-slate-900"
-                              }`}
-                            >
-                              Entities
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Title */}
-                        <h4 className="text-sm font-bold text-slate-900 mt-2 leading-snug truncate">
-                          {activeItem.summary.title}
-                        </h4>
-
-                        {/* TAB 1: Summary Bullets */}
-                        {activeResultTab === "summary" && (
-                          <ul className="space-y-2 my-2 flex-1 overflow-y-auto pr-1">
-                            {activeItem.summary.bullets.map((bullet, idx) => (
-                              <motion.li
-                                key={idx}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ duration: 0.25, delay: idx * 0.08 }}
-                                className="text-xs text-slate-700 flex items-start gap-2.5 leading-relaxed"
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#007AFF] shrink-0 mt-1.5" />
-                                <span>{bullet}</span>
-                              </motion.li>
-                            ))}
-                          </ul>
-                        )}
-
-                        {/* TAB 2: Q&A */}
-                        {activeResultTab === "qa" && (
-                          <div className="space-y-2 my-2 flex-1 overflow-y-auto pr-1">
-                            {activeItem.summary.qa.map((qaItem, idx) => (
-                              <div key={idx} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1">
-                                <p className="text-[11px] font-bold text-[#007AFF] flex items-center gap-1.5">
-                                  <MessageSquare className="w-3.5 h-3.5" />
-                                  {qaItem.question}
-                                </p>
-                                <p className="text-[11px] text-slate-600 leading-relaxed">
-                                  {qaItem.answer}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* TAB 3: Extracted Entities */}
-                        {activeResultTab === "entities" && (
-                          <div className="space-y-3 my-2 flex-1 overflow-y-auto pr-1">
-                            <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
-                              <Tag className="w-3.5 h-3.5 text-[#007AFF]" />
-                              Extracted Knowledge Graph Concepts:
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {activeItem.summary.entities.map((entity, idx) => (
-                                <motion.span
-                                  key={idx}
-                                  initial={{ opacity: 0, scale: 0.8 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  transition={{ duration: 0.2, delay: idx * 0.06 }}
-                                  className="text-[11px] font-bold px-3 py-1 bg-blue-50 text-[#007AFF] border border-blue-200/80 rounded-lg shadow-2xs"
-                                >
-                                  {entity}
-                                </motion.span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Bottom Metadata & Citation */}
-                        <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 mt-1">
-                          <p className="text-[10px] font-mono text-slate-500 truncate max-w-[280px]">
-                            🎓 {activeItem.summary.citation}
-                          </p>
-                          <Link
-                            to="/signup"
-                            className="text-[10px] font-bold text-[#007AFF] hover:text-[#0051D5] flex items-center gap-1 hover:underline shrink-0"
-                          >
-                            Save to Library
-                            <ArrowRight className="w-3 h-3" />
-                          </Link>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
+      {/* Interactive Research Synthesizer Bento Console */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        {/* Console Header Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/80">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200/60 dark:border-indigo-900/60">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Research Synthesizer
+              </p>
+              <p className="text-xs text-slate-500 font-mono">
+                {paper.doi}
+              </p>
             </div>
           </div>
-        </motion.div>
+
+          {/* Mode Switcher Tabs */}
+          <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium border border-slate-200/80 dark:border-slate-700">
+            <button
+              onClick={() => setActiveMode("findings")}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                activeMode === "findings"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              }`}
+            >
+              Key Findings & LaTeX
+            </button>
+            <button
+              onClick={() => setActiveMode("bibtex")}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                activeMode === "bibtex"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              }`}
+            >
+              BibTeX Citation
+            </button>
+            <button
+              onClick={() => setActiveMode("graph")}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                activeMode === "graph"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              }`}
+            >
+              Knowledge Nodes
+            </button>
+          </div>
+        </div>
+
+        {/* Console Workspace: Source Excerpt + Synthesis Canvas */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
+          {/* Left Column: Primary Literature Ingestion Excerpt */}
+          <div className="lg:col-span-5 p-6 sm:p-8 space-y-4 bg-slate-50/30 dark:bg-slate-900/30">
+            <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
+              <FileText className="w-3.5 h-3.5 text-slate-400" />
+              <span>ORIGINAL DOCUMENT EXCERPT</span>
+            </div>
+
+            <h3 className="font-title text-xl font-semibold text-slate-900 dark:text-slate-100 leading-snug">
+              {paper.title}
+            </h3>
+
+            <p className="text-xs text-slate-500 font-mono">
+              {paper.authors} • {paper.journal}
+            </p>
+
+            <blockquote className="text-sm text-slate-600 dark:text-slate-400 italic leading-relaxed border-l-2 border-slate-300 dark:border-slate-700 pl-4 py-1">
+              "{paper.excerpt}"
+            </blockquote>
+
+            <div className="pt-2 text-xs text-slate-500 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>Extracted directly from indexed publication</span>
+            </div>
+          </div>
+
+          {/* Right Column: Dynamic Academic Synthesizer View */}
+          <div className="lg:col-span-7 p-6 sm:p-8">
+            <AnimatePresence mode="wait">
+              {activeMode === "findings" && (
+                <motion.div
+                  key="findings"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-6"
+                >
+                  <div>
+                    <h4 className="text-xs font-mono text-slate-500 uppercase tracking-wider mb-3">
+                      Synthesized Takeaways
+                    </h4>
+                    <ul className="space-y-3">
+                      {paper.findings.map((finding, idx) => (
+                        <li key={idx} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-mono shrink-0 mt-0.5 border border-indigo-200/40">
+                            {idx + 1}
+                          </span>
+                          <span>{finding}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-900 text-slate-100 dark:bg-slate-950 border border-slate-800">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 text-[11px] font-mono text-slate-400">
+                      <span>{paper.formulaLabel}</span>
+                      <span className="text-indigo-400">LaTeX Mathematical Extraction</span>
+                    </div>
+                    <code className="text-xs sm:text-sm font-mono text-emerald-400 block break-all">
+                      {paper.formula}
+                    </code>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeMode === "bibtex" && (
+                <motion.div
+                  key="bibtex"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-mono text-slate-500 uppercase tracking-wider">
+                      Standardized BibTeX Record
+                    </h4>
+                    <button
+                      onClick={handleCopyBibtex}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      {copiedBibtex ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy BibTeX</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <pre className="p-4 rounded-xl bg-slate-900 dark:bg-slate-950 text-slate-200 text-xs font-mono overflow-x-auto border border-slate-800 leading-relaxed">
+                    {paper.bibtex}
+                  </pre>
+                </motion.div>
+              )}
+
+              {activeMode === "graph" && (
+                <motion.div
+                  key="graph"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-mono text-slate-500 uppercase tracking-wider">
+                      Knowledge Graph Inferred Associations
+                    </h4>
+                    <div className="flex items-center gap-1 text-xs text-slate-500">
+                      <Network className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Co-citation Mapping</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {paper.graphNodes.map((node, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-indigo-400 dark:hover:border-indigo-600 transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded">
+                            {node.group}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            {node.connections} edges
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200 mt-2">
+                          {node.label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
   );
 };
 

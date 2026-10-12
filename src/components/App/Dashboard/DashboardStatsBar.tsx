@@ -27,27 +27,23 @@ interface DashboardStatsBarProps {
 
 const DashboardStatsBar: React.FC<DashboardStatsBarProps> = ({ stats }) => {
   const statItems = [
-    { label: "Total Items", value: stats.total, color: "#007AFF" },
-    { label: "With AI Summary", value: stats.withAiSummary, color: "#5856D6" },
-    { label: "From Extension", value: stats.fromExtension, color: "#34C759" },
-    { label: "This Week", value: stats.thisWeek, color: "#FF9500" },
+    { label: "Total Documents", value: stats.total },
+    { label: "Synthesized", value: stats.withAiSummary },
+    { label: "Browser Ingested", value: stats.fromExtension },
+    { label: "Added This Week", value: stats.thisWeek },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-stagger">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {statItems.map((stat, idx) => (
         <div
           key={idx}
-          className="theme-surface glass-card hover-lift rounded-xl p-4 animate-fade-up"
-          style={{ animationDelay: `${idx * 100}ms` }}
+          className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-2xs"
         >
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-sans mb-1 font-medium">
             {stat.label}
           </p>
-          <p
-            className="theme-stat text-2xl font-bold"
-            style={{ color: stat.color }}
-          >
+          <p className="text-2xl font-semibold text-slate-900 dark:text-slate-50 font-mono tracking-tight">
             {stat.value}
           </p>
         </div>

@@ -1,291 +1,288 @@
-// ============================================
-// FEATURES SECTION - Feature cards grid + ecosystem overview
-// Clean Light Theme
-// ============================================
-
-import React from "react";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "motion/react";
 import {
-  Zap,
-  Smartphone,
   PenTool,
-  Layers,
-  Shield,
-  RefreshCw,
-  Chrome,
-  Globe,
-  Mic,
-  Rss,
+  Network,
   BookOpen,
+  Smartphone,
+  Chrome,
+  CheckCircle2,
+  ArrowRight,
+  Maximize2,
+  FileText,
   Sparkles,
-  FileCheck,
+  RefreshCw,
 } from "lucide-react";
-import { AnimateOnScroll } from "../shared/AnimateOnScroll";
 
-interface FeatureItem {
-  icon: React.ElementType;
-  title: string;
-  desc: string;
-  color: string;
-}
-
-interface DeviceItem {
-  icon: React.ElementType;
-  name: string;
-  desc: string;
-  status: string;
-}
-
-const FEATURES: FeatureItem[] = [
-  {
-    icon: Zap,
-    title: "AI-Powered Summaries",
-    desc: "Instantly distill lengthy research papers into key insights with Gemini 3.6 Flash.",
-    color: "#007AFF",
-  },
-  {
-    icon: Mic,
-    title: "Media Transcription",
-    desc: "Transcribe audio lectures, podcasts, and YouTube video notes directly into readable summaries.",
-    color: "#FF2D55",
-  },
-  {
-    icon: Rss,
-    title: "Live Paper Feeds",
-    desc: "Stay ahead with real-time academic paper feeds from ArXiv, PubMed, bioRxiv, and Nature.",
-    color: "#FF9500",
-  },
-  {
-    icon: BookOpen,
-    title: "Advanced PDF Reader",
-    desc: "Read, annotate, highlight, and extract smart citation notes from heavy PDF documents.",
-    color: "#5856D6",
-  },
-  {
-    icon: RefreshCw,
-    title: "Real-Time Cloud Sync",
-    desc: "Your research updates across browser extensions, mobile camera portal, and web apps automatically.",
-    color: "#34C759",
-  },
-  {
-    icon: Smartphone,
-    title: "Mobile PWA & Camera Sync",
-    desc: "Scan handwritten research pages and book pages using your mobile phone camera.",
-    color: "#AF52DE",
-  },
-  {
-    icon: PenTool,
-    title: "OCR Handwriting Recognition",
-    desc: "Digitize handwritten notes and physical paper citations into searchable digital text.",
-    color: "#FF9500",
-  },
-  {
-    icon: Layers,
-    title: "Smart Tag Collections",
-    desc: "Intelligent AI categorization and automatic tagging for effortless library organization.",
-    color: "#5E5CE6",
-  },
-  {
-    icon: Shield,
-    title: "Privacy First Architecture",
-    desc: "End-to-end encrypted storage and private API credentials so you own your research completely.",
-    color: "#FF3B30",
-  },
+const GRAPH_NODES = [
+  { id: "trans", label: "Transformer", x: 25, y: 35, size: 28, group: "Core" },
+  { id: "attn", label: "Self-Attention", x: 60, y: 25, size: 24, group: "Mechanism" },
+  { id: "bert", label: "BERT (2018)", x: 80, y: 60, size: 22, group: "Downstream" },
+  { id: "gpt", label: "GPT Architecture", x: 30, y: 75, size: 24, group: "Downstream" },
+  { id: "pos", label: "Positional Encoding", x: 70, y: 85, size: 18, group: "Layer" },
 ];
 
-const DEVICES: DeviceItem[] = [
-  {
-    icon: Chrome,
-    name: "Browser Extension",
-    desc: "Highlight, save, and summarize any web page in 1-click",
-    status: "Available",
-  },
-  {
-    icon: Smartphone,
-    name: "Mobile Camera Sync",
-    desc: "Scan physical documents directly into your inbox",
-    status: "Available",
-  },
-  {
-    icon: PenTool,
-    name: "OCR Camera Scanner",
-    desc: "Digitize handwritten notes into structured text",
-    status: "Available",
-  },
+const GRAPH_EDGES = [
+  { from: "trans", to: "attn" },
+  { from: "trans", to: "bert" },
+  { from: "trans", to: "gpt" },
+  { from: "trans", to: "pos" },
+  { from: "attn", to: "bert" },
 ];
 
 const FeaturesSection: React.FC = () => {
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    e.currentTarget.style.setProperty("--pointer-x", `${x}px`);
-    e.currentTarget.style.setProperty("--pointer-y", `${y}px`);
-  };
+  const [ocrMode, setOcrMode] = useState<"handwritten" | "digitized">("digitized");
+  const [activeNode, setActiveNode] = useState<string>("trans");
 
   return (
-    <div className="bg-[#FAFBFD] text-slate-900 py-24 px-6 relative overflow-hidden">
-      {/* Background Soft Pastel Beams */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-0 w-[500px] h-[500px] bg-blue-200/30 blur-[130px] rounded-full" />
-        <div className="absolute bottom-1/4 right-0 w-[500px] h-[500px] bg-purple-200/30 blur-[130px] rounded-full" />
+    <section id="features" className="py-20 px-4 sm:px-6 max-w-7xl mx-auto">
+      {/* Editorial Section Heading (No eyebrow/kicker ban) */}
+      <div className="max-w-3xl mb-14">
+        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-title font-semibold tracking-tight text-slate-900 dark:text-slate-50 leading-[1.1] mb-4">
+          Architected for how serious researchers actually work.
+        </h2>
+        <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 font-sans leading-relaxed max-w-[65ch]">
+          Four unified engines replace scattered PDF folders, disconnected notebook scans, and fragmented reference managers.
+        </p>
       </div>
 
-      <div className="max-w-6xl mx-auto relative z-10">
+      {/* Editorial 4-Quadrant Bento Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         
-        {/* Section Header */}
-        <div className="text-center mb-20">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white/80 border border-slate-200 rounded-full text-xs font-bold text-[#007AFF] mb-4 shadow-sm">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Built for Modern Researchers</span>
+        {/* Quadrant 1: Smart Pen & Handwriting OCR (Span 7) */}
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 flex flex-col justify-between shadow-xs">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center border border-amber-200/60 dark:border-amber-900/60">
+                  <PenTool className="w-4 h-4" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 font-title">
+                  Smart Pen & Optical Handwriting Recognition
+                </h3>
+              </div>
+
+              {/* Toggle State */}
+              <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium border border-slate-200/70 dark:border-slate-700">
+                <button
+                  onClick={() => setOcrMode("handwritten")}
+                  className={`px-2.5 py-1 rounded transition-all ${
+                    ocrMode === "handwritten"
+                      ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs"
+                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                  }`}
+                >
+                  Raw Ink
+                </button>
+                <button
+                  onClick={() => setOcrMode("digitized")}
+                  className={`px-2.5 py-1 rounded transition-all ${
+                    ocrMode === "digitized"
+                      ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs"
+                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                  }`}
+                >
+                  OCR Digital
+                </button>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed max-w-[55ch]">
+              Capture physical notes via smart pen or mobile camera. Equations, chemical structures, and marginalia convert directly into searchable Markdown and LaTeX.
+            </p>
           </div>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-slate-900 mb-5 tracking-tight font-title">
-            Everything you need for better research
-          </h2>
-          <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed font-medium">
-            High-performance tools engineered to capture, organize, and synthesize knowledge effortlessly across all your workflows.
-          </p>
-        </div>
 
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-28">
-          {FEATURES.map((feature, idx) => (
-            <AnimateOnScroll key={idx} delay={idx * 80} className="h-full">
-              <div
-                onMouseMove={handleMouseMove}
-                className="spotlight-card group h-full p-7 bg-white/80 backdrop-blur-xl rounded-3xl border border-slate-200/80 hover:border-[#007AFF]/40 hover:bg-white transition-all duration-300 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-blue-500/10 flex flex-col justify-between"
-              >
-                <div>
-                  <div
-                    className="w-12 h-12 rounded-2xl flex items-center justify-center mb-6 transition-transform duration-300 group-hover:scale-110 shadow-sm"
-                    style={{ backgroundColor: `${feature.color}15`, border: `1px solid ${feature.color}30` }}
-                  >
-                    <feature.icon className="w-6 h-6" style={{ color: feature.color }} />
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-900 mb-2 group-hover:text-[#007AFF] transition-colors">
-                    {feature.title}
-                  </h3>
-                  <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                    {feature.desc}
-                  </p>
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-400 group-hover:text-slate-700 transition-colors">
-                  <span>Explore capability</span>
-                  <span style={{ color: feature.color }}>→</span>
-                </div>
+          {/* Interactive OCR Transformation Canvas */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-50/80 dark:bg-slate-950/60 p-5 min-h-[170px] flex flex-col justify-center">
+            {ocrMode === "handwritten" ? (
+              <div className="font-serif italic text-slate-700 dark:text-slate-300 text-base sm:text-lg border border-amber-200/80 dark:border-amber-900/40 p-4 space-y-2 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl">
+                <p>∇ × E = -∂B/∂t  (Faraday's Induction)</p>
+                <p className="text-sm text-slate-500 font-sans not-italic">Note: Confirmed with 4.2K cryogenic sensor test at 15:30.</p>
               </div>
-            </AnimateOnScroll>
-          ))}
-        </div>
-
-        {/* Interactive Feature Demo Showcase */}
-        <div className="bg-white/90 backdrop-blur-2xl rounded-3xl border border-slate-200/90 p-8 md:p-12 shadow-xl shadow-slate-200/60 mb-24 relative overflow-hidden">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            
-            {/* Left text column */}
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200/80 rounded-full text-[#007AFF] text-xs font-bold mb-6">
-                <Globe className="w-4 h-4" />
-                <span>Seamless Ecosystem</span>
-              </div>
-
-              <h3 className="text-3xl font-extrabold text-slate-900 mb-4 leading-tight font-title">
-                One unified library.
-                <br />
-                <span className="bg-gradient-to-r from-[#007AFF] via-[#5856D6] to-[#AF52DE] bg-clip-text text-transparent">
-                  Every device connected.
-                </span>
-              </h3>
-
-              <p className="text-slate-600 text-sm md:text-base leading-relaxed mb-8 font-medium">
-                Your notes, papers, and transcripts flow seamlessly between your browser extension, mobile camera sync, and desktop dashboard.
-              </p>
-
-              {/* Devices List */}
-              <div className="space-y-3 mb-8">
-                {DEVICES.map((device, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 hover:border-[#007AFF]/50 hover:bg-white transition-all cursor-pointer group shadow-sm"
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-[#007AFF]">
-                        <device.icon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#007AFF] transition-colors">
-                          {device.name}
-                        </h4>
-                        <p className="text-xs text-slate-500">{device.desc}</p>
-                      </div>
-                    </div>
-                    <span
-                      className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                        device.status === "Available"
-                          ? "bg-emerald-500/10 text-emerald-700 border border-emerald-500/20"
-                          : "bg-amber-500/10 text-amber-700 border border-amber-500/20"
-                      }`}
-                    >
-                      {device.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Right Mockup Card */}
-            <div className="relative">
-              <div className="bg-slate-900 text-slate-100 rounded-3xl border border-slate-800 p-6 shadow-2xl relative overflow-hidden">
-                {/* Header Mockup */}
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span className="text-[11px] font-mono text-slate-400 ml-2">Live Cloud Sync Preview</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    Connected
+            ) : (
+              <div className="space-y-3 font-mono text-xs">
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pb-1 border-b border-slate-200 dark:border-slate-800">
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Parsed LaTeX Structure
                   </span>
+                  <span>Confidence: 99.4%</span>
                 </div>
-
-                {/* Content Mockup Body */}
-                <div className="space-y-4">
-                  <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-start gap-3">
-                    <FileCheck className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
-                    <div className="space-y-1 text-left">
-                      <p className="text-xs font-bold text-white">Quantum_Superconducting_Gate_2026.pdf</p>
-                      <p className="text-[11px] text-slate-400 leading-relaxed">
-                        Synthesized 4 key findings from ArXiv paper. Automatically tagged under <span className="text-indigo-400 font-mono">#QuantumPhysics</span>.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-start gap-3">
-                    <Smartphone className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                    <div className="space-y-1 text-left">
-                      <p className="text-xs font-bold text-white">Mobile Camera Scan #1042</p>
-                      <p className="text-[11px] text-slate-400 leading-relaxed">
-                        OCR converted 2 handwritten formula pages into LaTeX format and synced to web dashboard in 1.2s.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer status */}
-                <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                  <span>Status: 100% Synced</span>
-                  <span>Encryption: AES-256</span>
-                </div>
+                <code className="text-slate-900 dark:text-slate-100 block bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-800 overflow-x-auto">
+                  {"\\nabla \\times \\mathbf{E} = -\\frac{\\partial \\mathbf{B}}{\\partial t}"}
+                </code>
+                <p className="text-[11px] text-slate-500 font-sans">
+                  Exported directly as inline block for TipTap Document Editor.
+                </p>
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* Quadrant 2: Connected Citation & Knowledge Graph (Span 5) */}
+        <div className="lg:col-span-5 bg-slate-950 text-slate-100 rounded-2xl border border-slate-800 p-6 sm:p-8 flex flex-col justify-between shadow-xs">
+          <div>
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-indigo-950/80 text-indigo-400 flex items-center justify-center border border-indigo-800/60">
+                <Network className="w-4 h-4" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-100 font-title">
+                Co-Citation Knowledge Graph
+              </h3>
             </div>
 
+            <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+              Every indexed paper, tagged snippet, and note automatically links into an interactive topological network graph.
+            </p>
+          </div>
+
+          {/* Interactive Graph Mini-Canvas */}
+          <div className="relative h-44 rounded-xl bg-slate-900 border border-slate-800/80 overflow-hidden p-3 flex items-center justify-center">
+            {/* SVG Interactive Topology Preview */}
+            <svg className="w-full h-full" viewBox="0 0 100 100">
+              {GRAPH_EDGES.map((edge, idx) => {
+                const source = GRAPH_NODES.find((n) => n.id === edge.from);
+                const target = GRAPH_NODES.find((n) => n.id === edge.to);
+                if (!source || !target) return null;
+                const isHighlighted = activeNode === edge.from || activeNode === edge.to;
+                return (
+                  <line
+                    key={idx}
+                    x1={source.x}
+                    y1={source.y}
+                    x2={target.x}
+                    y2={target.y}
+                    stroke={isHighlighted ? "#818cf8" : "#334155"}
+                    strokeWidth={isHighlighted ? "1.5" : "0.75"}
+                    strokeDasharray={isHighlighted ? "none" : "2,2"}
+                  />
+                );
+              })}
+
+              {GRAPH_NODES.map((node) => {
+                const isActive = activeNode === node.id;
+                return (
+                  <g
+                    key={node.id}
+                    onClick={() => setActiveNode(node.id)}
+                    className="cursor-pointer transition-transform hover:scale-110"
+                  >
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={isActive ? 6 : 4.5}
+                      fill={isActive ? "#6366f1" : "#1e293b"}
+                      stroke={isActive ? "#c7d2fe" : "#475569"}
+                      strokeWidth="1.2"
+                    />
+                    <text
+                      x={node.x}
+                      y={node.y - 7}
+                      textAnchor="middle"
+                      fill={isActive ? "#ffffff" : "#94a3b8"}
+                      fontSize="3.8"
+                      fontFamily="monospace"
+                    >
+                      {node.label}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+
+            <div className="absolute bottom-2 right-2 text-[10px] font-mono text-slate-500 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">
+              Interactive Nodes
+            </div>
+          </div>
+        </div>
+
+        {/* Quadrant 3: Distraction-Free PDF Reader (Span 5) */}
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 flex flex-col justify-between shadow-xs">
+          <div>
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200/60 dark:border-blue-900/60">
+                <BookOpen className="w-4 h-4" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 font-title">
+                Distraction-Free PDF Reader
+              </h3>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+              Read 80-page manuscripts with instant AI margin notes, customizable typestyle margins, and one-click citation exports.
+            </p>
+          </div>
+
+          {/* Reader Mockup Frame */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 space-y-3 font-sans text-xs">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 pb-2 border-b border-slate-200 dark:border-slate-800 font-mono">
+              <span>Section 3.2 Methodology</span>
+              <span>p. 14 of 48</span>
+            </div>
+
+            <p className="text-slate-700 dark:text-slate-300 leading-relaxed bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-200/70 dark:border-slate-800">
+              <mark className="bg-amber-100 dark:bg-amber-950/80 text-amber-950 dark:text-amber-200 px-1 py-0.5 rounded">
+                "The sample exhibited quantized Hall conductance in steps of e²/h"
+              </mark>{" "}
+              consistent with integer quantum Hall effect constraints.
+            </p>
+
+            <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-900/60 flex items-start gap-2">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-indigo-900 dark:text-indigo-200 leading-snug">
+                <strong>AI Margin Reference:</strong> Directly corroborates the 1980 von Klitzing fundamental metric.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Quadrant 4: Multi-Device Ecosystem Sync (Span 7) */}
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 flex flex-col justify-between shadow-xs">
+          <div>
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center border border-emerald-200/60 dark:border-emerald-900/60">
+                <RefreshCw className="w-4 h-4" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 font-title">
+                Zero-Latency Ecosystem Sync
+              </h3>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed max-w-[55ch]">
+              Save articles from the browser, snap physical textbooks from your phone camera, and edit on desktop with instant cloud reconciliation.
+            </p>
+          </div>
+
+          {/* Sync Endpoints Strip */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80">
+              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-1.5">
+                <Chrome className="w-4 h-4" />
+                <span className="text-xs font-semibold">Chrome Extension</span>
+              </div>
+              <p className="text-[11px] text-slate-500">1-click ArXiv & PubMed paper capture.</p>
+            </div>
+
+            <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 mb-1.5">
+                <Smartphone className="w-4 h-4" />
+                <span className="text-xs font-semibold">Mobile Camera</span>
+              </div>
+              <p className="text-[11px] text-slate-500">Instant OCR upload of paper pages.</p>
+            </div>
+
+            <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 mb-1.5">
+                <FileText className="w-4 h-4" />
+                <span className="text-xs font-semibold">Desktop Workspace</span>
+              </div>
+              <p className="text-[11px] text-slate-500">Full TipTap & PDF annotation suite.</p>
+            </div>
           </div>
         </div>
 
       </div>
-    </div>
+    </section>
   );
 };
 

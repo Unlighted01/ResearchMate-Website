@@ -3,6 +3,18 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-title: "Fraunces", Georgia, Cambria, serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-surface-canvas: oklch(0.985 0.002 240);
+  --color-surface-card: oklch(1.0 0 0);
+  --color-surface-subtle: oklch(0.96 0.005 240);
+  --color-border-subtle: oklch(0.91 0.005 240);
+  --color-text-primary: oklch(0.14 0.01 250);
+  --color-text-muted: oklch(0.48 0.015 250);
+  --color-accent-primary: oklch(0.55 0.20 260);
+
   --color-primary-50: #eef2ff;
   --color-primary-100: #e0e7ff;
   --color-primary-200: #c7d2fe;
@@ -18,14 +30,10 @@
   --color-secondary-600: #0891b2;
   
   --color-accent-500: #f59e0b;
-  
-  --font-sans: var(--font-sans);
-  --font-title: var(--font-title);
-  --font-mono: "JetBrains Mono", monospace;
 }
 
 /* ============================================
-   RESEARCHMATE - APPLE-INSPIRED DESIGN SYSTEM
+   RESEARCHMATE - ACADEMIC EDITORIAL DESIGN SYSTEM
    ============================================ */
 
 /* ============================================
@@ -34,14 +42,14 @@
 
 :root, [data-theme="light"] {
   color-scheme: light;
-  /* OKLCH Space Theme Tokens */
-  --color-primary: oklch(0.55 0.22 260);
-  --surface-base: oklch(0.98 0.005 240);
+  /* OKLCH Editorial Theme Tokens */
+  --color-primary: oklch(0.55 0.20 260);
+  --surface-base: oklch(0.985 0.002 240);
   --surface-elevated: oklch(1.0 0.0 0);
-  --surface-overlay: oklch(1.0 0.0 0 / 0.85);
-  --text-primary: oklch(0.12 0.01 250);
-  --text-muted: oklch(0.55 0.01 250);
-  --border-subtle: oklch(0.90 0.01 250);
+  --surface-overlay: oklch(1.0 0.0 0 / 0.95);
+  --text-primary: oklch(0.14 0.01 250);
+  --text-muted: oklch(0.48 0.015 250);
+  --border-subtle: oklch(0.91 0.005 240);
 
   /* 8px Spacing Grid */
   --space-1: 8px;
@@ -56,77 +64,58 @@
   /* Typography scale */
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-title: "Fraunces", Georgia, serif;
+  --font-mono: "JetBrains Mono", monospace;
 
-  /* Nebula Glass Accents */
-  --accent-gradient: linear-gradient(135deg, oklch(0.65 0.24 280) 0%, oklch(0.65 0.25 320) 100%);
-  --hairline-border: 1px solid oklch(0.12 0.01 250 / 0.08);
+  /* Editorial Accents */
+  --accent-gradient: linear-gradient(135deg, oklch(0.55 0.20 260) 0%, oklch(0.50 0.18 280) 100%);
+  --hairline-border: 1px solid oklch(0.14 0.01 250 / 0.08);
 
-  /* Core UI Semantic Mappings for backward compatibility */
+  /* Core UI Semantic Mappings */
   --bg-primary: var(--surface-base);
   --bg-secondary: oklch(0.96 0.005 240);
   --bg-tertiary: oklch(0.92 0.005 240);
-  --glass-bg: oklch(1.0 0.0 0 / 0.72);
-  --glass-border: oklch(0.0 0.0 0 / 0.08);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+  --glass-bg: oklch(1.0 0.0 0 / 0.95);
+  --glass-border: oklch(0.14 0.01 250 / 0.08);
+  --glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
-  --rm-blue: #007aff;
-  --rm-purple: #5856d6;
-  --rm-green: #34c759;
-  --rm-orange: #ff9500;
-  --rm-red: #ff3b30;
+  --rm-blue: #2563eb;
+  --rm-purple: #6366f1;
+  --rm-green: #10b981;
+  --rm-orange: #f59e0b;
+  --rm-red: #ef4444;
 
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .dark, [data-theme="dark"] {
   color-scheme: dark;
-  /* OKLCH Premium Dark Theme Tokens */
-  --color-primary: oklch(0.70 0.22 280); /* Bright violet-cyan blend */
-  --surface-base: oklch(0.13 0.01 250); /* Deep Slate/Zinc #09090b range */
-  --surface-elevated: oklch(0.16 0.01 250 / 0.45); /* Semi-translucent glass */
-  --surface-overlay: oklch(0.15 0.01 250 / 0.85); /* Dropdowns/modals */
-  --text-primary: oklch(0.95 0.01 250); /* Ultra high contrast white */
-  --text-muted: oklch(0.65 0.01 250); /* Gray muted text */
-  --border-subtle: oklch(0.25 0.01 250 / 0.5); /* 1px hairline border */
+  /* OKLCH Editorial Dark Theme Tokens */
+  --color-primary: oklch(0.68 0.18 260);
+  --surface-base: oklch(0.14 0.01 250);
+  --surface-elevated: oklch(0.18 0.01 250);
+  --surface-overlay: oklch(0.16 0.01 250 / 0.95);
+  --text-primary: oklch(0.96 0.005 250);
+  --text-muted: oklch(0.62 0.01 250);
+  --border-subtle: oklch(0.24 0.01 250);
 
-  /* Nebula Glass Dark Accents */
   --hairline-border: 1px solid oklch(1.0 0.0 0 / 0.1);
-  --accent-gradient: linear-gradient(135deg, oklch(0.75 0.16 195) 0%, oklch(0.60 0.25 320) 100%); /* cyan-to-violet nebula */
+  --accent-gradient: linear-gradient(135deg, oklch(0.65 0.18 260) 0%, oklch(0.60 0.20 280) 100%);
 
   /* Core UI Semantic Mappings */
   --bg-primary: var(--surface-base);
-  --bg-secondary: oklch(0.15 0.01 250);
-  --bg-tertiary: oklch(0.18 0.01 250);
-  --glass-bg: oklch(0.14 0.01 250 / 0.45);
+  --bg-secondary: oklch(0.16 0.01 250);
+  --bg-tertiary: oklch(0.20 0.01 250);
+  --glass-bg: oklch(0.18 0.01 250 / 0.95);
   --glass-border: oklch(1.0 0.0 0 / 0.1);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --glass-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 
-  --rm-blue: #0a84ff;
-  --rm-purple: #bf5af2;
-  --rm-green: #30d158;
-  --rm-orange: #ff9f0a;
-  --rm-red: #ff453a;
-}
-
-/* Nebula Glass Glow Keyframe Animations */
-@keyframes nebula-drifting {
-  0% { transform: translate(0px, 0px) scale(1); }
-  33% { transform: translate(30px, -50px) scale(1.05); }
-  66% { transform: translate(-20px, 20px) scale(0.98); }
-  100% { transform: translate(0px, 0px) scale(1); }
-}
-
-@keyframes pulse-soft {
-  0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 5px oklch(0.70 0.22 280 / 0.2)); }
-  50% { opacity: 1; filter: drop-shadow(0 0 15px oklch(0.70 0.22 280 / 0.4)); }
-}
-
-@keyframes spotlight-glow {
-  0% { opacity: 0.4; }
-  100% { opacity: 0.8; }
+  --rm-blue: #3b82f6;
+  --rm-purple: #818cf8;
+  --rm-green: #34d399;
+  --rm-orange: #fbbf24;
+  --rm-red: #f87171;
 }
 
 /* ============================================

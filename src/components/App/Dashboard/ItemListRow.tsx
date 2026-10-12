@@ -37,12 +37,12 @@ const ItemListRow: React.FC<ItemListRowProps> = ({
   onClick,
   onDelete,
 }) => {
-  const colorBorderClass =
-    item.color === "yellow" ? "border-l-[4px] border-l-[#FBBF24] bg-amber-50/10 dark:bg-amber-900/10" :
-    item.color === "green" ? "border-l-[4px] border-l-[#34D399] bg-emerald-50/10 dark:bg-emerald-900/10" :
-    item.color === "blue" ? "border-l-[4px] border-l-[#60A5FA] bg-blue-50/10 dark:bg-blue-900/10" :
-    item.color === "red" ? "border-l-[4px] border-l-[#F87171] bg-red-50/10 dark:bg-red-900/10" :
-    item.color === "purple" ? "border-l-[4px] border-l-[#A78BFA] bg-purple-50/10 dark:bg-purple-900/10" : "";
+  const colorDotClass =
+    item.color === "yellow" ? "bg-amber-400" :
+    item.color === "green" ? "bg-emerald-400" :
+    item.color === "blue" ? "bg-blue-400" :
+    item.color === "red" ? "bg-rose-400" :
+    item.color === "purple" ? "bg-purple-400" : "bg-slate-400";
 
   const displayText = (() => {
     const t = item.aiSummary || item.text || item.ocrText || "";
@@ -52,9 +52,8 @@ const ItemListRow: React.FC<ItemListRowProps> = ({
   return (
     <div
       onClick={() => onClick(item)}
-      className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group
-        ${colorBorderClass}
-        ${isSelected ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}
+      className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800/80 transition-colors group
+        ${isSelected ? "bg-indigo-50/40 dark:bg-indigo-950/20" : ""}
         cursor-pointer`}
     >
       {/* Checkbox + Icon */}

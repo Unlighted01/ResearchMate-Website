@@ -9,7 +9,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
-import BubbleBackground from "../shared/BubbleBackground";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import CommandPalette from "./CommandPalette";
@@ -315,18 +314,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // ---------- PART 4C: RENDER ----------
 
   return (
-    <div
-      className={`min-h-screen flex font-sans relative overflow-hidden ${
-        isGlassTheme
-          ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"
-          : "bg-[#F5F5F7] dark:bg-[#000000]"
-      } theme-page theme-dashboard`}
-    >
-      {/* Ambient Background */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <BubbleBackground bubbleCount={3} enabled={isBubbleTheme} />
-      </div>
-
+    <div className="min-h-screen flex font-sans relative overflow-hidden bg-[#FAFBFD] dark:bg-slate-950 text-slate-900 dark:text-slate-100 theme-page theme-dashboard">
       {/* Command Palette */}
       <CommandPalette
         isOpen={commandPaletteOpen}

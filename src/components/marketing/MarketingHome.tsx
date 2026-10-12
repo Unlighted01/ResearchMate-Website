@@ -43,7 +43,7 @@ const MarketingHome: React.FC = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen bg-[#FAFBFD]">
+    <div className="min-h-screen bg-[#FAFBFD] dark:bg-slate-950 text-slate-900 dark:text-slate-50 transition-colors">
       <section id="home" className="scroll-mt-12">
         <HeroSection />
         <FeaturesSection />
