@@ -31,6 +31,11 @@ import BulkActions from "../../shared/BulkActions";
 import AdvancedSearchFilter from "../../shared/AdvancedSearchFilter";
 import SmartPenScanModal from "../SmartPenScanModal";
 import ConfirmDialog from "../../shared/ConfirmDialog";
+import LiteratureMatrixModal from "../LiteratureMatrix/LiteratureMatrixModal";
+import {
+  generateLiteratureMatrix,
+  MatrixRow,
+} from "../../../services/geminiService";
 
 import { useDashboardData } from "./useDashboardData";
 import { useDashboardActions } from "./useDashboardActions";
@@ -84,7 +89,49 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     filteredItems: data.filteredItems,
   });
 
-  // ---------- PART 3C: KEYBOARD SHORTCUTS ----------
+  // ---------- PART 3C: LITERATURE REVIEW MATRIX (Option A) ----------
+  const [showMatrixModal, setShowMatrixModal] = React.useState(false);
+  const [matrixData, setMatrixData] = React.useState<MatrixRow[]>([]);
+  const [crossPaperGaps, setCrossPaperGaps] = React.useState<string[]>([]);
+  const [synthesisDraft, setSynthesisDraft] = React.useState<string>("");
+  const [isGeneratingMatrix, setIsGeneratingMatrix] = React.useState(false);
+
+  const handleGenerateLiteratureMatrix = async () => {
+    const selectedList = data.items.filter((item) =>
+      data.selectedItems.has(item.id),
+    );
+
+    if (selectedList.length < 2) {
+      showToast(
+        "Please select at least 2 papers to generate a comparative literature matrix.",
+        "info",
+      );
+      return;
+    }
+
+    setIsGeneratingMatrix(true);
+    setShowMatrixModal(true);
+    try {
+      const result = await generateLiteratureMatrix(selectedList);
+      if (!result.ok) {
+        throw new Error(result.error || "Failed to generate literature matrix.");
+      }
+      setMatrixData(result.matrix);
+      setCrossPaperGaps(result.crossPaperGaps);
+      setSynthesisDraft(result.synthesisDraft);
+      showToast("Literature matrix synthesized successfully!", "success");
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Matrix generation failed",
+        "error",
+      );
+      setShowMatrixModal(false);
+    } finally {
+      setIsGeneratingMatrix(false);
+    }
+  };
+
+  // ---------- PART 3D: KEYBOARD SHORTCUTS ----------
   useKeyboardShortcuts([
     {
       ...COMMON_SHORTCUTS.SEARCH,
@@ -353,7 +400,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           await actions.handleGenerateSummary(scan);
           data.setIsSummarizingSmartPen(false);
         }}
-        onRunOCR={async (scan) => {
+        onRunOCR={async (scan, mode = "standard") => {
           if (!scan.imageUrl) return;
           try {
             const response = await fetch("/api/ocr", {
@@ -362,6 +409,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
               body: JSON.stringify({
                 image: scan.imageUrl,
                 includeSummary: true,
+                mode,
               }),
             });
             if (!response.ok)
@@ -383,7 +431,12 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
             data.setSelectedSmartPenScan((prev) =>
               prev ? { ...prev, ...updates } : null,
             );
-            showToast("Text extracted!", "success");
+            showToast(
+              mode === "math"
+                ? "LaTeX math transcribed!"
+                : "Text extracted!",
+              "success",
+            );
           } catch (err) {
             showToast(
               err instanceof Error ? err.message : "OCR failed",
@@ -425,6 +478,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           data.setCollectionActionType("bulk");
           data.setShowCollectionModal(true);
         }}
+        onGenerateMatrix={handleGenerateLiteratureMatrix}
+        isGeneratingMatrix={isGeneratingMatrix}
         isDeleting={data.isBulkDeleting}
       />
 
@@ -485,6 +540,16 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         onClose={() => data.setShowAdvancedFilters(false)}
         onApply={data.setAdvancedFilters}
         availableTags={data.allTags}
+      />
+
+      {/* Option A: Literature Review Matrix Modal */}
+      <LiteratureMatrixModal
+        isOpen={showMatrixModal}
+        onClose={() => setShowMatrixModal(false)}
+        matrix={matrixData}
+        crossPaperGaps={crossPaperGaps}
+        synthesisDraft={synthesisDraft}
+        isLoading={isGeneratingMatrix}
       />
     </div>
   );

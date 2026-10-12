@@ -1,5 +1,5 @@
 import React from "react";
-import { X, CheckSquare, FolderMinus } from "lucide-react";
+import { X, CheckSquare, FolderMinus, Sparkles, Table as TableIcon } from "lucide-react";
 import { TrashIcon, DownloadIcon } from "../icons";
 
 interface BulkActionsProps {
@@ -11,6 +11,8 @@ interface BulkActionsProps {
   onBulkExport?: (format: "json" | "csv" | "md" | "pdf") => void;
   onBulkAddToCollection?: () => void;
   onBulkRemoveFromCollection?: () => void;
+  onGenerateMatrix?: () => void;
+  isGeneratingMatrix?: boolean;
   isDeleting?: boolean;
 }
 
@@ -27,6 +29,8 @@ const BulkActions: React.FC<BulkActionsProps> = ({
   onBulkExport,
   onBulkAddToCollection,
   onBulkRemoveFromCollection,
+  onGenerateMatrix,
+  isGeneratingMatrix = false,
   isDeleting = false,
 }) => {
   if (selectedCount === 0) return null;
@@ -67,6 +71,28 @@ const BulkActions: React.FC<BulkActionsProps> = ({
           >
             {allSelected ? "Deselect All" : "Select All"}
           </button>
+
+          {/* Option A: Literature Review Matrix */}
+          {onGenerateMatrix && (
+            <button
+              onClick={onGenerateMatrix}
+              disabled={isGeneratingMatrix}
+              className="flex items-center gap-2 px-3.5 py-2 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 text-sm font-semibold rounded-lg transition-all shadow-xs disabled:opacity-50"
+              aria-label="Generate comparative literature review matrix"
+            >
+              {isGeneratingMatrix ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-indigo-600 dark:border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                  <span>Synthesizing Matrix...</span>
+                </>
+              ) : (
+                <>
+                  <TableIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Literature Matrix</span>
+                </>
+              )}
+            </button>
+          )}
 
           {/* Export Dropdown */}
           {onBulkExport && (

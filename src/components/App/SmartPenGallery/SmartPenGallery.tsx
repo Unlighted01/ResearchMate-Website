@@ -868,18 +868,23 @@ const SmartPenGallery: React.FC<SmartPenGalleryProps> = ({ useToast }) => {
             setSummarizingId(null);
           }
         }}
-        onRunOCR={async (scan) => {
+        onRunOCR={async (scan, mode = "standard") => {
           if (!scan.imageUrl) return;
           setExtractingId(scan.id);
           try {
-            const result = await runOcr(scan.imageUrl, true);
+            const result = await runOcr(scan.imageUrl, true, mode);
             await updateScanItem(scan, {
               text: result.ocrText,
               ocrText: result.ocrText,
               ocrConfidence: result.ocrConfidence ?? undefined,
               aiSummary: result.aiSummary || undefined,
             });
-            showToast("Text extracted!", "success");
+            showToast(
+              mode === "math"
+                ? "LaTeX math transcribed!"
+                : "Text extracted!",
+              "success",
+            );
             loadScans();
           } catch (err) {
             showToast(err instanceof Error ? err.message : "OCR failed", "error");

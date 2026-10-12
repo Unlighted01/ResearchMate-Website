@@ -284,7 +284,90 @@ export async function generateChatResponse(
 }
 
 // ============================================
-// PART 6: EXPORTS & UTILS
+// PART 6: LITERATURE REVIEW MATRIX (Option A)
+// ============================================
+
+export interface MatrixRow {
+  id: string;
+  title: string;
+  authorsYear: string;
+  methodology: string;
+  dataset: string;
+  keyFindings: string;
+  limitations: string;
+}
+
+export interface LiteratureMatrixResult {
+  ok: boolean;
+  matrix: MatrixRow[];
+  crossPaperGaps: string[];
+  synthesisDraft: string;
+  provider?: string;
+  error?: string;
+}
+
+export async function generateLiteratureMatrix(
+  papers: Array<{
+    id: string;
+    title?: string;
+    sourceTitle?: string;
+    text: string;
+    citation?: string;
+    aiSummary?: string;
+  }>,
+): Promise<LiteratureMatrixResult> {
+  if (!papers || papers.length === 0) {
+    return {
+      ok: false,
+      matrix: [],
+      crossPaperGaps: [],
+      synthesisDraft: "",
+      error: "No papers selected.",
+    };
+  }
+
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/literature-matrix`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        papers: papers.map((p) => ({
+          id: p.id,
+          title: p.title || p.sourceTitle || "Untitled Paper",
+          text: p.text || p.aiSummary || "",
+          citation: p.citation || "",
+        })),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to generate literature matrix.");
+    }
+
+    return {
+      ok: true,
+      matrix: data.matrix || [],
+      crossPaperGaps: data.crossPaperGaps || [],
+      synthesisDraft: data.synthesisDraft || "",
+      provider: data.provider,
+    };
+  } catch (error) {
+    console.error("❌ Literature Matrix generation failed:", error);
+    return {
+      ok: false,
+      matrix: [],
+      crossPaperGaps: [],
+      synthesisDraft: "",
+      error: (error as Error).message,
+    };
+  }
+}
+
+// ============================================
+// PART 7: EXPORTS & UTILS
 // ============================================
 
 export async function checkBackendHealth(): Promise<boolean> {
@@ -308,5 +391,6 @@ export default {
   generateChatResponse,
   checkBackendHealth,
   generateItemSummary,
-  generateSummary, // exported for compatibility
+  generateSummary,
+  generateLiteratureMatrix,
 };

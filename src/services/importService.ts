@@ -29,6 +29,7 @@ export interface OcrResult {
 export async function runOcr(
   imageDataUrl: string,
   includeSummary: boolean = false,
+  mode: "standard" | "math" = "standard",
 ): Promise<OcrResult> {
   const token = (await supabase.auth.getSession()).data.session?.access_token;
   const response = await fetch("/api/ocr", {
@@ -37,7 +38,7 @@ export async function runOcr(
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ image: imageDataUrl, includeSummary }),
+    body: JSON.stringify({ image: imageDataUrl, includeSummary, mode }),
   });
 
   if (!response.ok) {

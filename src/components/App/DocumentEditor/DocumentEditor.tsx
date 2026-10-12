@@ -95,6 +95,68 @@ const DocumentEditor: React.FC = () => {
       setDiscoverBanner(`"${paper.title.slice(0, 60)}" inserted from Discover`);
       setTimeout(() => setDiscoverBanner(null), 5000);
     } catch { /* malformed payload — ignore */ }
+
+    // ── STEM Math LaTeX → Editor handoff ──────────────────────────────
+    const latexRaw = sessionStorage.getItem("rm_latex_to_editor");
+    if (latexRaw) {
+      sessionStorage.removeItem("rm_latex_to_editor");
+      try {
+        const item = JSON.parse(latexRaw) as { title: string; latex: string };
+        const nodes: Record<string, unknown>[] = [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                marks: [{ type: "bold" }],
+                text: item.title ? `[Equation] ${item.title}: ` : "[Equation]: ",
+              },
+              {
+                type: "text",
+                marks: [{ type: "code" }],
+                text: item.latex,
+              },
+            ],
+          },
+          { type: "paragraph" },
+        ];
+        editor.chain().focus().insertContent(nodes).run();
+        setDiscoverBanner("LaTeX equation inserted into draft");
+        setTimeout(() => setDiscoverBanner(null), 5000);
+      } catch { /* malformed payload */ }
+    }
+
+    // ── Literature Review Matrix → Editor handoff ─────────────────────
+    const matrixRaw = sessionStorage.getItem("rm_matrix_to_editor");
+    if (matrixRaw) {
+      sessionStorage.removeItem("rm_matrix_to_editor");
+      try {
+        const payload = JSON.parse(matrixRaw) as {
+          title: string;
+          draft: string;
+        };
+        const paragraphs = (payload.draft || "")
+          .split("\n\n")
+          .map((p) => p.trim())
+          .filter(Boolean);
+
+        const nodes: Record<string, unknown>[] = [
+          {
+            type: "heading",
+            attrs: { level: 2 },
+            content: [{ type: "text", text: payload.title || "Related Work & Literature Synthesis" }],
+          },
+          ...paragraphs.map((p) => ({
+            type: "paragraph",
+            content: [{ type: "text", text: p }],
+          })),
+          { type: "paragraph" },
+        ];
+        editor.chain().focus().insertContent(nodes).run();
+        setDiscoverBanner("Synthesized Literature Review section loaded into editor");
+        setTimeout(() => setDiscoverBanner(null), 5000);
+      } catch { /* malformed payload */ }
+    }
   }, [editor]);
 
   // ── Title-prompt modal state ──────────────────────────────────────

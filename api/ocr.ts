@@ -26,13 +26,14 @@ type OcrResult = {
 // PART 3: CONSTANTS & CONFIGURATION
 // ============================================
 
-// Shared prompt used across all three OCR providers
+// Shared prompts used across OCR providers
 const OCR_EXTRACTION_PROMPT = `Extract ALL text from this image exactly as it appears. Output raw text only.
 
 CRITICAL INSTRUCTIONS:
 - Transcribe every word exactly as printed or written — do NOT paraphrase, summarize, or restructure
 - Preserve the original paragraph structure and line breaks
-- Do NOT add any formatting: no Markdown, no bullet points, no dashes, no headers, no bold, no italics
+- If mathematical expressions or equations appear, transcribe them using standard LaTeX delimiters ($...$ for inline, $$...$$ for block display formulas)
+- Do NOT add formatting: no bullet points, no dashes, no headers, no bold, no italics unless they represent mathematical or structured notation
 - Do NOT add symbols or characters that are not in the original text
 - IGNORE these page artifacts: standalone page numbers, repeating headers/footers, watermarks, scan noise
 - Multi-column layouts: read the LEFT column completely first, then the RIGHT column
@@ -42,6 +43,20 @@ CRITICAL INSTRUCTIONS:
 - If the image contains no visible text at all, return exactly: [NO TEXT DETECTED]
 
 PROCESS THE ENTIRE IMAGE. Do not stop early or leave anything out.`;
+
+const OCR_MATH_LATEX_PROMPT = `Extract and transcribe ALL mathematical formulas, derivations, proofs, equations, and accompanying notes from this image into clean, publication-ready standard LaTeX.
+
+CRITICAL INSTRUCTIONS:
+- Mathematical equations, expressions, and symbols MUST be wrapped in standard LaTeX delimiters:
+  * Use $$...$$ for display equations, multi-line derivations, systems, and matrices.
+  * Use $...$ for inline variables and mathematical symbols within text.
+- Use standard LaTeX math environments and commands (e.g., \\begin{aligned}...\\end{aligned}, \\begin{pmatrix}...\\end{pmatrix}, \\frac{num}{den}, \\sqrt{}, \\int, \\sum, \\partial, \\nabla, Greek letters, sub/superscripts).
+- Transcribe handwritten notation with maximum fidelity: preserve every step of a multi-line derivation.
+- Accompanying prose, explanations, theorem names, or notes around the math should be preserved in plain text, with all inline symbols formatted in $...$.
+- Do NOT output conversational chatter or markdown fences (\`\`\`latex) unless wrapping code.
+- If the image contains no visible mathematical expressions or text, return exactly: [NO TEXT DETECTED]
+
+PROCESS THE ENTIRE IMAGE with precision.`;
 
 const OCR_SUMMARY_PROMPT = `Summarize the following scanned content in 2-4 concise, information-dense sentences.
 
@@ -105,7 +120,10 @@ function calculateOcrConfidence(text: string, provider: string): number {
 
 // ---------- PART 5A: TEXT EXTRACTION ----------
 
-async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
+async function extractTextFromImage(
+  imageBase64: string,
+  mode: "standard" | "math" = "standard",
+): Promise<OcrResult> {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   const claudeKey = process.env.OCR_API_KEY;
   const geminiKey = getRandomGeminiKey();
@@ -113,6 +131,8 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
   if (!openRouterKey && !claudeKey && !geminiKey) {
     return { success: false, text: "", error: "No API keys configured for OCR" };
   }
+
+  const prompt = mode === "math" ? OCR_MATH_LATEX_PROMPT : OCR_EXTRACTION_PROMPT;
 
   const match = imageBase64.match(/^data:(image\/\w+);base64,/);
   const mimeType = match ? match[1] : "image/jpeg";
@@ -126,7 +146,7 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
   if (openRouterKey) {
     const orStart = Date.now();
     try {
-      console.log("🔍 Processing image with OpenRouter...");
+      console.log(`🔍 Processing image with OpenRouter (mode: ${mode})...`);
       const orAbort = AbortController ? new AbortController() : null;
       const orTimeout = orAbort ? setTimeout(() => orAbort.abort(), 15000) : null;
       const response = await fetch(
@@ -143,7 +163,7 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
               {
                 role: "user",
                 content: [
-                  { type: "text", text: OCR_EXTRACTION_PROMPT },
+                  { type: "text", text: prompt },
                   {
                     type: "image_url",
                     image_url: { url: `data:${mimeType};base64,${base64Data}` },
@@ -197,7 +217,7 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
             contents: [
               {
                 parts: [
-                  { text: OCR_EXTRACTION_PROMPT },
+                  { text: prompt },
                   {
                     inlineData: {
                       mimeType:
@@ -266,7 +286,7 @@ async function extractTextFromImage(imageBase64: string): Promise<OcrResult> {
                   type: "image",
                   source: { type: "base64", media_type: mimeType, data: base64Data },
                 },
-                { type: "text", text: OCR_EXTRACTION_PROMPT },
+                { type: "text", text: prompt },
               ],
             },
           ],
@@ -416,7 +436,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let deductedUserId: string | null = null;
 
   try {
-    const { image, includeSummary = true } = req.body;
+    const { image, includeSummary = true, mode = "standard" } = req.body;
 
     if (!image) {
       return res.status(400).json({ error: "Image data is required" });
@@ -437,7 +457,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Service-to-service bypass for Smart Pen (no user session, no credit deduction)
     const serviceKey = req.headers["x-smart-pen-key"];
     if (serviceKey && serviceKey === process.env.SMART_PEN_SERVICE_KEY) {
-      const ocrResult = await extractTextFromImage(image);
+      const ocrResult = await extractTextFromImage(image, mode);
       if (!ocrResult.success) {
         return res.status(422).json({ success: false, error: ocrResult.error });
       }
@@ -461,7 +481,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Extract text from image
-    const ocrResult = await extractTextFromImage(image);
+    const ocrResult = await extractTextFromImage(image, mode);
 
     if (!ocrResult.success) {
       console.error("OCR failed:", ocrResult.error);
