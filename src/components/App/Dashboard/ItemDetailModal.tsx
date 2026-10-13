@@ -118,8 +118,22 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       if (onItemUpdated) {
         onItemUpdated(updatedItem);
       }
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "ai",
+          text: `✅ Successfully extracted and indexed **${extracted.pageCount} pages** from **${file.name}**!\n\nYou can now ask me to solve specific problems (e.g. *"solve problem 1"*), explain formulas, or generate mock practice questions.`,
+        },
+      ]);
     } catch (err: any) {
       console.error("Failed to re-index PDF:", err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "ai",
+          text: `⚠️ Could not extract text from this PDF: ${err?.message || "Unknown error"}. Try uploading another version or pasting the problem directly.`,
+        },
+      ]);
     } finally {
       setIsReindexing(false);
       if (e.target) e.target.value = "";
@@ -159,32 +173,23 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     setIsAiThinking(true);
 
     try {
-      const prompt = `You are a research study assistant analyzing this document:
-Document Title: "${item.sourceTitle || "Untitled"}"
-Document Text / Content:
-${displayText || "(No raw text extracted. Source title: " + item.sourceTitle + ")"}
+      const docContext = displayText
+        ? `Document Title: "${item.sourceTitle || "Untitled"}"\n\nDocument Text:\n${displayText}`
+        : `Document Title: "${item.sourceTitle || "Untitled"}"\n(Note: No body text extracted yet. If the user asks to solve specific problems or analyze sections, explain what is available, offer to solve it if they paste it or re-parse the PDF, and provide a helpful illustrative example).`;
 
-User Query: "${query}"
-
-Provide a clear, direct, and well-structured answer referencing the document.`;
-
-      const aiReply = await generateAiResponse(prompt, displayText);
-      setMessages((prev) => [...prev, { sender: "ai", text: aiReply }]);
+      const chatRes = await generateChatResponse(query, docContext);
+      if (chatRes.ok && chatRes.response) {
+        setMessages((prev) => [...prev, { sender: "ai", text: chatRes.response }]);
+      } else {
+        throw new Error(chatRes.error || "No response from AI assistant");
+      }
     } catch (err: any) {
-      console.warn("Direct generateAiResponse error, falling back to chat endpoint:", err);
-      try {
-        const chatRes = await generateChatResponse(query, displayText);
-        if (chatRes.ok && chatRes.response) {
-          setMessages((prev) => [...prev, { sender: "ai", text: chatRes.response }]);
-          return;
-        }
-      } catch {}
-
+      console.warn("AI chat error:", err);
       setMessages((prev) => [
         ...prev,
         {
           sender: "ai",
-          text: `I was unable to query the AI model for this document. If this PDF had no digital text extracted, try re-uploading it so the parser can index its contents.`,
+          text: `I had trouble connecting to the AI service. If this document was recently uploaded without text, click **Re-parse PDF** above to re-index its pages.`,
         },
       ]);
     } finally {
