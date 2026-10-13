@@ -28,12 +28,17 @@ import {
   Upload,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon } from "../../icons";
-import { StorageItem, updateItem } from "../../../services/storageService";
+import { StorageItem, updateItem, getCachedProblemSolution, saveCachedProblemSolution } from "../../../services/storageService";
 import { generateAiResponse, generateChatResponse } from "../../../services/geminiService";
 import { extractPdfContent } from "../../../services/pdfService";
+import { isPureMathCalculation, solveMath } from "../../../services/mathSolverEngine";
+import { findRelevantKnowledge } from "../../../services/knowledgeDatasets";
 import { isMarkdown } from "./dashboardUtils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -69,6 +74,20 @@ const stripMarkdown = (text: string) =>
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/^\s*[-]{3,}\s*$/gm, "")
     .trim();
+
+/**
+ * Normalizes mathematical operators and escapes currency symbols for KaTeX rendering
+ */
+const sanitizeMathAndOperators = (text: string): string => {
+  if (!text) return "";
+  return text
+    // Normalize informal division tokens: "/div" or "/div " -> "÷"
+    .replace(/\s*\/div\s*/gi, " ÷ ")
+    // Ensure standalone fraction slashes in arithmetic expressions have clean division symbols
+    .replace(/(\d+)\s*\/\s*(\d+)/g, "$1 ÷ $2")
+    // Escape isolated dollar signs that denote currency rather than KaTeX math mode
+    .replace(/(^|\s)\$(\d+(?:\.\d+)?)/g, "$1\\$$2");
+};
 
 // ============================================
 // PART 4: COMPONENT
@@ -173,13 +192,55 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     setIsAiThinking(true);
 
     try {
-      const docContext = displayText
+      // TIER 1: Check Cached Problem Solutions (0 credits, instant response)
+      const cachedSolution = await getCachedProblemSolution(item.sourceTitle, query);
+      if (cachedSolution) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "ai",
+            text: `${cachedSolution}\n\n*(Loaded from verified solution cache • 0 credits consumed)*`,
+          },
+        ]);
+        setIsAiThinking(false);
+        return;
+      }
+
+      // TIER 2: Pure Math & Unit Conversion Local Solver (0 credits, 100% accurate)
+      if (isPureMathCalculation(query)) {
+        const mathResult = solveMath(query);
+        if (mathResult.success) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              sender: "ai",
+              text: `${mathResult.explanationMarkdown}\n\n*(Computed deterministically via Math.js engine • 0 credits consumed)*`,
+            },
+          ]);
+          await saveCachedProblemSolution(item.sourceTitle, query, mathResult.explanationMarkdown);
+          setIsAiThinking(false);
+          return;
+        }
+      }
+
+      // TIER 3: Knowledge Bank Lookup + AI Pedagogical Tutor
+      const relevantKnowledge = findRelevantKnowledge(query);
+
+      let docContext = displayText
         ? `Document Title: "${item.sourceTitle || "Untitled"}"\n\nDocument Text:\n${displayText}`
         : `Document Title: "${item.sourceTitle || "Untitled"}"\n(Note: No body text extracted yet. If the user asks to solve specific problems or analyze sections, explain what is available, offer to solve it if they paste it or re-parse the PDF, and provide a helpful illustrative example).`;
+
+      if (relevantKnowledge.length > 0) {
+        docContext += `\n\nVERIFIED REFERENCE KNOWLEDGE:\n${relevantKnowledge.join("\n")}`;
+      }
 
       const chatRes = await generateChatResponse(query, docContext);
       if (chatRes.ok && chatRes.response) {
         setMessages((prev) => [...prev, { sender: "ai", text: chatRes.response }]);
+        // Auto-cache problem solutions to save credits on repeat visits
+        if (/problem|question|number|solve|formula/i.test(query)) {
+          await saveCachedProblemSolution(item.sourceTitle, query, chatRes.response);
+        }
       } else {
         throw new Error(chatRes.error || "No response from AI assistant");
       }
@@ -353,7 +414,8 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       <div className="text-base text-slate-700 dark:text-slate-300 leading-relaxed font-sans prose dark:prose-invert max-w-none">
                         {isMarkdown(displayText) ? (
                           <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
+                            remarkPlugins={[remarkGfm, remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
                             components={{
                               h1: ({ children }) => <h1 className="text-xl font-bold text-slate-900 dark:text-white mt-4 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1.5" style={{ fontFamily: "var(--font-title)" }}>{children}</h1>,
                               h2: ({ children }) => <h2 className="text-lg font-bold text-indigo-900 dark:text-indigo-400 mt-4 mb-2">{children}</h2>,
@@ -371,7 +433,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                               td: ({ children }) => <td className="border border-slate-200 dark:border-slate-800 px-3 py-2 align-top">{children}</td>,
                             }}
                           >
-                            {displayText}
+                            {sanitizeMathAndOperators(displayText)}
                           </ReactMarkdown>
                         ) : (
                           <span className="whitespace-pre-wrap leading-relaxed block">{displayText}</span>
@@ -565,8 +627,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                             <Sparkles className="w-3.5 h-3.5" />
                           </div>
                           <div className="bg-indigo-600/5 dark:bg-indigo-950/20 border border-indigo-500/10 p-3 rounded-2xl rounded-tl-none text-sm text-slate-700 dark:text-slate-300 leading-relaxed max-w-[85%] prose dark:prose-invert">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {m.text}
+                            <ReactMarkdown 
+                              remarkPlugins={[remarkGfm, remarkMath]}
+                              rehypePlugins={[rehypeKatex]}
+                            >
+                              {sanitizeMathAndOperators(m.text)}
                             </ReactMarkdown>
                           </div>
                         </>

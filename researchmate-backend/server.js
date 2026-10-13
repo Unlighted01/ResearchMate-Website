@@ -46,9 +46,11 @@ Output Structure:
 
 CORE GUIDELINES:
 1. Support math problem solving, step-by-step solutions, equations, and practice tests.
-2. Answer study questions, explain academic texts, and tutor users on concepts.
-3. Be professional, direct, and educational.
-4. Do not hallucinate citations. If you don't know, say so.
+2. Standard mathematical operators: Use \div, \frac{a}{b}, or ÷ for division. Never output raw "/div ".
+3. Strict unit preservation: Never default to dollar signs ($). Preserve exact problem units (kg, m/s, ₱, %, etc.) and wrap in \text{...}.
+4. Support English grammar checking and literary analysis.
+5. Answer study questions, explain academic texts, and tutor users on concepts.
+6. Be professional, direct, and educational.
 `.trim();
 
 // ============================================

@@ -708,7 +708,59 @@ export function subscribeToItems(
 }
 
 // ============================================
-// PART 10: EXPORTS
+// PART 10: PROBLEM SOLUTION CACHE (Credit Saver)
+// ============================================
+
+export interface CachedSolution {
+  documentTitle: string;
+  query: string;
+  solution: string;
+  timestamp: number;
+}
+
+const CACHE_STORAGE_KEY = "rm_solved_problems_cache";
+
+/**
+ * Normalizes query string for cache keys (e.g. "solve problem 1" -> "problem 1")
+ */
+function normalizeQueryKey(docTitle: string, query: string): string {
+  const cleanDoc = (docTitle || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const cleanQ = (query || "").toLowerCase().replace(/^(?:can\s+you\s+)?(?:please\s+)?(?:solve|calculate|what\s+is)\s+/i, "").replace(/[^a-z0-9]/g, "");
+  return `${cleanDoc}::${cleanQ}`;
+}
+
+export async function getCachedProblemSolution(docTitle: string, query: string): Promise<string | null> {
+  try {
+    const key = normalizeQueryKey(docTitle, query);
+    const raw = localStorage.getItem(CACHE_STORAGE_KEY);
+    if (!raw) return null;
+    const cache: Record<string, CachedSolution> = JSON.parse(raw);
+    return cache[key]?.solution || null;
+  } catch (err) {
+    console.warn("Failed to retrieve cached solution:", err);
+    return null;
+  }
+}
+
+export async function saveCachedProblemSolution(docTitle: string, query: string, solution: string): Promise<void> {
+  try {
+    const key = normalizeQueryKey(docTitle, query);
+    const raw = localStorage.getItem(CACHE_STORAGE_KEY);
+    const cache: Record<string, CachedSolution> = raw ? JSON.parse(raw) : {};
+    cache[key] = {
+      documentTitle: docTitle,
+      query,
+      solution,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(cache));
+  } catch (err) {
+    console.warn("Failed to cache problem solution:", err);
+  }
+}
+
+// ============================================
+// PART 11: EXPORTS
 // ============================================
 
 export default {
@@ -724,4 +776,6 @@ export default {
   getLocalItemsCount,
   getItemStats,
   subscribeToItems,
+  getCachedProblemSolution,
+  saveCachedProblemSolution,
 };

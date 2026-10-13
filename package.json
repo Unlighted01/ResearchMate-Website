@@ -42,6 +42,7 @@
     "katex": "^0.19.0",
     "lucide-react": "^0.555.0",
     "mammoth": "^1.13.0",
+    "mathjs": "^15.2.0",
     "motion": "^12.26.2",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.4.624",
@@ -53,7 +54,9 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.10.0",
     "recharts": "^3.5.1",
+    "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "supabase": "^2.83.0",
     "three": "^0.183.2",
     "three-spritetext": "^1.10.0"
