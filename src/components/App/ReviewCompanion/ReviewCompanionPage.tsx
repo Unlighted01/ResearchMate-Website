@@ -218,7 +218,15 @@ export const ReviewCompanionPage: React.FC<ReviewCompanionProps> = ({ useToast }
                     <div>
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-750">
-                          {item.deviceSource === "camera" ? "Camera OCR" : item.deviceSource || "Document"}
+                          {item.tags?.includes("pdf")
+                            ? "PDF Document"
+                            : item.tags?.includes("word-doc")
+                            ? "Word Document"
+                            : item.deviceSource === "mobile_scanner" || item.tags?.includes("camera-capture")
+                            ? "Camera OCR"
+                            : item.tags?.includes("image-scan")
+                            ? "Visual Note"
+                            : "Study Note"}
                         </span>
                         <button
                           onClick={(e) => handleDeleteItem(item.id, e)}

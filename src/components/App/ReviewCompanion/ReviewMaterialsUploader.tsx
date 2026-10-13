@@ -48,13 +48,13 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
   } | null>(null);
   const [copiedLatex, setCopiedLatex] = useState(false);
 
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Handle file uploads (PDF, DOCX, PNG/JPG)
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  // Common file processor (supports PDF, DOCX, images, markdown)
+  const processFiles = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
 
     setIsProcessing(true);
@@ -65,11 +65,12 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
       const filename = file.name;
       const extension = filename.split(".").pop()?.toLowerCase();
 
-      setStatusText(`Parsing and indexing ${filename}...`);
+      setStatusText(`Processing ${filename}...`);
 
       try {
         if (extension === "docx") {
           // Word document extraction via mammoth
+          setStatusText(`Parsing Word document: ${filename}...`);
           const arrayBuffer = await file.arrayBuffer();
           const result = await mammoth.extractRawText({ arrayBuffer });
           const text = result.value.trim();
@@ -80,58 +81,95 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
           }
 
           // Generate executive summary via Gemini
-          const summary = await generateItemSummary(text);
+          let summary = "";
+          try {
+            summary = await generateItemSummary(text.slice(0, 5000));
+          } catch {
+            summary = `Course notes extracted from ${filename}`;
+          }
 
           await addItem({
-            sourceTitle: filename.replace(".docx", ""),
+            sourceTitle: filename.replace(/\.docx$/i, ""),
             text,
             aiSummary: summary,
-            deviceSource: "word-doc",
-            tags: ["word-doc", "course-notes"],
-            color: "slate",
+            deviceSource: "web",
+            tags: ["word-doc", "review-material"],
           });
           successCount++;
         } else if (extension === "pdf") {
-          // Store PDF metadata & excerpt
-          const reader = new FileReader();
-          await new Promise<void>((resolve, reject) => {
-            reader.onload = async () => {
-              try {
-                await addItem({
-                  sourceTitle: filename.replace(".pdf", ""),
-                  text: `Uploaded PDF review document: ${filename}`,
-                  deviceSource: "pdf",
-                  tags: ["pdf", "lecture-slides"],
-                  color: "slate",
-                });
-                successCount++;
-                resolve();
-              } catch (err) {
-                reject(err);
+          setStatusText(`Extracting text from PDF: ${filename}...`);
+          let extractedText = "";
+
+          try {
+            const pdfjsLib = await import("pdfjs-dist");
+            if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+              pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+            }
+
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+            let fullText = "";
+            const maxPages = Math.min(pdf.numPages, 40);
+            for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+              const page = await pdf.getPage(pageNum);
+              const textContent = await page.getTextContent();
+              const pageStr = textContent.items
+                .map((item: any) => item.str)
+                .join(" ");
+              if (pageStr.trim()) {
+                fullText += pageStr + "\n\n";
               }
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
+            }
+            extractedText = fullText.trim();
+          } catch (pdfErr) {
+            console.warn("pdfjs extraction fallback:", pdfErr);
+          }
+
+          if (!extractedText) {
+            extractedText = `PDF review document: ${filename}. Content ready for study synthesis and retrieval.`;
+          }
+
+          setStatusText(`Synthesizing summary for ${filename}...`);
+          let summary = "";
+          try {
+            summary = await generateItemSummary(extractedText.slice(0, 5000));
+          } catch {
+            summary = `Extracted from ${filename}`;
+          }
+
+          await addItem({
+            sourceTitle: filename.replace(/\.pdf$/i, ""),
+            text: extractedText,
+            aiSummary: summary,
+            deviceSource: "web",
+            tags: ["pdf", "review-material"],
           });
+          successCount++;
         } else if (["png", "jpg", "jpeg"].includes(extension || "")) {
-          // Image / blackboard photo / diagram
+          // Image / diagram / formula photo
+          setStatusText(`Analyzing visual study note: ${filename}...`);
           const reader = new FileReader();
           await new Promise<void>((resolve, reject) => {
             reader.onload = async () => {
               try {
                 const base64 = reader.result as string;
-                // Run math/text OCR on image
-                const ocr = await runMathOcr(base64);
+                let ocrLatex = "";
+                let ocrExplanation = "";
+                try {
+                  const ocr = await runMathOcr(base64);
+                  ocrLatex = ocr.latex;
+                  ocrExplanation = ocr.explanation;
+                } catch {}
 
                 await addItem({
                   sourceTitle: filename.replace(/\.[^/.]+$/, ""),
-                  text: ocr.latex || `Visual study note from ${filename}`,
-                  ocrText: ocr.latex,
-                  aiSummary: ocr.explanation,
+                  text: ocrLatex || `Visual study note from ${filename}`,
+                  ocrText: ocrLatex,
+                  aiSummary: ocrExplanation,
                   imageUrl: base64,
-                  deviceSource: "visual-note",
+                  deviceSource: "web",
                   tags: ["image-scan", "math-ocr"],
-                  color: "slate",
                 });
                 successCount++;
                 resolve();
@@ -143,14 +181,13 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
             reader.readAsDataURL(file);
           });
         } else {
-          // Text / markdown fallback
+          // Markdown / plain text
           const text = await file.text();
           await addItem({
             sourceTitle: filename,
             text,
-            deviceSource: "note",
-            tags: ["plain-notes"],
-            color: "slate",
+            deviceSource: "web",
+            tags: ["plain-notes", "review-material"],
           });
           successCount++;
         }
@@ -167,6 +204,31 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
     if (successCount > 0) {
       showToast(`Ingested ${successCount} study material(s) into review corpus.`, "success");
       if (onMaterialUploaded) onMaterialUploaded();
+    }
+  };
+
+  // Handle file input change
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) await processFiles(files);
+  };
+
+  // Handle Drag & Drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processFiles(e.dataTransfer.files);
     }
   };
 
@@ -223,16 +285,15 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
         imageUrl: base64,
       });
 
-      // Also save to library
+      // Save to library with valid device_source
       await addItem({
         sourceTitle: "Camera STEM Math Derivation",
         text: ocr.latex,
         ocrText: ocr.latex,
         aiSummary: ocr.explanation,
         imageUrl: base64,
-        deviceSource: "camera",
+        deviceSource: "mobile_scanner",
         tags: ["stem-math", "camera-capture"],
-        color: "slate",
       });
 
       showToast("Formula digitized and compiled into LaTeX!", "success");
@@ -281,7 +342,16 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
       {/* Workstation Split Body */}
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left Workstation: Document Ingest */}
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-6 flex flex-col justify-between">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`rounded-xl border transition-all p-6 flex flex-col justify-between ${
+            isDragging
+              ? "border-slate-900 dark:border-white bg-slate-100/90 dark:bg-slate-800/90 ring-2 ring-slate-900 dark:ring-white shadow-sm"
+              : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40"
+          }`}
+        >
           <div>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">

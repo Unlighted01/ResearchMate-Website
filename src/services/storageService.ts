@@ -158,32 +158,52 @@ function transformToDatabase(
 ): Record<string, any> {
   const finalTags = item.tags ? [...item.tags] : [];
   if (item.color) {
-    // Inject the selected color string format so it saves into supabase effortlessly 
-    // without requiring complex column migrations on the backend
-    // Prevents pushing duplicate color tags
-    const cleanTags = finalTags.filter(t => !t.startsWith("color:"));
-    cleanTags.push(`color:${item.color}`);
-    finalTags.length = 0;
-    finalTags.push(...cleanTags);
+    const validColors = ["yellow", "green", "blue", "red", "purple"];
+    if (validColors.includes(item.color)) {
+      const cleanTags = finalTags.filter((t) => !t.startsWith("color:"));
+      cleanTags.push(`color:${item.color}`);
+      finalTags.length = 0;
+      finalTags.push(...cleanTags);
+    }
   }
 
-  return {
+  // Ensure device_source strictly conforms to Supabase constraint:
+  // CHECK (device_source IN ('extension', 'mobile', 'smart_pen', 'web', 'transcription', 'mobile_scanner', 'tablet_sync'))
+  const validDeviceSources = [
+    "extension",
+    "mobile",
+    "smart_pen",
+    "web",
+    "transcription",
+    "mobile_scanner",
+    "tablet_sync",
+  ];
+  const safeDeviceSource = validDeviceSources.includes(
+    item.deviceSource as string,
+  )
+    ? item.deviceSource
+    : "web";
+
+  const dbRow: Record<string, any> = {
     user_id: userId,
-    text: item.text,
+    text: item.text || "Untitled Note",
     tags: finalTags,
     note: item.note || "",
     source_url: item.sourceUrl || "",
     source_title: item.sourceTitle || "",
     ai_summary: item.aiSummary || "",
-    citation: item.citation,
-    citation_format: item.citationFormat,
     preferred_view: item.preferredView || "original",
-    device_source: item.deviceSource || "web",
-    collection_id: item.collectionId,
-    image_url: item.imageUrl,
-    ocr_text: item.ocrText,
-    ocr_confidence: item.ocrConfidence,
+    device_source: safeDeviceSource,
   };
+
+  if (item.collectionId) dbRow.collection_id = item.collectionId;
+  if (item.citation) dbRow.citation = item.citation;
+  if (item.citationFormat) dbRow.citation_format = item.citationFormat;
+  if (item.imageUrl) dbRow.image_url = item.imageUrl;
+  if (item.ocrText) dbRow.ocr_text = item.ocrText;
+  if (typeof item.ocrConfidence === "number") dbRow.ocr_confidence = item.ocrConfidence;
+
+  return dbRow;
 }
 
 // ============================================
@@ -213,7 +233,18 @@ export async function getAllItems(
 
       if (error) throw error;
 
-      return (data || []).map(transformDatabaseItem);
+      const cloudItems = (data || []).map(transformDatabaseItem);
+      // Merge any pending local items that haven't synced yet
+      const localItems = getLocalItems();
+      if (localItems.length > 0) {
+        const cloudIds = new Set(cloudItems.map((i) => i.id));
+        const unmergedLocal = localItems.filter((i) => !cloudIds.has(i.id));
+        if (unmergedLocal.length > 0) {
+          return [...unmergedLocal, ...cloudItems].slice(offset, offset + limit);
+        }
+      }
+
+      return cloudItems;
     } catch (error) {
       console.error("☁️ Cloud fetch failed, using local:", error);
       return getLocalItems();
