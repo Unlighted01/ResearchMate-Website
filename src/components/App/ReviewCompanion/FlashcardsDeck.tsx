@@ -1,6 +1,7 @@
 // ============================================
-// FLASHCARDS DECK - Active Recall Study Tool
-// 3D Flip Flashcards generated from uploaded review materials
+// FLASHCARDS DECK - Active Recall Academic Workstation
+// Aesthetic: Matches Landing Page Console (Fraunces + Inter + Geist Mono)
+// 3D Flip Flashcards synthesized from ingested study materials
 // ============================================
 
 import React, { useState } from "react";
@@ -42,26 +43,26 @@ export const FlashcardsDeck: React.FC<FlashcardsDeckProps> = ({
   const [cards, setCards] = useState<Flashcard[]>([
     {
       id: 1,
-      front: "What is the primary condition for an isolated system to reach thermodynamic equilibrium?",
-      back: "Its entropy must reach the absolute global maximum compatible with its internal energy, volume, and composition.",
+      front: "What is the primary thermodynamic condition for an isolated system to reach equilibrium?",
+      back: "Its entropy S reaches the absolute global maximum compatible with internal energy U, volume V, and composition N (dS = 0 and d²S < 0).",
       category: "Thermodynamics",
     },
     {
       id: 2,
-      front: "Why do Transformer architectures utilize Multi-Head Attention rather than a single attention head?",
-      back: "Multi-head attention jointly attends to information from different representation subspaces at different positions, preventing a single average from diluting focused relationships.",
+      front: "Why do Transformer architectures utilize Multi-Head Attention rather than single-head projection?",
+      back: "Multi-head attention jointly attends to information from distinct representation subspaces at different positions, preventing a single attention distribution from averaging out specialized tokens.",
       category: "Deep Learning",
     },
     {
       id: 3,
-      front: "State the Central Limit Theorem and its core assumption.",
-      back: "The normalized sum of independent and identically distributed (i.i.d.) random variables with finite variance approaches a standard normal distribution as sample size n -> infinity.",
+      front: "State the Central Limit Theorem and its foundational assumption.",
+      back: "The normalized sum of independent and identically distributed (i.i.d.) random variables with finite variance σ² approaches a standard normal distribution N(0, 1) as sample size n → ∞.",
       category: "Probability & Statistics",
     },
     {
       id: 4,
       front: "What constitutes the Michaelis Constant (Km) in enzyme kinetics?",
-      back: "The substrate concentration at which the reaction velocity is half of Vmax. A lower Km indicates higher substrate affinity.",
+      back: "The substrate concentration at which the reaction velocity is half of Vmax. Lower Km signifies higher substrate binding affinity under quasi-steady-state assumptions.",
       category: "Biochemistry",
     },
   ]);
@@ -136,22 +137,22 @@ Respond ONLY with a valid raw JSON array of objects:
 
   return (
     <div className="space-y-6">
-      {/* Header & Generator Bar */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Console Header & Generator Card */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
           <div>
             <h3 className="text-base font-semibold text-slate-900 dark:text-white font-title flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <BookOpen className="w-4 h-4 text-slate-700 dark:text-slate-300" />
               Active Recall Flashcard Decks
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
-              Test your retention on key equations, mechanisms, and textbook concepts.
+              Test retention of key equations, derivations, and definitions synthesized from your course notes.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-md">
-              {masteredIds.size} of {cards.length} Mastered
+            <span className="text-xs font-mono text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-3 py-1 rounded-md">
+              Progress: <strong className="text-slate-900 dark:text-slate-100">{masteredIds.size} of {cards.length} Mastered</strong>
             </span>
           </div>
         </div>
@@ -159,15 +160,15 @@ Respond ONLY with a valid raw JSON array of objects:
         <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
           <input
             type="text"
-            placeholder="Flashcard topic focus (e.g. 'Enzyme Kinetics', 'Quantum Mechanics')..."
+            placeholder="Flashcard focus topic (e.g. 'Enzyme Kinetics', 'Quantum Mechanics', or leave blank)..."
             value={topicInput}
             onChange={(e) => setTopicInput(e.target.value)}
-            className="flex-1 px-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 font-sans"
           />
           <button
             onClick={handleGenerateCards}
             disabled={isGenerating}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-850 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors shadow-xs disabled:opacity-50 shrink-0"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-850 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 text-white rounded-lg text-xs font-semibold transition-all shadow-2xs disabled:opacity-50 shrink-0"
           >
             {isGenerating ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -179,16 +180,16 @@ Respond ONLY with a valid raw JSON array of objects:
         </div>
       </div>
 
-      {/* Interactive 3D Flip Card Container */}
+      {/* Editorial Flashcard Console */}
       {cards.length > 0 && currentCard && (
-        <div className="max-w-xl mx-auto space-y-4">
+        <div className="max-w-2xl mx-auto space-y-4">
           <div
             onClick={() => setIsFlipped(!isFlipped)}
-            className="min-h-[260px] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-8 flex flex-col justify-between cursor-pointer select-none transition-all shadow-md hover:shadow-lg relative overflow-hidden group"
+            className="min-h-[280px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 flex flex-col justify-between cursor-pointer select-none transition-all shadow-sm hover:shadow-md relative overflow-hidden group"
           >
-            {/* Top Category Badge */}
-            <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-              <span className="uppercase text-[10px] tracking-wider px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+            {/* Top Bar inside card */}
+            <div className="flex items-center justify-between text-xs font-mono text-slate-400 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+              <span className="uppercase text-[10px] tracking-wider px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
                 {currentCard.category}
               </span>
               <span>
@@ -196,27 +197,27 @@ Respond ONLY with a valid raw JSON array of objects:
               </span>
             </div>
 
-            {/* Main Question or Answer Content */}
-            <div className="py-6 text-center">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-600 dark:text-indigo-400 block mb-2 font-semibold">
-                {isFlipped ? "Answer / Derivation" : "Prompt / Question"}
+            {/* Prompt or Answer Text */}
+            <div className="py-8 text-center px-4">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-slate-400 dark:text-slate-500 block mb-3 font-semibold">
+                {isFlipped ? "Core Derivation / Answer" : "Concept Prompt / Question"}
               </span>
-              <p className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white font-title leading-relaxed">
+              <p className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-white font-title leading-relaxed">
                 {isFlipped ? currentCard.back : currentCard.front}
               </p>
             </div>
 
-            {/* Bottom Flip Hint */}
-            <div className="text-center text-[11px] font-mono text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+            {/* Bottom Cue */}
+            <div className="text-center text-[11px] font-mono text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors pt-3 border-t border-slate-100 dark:border-slate-800/80">
               Click anywhere to flip card ↻
             </div>
           </div>
 
-          {/* Controls Bar */}
-          <div className="flex items-center justify-between">
+          {/* Navigation Controls */}
+          <div className="flex items-center justify-between px-1">
             <button
               onClick={handlePrev}
-              className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 transition-colors"
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 transition-colors shadow-2xs"
               title="Previous card"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -225,10 +226,10 @@ Respond ONLY with a valid raw JSON array of objects:
             <div className="flex items-center gap-2">
               <button
                 onClick={() => toggleMastered(currentCard.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all border ${
                   masteredIds.has(currentCard.id)
-                    ? "bg-emerald-500 border-emerald-500 text-white"
-                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950 border-slate-900 dark:border-white shadow-2xs"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                 }`}
               >
                 <Check className="w-3.5 h-3.5" />
@@ -237,16 +238,16 @@ Respond ONLY with a valid raw JSON array of objects:
 
               <button
                 onClick={handleNext}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-850 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-850 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 text-white transition-all shadow-2xs"
               >
-                <span>Next</span>
+                <span>Next Card</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
             <button
               onClick={handleNext}
-              className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 transition-colors"
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 transition-colors shadow-2xs"
               title="Next card"
             >
               <ChevronRight className="w-4 h-4" />

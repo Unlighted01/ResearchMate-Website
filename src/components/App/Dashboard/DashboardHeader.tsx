@@ -64,16 +64,16 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         {/* Quick link to Research Hub & Study Review */}
         <Link
           to="/app/research"
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-750 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-2xs"
         >
-          <GraduationCap className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+          <GraduationCap className="w-3.5 h-3.5 text-slate-500" />
           <span>Research Suite</span>
         </Link>
         <Link
           to="/app/review"
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-750 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-2xs"
         >
-          <BrainCircuit className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+          <BrainCircuit className="w-3.5 h-3.5 text-slate-500" />
           <span>Study & Review</span>
         </Link>
 
@@ -98,7 +98,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         <button
           onClick={() => importFileRef.current?.click()}
           disabled={isImporting}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-850 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors shadow-xs disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-850 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 text-white text-xs font-semibold rounded-lg transition-all shadow-2xs disabled:opacity-60"
         >
           {isImporting ? (
             <RefreshCw className="w-3.5 h-3.5 animate-spin" />

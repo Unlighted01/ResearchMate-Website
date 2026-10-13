@@ -1,6 +1,6 @@
 // ============================================
-// RESEARCH & THESIS HUB - Unified Academic Suite
-// Compiles Literature Matrix, Manuscript Editor, Citations & PDF Reader
+// RESEARCH & THESIS HUB - Precision Academic Workstation
+// Aesthetic: Matches Landing Page Console (Fraunces + Inter + Geist Mono)
 // ============================================
 
 import React, { useState, useEffect } from "react";
@@ -11,6 +11,7 @@ import {
   Quote,
   BookOpen,
   GraduationCap,
+  Sparkles,
 } from "lucide-react";
 
 import LiteratureMatrixPage from "../LiteratureMatrix/LiteratureMatrixPage";
@@ -43,97 +44,85 @@ const ResearchHubPage: React.FC<ResearchHubProps> = ({ useToast }) => {
     setSearchParams({ tab });
   };
 
-  const tabs: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }>; description: string }[] = [
+  const tabs: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }>; tag: string }[] = [
     {
       id: "matrix",
-      label: "Literature Review Matrix",
+      label: "Literature Matrix",
       icon: Table2,
-      description: "Synthesize papers side-by-side across methodology, benchmarks, findings, and research gaps.",
+      tag: "5-Column Comparative Synthesis",
     },
     {
       id: "editor",
       label: "Manuscript Editor",
       icon: FileEdit,
-      description: "Distraction-free academic writing with live KaTeX math and integrated citations.",
+      tag: "LaTeX & Cited Prose",
     },
     {
       id: "citations",
       label: "Citations & BibTeX",
       icon: Quote,
-      description: "Generate BibTeX, APA, IEEE, and MLA references directly for your thesis.",
+      tag: "APA, IEEE, MLA & BibTeX",
     },
     {
       id: "pdf",
       label: "PDF Reader & Ingest",
       icon: BookOpen,
-      description: "High-fidelity in-browser PDF reader for papers, lab manuals, and preprints.",
+      tag: "Paper Annotation",
     },
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Top Header & Tab Navigation */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl p-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-                <GraduationCap className="w-4 h-4" />
-              </div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white font-title tracking-tight">
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Precision Academic Console Card */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        {/* Console Header Bar */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/80">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200/60 dark:border-indigo-900/60">
+              <GraduationCap className="w-4 h-4" />
+            </div>
+            <div>
+              <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 font-title tracking-tight">
                 Research & Thesis Suite
               </h1>
+              <p className="text-xs text-slate-500 font-mono">
+                Literature Matrix • Manuscript Editor • Citations • PDF Ingest
+              </p>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-sans">
-              Unified workspace for literature reviews, paper drafting, reference citations, and PDF reading.
-            </p>
           </div>
 
-          <div className="text-xs font-mono text-slate-400">
-            Active: <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{tabs.find((t) => t.id === activeTab)?.label}</span>
-          </div>
-        </div>
-
-        {/* Tab Pills */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-2.5 p-3 rounded-lg border text-left transition-all ${
-                  isActive
-                    ? "bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800 text-indigo-950 dark:text-indigo-200 shadow-xs"
-                    : "bg-slate-50/60 dark:bg-slate-850/40 border-slate-200/70 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                }`}
-              >
-                <div
-                  className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
+          {/* Linear-style Segmented Mode Switcher */}
+          <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium border border-slate-200/80 dark:border-slate-700 overflow-x-auto scrollbar-none">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
                     isActive
-                      ? "bg-indigo-600 text-white"
-                      : "bg-slate-200 dark:bg-slate-750 text-slate-500 dark:text-slate-400"
+                      ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs font-semibold"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold truncate font-title">
-                    {tab.label}
-                  </div>
-                  <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
-                    {tab.id === "matrix" ? "5-Column Comparison" : tab.id === "editor" ? "LaTeX & Markdown" : tab.id === "citations" ? "BibTeX, APA, IEEE" : "Annotate & Read"}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Sub-header context indicator */}
+        <div className="px-6 py-2.5 bg-slate-50/30 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-xs font-mono text-slate-400">
+          <span>Active Mode: <strong className="text-slate-700 dark:text-slate-200 font-medium">{tabs.find((t) => t.id === activeTab)?.label}</strong></span>
+          <span className="hidden sm:inline text-[11px] text-slate-500">{tabs.find((t) => t.id === activeTab)?.tag}</span>
         </div>
       </div>
 
-      {/* Active Tab View */}
-      <div className="transition-opacity duration-200">
+      {/* Active Workstation Body */}
+      <div className="transition-opacity duration-150">
         {activeTab === "matrix" && (
           <LiteratureMatrixPage useToast={useToast} />
         )}
