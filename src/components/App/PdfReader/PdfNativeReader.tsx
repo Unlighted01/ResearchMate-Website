@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import { savePdfLocally, getLocalPdf, clearLocalPdf } from "../../../services/localPdfStore";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3.0;

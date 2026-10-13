@@ -72,9 +72,9 @@ const DEFAULT_SCALE = 1.2;
 
 async function loadPdfJs() {
   const pdfjsLib = await import("pdfjs-dist");
-  // unpkg mirrors npm exactly, so the version always resolves (cdnjs often lags)
+  const { default: pdfWorker } = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
   if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
   }
   return pdfjsLib;
 }

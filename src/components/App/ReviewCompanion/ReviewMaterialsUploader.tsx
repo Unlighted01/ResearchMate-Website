@@ -23,7 +23,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { addItem } from "../../../services/storageService";
-import { runMathOcr, generateItemSummary } from "../../../services/geminiService";
+import { runMathOcr, generateSummary } from "../../../services/geminiService";
+import { extractPdfContent } from "../../../services/pdfService";
 import LatexRenderer from "../../shared/LatexRenderer";
 
 interface ReviewMaterialsUploaderProps {
@@ -83,7 +84,7 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
           // Generate executive summary via Gemini
           let summary = "";
           try {
-            summary = await generateItemSummary(text.slice(0, 5000));
+            summary = await generateSummary(text.slice(0, 5000));
           } catch {
             summary = `Course notes extracted from ${filename}`;
           }
@@ -97,51 +98,13 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
           });
           successCount++;
         } else if (extension === "pdf") {
-          setStatusText(`Extracting text from PDF: ${filename}...`);
-          let extractedText = "";
-
-          try {
-            const pdfjsLib = await import("pdfjs-dist");
-            if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-              pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-            }
-
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-            let fullText = "";
-            const maxPages = Math.min(pdf.numPages, 40);
-            for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-              const page = await pdf.getPage(pageNum);
-              const textContent = await page.getTextContent();
-              const pageStr = textContent.items
-                .map((item: any) => item.str)
-                .join(" ");
-              if (pageStr.trim()) {
-                fullText += pageStr + "\n\n";
-              }
-            }
-            extractedText = fullText.trim();
-          } catch (pdfErr) {
-            console.warn("pdfjs extraction fallback:", pdfErr);
-          }
-
-          if (!extractedText) {
-            extractedText = `PDF review document: ${filename}. Content ready for study synthesis and retrieval.`;
-          }
-
-          setStatusText(`Synthesizing summary for ${filename}...`);
-          let summary = "";
-          try {
-            summary = await generateItemSummary(extractedText.slice(0, 5000));
-          } catch {
-            summary = `Extracted from ${filename}`;
-          }
+          setStatusText(`Parsing PDF text & formulas from ${filename}...`);
+          const extracted = await extractPdfContent(file);
 
           await addItem({
             sourceTitle: filename.replace(/\.pdf$/i, ""),
-            text: extractedText,
-            aiSummary: summary,
+            text: extracted.text,
+            aiSummary: extracted.summary,
             deviceSource: "web",
             tags: ["pdf", "review-material"],
           });

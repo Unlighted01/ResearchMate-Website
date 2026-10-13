@@ -7,6 +7,8 @@
 // ============================================
 
 import { supabase } from "./supabaseClient";
+import { addItem } from "./storageService";
+import { extractPdfContent } from "./pdfService";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -90,37 +92,21 @@ export async function importImageFile(file: File): Promise<void> {
 }
 
 /**
- * Import a PDF file: extract text via pdfjs-dist and insert to DB.
+ * Import a PDF file: extract text via pdfService and insert to DB/storage.
  */
 export async function importPdfFile(
   file: File,
   userId?: string,
 ): Promise<void> {
-  const pdfjsLib = await import("pdfjs-dist");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+  const extracted = await extractPdfContent(file);
 
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-  let fullText = "";
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    fullText +=
-      textContent.items.map((item: any) => item.str).join(" ") + "\n\n";
-  }
-
-  const cleanText = fullText.trim();
-  if (!cleanText) throw new Error("No readable text found in PDF.");
-
-  const uid = userId || (await supabase.auth.getUser()).data.user?.id;
-  const { error } = await supabase.from("items").insert({
-    user_id: uid,
-    text: cleanText,
-    source_title: file.name.replace(/\.pdf$/i, ""),
-    device_source: "web",
+  await addItem({
+    sourceTitle: file.name.replace(/\.pdf$/i, ""),
+    text: extracted.text,
+    aiSummary: extracted.summary,
+    deviceSource: "web",
+    tags: ["pdf", "imported-source"],
   });
-  if (error) throw error;
 }
 
 /**

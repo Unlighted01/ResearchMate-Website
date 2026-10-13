@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon } from "../../icons";
 import { StorageItem } from "../../../services/storageService";
+import { generateAiResponse, generateChatResponse } from "../../../services/geminiService";
 import { isMarkdown } from "./dashboardUtils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -88,6 +89,8 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [messages, setMessages] = useState<Array<{ sender: "user" | "ai"; text: string }>>([]);
 
+  const [isAiThinking, setIsAiThinking] = useState(false);
+
   const displayText = item ? (item.text || item.ocrText || "") : "";
 
   // Reset custom messages when the item changes
@@ -113,35 +116,47 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const handleSendMessage = (e?: React.FormEvent) => {
+  const handleSendMessage = async (e?: React.FormEvent, customMsg?: string) => {
     if (e) e.preventDefault();
-    if (!chatInput.trim() || !item) return;
+    const query = (customMsg || chatInput).trim();
+    if (!query || !item || isAiThinking) return;
 
-    const userMsg = chatInput;
-    setMessages((prev) => [...prev, { sender: "user", text: userMsg }]);
+    setMessages((prev) => [...prev, { sender: "user", text: query }]);
     setChatInput("");
+    setIsAiThinking(true);
 
-    // Simulated premium context-aware AI Assistant response
-    setTimeout(() => {
-      let replyText = "";
-      const lower = userMsg.toLowerCase();
+    try {
+      const prompt = `You are a research study assistant analyzing this document:
+Document Title: "${item.sourceTitle || "Untitled"}"
+Document Text / Content:
+${displayText || "(No raw text extracted. Source title: " + item.sourceTitle + ")"}
 
-      if (lower.includes("insight") || lower.includes("key") || lower.includes("takeaway")) {
-        replyText = `### Key Takeaways from this document:\n\n1. **Core Summary:** The research addresses structural content saved from **${item.deviceSource || "web"}** source.\n2. **Length Profile:** Comprises **${displayText.length} characters** of dense research metadata.\n3. **Primary Intent:** Capturing context tags and highlighting entities recursively under the active collection system.`;
-      } else if (lower.includes("stat") || lower.includes("count") || lower.includes("size")) {
-        replyText = `### Document Profile Analysis:\n\n- **Character Count:** \`${displayText.length}\` characters\n- **Approx. Word Count:** \`${displayText.split(/\s+/).filter(Boolean).length}\` words\n- **Creation Date:** ${new Date(item.createdAt).toLocaleString()}\n- **Source Channel:** \`${item.deviceSource || "web"}\` capture\n- **Color Grouping:** \`${item.color || "None"}\``;
-      } else if (lower.includes("tag") || lower.includes("category")) {
-        replyText = `The current document has **${item.tags?.length || 0} associated tags**: ${
-          item.tags && item.tags.length > 0 
-            ? item.tags.map(t => `\`#${t}\``).join(", ") 
-            : "No active tags designated yet. You can associate tags under the Collection panel."
-        }`;
-      } else {
-        replyText = `I have analyzed the research document: **"${item.sourceTitle || "Untitled Document"}"**.\n\nThe content highlights:\n> "${stripMarkdown(displayText).substring(0, 180)}..."\n\nAsk me to **summarize key insights**, **compile statistical profiles**, or **outline a blog draft** from this data!`;
-      }
+User Query: "${query}"
 
-      setMessages((prev) => [...prev, { sender: "ai", text: replyText }]);
-    }, 900);
+Provide a clear, direct, and well-structured answer referencing the document.`;
+
+      const aiReply = await generateAiResponse(prompt, displayText);
+      setMessages((prev) => [...prev, { sender: "ai", text: aiReply }]);
+    } catch (err: any) {
+      console.warn("Direct generateAiResponse error, falling back to chat endpoint:", err);
+      try {
+        const chatRes = await generateChatResponse(query, displayText);
+        if (chatRes.ok && chatRes.response) {
+          setMessages((prev) => [...prev, { sender: "ai", text: chatRes.response }]);
+          return;
+        }
+      } catch {}
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "ai",
+          text: `I was unable to query the AI model for this document. If this PDF had no digital text extracted, try re-uploading it so the parser can index its contents.`,
+        },
+      ]);
+    } finally {
+      setIsAiThinking(false);
+    }
   };
 
   return createPortal(
@@ -504,22 +519,39 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     </div>
                   ))}
 
+                  {/* AI Thinking Indicator */}
+                  {isAiThinking && (
+                    <div className="flex gap-3 justify-start">
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0 text-white animate-pulse">
+                        <Sparkles className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="bg-indigo-600/5 dark:bg-indigo-950/20 border border-indigo-500/10 p-3 rounded-2xl rounded-tl-none text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                        <svg className="w-3.5 h-3.5 animate-spin text-indigo-600" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                        <span>Analyzing document context...</span>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
 
                 {/* Quick-Click Preset Prompts Shelf */}
                 <div className="px-6 py-2 border-t border-slate-200/30 dark:border-slate-800/30 bg-slate-50/20 dark:bg-slate-900/20">
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
                     {[
-                      { prompt: "📝 Key Insights", label: "Insights" },
-                      { prompt: "📊 Document Statistics", label: "Stats Profile" },
-                      { prompt: "🏷️ Associated Tags", label: "Tag Details" },
+                      { prompt: "Provide the top 3 key insights and takeaways from this document.", label: "Insights" },
+                      { prompt: "Summarize the methodology or key problem-solving approach in this document.", label: "Methodology" },
+                      { prompt: "Generate 3 practice questions based on this document.", label: "Practice Questions" },
                     ].map((p, i) => (
                       <button
                         key={i}
+                        disabled={isAiThinking}
                         onClick={() => {
-                          setChatInput(p.prompt);
+                          handleSendMessage(undefined, p.prompt);
                         }}
-                        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-800 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 border border-slate-200/50 dark:border-slate-700 text-xs font-semibold text-slate-500 dark:text-slate-400 rounded-full transition-all"
+                        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-800 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 border border-slate-200/50 dark:border-slate-700 text-xs font-semibold text-slate-500 dark:text-slate-400 rounded-full transition-all disabled:opacity-50"
                       >
                         <span>{p.label}</span>
                         <ChevronRight className="w-3 h-3 opacity-60" />
