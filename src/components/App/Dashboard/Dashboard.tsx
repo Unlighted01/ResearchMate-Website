@@ -31,7 +31,6 @@ import {
 import KeyboardShortcutsModal from "../../shared/KeyboardShortcutsModal";
 import BulkActions from "../../shared/BulkActions";
 import AdvancedSearchFilter from "../../shared/AdvancedSearchFilter";
-import SmartPenScanModal from "../SmartPenScanModal";
 import ConfirmDialog from "../../shared/ConfirmDialog";
 import LiteratureMatrixModal from "../LiteratureMatrix/LiteratureMatrixModal";
 import {
@@ -168,12 +167,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
 
   // ---------- PART 3D: ITEM CLICK HANDLER ----------
   const handleItemClick = (item: StorageItem) => {
-    if (item.deviceSource === "smart_pen") {
-      data.setSelectedSmartPenScan(item);
-    } else {
-      data.setSelectedItem(item);
-      data.setIsModalOpen(true);
-    }
+    data.setSelectedItem(item);
+    data.setIsModalOpen(true);
   };
 
   // ---------- PART 3E: RENDER ----------
@@ -388,73 +383,6 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           data.setShowCollectionModal(true);
         }}
         onDelete={actions.handleDeleteItem}
-      />
-
-      {/* ========== SMART PEN SCAN MODAL ========== */}
-      <SmartPenScanModal
-        scan={data.selectedSmartPenScan}
-        onClose={() => data.setSelectedSmartPenScan(null)}
-        onUpdate={(id, updates) => {
-          data.setItems((prev) =>
-            prev.map((i) => (i.id === id ? { ...i, ...updates } : i)),
-          );
-          if (data.selectedSmartPenScan?.id === id) {
-            data.setSelectedSmartPenScan((prev) =>
-              prev ? { ...prev, ...updates } : null,
-            );
-          }
-        }}
-        onDelete={(id) => actions.handleDeleteItem(id)}
-        onGenerateSummary={async (scan) => {
-          data.setIsSummarizingSmartPen(true);
-          await actions.handleGenerateSummary(scan);
-          data.setIsSummarizingSmartPen(false);
-        }}
-        onRunOCR={async (scan, mode = "standard") => {
-          if (!scan.imageUrl) return;
-          try {
-            const response = await fetch("/api/ocr", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                image: scan.imageUrl,
-                includeSummary: true,
-                mode,
-              }),
-            });
-            if (!response.ok)
-              throw new Error(
-                (await response.json()).error || "OCR failed",
-              );
-            const result = await response.json();
-            const updates = {
-              text: result.ocrText,
-              ocrText: result.ocrText,
-              aiSummary: result.aiSummary || undefined,
-            };
-            await updateItem(scan.id, updates);
-            data.setItems((prev) =>
-              prev.map((i) =>
-                i.id === scan.id ? { ...i, ...updates } : i,
-              ),
-            );
-            data.setSelectedSmartPenScan((prev) =>
-              prev ? { ...prev, ...updates } : null,
-            );
-            showToast(
-              mode === "math"
-                ? "LaTeX math transcribed!"
-                : "Text extracted!",
-              "success",
-            );
-          } catch (err) {
-            showToast(
-              err instanceof Error ? err.message : "OCR failed",
-              "error",
-            );
-          }
-        }}
-        isSummarizing={data.isSummarizingSmartPen}
       />
 
       {/* Confirm Delete Dialog */}

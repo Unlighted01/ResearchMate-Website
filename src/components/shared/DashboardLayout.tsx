@@ -35,6 +35,8 @@ import {
   BookOpen,
   Timer,
   Sliders,
+  GraduationCap,
+  BrainCircuit,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { getAllItems, subscribeToItems } from "../../services/storageService";
@@ -43,7 +45,8 @@ import { getAllItems, subscribeToItems } from "../../services/storageService";
 // PART 2: CONSTANTS
 // ============================================
 
-// Grouped sidebar nav. Flat list is derived below for legacy consumers.
+// Grouped sidebar nav matching the 5 core workstations:
+// Dashboard, Research & Thesis, Study & Review, AI Assistant, Settings
 const NAV_GROUPS: {
   label: string;
   items: {
@@ -54,26 +57,13 @@ const NAV_GROUPS: {
   }[];
 }[] = [
   {
-    label: "Synthesis & Library",
+    label: "Main Navigation",
     items: [
-      { icon: Table2, label: "Literature Matrix", path: "/app/literature-matrix", badge: "Core" },
-      { icon: LayoutDashboard, label: "Library Overview", path: "/app/dashboard" },
-      { icon: FolderOpen, label: "Collections", path: "/app/collections" },
-    ],
-  },
-  {
-    label: "Capture & Ingest",
-    items: [
-      { icon: BookOpen, label: "PDF Reader", path: "/app/pdf-reader" },
-      { icon: Calculator, label: "STEM Math OCR", path: "/app/smart-pen" },
-    ],
-  },
-  {
-    label: "Manuscript & Writing",
-    items: [
-      { icon: FileEdit, label: "Manuscript Editor", path: "/app/editor" },
-      { icon: Quote, label: "Citations & BibTeX", path: "/app/citations" },
-      { icon: MessageSquare, label: "Research Assistant", path: "/app/ai-assistant" },
+      { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
+      { icon: GraduationCap, label: "Research & Thesis", path: "/app/research" },
+      { icon: BrainCircuit, label: "Study & Review", path: "/app/review", badge: "AI" },
+      { icon: MessageSquare, label: "AI Assistant", path: "/app/assistant" },
+      { icon: Settings, label: "Settings", path: "/app/settings" },
     ],
   },
 ];

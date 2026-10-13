@@ -304,12 +304,9 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import AIAssistant from "./components/App/AIAssistant";
-import SmartPenGallery from "./components/App/SmartPenGallery";
-import PairSmartPen from "./components/App/PairSmartPen";
-import DocumentEditor from "./components/App/DocumentEditor";
-import PdfReader from "./components/App/PdfReader";
+import ResearchHubPage from "./components/App/ResearchHub/ResearchHubPage";
+import ReviewCompanionPage from "./components/App/ReviewCompanion/ReviewCompanionPage";
 import SupportPage from "./components/marketing/SupportPage";
-import LiteratureMatrixPage from "./components/App/LiteratureMatrix/LiteratureMatrixPage";
 
 // ============================================
 // PART 5: MAIN APP COMPONENT
@@ -433,14 +430,7 @@ export default function App() {
                   <RequireAuth>
                     <DashboardLayout useToast={() => ({ showToast, ToastComponent })}>
                       <Routes>
-                        <Route
-                          path="literature-matrix"
-                          element={
-                            <LiteratureMatrixPage
-                              useToast={() => ({ showToast, ToastComponent })}
-                            />
-                          }
-                        />
+                        {/* 1. Dashboard (All Ingested Items / Library) */}
                         <Route
                           path="dashboard"
                           element={
@@ -449,49 +439,55 @@ export default function App() {
                             />
                           }
                         />
+
+                        {/* 2. Research & Thesis Suite (Matrix, Editor, Citations, PDF) */}
                         <Route
-                          path="collections"
+                          path="research"
                           element={
-                            <CollectionsPage
+                            <ResearchHubPage
                               useToast={() => ({ showToast, ToastComponent })}
                             />
                           }
                         />
+
+                        {/* 3. Study & Review Companion (Materials Ingest, Mock Exams, Flashcards, Search) */}
                         <Route
-                          path="ai-assistant"
+                          path="review"
+                          element={
+                            <ReviewCompanionPage
+                              useToast={() => ({ showToast, ToastComponent })}
+                            />
+                          }
+                        />
+
+                        {/* 4. AI Assistant */}
+                        <Route
+                          path="assistant"
                           element={
                             <AIAssistant
                               useToast={() => ({ showToast, ToastComponent })}
                             />
                           }
                         />
-                        <Route
-                          path="citations"
-                          element={<CitationGenerator />}
-                        />
-                        <Route
-                          path="editor"
-                          element={<DocumentEditor />}
-                        />
-                        <Route
-                          path="pdf-reader"
-                          element={<PdfReader />}
-                        />
-                        <Route
-                          path="smart-pen"
-                          element={
-                            <SmartPenGallery
-                              useToast={() => ({ showToast, ToastComponent })}
-                            />
-                          }
-                        />
-                        <Route path="pair-pen" element={<PairSmartPen />} />
+
+                        {/* 5. Settings */}
                         <Route
                           path="settings"
-                          element={
-                            <SettingsPage />
-                          }
+                          element={<SettingsPage />}
                         />
+
+                        {/* Backward Compatibility Redirects */}
+                        <Route path="literature-matrix" element={<Navigate to="/app/research?tab=matrix" replace />} />
+                        <Route path="editor" element={<Navigate to="/app/research?tab=editor" replace />} />
+                        <Route path="citations" element={<Navigate to="/app/research?tab=citations" replace />} />
+                        <Route path="pdf-reader" element={<Navigate to="/app/research?tab=pdf" replace />} />
+                        <Route path="smart-pen" element={<Navigate to="/app/review?tab=materials" replace />} />
+                        <Route path="pair-pen" element={<Navigate to="/app/review?tab=materials" replace />} />
+                        <Route path="ai-assistant" element={<Navigate to="/app/assistant" replace />} />
+                        <Route path="collections" element={<Navigate to="/app/dashboard" replace />} />
+
+                        {/* Default route redirect to dashboard */}
+                        <Route path="*" element={<Navigate to="/app/dashboard" replace />} />
                       </Routes>
                     </DashboardLayout>
                   </RequireAuth>

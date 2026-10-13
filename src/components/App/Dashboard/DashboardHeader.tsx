@@ -9,7 +9,8 @@ import {
   Plus,
   HelpCircle,
   WifiOff,
-  Table2,
+  GraduationCap,
+  BrainCircuit,
 } from "lucide-react";
 
 interface DashboardHeaderProps {
@@ -60,13 +61,20 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Quick link to Option A Literature Matrix */}
+        {/* Quick link to Research Hub & Study Review */}
         <Link
-          to="/app/literature-matrix"
+          to="/app/research"
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
         >
-          <Table2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span>Literature Matrix</span>
+          <GraduationCap className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+          <span>Research Suite</span>
+        </Link>
+        <Link
+          to="/app/review"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+        >
+          <BrainCircuit className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+          <span>Study & Review</span>
         </Link>
 
         <button
