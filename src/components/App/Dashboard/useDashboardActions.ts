@@ -10,6 +10,7 @@ import { supabase } from "../../../services/supabaseClient";
 import {
   deleteItem,
   updateItem,
+  getAllItems,
   StorageItem,
 } from "../../../services/storageService";
 import {
@@ -295,7 +296,15 @@ export function useDashboardActions({
       }
     }
 
-    if (successCount > 0) showToast(`Imported ${successCount} item(s)!`, "success");
+    if (successCount > 0) {
+      try {
+        const fresh = await getAllItems();
+        setItems(fresh);
+      } catch (refreshErr) {
+        console.error("Failed to refresh items after import:", refreshErr);
+      }
+      showToast(`Imported ${successCount} item(s)!`, "success");
+    }
     if (errors.length > 0) showToast(`${errors.length} file(s) failed.`, "error");
     setIsImporting(false);
     e.target.value = "";

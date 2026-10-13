@@ -383,6 +383,12 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           data.setShowCollectionModal(true);
         }}
         onDelete={actions.handleDeleteItem}
+        onItemUpdated={(updated) => {
+          data.setSelectedItem(updated);
+          data.setItems((prev) =>
+            prev.map((i) => (i.id === updated.id ? updated : i)),
+          );
+        }}
       />
 
       {/* Confirm Delete Dialog */}

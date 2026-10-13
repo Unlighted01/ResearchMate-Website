@@ -24,11 +24,13 @@ import {
   Clock, 
   FileCode,
   CornerDownLeft,
-  ChevronRight
+  ChevronRight,
+  Upload,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon } from "../../icons";
-import { StorageItem } from "../../../services/storageService";
+import { StorageItem, updateItem } from "../../../services/storageService";
 import { generateAiResponse, generateChatResponse } from "../../../services/geminiService";
+import { extractPdfContent } from "../../../services/pdfService";
 import { isMarkdown } from "./dashboardUtils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -49,6 +51,7 @@ interface ItemDetailModalProps {
   onShare: (item: StorageItem) => void;
   onAddToCollection: () => void;
   onDelete: (id: string) => void;
+  onItemUpdated?: (updated: StorageItem) => void;
 }
 
 // ============================================
@@ -83,6 +86,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onShare,
   onAddToCollection,
   onDelete,
+  onItemUpdated,
 }) => {
   const [activeLeftTab, setActiveLeftTab] = useState<"preview" | "raw">("preview");
   const [chatInput, setChatInput] = useState("");
@@ -90,8 +94,37 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [messages, setMessages] = useState<Array<{ sender: "user" | "ai"; text: string }>>([]);
 
   const [isAiThinking, setIsAiThinking] = useState(false);
+  const [isReindexing, setIsReindexing] = useState(false);
+  const pdfInputRef = React.useRef<HTMLInputElement>(null);
 
   const displayText = item ? (item.text || item.ocrText || "") : "";
+
+  const handleReindexPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !item) return;
+
+    setIsReindexing(true);
+    try {
+      const extracted = await extractPdfContent(file);
+      await updateItem(item.id, {
+        text: extracted.text,
+        aiSummary: extracted.summary,
+      });
+      const updatedItem: StorageItem = {
+        ...item,
+        text: extracted.text,
+        aiSummary: extracted.summary,
+      };
+      if (onItemUpdated) {
+        onItemUpdated(updatedItem);
+      }
+    } catch (err: any) {
+      console.error("Failed to re-index PDF:", err);
+    } finally {
+      setIsReindexing(false);
+      if (e.target) e.target.value = "";
+    }
+  };
 
   // Reset custom messages when the item changes
   useEffect(() => {
@@ -262,6 +295,23 @@ Provide a clear, direct, and well-structured answer referencing the document.`;
                       {copiedField === "text" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                       <span>{copiedField === "text" ? "Copied!" : "TEXT"}</span>
                     </button>
+
+                    <button
+                      onClick={() => pdfInputRef.current?.click()}
+                      disabled={isReindexing}
+                      className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-750 transition-colors shadow-2xs"
+                      title="Re-parse PDF file into this note"
+                    >
+                      <Upload className={`w-3 h-3 ${isReindexing ? "animate-spin" : ""}`} />
+                      <span>{isReindexing ? "Parsing..." : "Re-parse PDF"}</span>
+                    </button>
+                    <input
+                      ref={pdfInputRef}
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={handleReindexPdf}
+                    />
 
                     <button
                       onClick={() => onShare(item)}
