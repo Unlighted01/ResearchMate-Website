@@ -76,17 +76,15 @@ const stripMarkdown = (text: string) =>
     .trim();
 
 /**
- * Normalizes mathematical operators and escapes currency symbols for KaTeX rendering
+ * Normalizes mathematical operators and unescapes stray tokens for KaTeX rendering
  */
 const sanitizeMathAndOperators = (text: string): string => {
   if (!text) return "";
   return text
-    // Normalize informal division tokens: "/div" or "/div " -> "÷"
+    // Normalize informal OCR division tokens: "/div" -> " ÷ "
     .replace(/\s*\/div\s*/gi, " ÷ ")
-    // Ensure standalone fraction slashes in arithmetic expressions have clean division symbols
-    .replace(/(\d+)\s*\/\s*(\d+)/g, "$1 ÷ $2")
-    // Escape isolated dollar signs that denote currency rather than KaTeX math mode
-    .replace(/(^|\s)\$(\d+(?:\.\d+)?)/g, "$1\\$$2");
+    // Unescape stray escaped question marks in math expressions (e.g., \? -> ?)
+    .replace(/\\(\?)/g, "$1");
 };
 
 // ============================================
