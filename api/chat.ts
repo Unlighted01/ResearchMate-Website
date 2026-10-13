@@ -88,7 +88,8 @@ async function callGeminiAPI(
   apiKey: string,
   options: any = {},
 ) {
-  const url = `${GEMINI_ENDPOINT}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const modelToUse = options.model || GEMINI_MODEL;
+  const url = `${GEMINI_ENDPOINT}/${modelToUse}:generateContent?key=${apiKey}`;
 
   const fullPrompt = `${SYSTEM_INSTRUCTION}\n\nUSER REQUEST:\n${prompt}`;
 
@@ -128,6 +129,8 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
     throw new Error("OpenRouter API Key not configured.");
   }
 
+  const modelToUse = options.model || OPENROUTER_MODEL || "deepseek/deepseek-r1";
+
   const response = await fetch(OPENROUTER_ENDPOINT, {
     method: "POST",
     headers: {
@@ -137,7 +140,7 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
       "X-Title": "ResearchMate",
     },
     body: JSON.stringify({
-      model: OPENROUTER_MODEL,
+      model: modelToUse,
       messages: [
         { role: "system", content: SYSTEM_INSTRUCTION },
         { role: "user", content: prompt },
@@ -228,11 +231,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userId = user?.id;
 
     // 2. Prepare Request
-    const { message, context } = req.body;
+    const { message, context, model } = req.body;
     if (!message) return res.status(400).json({ error: "Message is required" });
 
     const keyToUse = customKey || getRandomGeminiKey();
-    if (!keyToUse)
+    if (!keyToUse && !process.env.OPENROUTER_API_KEY && !process.env.GROQ_API_KEY)
       return res
         .status(500)
         .json({ error: "Server misconfiguration: No API keys." });
@@ -240,67 +243,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const prompt = `Use this context to answer the user.\n\nCONTEXT:\n${context || "No context."}\n\nMessage: ${message}`;
     let responseText = "";
 
-    // 3. Call AI (With 3-Layer Fallback)
+    // 3. Call AI (Model-Aware Routing with Fallbacks)
     const errors: string[] = [];
 
-    try {
-      // Attempt 1: Gemini
-      responseText = await callGeminiAPI(prompt, keyToUse);
-    } catch (geminiError) {
-      const msg = `Gemini Failed: ${(geminiError as Error).message}`;
-      console.warn(msg);
-      errors.push(msg);
+    // Check if user requested a specific flagship model
+    const isClaude = model === "claude-3.5-sonnet";
+    const isDeepSeek = model === "deepseek-r1";
+    const isGeminiPro = model === "gemini-pro";
 
-      // Attempt 2: OpenRouter (Fallback 1)
-      if (process.env.OPENROUTER_API_KEY) {
-        console.log("🔄 Switching to Fallback 1: OpenRouter (Grok)...");
-        try {
-          responseText = await callOpenRouterAPI(prompt);
-        } catch (openRouterError) {
-          const msg = `OpenRouter Failed: ${(openRouterError as Error).message}`;
-          console.warn(msg);
-          errors.push(msg);
+    if (isClaude && process.env.OPENROUTER_API_KEY) {
+      try {
+        responseText = await callOpenRouterAPI(prompt, { model: "anthropic/claude-3.5-sonnet" });
+      } catch (err) {
+        console.warn("Claude via OpenRouter failed, falling back to default:", err);
+        errors.push(`Claude: ${(err as Error).message}`);
+      }
+    } else if (isDeepSeek && process.env.OPENROUTER_API_KEY) {
+      try {
+        responseText = await callOpenRouterAPI(prompt, { model: "deepseek/deepseek-r1" });
+      } catch (err) {
+        console.warn("DeepSeek via OpenRouter failed, falling back to default:", err);
+        errors.push(`DeepSeek: ${(err as Error).message}`);
+      }
+    } else if (isGeminiPro && keyToUse) {
+      try {
+        responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-1.5-pro" });
+      } catch (err) {
+        console.warn("Gemini Pro failed, falling back to Flash:", err);
+        errors.push(`Gemini Pro: ${(err as Error).message}`);
+      }
+    }
 
-          // Attempt 3: Groq (Fallback 2)
-          if (process.env.GROQ_API_KEY) {
-            console.log("🔄 Switching to Fallback 2: Groq (Llama 3)...");
-            try {
-              responseText = await callGroqAPI(prompt);
-            } catch (groqError) {
-              const msg = `Groq Failed: ${(groqError as Error).message}`;
-              console.error(msg);
-              errors.push(msg);
-              // All failed
-              throw new Error(
-                `All providers failed. Logs: ${errors.join(" | ")}`,
-              );
-            }
-          } else {
-            const msg = "Groq Skipped: No GROQ_API_KEY found.";
+    // Default or Fallback: Gemini 2.5 Flash
+    if (!responseText && keyToUse) {
+      try {
+        responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-2.5-flash" });
+      } catch (geminiError) {
+        const msg = `Gemini Failed: ${(geminiError as Error).message}`;
+        console.warn(msg);
+        errors.push(msg);
+
+        // Fallback 1: OpenRouter
+        if (process.env.OPENROUTER_API_KEY) {
+          console.log("🔄 Switching to Fallback: OpenRouter...");
+          try {
+            responseText = await callOpenRouterAPI(prompt);
+          } catch (openRouterError) {
+            const msg = `OpenRouter Failed: ${(openRouterError as Error).message}`;
+            console.warn(msg);
             errors.push(msg);
-            throw new Error(
-              `Gemini/OpenRouter failed. Logs: ${errors.join(" | ")}`,
-            );
           }
         }
-      } else if (process.env.GROQ_API_KEY) {
-        // OpenRouter Key missing, but Groq exists, try Groq directly
-        console.log(
-          "🔄 OpenRouter Key missing. Switching to Fallback 2: Groq...",
-        );
-        try {
-          responseText = await callGroqAPI(prompt);
-        } catch (groqError) {
-          const msg = `Groq Failed: ${(groqError as Error).message}`;
-          errors.push(msg);
-          throw new Error(`Gemini/Groq failed. Logs: ${errors.join(" | ")}`);
+
+        // Fallback 2: Groq
+        if (!responseText && process.env.GROQ_API_KEY) {
+          console.log("🔄 Switching to Fallback: Groq...");
+          try {
+            responseText = await callGroqAPI(prompt);
+          } catch (groqError) {
+            const msg = `Groq Failed: ${(groqError as Error).message}`;
+            console.error(msg);
+            errors.push(msg);
+          }
         }
-      } else {
-        const msg =
-          "Fallbacks Skipped: No OPENROUTER_API_KEY or GROQ_API_KEY found.";
-        errors.push(msg);
-        throw new Error(msg);
       }
+    }
+
+    if (!responseText) {
+      throw new Error(`All providers failed. Logs: ${errors.join(" | ")}`);
     }
 
     // 4. Deduct Credit (Only if success)

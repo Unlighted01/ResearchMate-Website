@@ -113,6 +113,8 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [messages, setMessages] = useState<Array<{ sender: "user" | "ai"; text: string }>>([]);
 
   const [isAiThinking, setIsAiThinking] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>("gemini-flash");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
   const pdfInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -234,7 +236,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         docContext += `\n\nVERIFIED REFERENCE KNOWLEDGE:\n${relevantKnowledge.join("\n")}`;
       }
 
-      const chatRes = await generateChatResponse(query, docContext);
+      const chatRes = await generateChatResponse(query, docContext, selectedModel);
       if (chatRes.ok && chatRes.response) {
         setMessages((prev) => [...prev, { sender: "ai", text: chatRes.response }]);
         // Auto-cache problem solutions to save credits on repeat visits
@@ -242,15 +244,23 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           await saveCachedProblemSolution(item.sourceTitle, query, chatRes.response);
         }
       } else {
+        if (chatRes.reason === "no_credits" || chatRes.error?.toLowerCase().includes("credit")) {
+          setShowUpgradeModal(true);
+        }
         throw new Error(chatRes.error || "No response from AI assistant");
       }
     } catch (err: any) {
       console.warn("AI chat error:", err);
+      if (err.message?.toLowerCase().includes("credit")) {
+        setShowUpgradeModal(true);
+      }
       setMessages((prev) => [
         ...prev,
         {
           sender: "ai",
-          text: `I had trouble connecting to the AI service. If this document was recently uploaded without text, click **Re-parse PDF** above to re-index its pages.`,
+          text: err.message?.toLowerCase().includes("credit")
+            ? `⚠️ You have used all your free AI credits. You can add your personal free Google key in Settings for unlimited studying, or upgrade to Student Pro!`
+            : `I had trouble connecting to the AI service. If this document was recently uploaded without text, click **Re-parse PDF** above to re-index its pages.`,
         },
       ]);
     } finally {
@@ -546,10 +556,28 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       </p>
                     </div>
                   </div>
-                  <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    Ready
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                      title="Select AI Reasoning Model"
+                    >
+                      <option value="gemini-flash">⚡ Gemini 2.5 Flash (Fast Tutor · Free)</option>
+                      <option value="claude-3.5-sonnet">🎓 Claude 3.5 Sonnet (Thesis & Prose · Pro)</option>
+                      <option value="deepseek-r1">📐 DeepSeek-R1 (Math Reasoner · Pro)</option>
+                      <option value="gemini-pro">📚 Gemini 1.5 Pro (Deep Book Reader · Pro)</option>
+                    </select>
+
+                    <button
+                      onClick={() => setShowUpgradeModal(true)}
+                      className="px-2 py-1 bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500/20 transition-all shadow-2xs flex items-center gap-1"
+                      title="View Student Pro & Free BYOK details"
+                    >
+                      <Zap className="w-3 h-3 text-amber-500" />
+                      <span>Pro</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Interactive AI Message Flow */}
@@ -705,6 +733,95 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
             </div>
           </motion.div>
+
+          {/* Low-Credit / Upgrade to Student Pro Dialog */}
+          <AnimatePresence>
+            {showUpgradeModal && (
+              <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-6 relative"
+                >
+                  <button
+                    onClick={() => setShowUpgradeModal(false)}
+                    className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+                    aria-label="Close dialog"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-indigo-500/10 text-indigo-500 rounded-xl">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white" style={{ fontFamily: "var(--font-title)" }}>
+                        Student Pro & Free Access
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Choose how you want to power your studying on ResearchMate
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Option 1: Free Forever via BYOK */}
+                    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">100% Free Forever</span>
+                        </div>
+                        <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 mt-2">Bring Your Own Key</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                          Get a free Gemini API key from Google AI Studio and paste it in Settings. Unlimited studying, zero fees forever.
+                        </p>
+                      </div>
+                      <a
+                        href="#/app/settings"
+                        onClick={() => {
+                          setShowUpgradeModal(false);
+                          onClose();
+                        }}
+                        className="w-full py-2 px-3 text-center bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-lg transition-colors block shadow-2xs"
+                      >
+                        Open Settings →
+                      </a>
+                    </div>
+
+                    {/* Option 2: Student Pro Subscription */}
+                    <div className="p-4 rounded-xl border-2 border-indigo-500/40 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 dark:bg-slate-800/50 flex flex-col justify-between space-y-3 relative overflow-hidden">
+                      <div className="absolute top-2 right-2 px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-bold rounded-full uppercase">
+                        Recommended
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Student Pro</span>
+                        <div className="flex items-baseline gap-1 mt-1">
+                          <span className="text-xl font-extrabold text-slate-900 dark:text-white">₱199</span>
+                          <span className="text-xs text-slate-400">/mo ($4.99)</span>
+                        </div>
+                        <ul className="text-xs text-slate-600 dark:text-slate-300 mt-2 space-y-1">
+                          <li className="flex items-center gap-1.5">✓ Claude 3.5 Sonnet unlocked</li>
+                          <li className="flex items-center gap-1.5">✓ DeepSeek-R1 Math Reasoner</li>
+                          <li className="flex items-center gap-1.5">✓ Gemini Pro 2M Token Context</li>
+                          <li className="flex items-center gap-1.5">✓ Unlimited high-speed AI queries</li>
+                        </ul>
+                      </div>
+                      <button
+                        onClick={() => {
+                          alert("Student Pro payment gateway is connecting! In the meantime, use your own free Google key in Settings.");
+                        }}
+                        className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
+                      >
+                        Upgrade to Pro
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
         </>
       )}
     </AnimatePresence>,

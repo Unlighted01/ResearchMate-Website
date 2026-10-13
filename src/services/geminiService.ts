@@ -241,6 +241,7 @@ export async function extractInsights(text: string): Promise<InsightsResult> {
 export async function generateChatResponse(
   userMessage: string,
   context: string,
+  model?: string,
   signal?: AbortSignal,
 ): Promise<ChatResult> {
   const message = (userMessage || "").trim();
@@ -251,7 +252,7 @@ export async function generateChatResponse(
     const response = await fetch(`${API_BASE_URL}/chat`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ message, context }),
+      body: JSON.stringify({ message, context, model }),
       signal,
     });
 
