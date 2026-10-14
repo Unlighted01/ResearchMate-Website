@@ -30,6 +30,7 @@ export interface UseDocumentEditorReturn {
 
   // Actions
   handleNewDocument: (title: string) => Promise<void>;
+  handleCreateDocumentWithContent: (title: string, content?: Record<string, unknown>) => Promise<Document | null>;
   handleSelectDocument: (id: string) => Promise<void>;
   handleRenameDocument: (id: string, title: string) => Promise<void>;
   handleDeleteDocument: (id: string) => Promise<void>;
@@ -178,6 +179,21 @@ const useDocumentEditor = (): UseDocumentEditorReturn => {
     }
   }, []);
 
+  const handleCreateDocumentWithContent = useCallback(
+    async (title: string, content?: Record<string, unknown>) => {
+      try {
+        const doc = await createDocument(title, content);
+        setDocuments((prev) => [doc, ...prev]);
+        setCurrentDoc(doc);
+        return doc;
+      } catch (err) {
+        console.error("Failed to create document with content:", err);
+        return null;
+      }
+    },
+    []
+  );
+
   const handleSelectDocument = useCallback(
     async (id: string) => {
       // Flush pending save before switching
@@ -252,6 +268,7 @@ const useDocumentEditor = (): UseDocumentEditorReturn => {
     loading,
     saving,
     handleNewDocument,
+    handleCreateDocumentWithContent,
     handleSelectDocument,
     handleRenameDocument,
     handleDeleteDocument,

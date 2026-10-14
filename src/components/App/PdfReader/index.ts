@@ -1,2 +1,2 @@
-export { default } from "./PdfNativeReader";
-export { default as PdfReader } from "./PdfNativeReader";
+export { default } from "./PdfReader";
+export { default as PdfReader } from "./PdfReader";

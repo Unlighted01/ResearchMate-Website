@@ -6,8 +6,8 @@
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
 
-import React, { useState } from "react";
-import { Plus, FileText, Trash2, Pencil, Check, X, CheckSquare, Square, Timer } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { Plus, FileText, Trash2, Pencil, Check, X, CheckSquare, Square, Timer, Upload, Loader2 } from "lucide-react";
 import type { Document } from "../../../services/documentService";
 import FocusTimer from "./FocusTimer";
 
@@ -23,6 +23,8 @@ interface DocumentSidebarProps {
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onDeleteMany?: (ids: string[]) => void;
+  onImportWord?: (file: File) => void;
+  importingWord?: boolean;
 }
 
 // ============================================
@@ -37,7 +39,10 @@ const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
   onRename,
   onDelete,
   onDeleteMany,
+  onImportWord,
+  importingWord,
 }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -98,13 +103,40 @@ const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
     <div className="w-60 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-[#1C1C1E]/50 flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700 space-y-2">
-        <button
-          onClick={onNew}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white text-sm font-medium rounded-xl transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          New Document
-        </button>
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            onClick={onNew}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[#007AFF] hover:bg-[#0066DD] text-white text-xs font-semibold rounded-xl transition-colors shadow-2xs"
+            title="Create blank manuscript"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Blank</span>
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importingWord}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 text-xs font-semibold rounded-xl transition-colors shadow-2xs disabled:opacity-50"
+            title="Upload Word (.docx) or manuscript file"
+          >
+            {importingWord ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Upload className="w-3.5 h-3.5" />
+            )}
+            <span>.docx</span>
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".docx,.txt,.md"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onImportWord?.(f);
+            e.target.value = "";
+          }}
+        />
         <button
           onClick={() => {
             if (multiSelectMode) {

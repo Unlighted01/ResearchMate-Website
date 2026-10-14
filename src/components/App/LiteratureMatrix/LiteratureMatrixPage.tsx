@@ -20,6 +20,9 @@ import {
   Square,
   AlertCircle,
   ExternalLink,
+  RotateCcw,
+  Plus,
+  Layers,
 } from "lucide-react";
 import { getAllItems, StorageItem } from "../../../services/storageService";
 import { generateLiteratureMatrix, MatrixRow } from "../../../services/geminiService";
@@ -39,23 +42,47 @@ const LiteratureMatrixPage: React.FC<LiteratureMatrixPageProps> = ({ useToast })
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
 
+  const STORAGE_KEY = "researchmate_literature_matrix_cache";
+
   const [matrixData, setMatrixData] = useState<MatrixRow[]>([]);
   const [crossPaperGaps, setCrossPaperGaps] = useState<string[]>([]);
   const [synthesisDraft, setSynthesisDraft] = useState<string>("");
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Load items on mount
+  // Load cached matrix and items on mount
   useEffect(() => {
+    // 1. Restore matrix from cache so reload never loses work
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.matrix && Array.isArray(parsed.matrix) && parsed.matrix.length > 0) {
+          setMatrixData(parsed.matrix);
+          if (parsed.crossPaperGaps) setCrossPaperGaps(parsed.crossPaperGaps);
+          if (parsed.synthesisDraft) setSynthesisDraft(parsed.synthesisDraft);
+          if (parsed.selectedIds && Array.isArray(parsed.selectedIds)) {
+            setSelectedIds(new Set(parsed.selectedIds));
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Could not parse cached matrix", e);
+    }
+
+    // 2. Load library items
     const load = async () => {
       setLoadingItems(true);
       try {
         const loaded = await getAllItems();
         setItems(loaded);
-        // Pre-select first 3 items by default if none selected
-        if (loaded.length >= 2) {
-          setSelectedIds(new Set(loaded.slice(0, 3).map((i) => i.id)));
-        }
+        // Pre-select first 3 items by default if none already selected
+        setSelectedIds((prev) => {
+          if (prev.size === 0 && loaded.length >= 2) {
+            return new Set(loaded.slice(0, 3).map((i) => i.id));
+          }
+          return prev;
+        });
       } catch (err) {
         showToast("Failed to load library items", "error");
       } finally {
@@ -93,7 +120,7 @@ const LiteratureMatrixPage: React.FC<LiteratureMatrixPageProps> = ({ useToast })
     setSelectedIds(new Set());
   };
 
-  const handleSynthesize = async () => {
+  const handleSynthesize = async (shouldStack: boolean = false) => {
     const selectedList = items.filter((i) => selectedIds.has(i.id));
     if (selectedList.length < 2) {
       showToast("Please select at least 2 papers to compare methodologies.", "info");
@@ -106,15 +133,56 @@ const LiteratureMatrixPage: React.FC<LiteratureMatrixPageProps> = ({ useToast })
       if (!res.ok) {
         throw new Error(res.error || "Failed to generate synthesis matrix.");
       }
-      setMatrixData(res.matrix);
+
+      let updatedMatrix = res.matrix;
+      if (shouldStack && matrixData.length > 0) {
+        // Merge without duplicating existing titles
+        const existingTitles = new Set(matrixData.map((m) => m.paperTitle.toLowerCase().trim()));
+        const uniqueNewRows = res.matrix.filter(
+          (m) => !existingTitles.has(m.paperTitle.toLowerCase().trim())
+        );
+        updatedMatrix = [...matrixData, ...uniqueNewRows];
+      }
+
+      setMatrixData(updatedMatrix);
       setCrossPaperGaps(res.crossPaperGaps);
       setSynthesisDraft(res.synthesisDraft);
-      showToast("Literature matrix synthesized successfully!", "success");
+
+      // Persist to local storage
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            matrix: updatedMatrix,
+            crossPaperGaps: res.crossPaperGaps,
+            synthesisDraft: res.synthesisDraft,
+            selectedIds: Array.from(selectedIds),
+            updatedAt: new Date().toISOString(),
+          })
+        );
+      } catch (e) {
+        console.warn("Failed to persist matrix cache", e);
+      }
+
+      showToast(
+        shouldStack
+          ? "Stacked new papers onto literature matrix!"
+          : "Literature matrix synthesized successfully!",
+        "success"
+      );
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Synthesis failed", "error");
     } finally {
       setIsSynthesizing(false);
     }
+  };
+
+  const handleClearMatrix = () => {
+    setMatrixData([]);
+    setCrossPaperGaps([]);
+    setSynthesisDraft("");
+    localStorage.removeItem(STORAGE_KEY);
+    showToast("Cleared literature matrix.", "info");
   };
 
   const copyToClipboard = (text: string, key: string) => {
@@ -204,9 +272,32 @@ ${matrixData
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          {matrixData.length > 0 && (
+            <>
+              <button
+                onClick={handleClearMatrix}
+                disabled={isSynthesizing}
+                className="inline-flex items-center gap-1.5 px-3 py-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold tracking-wide transition-all shadow-xs"
+                title="Clear current matrix from cache"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Clear</span>
+              </button>
+              <button
+                onClick={() => handleSynthesize(true)}
+                disabled={isSynthesizing || selectedIds.size === 0}
+                className="inline-flex items-center gap-1.5 px-4 py-2 border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg text-xs font-semibold tracking-wide transition-all shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Append selected papers to existing matrix"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>+ Stack Selected ({selectedIds.size})</span>
+              </button>
+            </>
+          )}
+
           <button
-            onClick={handleSynthesize}
+            onClick={() => handleSynthesize(false)}
             disabled={isSynthesizing || selectedIds.size < 2}
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 rounded-lg text-xs font-semibold tracking-wide transition-all shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -218,7 +309,7 @@ ${matrixData
             ) : (
               <>
                 <Sparkles className="w-4 h-4 text-indigo-400 dark:text-indigo-600" />
-                <span>Generate Matrix ({selectedIds.size} Papers)</span>
+                <span>{matrixData.length > 0 ? "Regenerate Matrix" : `Generate Matrix (${selectedIds.size} Papers)`}</span>
               </>
             )}
           </button>
@@ -300,7 +391,16 @@ ${matrixData
               <span>Comparative synthesis ready ({matrixData.length} records)</span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={handleClearMatrix}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-200 dark:hover:border-rose-800 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                title="Clear cached matrix from workstation"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </button>
+
               <button
                 onClick={exportCSV}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors"

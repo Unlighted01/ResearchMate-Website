@@ -27,8 +27,12 @@ import {
   Download,
   AlertCircle,
   X,
-  Maximize2,
+  BookmarkPlus,
+  Check,
+  Sparkles,
 } from "lucide-react";
+import { importPdfFile } from "../../../services/importService";
+import { clearLocalPdf } from "../../../services/localPdfStore";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -106,6 +110,10 @@ const PdfReader: React.FC = () => {
   const [scale, setScale] = useState(DEFAULT_SCALE);
   const [documentTitle, setDocumentTitle] = useState<string>("");
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [isSavingToLibrary, setIsSavingToLibrary] = useState(false);
+  const [savedToLibrary, setSavedToLibrary] = useState(false);
+  const [autoSaveToLibrary, setAutoSaveToLibrary] = useState(true);
   // Base (scale=1) dimensions per page — computed once at doc load
   const [basePageSizes, setBasePageSizes] = useState<
     Array<{ width: number; height: number }>
@@ -490,6 +498,9 @@ const PdfReader: React.FC = () => {
       }
 
       setSourceUrl(null);
+      setUploadedFile(file);
+      setSavedToLibrary(false);
+
       // Clear URL param so the file load doesn't get overridden
       if (urlParam) {
         setSearchParams({}, { replace: true });
@@ -497,11 +508,34 @@ const PdfReader: React.FC = () => {
 
       const arrayBuffer = await file.arrayBuffer();
       loadPdfFromSource({ data: arrayBuffer, title: file.name });
+
+      // Automatically store/index in Research Library if autoSave is active
+      if (autoSaveToLibrary) {
+        setIsSavingToLibrary(true);
+        importPdfFile(file)
+          .then(() => setSavedToLibrary(true))
+          .catch((err) => console.warn("Auto-index into library skipped/failed:", err))
+          .finally(() => setIsSavingToLibrary(false));
+      }
+
       // Reset input so same file can be selected again
       e.target.value = "";
     },
-    [loadPdfFromSource, urlParam, setSearchParams]
+    [loadPdfFromSource, urlParam, setSearchParams, autoSaveToLibrary]
   );
+
+  const handleSaveToLibrary = useCallback(async () => {
+    if (!uploadedFile) return;
+    setIsSavingToLibrary(true);
+    try {
+      await importPdfFile(uploadedFile);
+      setSavedToLibrary(true);
+    } catch (err) {
+      console.error("Failed to save PDF to library:", err);
+    } finally {
+      setIsSavingToLibrary(false);
+    }
+  }, [uploadedFile]);
 
   const handleZoomIn = useCallback(() => {
     setScale((s) => Math.min(MAX_SCALE, s + SCALE_STEP));
@@ -552,15 +586,27 @@ const PdfReader: React.FC = () => {
     setTotalPages(0);
     setDocumentTitle("");
     setSourceUrl(null);
+    setUploadedFile(null);
+    setSavedToLibrary(false);
     setBasePageSizes([]);
+    clearLocalPdf().catch(() => {});
     if (urlParam) setSearchParams({}, { replace: true });
   }, [pdfDoc, urlParam, setSearchParams]);
 
   const handleDownload = useCallback(() => {
     if (sourceUrl) {
       window.open(sourceUrl, "_blank", "noopener,noreferrer");
+    } else if (uploadedFile) {
+      const url = URL.createObjectURL(uploadedFile);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = uploadedFile.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
-  }, [sourceUrl]);
+  }, [sourceUrl, uploadedFile]);
 
   // ---------- PART 5F: DERIVED STATE ----------
 
@@ -605,12 +651,15 @@ const PdfReader: React.FC = () => {
             <Upload className="w-3.5 h-3.5" />
             Upload PDF
           </button>
-          <button
-            onClick={() => navigate("/app/literature-matrix")}
-            className="text-xs text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-mono"
-          >
-            Or extract comparisons on Literature Matrix →
-          </button>
+          <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={autoSaveToLibrary}
+              onChange={(e) => setAutoSaveToLibrary(e.target.checked)}
+              className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>Automatically index and store uploaded PDF in Research Library</span>
+          </label>
         </div>
       )}
 
@@ -725,28 +774,60 @@ const PdfReader: React.FC = () => {
             <div className="flex-1" />
 
             {/* Right side actions */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-[#007AFF] hover:bg-[#007AFF]/5 rounded-lg transition-all"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Open
-              </button>
-              {sourceUrl && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {uploadedFile && (
                 <button
-                  onClick={handleDownload}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-[#007AFF] hover:bg-[#007AFF]/5 rounded-lg transition-all"
+                  onClick={handleSaveToLibrary}
+                  disabled={isSavingToLibrary || savedToLibrary}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    savedToLibrary
+                      ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                      : "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100"
+                  }`}
+                  title="Store this PDF as an indexed item in your Research Library"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  Download
+                  {isSavingToLibrary ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Indexing...</span>
+                    </>
+                  ) : savedToLibrary ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Saved in Library</span>
+                    </>
+                  ) : (
+                    <>
+                      <BookmarkPlus className="w-3.5 h-3.5" />
+                      <span>Save to Library</span>
+                    </>
+                  )}
                 </button>
               )}
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 rounded-lg transition-all"
+                title="Open a different PDF"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Open File
+              </button>
+
+              <button
+                onClick={handleDownload}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 rounded-lg transition-all"
+                title="Download this PDF"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download
+              </button>
+
               <button
                 onClick={handleClose}
                 className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all"
                 aria-label="Close document"
-                title="Close"
+                title="Close and return to upload"
               >
                 <X className="w-4 h-4" />
               </button>

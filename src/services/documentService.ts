@@ -80,7 +80,8 @@ export async function getDocument(id: string): Promise<Document | null> {
 }
 
 export async function createDocument(
-  title = "Untitled Document"
+  title = "Untitled Document",
+  content: Record<string, unknown> = EMPTY_DOC_CONTENT,
 ): Promise<Document> {
   const {
     data: { user },
@@ -92,7 +93,7 @@ export async function createDocument(
     .insert({
       user_id: user.id,
       title,
-      content: EMPTY_DOC_CONTENT,
+      content: content || EMPTY_DOC_CONTENT,
     })
     .select()
     .single();

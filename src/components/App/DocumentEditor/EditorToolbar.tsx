@@ -35,6 +35,7 @@ import {
   Loader2,
   BookOpen,
   Table as TableIcon,
+  Upload,
 } from "lucide-react";
 import type { CitationFormat } from "../Citations/citationUtils";
 
@@ -47,6 +48,7 @@ interface EditorToolbarProps {
   onInsertItem: () => void;
   onExport: (format: "docx" | "pdf" | "tex" | "md") => void;
   onInsertBibliography: (format: CitationFormat) => void;
+  onImportWord?: (file: File) => void;
   saving: boolean;
 }
 
@@ -162,8 +164,10 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onInsertItem,
   onExport,
   onInsertBibliography,
+  onImportWord,
   saving,
 }) => {
+  const toolbarFileInputRef = useRef<HTMLInputElement>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
   const [showBib, setShowBib] = useState(false);
@@ -726,10 +730,33 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       {/* ---- Insert Research ---- */}
       <ToolbarBtn
         onClick={onInsertItem}
-        title="Insert Research Item"
+        title="Insert Research Item from Library"
       >
         <FileText className="w-4 h-4" />
       </ToolbarBtn>
+
+      {/* ---- Import Word Manuscript ---- */}
+      {onImportWord && (
+        <>
+          <ToolbarBtn
+            onClick={() => toolbarFileInputRef.current?.click()}
+            title="Import Word Manuscript (.docx)"
+          >
+            <Upload className="w-4 h-4" />
+          </ToolbarBtn>
+          <input
+            ref={toolbarFileInputRef}
+            type="file"
+            accept=".docx,.txt,.md"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onImportWord(f);
+              e.target.value = "";
+            }}
+          />
+        </>
+      )}
 
       {/* ---- Bibliography dropdown ---- */}
       <div className="relative shrink-0" ref={bibRef}>

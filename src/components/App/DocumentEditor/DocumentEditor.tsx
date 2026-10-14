@@ -6,9 +6,9 @@
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Editor } from "@tiptap/react";
-import { FileEdit, X, Sparkles } from "lucide-react";
+import { FileEdit, X, Sparkles, Upload, Loader2, Plus } from "lucide-react";
 
 import useDocumentEditor from "./useDocumentEditor";
 import DocumentSidebar from "./DocumentSidebar";
@@ -16,6 +16,7 @@ import EditorToolbar from "./EditorToolbar";
 import EditorCanvas from "./EditorCanvas";
 import ItemImportDrawer from "./ItemImportDrawer";
 import EditorSkeleton from "./EditorSkeleton";
+import { parseWordDocument } from "./wordImportUtils";
 import { exportToDocx, exportToPdf } from "./exportUtils";
 import { exportToLatex } from "./latexExportUtils";
 import {
@@ -36,6 +37,7 @@ const DocumentEditor: React.FC = () => {
     loading,
     saving,
     handleNewDocument,
+    handleCreateDocumentWithContent,
     handleSelectDocument,
     handleRenameDocument,
     handleDeleteDocument,
@@ -51,6 +53,8 @@ const DocumentEditor: React.FC = () => {
 
   const [editor, setEditor] = useState<Editor | null>(null);
   const [bibFormat, setBibFormat] = useState<CitationFormat>("apa");
+  const [importingWord, setImportingWord] = useState(false);
+  const emptyFileInputRef = useRef<HTMLInputElement>(null);
 
   // Banner shown after a paper arrives from Discover page
   const [discoverBanner, setDiscoverBanner] = useState<string | null>(null);
@@ -225,6 +229,30 @@ const DocumentEditor: React.FC = () => {
     [editor, dashboardItems, citedItemIds, handleContentChange]
   );
 
+  const handleImportWord = useCallback(
+    async (file: File) => {
+      setImportingWord(true);
+      try {
+        const { title, html } = await parseWordDocument(file);
+        const doc = await handleCreateDocumentWithContent(title);
+        if (doc) {
+          setTimeout(() => {
+            if (editor) {
+              editor.commands.setContent(html);
+              const json = editor.getJSON();
+              handleContentChange(json);
+            }
+          }, 150);
+        }
+      } catch (err) {
+        console.error("Failed to import Word manuscript:", err);
+      } finally {
+        setImportingWord(false);
+      }
+    },
+    [editor, handleCreateDocumentWithContent, handleContentChange]
+  );
+
   // ---------- PART 2A: LOADING STATE ----------
   if (loading) return <EditorSkeleton />;
 
@@ -241,16 +269,41 @@ const DocumentEditor: React.FC = () => {
               Document Editor
             </h2>
             <p className="text-gray-500 mt-2 max-w-md">
-              Write research documents, import items from your dashboard, and
-              export as Word, PDF, or LaTeX.
+              Write research documents, import items from your dashboard, or upload your existing Word manuscripts (.docx).
             </p>
           </div>
-          <button
-            onClick={openTitleModal}
-            className="px-6 py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-xl transition-colors shadow-lg shadow-blue-500/25"
-          >
-            Create Your First Document
-          </button>
+          <div className="flex items-center gap-3 flex-wrap justify-center">
+            <button
+              onClick={openTitleModal}
+              className="px-5 py-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white text-xs font-semibold rounded-xl transition-colors shadow-lg shadow-blue-500/25 flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Blank Document</span>
+            </button>
+            <button
+              onClick={() => emptyFileInputRef.current?.click()}
+              disabled={importingWord}
+              className="px-5 py-2.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold rounded-xl transition-colors shadow-xs flex items-center gap-2 disabled:opacity-50"
+            >
+              {importingWord ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4" />
+              )}
+              <span>Upload Word File (.docx)</span>
+            </button>
+            <input
+              ref={emptyFileInputRef}
+              type="file"
+              accept=".docx,.txt,.md"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleImportWord(f);
+                e.target.value = "";
+              }}
+            />
+          </div>
         </div>
 
         {/* Title Prompt Modal */}
@@ -277,6 +330,8 @@ const DocumentEditor: React.FC = () => {
           onRename={handleRenameDocument}
           onDelete={handleDeleteDocument}
           onDeleteMany={handleDeleteManyDocuments}
+          onImportWord={handleImportWord}
+          importingWord={importingWord}
         />
 
         {currentDoc ? (
@@ -293,6 +348,7 @@ const DocumentEditor: React.FC = () => {
               onInsertItem={() => setShowImportDrawer(true)}
               onExport={handleExport}
               onInsertBibliography={handleInsertBibliography}
+              onImportWord={handleImportWord}
               saving={saving}
             />
             <EditorCanvas
