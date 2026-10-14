@@ -13,7 +13,6 @@ import {
   Palette,
   Shield,
   Database,
-  Library,
 } from "lucide-react";
 import { supabase } from "../../../services/supabaseClient";
 import { useTheme } from "../../../context/ThemeContext";
@@ -110,7 +109,6 @@ const TABS: TabDefinition[] = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "ai-privacy", label: "AI & Privacy", icon: Shield },
   { id: "data", label: "Data", icon: Database },
-  { id: "library", label: "Book Search", icon: Library },
 ];
 
 // ============================================

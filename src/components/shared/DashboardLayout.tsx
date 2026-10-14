@@ -31,6 +31,7 @@ import {
   Smartphone,
   Quote,
   FileEdit,
+  FileText,
   ChevronLeft,
   BookOpen,
   Timer,
@@ -45,8 +46,8 @@ import { getAllItems, subscribeToItems } from "../../services/storageService";
 // PART 2: CONSTANTS
 // ============================================
 
-// Grouped sidebar nav matching the 5 core workstations:
-// Dashboard, Research & Thesis, Study & Review, AI Assistant, Settings
+// Grouped sidebar nav matching the core workstations:
+// Dashboard, Document Studio, Study & Review, AI Assistant (Settings is pinned to bottom nav)
 const NAV_GROUPS: {
   label: string;
   items: {
@@ -60,10 +61,9 @@ const NAV_GROUPS: {
     label: "Main Navigation",
     items: [
       { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
-      { icon: GraduationCap, label: "Research & Thesis", path: "/app/research" },
+      { icon: FileText, label: "Document Studio", path: "/app/research" },
       { icon: BrainCircuit, label: "Study & Review", path: "/app/review", badge: "AI" },
       { icon: MessageSquare, label: "AI Assistant", path: "/app/assistant" },
-      { icon: Settings, label: "Settings", path: "/app/settings" },
     ],
   },
 ];
@@ -864,7 +864,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                           )}
                         </div>
                         <div className="p-1.5 space-y-0.5">
-                          {NAV_ITEMS.slice(0, 4).map((item) => (
+                          {NAV_ITEMS.map((item) => (
                             <Link
                               key={item.path}
                               to={item.path}

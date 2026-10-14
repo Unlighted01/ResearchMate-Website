@@ -15,7 +15,6 @@ import AppearanceTab from "./AppearanceTab";
 import NotificationsTab from "./NotificationsTab";
 import AiPrivacyTab from "./AiPrivacyTab";
 import DataTab from "./DataTab";
-import LibraryTab from "./LibraryTab";
 
 // ============================================
 // PART 2: TOAST COMPONENT
@@ -183,8 +182,6 @@ const SettingsPage: React.FC = () => {
           handleImport={data.handleImport}
         />
       )}
-
-      {data.activeTab === "library" && <LibraryTab showToast={showToast} />}
     </div>
   );
 };

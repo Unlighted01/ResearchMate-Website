@@ -8,9 +8,9 @@ import { useSearchParams } from "react-router-dom";
 import {
   Table2,
   FileEdit,
+  FileText,
   Quote,
   BookOpen,
-  GraduationCap,
   Sparkles,
 } from "lucide-react";
 
@@ -79,14 +79,14 @@ const ResearchHubPage: React.FC<ResearchHubProps> = ({ useToast }) => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/80">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200/60 dark:border-indigo-900/60">
-              <GraduationCap className="w-4 h-4" />
+              <FileText className="w-4 h-4" />
             </div>
             <div>
               <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 font-title tracking-tight">
-                Research & Thesis Suite
+                Document & Writing Studio
               </h1>
               <p className="text-xs text-slate-500 font-mono">
-                Literature Matrix • Manuscript Editor • Citations • PDF Ingest
+                Manuscript Editor • Citations • PDF Reader • Comparative Matrix
               </p>
             </div>
           </div>
