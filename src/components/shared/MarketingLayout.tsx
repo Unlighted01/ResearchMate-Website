@@ -10,6 +10,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
+import { ResearchMateLogo } from "./ResearchMateLogo";
 
 // ============================================
 // PART 2: COMPONENT
@@ -21,7 +22,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
   const { visualTheme } = useTheme();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const isBubbleTheme = false;
+  const isBubbleTheme = visualTheme === "bubble";
   const isGlassTheme = visualTheme === "glass";
 
   // Force light mode for marketing pages
@@ -65,11 +66,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
           <div className="flex justify-between h-14 items-center">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2.5 group">
-              <img
-                src="/logo.svg"
-                alt="ResearchMate Logo"
-                className="w-7 h-7 group-hover:scale-105 transition-transform"
-              />
+              <ResearchMateLogo size={28} />
               <span className="text-base font-semibold font-title text-slate-900">
                 ResearchMate
               </span>
@@ -214,8 +211,8 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
             {/* Brand */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <img src="/logo.svg" alt="Logo" className="w-6 h-6" />
-                <span className="font-semibold">ResearchMate</span>
+                <ResearchMateLogo size={24} />
+                <span className="font-semibold text-slate-900">ResearchMate</span>
               </div>
               <p className="text-sm text-gray-500">
                 Your research, everywhere.

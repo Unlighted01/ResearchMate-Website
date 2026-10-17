@@ -15,7 +15,7 @@ import {
   Database,
 } from "lucide-react";
 import { supabase } from "../../../services/supabaseClient";
-import { useTheme } from "../../../context/ThemeContext";
+import { useTheme, type VisualTheme } from "../../../context/ThemeContext";
 import {
   importImageFile,
   importPdfFile,
@@ -54,8 +54,8 @@ export interface UseSettingsDataReturn {
   // Theme
   theme: string;
   setTheme: (t: "light" | "dark" | "system") => void;
-  visualTheme: string;
-  setVisualTheme: (t: "minimalist" | "glass") => void;
+  visualTheme: VisualTheme;
+  setVisualTheme: (t: VisualTheme) => void;
 
   // Notifications
   emailNotifications: boolean;

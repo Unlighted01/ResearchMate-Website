@@ -13,6 +13,8 @@ import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import CommandPalette from "./CommandPalette";
 import ClockWidget from "./ClockWidget";
+import { ResearchMateLogo } from "./ResearchMateLogo";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Table2,
@@ -145,7 +147,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, []);
 
   const isCollapsed = sidebarCollapsed && !isMobile;
-  const isBubbleTheme = false;
+  const isBubbleTheme = visualTheme === "bubble";
   const isGlassTheme = visualTheme === "glass";
 
   // ---------- PART 4A: EFFECTS ----------
@@ -313,7 +315,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // ---------- PART 4C: RENDER ----------
 
   return (
-    <div className="min-h-screen flex font-sans relative overflow-hidden bg-[#FAFBFD] dark:bg-slate-950 text-slate-900 dark:text-slate-100 theme-page theme-dashboard">
+    <div className="min-h-screen flex font-sans relative overflow-hidden text-slate-900 dark:text-slate-100 theme-page theme-dashboard">
       {/* Command Palette */}
       <CommandPalette
         isOpen={commandPaletteOpen}
@@ -335,10 +337,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className={`
-          fixed top-3 bottom-3 left-3 z-30
+          theme-sidebar fixed top-3 bottom-3 left-3 z-30
           overflow-hidden
-          rounded-2xl border border-slate-200/80 dark:border-slate-800
-          bg-white dark:bg-slate-950 shadow-xs
+          ${
+            isBubbleTheme
+              ? "rounded-3xl border border-purple-200/50 dark:border-purple-500/20 shadow-[0_10px_35px_rgba(168,85,247,0.12)]"
+              : isGlassTheme
+              ? "rounded-2xl border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+              : "rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs"
+          }
           transition-transform duration-300 ease-in-out
           ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-[calc(100%+2rem)]"}
           lg:translate-x-0
@@ -357,11 +364,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 isCollapsed ? "justify-center" : ""
               }`}
             >
-              <img
-                src="/logo.svg"
-                alt="Logo"
-                className="w-7 h-7 shrink-0"
-              />
+              <ResearchMateLogo size={28} />
               <AnimatePresence mode="wait">
                 {!isCollapsed && (
                   <motion.div
@@ -374,7 +377,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     <span className="font-title text-base font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
                       ResearchMate
                     </span>
-                    <span className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-200/40 dark:border-indigo-800/40">
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                      isBubbleTheme
+                        ? "text-purple-600 dark:text-purple-300 bg-purple-50/80 dark:bg-purple-950/40 border-purple-200/50 dark:border-purple-500/30"
+                        : isGlassTheme
+                        ? "text-cyan-600 dark:text-cyan-300 bg-cyan-50/80 dark:bg-cyan-950/40 border-cyan-200/50 dark:border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]"
+                        : "text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800/70 border-zinc-200 dark:border-zinc-700"
+                    }`}>
                       STUDIO
                     </span>
                   </motion.div>
@@ -626,7 +635,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         `}
       >
         {/* Header */}
-        <header className="sticky top-0 z-20 bg-white/85 dark:bg-[#0d1017]/85 backdrop-blur-md rounded-xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs mb-3 sm:mb-4 lg:mb-6">
+        <header className={`theme-headerbar sticky top-0 z-20 ${
+          isBubbleTheme
+            ? "rounded-2xl border border-purple-200/50 dark:border-purple-500/20 shadow-[0_4px_20px_rgba(168,85,247,0.08)]"
+            : isGlassTheme
+            ? "rounded-xl border border-white/60 dark:border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+            : "rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs"
+        } mb-3 sm:mb-4 lg:mb-6`}>
           <div className="h-13 sm:h-14 px-3 sm:px-4 lg:px-6 flex items-center justify-between gap-3 sm:gap-4">
             {/* Left: Mobile Menu + Search */}
             <div className="flex items-center gap-4 flex-1">
@@ -671,8 +686,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <span className="hidden sm:inline">SYNCED</span>
               </div>
 
-              {/* Restrained Action Bar (Timer + Notifications + Profile) */}
+              {/* Action Bar (Theme Switcher + Timer + Notifications + Profile) */}
               <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800">
+                {/* Theme & Mode Switcher */}
+                <ThemeSwitcher />
+
                 {/* Clock & Pomodoro Quick Toggle */}
                 <button
                   onClick={() => {

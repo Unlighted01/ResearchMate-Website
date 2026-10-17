@@ -6,21 +6,22 @@ import React, {
   useRef,
 } from "react";
 
-type Theme = "light" | "dark" | "system";
-type VisualTheme = "minimalist" | "glass";
+export type Theme = "light" | "dark" | "system";
+export type VisualTheme = "minimalist" | "glass" | "bubble";
 
-interface ThemeContextType {
+export interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   visualTheme: VisualTheme;
   setVisualTheme: (theme: VisualTheme) => void;
+  isDark: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const COLOR_THEME_KEY = "theme";
 const VISUAL_THEME_KEY = "visualTheme";
 const validColorThemes: Theme[] = ["light", "dark", "system"];
-const validVisualThemes: VisualTheme[] = ["minimalist", "glass"];
+const validVisualThemes: VisualTheme[] = ["minimalist", "glass", "bubble"];
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -36,7 +37,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
         return saved;
       }
     }
-    return "light"; // Default to light, don't auto-detect system
+    return "light"; // Default to light
   });
   const [visualTheme, setVisualThemeState] = useState<VisualTheme>(() => {
     if (typeof window !== "undefined") {
@@ -46,6 +47,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     }
     return "minimalist";
+  });
+
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    if (theme === "dark") return true;
+    if (theme === "light") return false;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
 
   // Wrapper for setTheme that marks user has made a choice
@@ -59,36 +67,38 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Apply theme changes
   useEffect(() => {
-    // Only apply theme if user has explicitly set one
-    if (!hasUserSetTheme.current) {
-      return;
-    }
-
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
 
+    let currentIsDark = false;
     if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
-        ? "dark"
-        : "light";
-      root.classList.add(systemTheme);
+      currentIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.classList.add(currentIsDark ? "dark" : "light");
+      root.setAttribute("data-theme", currentIsDark ? "dark" : "light");
     } else {
+      currentIsDark = theme === "dark";
       root.classList.add(theme);
+      root.setAttribute("data-theme", theme);
     }
+    setIsDark(currentIsDark);
 
-    localStorage.setItem(COLOR_THEME_KEY, theme);
+    if (hasUserSetTheme.current) {
+      localStorage.setItem(COLOR_THEME_KEY, theme);
+    }
   }, [theme]);
 
   // Listen for system preference changes (only when theme is "system")
   useEffect(() => {
-    if (theme !== "system" || !hasUserSetTheme.current) return;
+    if (theme !== "system") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
       const root = window.document.documentElement;
+      const darkPref = mediaQuery.matches;
       root.classList.remove("light", "dark");
-      root.classList.add(mediaQuery.matches ? "dark" : "light");
+      root.classList.add(darkPref ? "dark" : "light");
+      root.setAttribute("data-theme", darkPref ? "dark" : "light");
+      setIsDark(darkPref);
     };
 
     mediaQuery.addEventListener("change", handleChange);
@@ -104,7 +114,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   return (
     <ThemeContext.Provider
-      value={{ theme, setTheme, visualTheme, setVisualTheme }}
+      value={{ theme, setTheme, visualTheme, setVisualTheme, isDark }}
     >
       {children}
     </ThemeContext.Provider>

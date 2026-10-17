@@ -59,9 +59,9 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
         ease: "easeOut",
       }}
       onClick={() => onClick(item)}
-      className={`group relative bg-white dark:bg-slate-900/90 rounded-xl border p-5 flex flex-col h-[230px] transition-all cursor-pointer border-l-4 ${colorTagBorder} ${
+      className={`group relative theme-surface p-5 flex flex-col h-[230px] transition-all cursor-pointer border-l-4 ${colorTagBorder} ${
         isSelected
-          ? "border-indigo-500 dark:border-indigo-500 ring-1 ring-indigo-500/50 bg-indigo-50/20 dark:bg-indigo-950/20"
+          ? "border-primary-500 ring-2 ring-primary-500/40 bg-primary-50/20 dark:bg-primary-950/20"
           : "border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs hover:shadow-sm"
       }`}
     >

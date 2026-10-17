@@ -38,7 +38,7 @@ const DashboardStatsBar: React.FC<DashboardStatsBarProps> = ({ stats }) => {
       {statItems.map((stat, idx) => (
         <div
           key={idx}
-          className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-2xs"
+          className="theme-surface border p-4 transition-all duration-200"
         >
           <p className="text-xs text-slate-500 dark:text-slate-400 font-sans mb-1 font-medium">
             {stat.label}

@@ -7,8 +7,10 @@
 // ============================================
 
 import React from "react";
-import { Palette, Sun, Moon, Monitor, Clock, Timer, Zap } from "lucide-react";
-import { Card, Select, Toggle } from "../../shared/ui";
+import { Palette, Sun, Moon, Monitor, Clock, Timer, Zap, Feather, Layers, Sparkles, Check } from "lucide-react";
+import { Card, Toggle } from "../../shared/ui";
+import { ResearchMateLogo } from "../../shared/ResearchMateLogo";
+import { type VisualTheme } from "../../../context/ThemeContext";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -17,8 +19,8 @@ import { Card, Select, Toggle } from "../../shared/ui";
 interface AppearanceTabProps {
   theme: string;
   setTheme: (t: "light" | "dark" | "system") => void;
-  visualTheme: string;
-  setVisualTheme: (t: "minimalist" | "glass") => void;
+  visualTheme: VisualTheme;
+  setVisualTheme: (t: VisualTheme) => void;
   showToast: (msg: string, type: "success" | "error" | "info") => void;
 }
 
@@ -33,33 +35,115 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
   setVisualTheme,
   showToast,
 }) => {
+  const visualThemeOptions: {
+    id: VisualTheme;
+    name: string;
+    tagline: string;
+    icon: React.FC<{ className?: string }>;
+    accentPill: string;
+    swatchBg: string;
+    swatchBorder: string;
+  }[] = [
+    {
+      id: "minimalist",
+      name: "Minimalist",
+      tagline: "Editorial precision, stark monochrome & cobalt hairlines",
+      icon: Feather,
+      accentPill: "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900",
+      swatchBg: "bg-white dark:bg-[#121215]",
+      swatchBorder: "border-slate-300 dark:border-zinc-700",
+    },
+    {
+      id: "glass",
+      name: "Glass",
+      tagline: "Frosted acrylic, specular highlights & cyan aurora glow",
+      icon: Layers,
+      accentPill: "bg-cyan-500 text-white shadow-[0_0_10px_rgba(34,211,238,0.5)]",
+      swatchBg: "bg-cyan-50/70 dark:bg-cyan-950/40 backdrop-blur-md",
+      swatchBorder: "border-cyan-300/80 dark:border-cyan-500/40",
+    },
+    {
+      id: "bubble",
+      name: "Bubble",
+      tagline: "Organic curves, soft lavender velvet & electric magenta",
+      icon: Sparkles,
+      accentPill: "bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-[0_0_10px_rgba(232,121,249,0.5)]",
+      swatchBg: "bg-purple-50/80 dark:bg-[#1A0B2E]/70",
+      swatchBorder: "border-purple-300/80 dark:border-purple-500/40",
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-          <Palette className="w-5 h-5 text-primary-600" /> Theme
+          <Palette className="w-5 h-5 text-primary-600" /> Workspace Theme
         </h3>
         <p className="text-gray-500 text-sm mb-6">
-          Choose how ResearchMate looks to you
+          Customize the aesthetic personality and color mode of your workstation
         </p>
-        <div className="mb-6">
-          <Select
-            label="Visual Theme"
-            value={visualTheme}
-            onChange={(value) =>
-              setVisualTheme(value as "minimalist" | "glass")
-            }
-            options={[
-              { value: "minimalist", label: "Minimalist (Default)" },
-              { value: "glass", label: "Glass" },
-            ]}
-          />
-          <p className="text-xs text-gray-500 mt-2">
-            Applies across dashboard, auth pages, and shared layouts.
-          </p>
+
+        {/* Visual Themes Grid */}
+        <div className="mb-8">
+          <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+            Aesthetic Family
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {visualThemeOptions.map((opt) => {
+              const isSelected = visualTheme === opt.id;
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => {
+                    setVisualTheme(opt.id);
+                    showToast(`Theme changed to ${opt.name}`, "info");
+                  }}
+                  className={`relative p-5 rounded-2xl border-2 transition-all duration-200 text-left flex flex-col justify-between overflow-hidden group ${
+                    isSelected
+                      ? "border-primary-500 shadow-md ring-2 ring-primary-500/20 bg-primary-50/30 dark:bg-primary-950/20"
+                      : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white/50 dark:bg-slate-900/40"
+                  }`}
+                >
+                  {/* Selected check badge */}
+                  {isSelected && (
+                    <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-primary-500 text-white flex items-center justify-center shadow-xs">
+                      <Check className="w-3 h-3 stroke-[3]" />
+                    </div>
+                  )}
+
+                  <div>
+                    {/* Header icon & pill */}
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                        isSelected ? opt.accentPill : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                      }`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <span className="font-title font-semibold text-base text-slate-900 dark:text-slate-100">
+                        {opt.name}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+                      {opt.tagline}
+                    </p>
+                  </div>
+
+                  {/* Swatch Preview Bar */}
+                  <div className={`h-8 w-full rounded-xl border ${opt.swatchBorder} ${opt.swatchBg} flex items-center px-3 gap-2 overflow-hidden`}>
+                    <div className="w-3 h-3 rounded-full bg-current opacity-70" />
+                    <div className="h-1.5 w-12 rounded-full bg-current opacity-40" />
+                    <div className="h-1.5 w-6 rounded-full bg-current opacity-25" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
+        {/* Color Mode Selection */}
+        <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
           Color Mode
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -68,64 +152,109 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
               id: "light",
               label: "Light",
               icon: Sun,
-              desc: "Clean and bright",
+              desc: "Crisp and luminous day contrast",
             },
             {
               id: "dark",
               label: "Dark",
               icon: Moon,
-              desc: "Easy on the eyes",
+              desc: "Deep obsidian ease for late-night focus",
             },
             {
               id: "system",
               label: "System",
               icon: Monitor,
-              desc: "Match your device",
+              desc: "Automatically adapts to device appearance",
             },
           ].map((option) => (
             <button
               key={option.id}
-              onClick={() => setTheme(option.id as "light" | "dark" | "system")}
-              className={`p-6 rounded-xl border-2 transition-all text-left ${
+              onClick={() => {
+                setTheme(option.id as "light" | "dark" | "system");
+                showToast(`Color mode set to ${option.label}`, "info");
+              }}
+              className={`p-4 sm:p-5 rounded-2xl border-2 transition-all text-left ${
                 theme === option.id
-                  ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20 shadow-md"
-                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                  ? "border-primary-500 bg-primary-50/40 dark:bg-primary-900/20 shadow-md ring-2 ring-primary-500/20"
+                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white/40 dark:bg-slate-900/40"
               }`}
             >
               <option.icon
-                className={`w-8 h-8 mb-3 ${
-                  theme === option.id ? "text-primary-600" : "text-gray-400"
+                className={`w-6 h-6 mb-2.5 ${
+                  theme === option.id ? "text-primary-600 dark:text-primary-400" : "text-slate-400"
                 }`}
               />
               <p
-                className={`font-semibold ${
+                className={`font-semibold text-sm ${
                   theme === option.id
-                    ? "text-primary-600"
-                    : "text-gray-900 dark:text-white"
+                    ? "text-primary-600 dark:text-primary-400"
+                    : "text-slate-900 dark:text-white"
                 }`}
               >
                 {option.label}
               </p>
-              <p className="text-xs text-gray-500 mt-1">{option.desc}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{option.desc}</p>
             </button>
           ))}
         </div>
       </Card>
 
-      {/* Preview */}
+      {/* Live Dynamic Theme Preview Card */}
       <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Preview</h3>
-        <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-xl">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-full bg-primary-500"></div>
-            <div>
-              <div className="h-3 w-24 bg-gray-300 dark:bg-gray-600 rounded"></div>
-              <div className="h-2 w-16 bg-gray-200 dark:bg-gray-700 rounded mt-1"></div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Live Workstation Preview
+          </h3>
+          <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
+            Active: {visualTheme} · {theme}
+          </span>
+        </div>
+
+        <div className="theme-surface p-5 rounded-2xl border transition-all duration-300">
+          <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/60 dark:border-slate-800/60">
+            <div className="flex items-center gap-3">
+              <ResearchMateLogo size={36} />
+              <div>
+                <span className="font-title text-base font-semibold text-slate-900 dark:text-slate-100 block">
+                  ResearchMate Workstation
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  Dynamic vector mark synced with {visualTheme} aesthetic
+                </span>
+              </div>
             </div>
+
+            <button className="theme-btn-primary px-3.5 py-1.5 text-xs font-medium rounded-lg transition-transform active:scale-95">
+              Action Button
+            </button>
           </div>
-          <div className="space-y-2">
-            <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded"></div>
-            <div className="h-2 w-3/4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-3 rounded-xl bg-slate-100/70 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block mb-1">
+                Paper Index
+              </span>
+              <span className="text-lg font-semibold text-slate-900 dark:text-slate-100 font-mono">
+                128 Sources
+              </span>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-100/70 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block mb-1">
+                Syntheses
+              </span>
+              <span className="text-lg font-semibold text-slate-900 dark:text-slate-100 font-mono">
+                94 Complete
+              </span>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-100/70 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block mb-1">
+                Formulary Rubric
+              </span>
+              <span className="text-lg font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
+                Active 4-Step
+              </span>
+            </div>
           </div>
         </div>
       </Card>

@@ -216,106 +216,108 @@ html.dark[data-ui-theme] {
   --ui-kbd-bg: rgba(255, 255, 255, 0.08);
 }
 
-/* ── MINIMALIST: Editorial precision — blue accent, hairline borders, no blur ── */
+/* ── MINIMALIST: Editorial precision — monochrome ink, cobalt accents, hairline borders, no blur ── */
 html[data-ui-theme="minimalist"] {
   --font-sans:
     "Manrope", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
     sans-serif;
   --font-title:
     "Fraunces", Georgia, Cambria, "Times New Roman", Times, serif;
-  --ui-radius-md: 6px;
-  --ui-radius-lg: 8px;
+  --ui-radius-md: 8px;
+  --ui-radius-lg: 10px;
   --ui-surface-bg: #ffffff;
-  --ui-surface-border: #e5e7eb;
-  --ui-surface-shadow: none;
+  --ui-surface-border: #e4e4e7;
+  --ui-surface-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   --ui-input-bg: #ffffff;
-  --ui-input-border: #d1d5db;
-  --ui-search-bg: #f9fafb;
-  --ui-search-border: #e5e7eb;
+  --ui-input-border: #d4d4d8;
+  --ui-search-bg: #f4f4f5;
+  --ui-search-border: #e4e4e7;
   --ui-title-weight: 700;
-  --ui-title-color: #0a0a0a;
+  --ui-title-color: #09090b;
   --ui-stat-accent: #2563eb;
-  --ui-btn-radius: 6px;
-  --ui-btn-fill: #2563eb;
-  --ui-btn-fill-hover: #1d4ed8;
+  --ui-btn-radius: 8px;
+  --ui-btn-fill: #18181b;
+  --ui-btn-fill-hover: #09090b;
   --ui-btn-text: #ffffff;
   --ui-btn-border: transparent;
   --ui-btn-shadow: none;
   --ui-sidebar-bg: #ffffff;
-  --ui-sidebar-border: #e5e7eb;
-  --ui-sidebar-text: #374151;
-  --ui-sidebar-icon: #9ca3af;
-  --ui-sidebar-active-bg: #2563eb;
+  --ui-sidebar-border: #e4e4e7;
+  --ui-sidebar-text: #27272a;
+  --ui-sidebar-icon: #71717a;
+  --ui-sidebar-active-bg: #18181b;
   --ui-sidebar-active-text: #ffffff;
   --ui-sidebar-active-icon: #ffffff;
-  --ui-sidebar-active-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
-  --ui-header-bg: rgba(255, 255, 255, 0.97);
-  --ui-chrome-border: #e5e7eb;
-  --ui-hover-bg: rgba(37, 99, 235, 0.06);
-  --ui-hover-strong-bg: rgba(37, 99, 235, 0.1);
-  --ui-muted-text: #6b7280;
-  --ui-subtle-surface: #f3f4f6;
+  --ui-sidebar-active-shadow: 0 2px 8px rgba(24, 24, 27, 0.2);
+  --ui-header-bg: rgba(255, 255, 255, 0.96);
+  --ui-chrome-border: #e4e4e7;
+  --ui-hover-bg: rgba(24, 24, 27, 0.05);
+  --ui-hover-strong-bg: rgba(24, 24, 27, 0.08);
+  --ui-muted-text: #71717a;
+  --ui-subtle-surface: #f4f4f5;
   --ui-subtle-elevated: #ffffff;
-  --ui-tooltip-bg: #111827;
+  --ui-tooltip-bg: #18181b;
   --ui-tooltip-text: #ffffff;
-  --ui-overlay-bg: rgba(15, 23, 42, 0.4);
+  --ui-overlay-bg: rgba(9, 9, 11, 0.45);
   --ui-unread-bg: rgba(37, 99, 235, 0.08);
-  --ui-kbd-bg: #e5e7eb;
+  --ui-kbd-bg: #f4f4f5;
   --ui-glass-blur: 0px;
 }
 
 html.dark[data-ui-theme="minimalist"] {
-  --ui-surface-bg: #111111;
-  --ui-surface-border: #1f1f1f;
-  --ui-input-bg: #0a0a0a;
-  --ui-input-border: #262626;
-  --ui-search-bg: #0a0a0a;
-  --ui-search-border: #262626;
-  --ui-title-color: #ffffff;
+  --ui-surface-bg: #121215;
+  --ui-surface-border: #27272a;
+  --ui-input-bg: #0c0c0e;
+  --ui-input-border: #27272a;
+  --ui-search-bg: #0c0c0e;
+  --ui-search-border: #27272a;
+  --ui-title-color: #fafafa;
   --ui-stat-accent: #3b82f6;
-  --ui-btn-fill: #2563eb;
-  --ui-btn-fill-hover: #3b82f6;
-  --ui-sidebar-bg: #000000;
-  --ui-sidebar-border: #1a1a1a;
-  --ui-sidebar-text: #a1a1aa;
-  --ui-sidebar-icon: #52525b;
-  --ui-sidebar-active-bg: #2563eb;
+  --ui-btn-fill: #fafafa;
+  --ui-btn-fill-hover: #e4e4e7;
+  --ui-btn-text: #09090b;
+  --ui-sidebar-bg: #0c0c0e;
+  --ui-sidebar-border: #27272a;
+  --ui-sidebar-text: #d4d4d8;
+  --ui-sidebar-icon: #a1a1aa;
+  --ui-sidebar-active-bg: #27272a;
   --ui-sidebar-active-text: #ffffff;
   --ui-sidebar-active-icon: #ffffff;
-  --ui-sidebar-active-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
-  --ui-header-bg: rgba(0, 0, 0, 0.97);
-  --ui-chrome-border: #1f1f1f;
-  --ui-hover-bg: rgba(59, 130, 246, 0.12);
-  --ui-hover-strong-bg: rgba(59, 130, 246, 0.18);
-  --ui-muted-text: #71717a;
-  --ui-subtle-surface: #111111;
-  --ui-subtle-elevated: #18181b;
-  --ui-tooltip-bg: #f8fafc;
-  --ui-tooltip-text: #111827;
-  --ui-overlay-bg: rgba(0, 0, 0, 0.58);
-  --ui-unread-bg: rgba(37, 99, 235, 0.16);
+  --ui-sidebar-active-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --ui-header-bg: rgba(12, 12, 14, 0.95);
+  --ui-chrome-border: #27272a;
+  --ui-hover-bg: rgba(255, 255, 255, 0.06);
+  --ui-hover-strong-bg: rgba(255, 255, 255, 0.1);
+  --ui-muted-text: #a1a1aa;
+  --ui-subtle-surface: #18181b;
+  --ui-subtle-elevated: #27272a;
+  --ui-tooltip-bg: #fafafa;
+  --ui-tooltip-text: #09090b;
+  --ui-overlay-bg: rgba(0, 0, 0, 0.7);
+  --ui-unread-bg: rgba(59, 130, 246, 0.16);
   --ui-kbd-bg: #18181b;
+  --ui-glass-blur: 0px;
 }
 
 html[data-ui-theme="minimalist"] body {
   background:
-    radial-gradient(at 0% 0%, rgba(240, 240, 240, 0.4) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(220, 220, 220, 0.3) 0px, transparent 50%),
+    radial-gradient(at 0% 0%, rgba(240, 240, 240, 0.5) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(225, 225, 225, 0.3) 0px, transparent 50%),
     linear-gradient(to right, rgba(0, 0, 0, 0.02) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(0, 0, 0, 0.02) 1px, transparent 1px),
-    #fafafa;
-  background-size: 100% 100%, 100% 100%, 60px 60px, 60px 60px;
+    #fafafa !important;
+  background-size: 100% 100%, 100% 100%, 60px 60px, 60px 60px !important;
   animation: minimalist-grid-drift 40s linear infinite;
 }
 
 html.dark[data-ui-theme="minimalist"] body {
   background:
-    radial-gradient(at 0% 0%, rgba(20, 20, 20, 0.6) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(10, 10, 10, 0.5) 0px, transparent 50%),
+    radial-gradient(at 0% 0%, rgba(24, 24, 27, 0.7) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(15, 15, 18, 0.6) 0px, transparent 50%),
     linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-    #09090b;
-  background-size: 100% 100%, 100% 100%, 60px 60px, 60px 60px;
+    #09090b !important;
+  background-size: 100% 100%, 100% 100%, 60px 60px, 60px 60px !important;
   animation: minimalist-grid-drift 40s linear infinite;
 }
 
@@ -328,7 +330,7 @@ html[data-ui-theme="minimalist"] h3 {
 }
 
 
-/* ── BUBBLE: Playful premium — rose/lavender palette, iridescent surfaces ── */
+/* ── BUBBLE: Playful premium — organic pill curves, rose/lavender palette, iridescent depth ── */
 html[data-ui-theme="bubble"] {
   --font-sans:
     "Nunito", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
@@ -339,211 +341,222 @@ html[data-ui-theme="bubble"] {
   --ui-radius-md: 18px;
   --ui-radius-lg: 24px;
   --ui-surface-bg: rgba(255, 255, 255, 0.88);
-  --ui-surface-border: rgba(232, 121, 249, 0.22);  /* rose-violet tint */
-  --ui-surface-shadow: 0 8px 32px rgba(196, 181, 253, 0.18);
+  --ui-surface-border: rgba(232, 121, 249, 0.28);
+  --ui-surface-shadow: 0 10px 30px rgba(168, 85, 247, 0.12);
   --ui-input-bg: #fdf9ff;
-  --ui-input-border: #e9d5ff;
+  --ui-input-border: #f0abfc;
   --ui-search-bg: #fdf4ff;
   --ui-search-border: #f0abfc;
   --ui-title-weight: 800;
-  --ui-title-color: #4c1d95;   /* deep violet */
+  --ui-title-color: #4c1d95;
   --ui-stat-accent: #9333ea;
-  --ui-btn-radius: 999px;
-  --ui-btn-fill: linear-gradient(135deg, #f472b6 0%, #a78bfa 100%);
-  --ui-btn-fill-hover: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  --ui-btn-radius: 9999px;
+  --ui-btn-fill: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
+  --ui-btn-fill-hover: linear-gradient(135deg, #db2777 0%, #9333ea 100%);
   --ui-btn-text: #ffffff;
-  --ui-btn-shadow: 0 8px 24px rgba(167, 139, 250, 0.35);
-  --ui-sidebar-bg: rgba(253, 249, 255, 0.92);
-  --ui-sidebar-border: rgba(196, 181, 253, 0.35);
-  --ui-sidebar-text: #5b21b6;
-  --ui-sidebar-icon: #7c3aed;
-  --ui-sidebar-active-bg: linear-gradient(135deg, #f472b6 0%, #a78bfa 100%);
+  --ui-btn-border: transparent;
+  --ui-btn-shadow: 0 8px 24px rgba(236, 72, 153, 0.35);
+  --ui-sidebar-bg: rgba(253, 249, 255, 0.88);
+  --ui-sidebar-border: rgba(216, 180, 254, 0.35);
+  --ui-sidebar-text: #581c87;
+  --ui-sidebar-icon: #9333ea;
+  --ui-sidebar-active-bg: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
   --ui-sidebar-active-text: #ffffff;
   --ui-sidebar-active-icon: #ffffff;
-  --ui-sidebar-active-shadow: 0 6px 18px rgba(167, 139, 250, 0.4);
-  --ui-header-bg: rgba(253, 249, 255, 0.90);
-  --ui-chrome-border: rgba(196, 181, 253, 0.35);
-  --ui-hover-bg: rgba(244, 114, 182, 0.08);
-  --ui-hover-strong-bg: rgba(167, 139, 250, 0.14);
+  --ui-sidebar-active-shadow: 0 6px 18px rgba(168, 85, 247, 0.35);
+  --ui-header-bg: rgba(253, 249, 255, 0.88);
+  --ui-chrome-border: rgba(216, 180, 254, 0.35);
+  --ui-hover-bg: rgba(244, 114, 182, 0.1);
+  --ui-hover-strong-bg: rgba(167, 139, 250, 0.16);
   --ui-muted-text: #7c3aed;
-  --ui-subtle-surface: rgba(255, 255, 255, 0.55);
+  --ui-subtle-surface: rgba(255, 255, 255, 0.65);
   --ui-subtle-elevated: rgba(255, 255, 255, 0.95);
   --ui-tooltip-bg: #5b21b6;
   --ui-tooltip-text: #ffffff;
-  --ui-overlay-bg: rgba(76, 29, 149, 0.28);
-  --ui-unread-bg: rgba(244, 114, 182, 0.12);
+  --ui-overlay-bg: rgba(76, 29, 149, 0.32);
+  --ui-unread-bg: rgba(244, 114, 182, 0.14);
   --ui-kbd-bg: rgba(167, 139, 250, 0.14);
-  --ui-glass-blur: 14px;
+  --ui-glass-blur: 16px;
 }
 
 html.dark[data-ui-theme="bubble"] {
-  --ui-surface-bg: rgba(24, 12, 38, 0.82);   /* deep violet-black */
-  --ui-surface-border: rgba(216, 180, 254, 0.2);
-  --ui-surface-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --ui-surface-bg: rgba(24, 12, 38, 0.82);
+  --ui-surface-border: rgba(216, 180, 254, 0.22);
+  --ui-surface-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
   --ui-input-bg: #120829;
-  --ui-input-border: #2e1065;
+  --ui-input-border: #3b0764;
   --ui-search-bg: #120829;
   --ui-search-border: #3b0764;
-  --ui-title-color: #e9d5ff;   /* soft lavender */
+  --ui-title-color: #f5d0fe;
   --ui-stat-accent: #c084fc;
-  --ui-btn-fill: linear-gradient(135deg, #e879f9 0%, #a78bfa 100%);
-  --ui-btn-fill-hover: linear-gradient(135deg, #d946ef 0%, #8b5cf6 100%);
-  --ui-sidebar-bg: rgba(13, 8, 20, 0.92);
-  --ui-sidebar-border: rgba(196, 181, 253, 0.15);
-  --ui-sidebar-text: #d8b4fe;
-  --ui-sidebar-icon: #a855f7;
-  --ui-sidebar-active-bg: linear-gradient(135deg, #e879f9 0%, #a78bfa 100%);
+  --ui-btn-radius: 9999px;
+  --ui-btn-fill: linear-gradient(135deg, #f43f5e 0%, #a855f7 100%);
+  --ui-btn-fill-hover: linear-gradient(135deg, #e11d48 0%, #9333ea 100%);
+  --ui-btn-text: #ffffff;
+  --ui-btn-border: transparent;
+  --ui-btn-shadow: 0 8px 24px rgba(244, 63, 94, 0.4);
+  --ui-sidebar-bg: rgba(16, 9, 28, 0.85);
+  --ui-sidebar-border: rgba(196, 181, 253, 0.18);
+  --ui-sidebar-text: #e9d5ff;
+  --ui-sidebar-icon: #c084fc;
+  --ui-sidebar-active-bg: linear-gradient(135deg, #f43f5e 0%, #a855f7 100%);
   --ui-sidebar-active-text: #ffffff;
   --ui-sidebar-active-icon: #ffffff;
-  --ui-sidebar-active-shadow: 0 6px 18px rgba(168, 85, 247, 0.4);
-  --ui-header-bg: rgba(13, 8, 20, 0.88);
-  --ui-chrome-border: rgba(196, 181, 253, 0.15);
-  --ui-hover-bg: rgba(232, 121, 249, 0.1);
-  --ui-hover-strong-bg: rgba(168, 85, 247, 0.18);
+  --ui-sidebar-active-shadow: 0 6px 18px rgba(232, 121, 249, 0.4);
+  --ui-header-bg: rgba(16, 9, 28, 0.85);
+  --ui-chrome-border: rgba(196, 181, 253, 0.18);
+  --ui-hover-bg: rgba(232, 121, 249, 0.12);
+  --ui-hover-strong-bg: rgba(168, 85, 247, 0.2);
   --ui-muted-text: #c084fc;
   --ui-subtle-surface: rgba(255, 255, 255, 0.05);
   --ui-subtle-elevated: rgba(255, 255, 255, 0.09);
   --ui-tooltip-bg: #f5d0fe;
   --ui-tooltip-text: #3b0764;
-  --ui-overlay-bg: rgba(13, 8, 20, 0.62);
-  --ui-unread-bg: rgba(232, 121, 249, 0.16);
+  --ui-overlay-bg: rgba(13, 8, 20, 0.65);
+  --ui-unread-bg: rgba(232, 121, 249, 0.18);
   --ui-kbd-bg: rgba(255, 255, 255, 0.08);
+  --ui-glass-blur: 16px;
 }
 
 html[data-ui-theme="bubble"] body {
   background:
-    radial-gradient(circle at 15% 20%, rgba(244, 114, 182, 0.16) 0%, transparent 45%),
-    radial-gradient(circle at 85% 80%, rgba(196, 181, 253, 0.18) 0%, transparent 45%),
-    radial-gradient(circle at 50% 50%, rgba(186, 230, 252, 0.12) 0%, transparent 60%),
-    #fdf9ff;
-  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
+    radial-gradient(circle at 15% 20%, rgba(244, 114, 182, 0.2) 0%, transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(196, 181, 253, 0.22) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(253, 186, 116, 0.12) 0%, transparent 55%),
+    #faf5ff !important;
+  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100% !important;
   animation: bubble-mesh-drift 25s ease-in-out infinite;
 }
 
 html.dark[data-ui-theme="bubble"] body {
   background:
-    radial-gradient(circle at 20% 25%, rgba(232, 121, 249, 0.14) 0%, transparent 45%),
-    radial-gradient(circle at 80% 75%, rgba(167, 139, 250, 0.16) 0%, transparent 45%),
-    radial-gradient(circle at 55% 45%, rgba(244, 114, 182, 0.15) 0%, transparent 55%),
-    #0b0712;
-  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
+    radial-gradient(circle at 20% 20%, rgba(232, 121, 249, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.2) 0%, transparent 45%),
+    radial-gradient(circle at 50% 45%, rgba(244, 63, 94, 0.14) 0%, transparent 55%),
+    #0a0514 !important;
+  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100% !important;
   animation: bubble-mesh-drift 25s ease-in-out infinite;
 }
 
-
-/* === CURSOR — Bubble Theme === */
-/* Cursor is NOT hidden — the glass sphere is ambient background decoration,
-   not a cursor replacement. System cursor remains visible. */
-
-
-
+/* ── GLASS: Apple liquid glassmorphism — frosted acrylic, specular refraction, oceanic/cyan glow ── */
 html[data-ui-theme="glass"] {
   --font-sans:
     "Sora", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
     sans-serif;
   --font-title:
-    "Barlow Condensed", "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   --ui-radius-md: 14px;
-  --ui-radius-lg: 20px;
+  --ui-radius-lg: 18px;
 
-  /* === LIGHT MODE GLASS — frosted soft-white, depth via shadows === */
-  --ui-surface-bg: rgba(255, 255, 255, 0.72);
-  --ui-surface-border: rgba(0, 0, 0, 0.05);
-  --ui-surface-shadow: 0 4px 24px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.04);
-  --ui-input-bg: rgba(255, 255, 255, 0.85);
-  --ui-input-border: rgba(0, 0, 0, 0.1);
-  --ui-search-bg: rgba(255, 255, 255, 0.8);
-  --ui-search-border: rgba(0, 0, 0, 0.08);
+  /* === LIGHT MODE GLASS — crystalline frosted acrylic with specular edge highlights === */
+  --ui-surface-bg: rgba(255, 255, 255, 0.68);
+  --ui-surface-border: rgba(255, 255, 255, 0.85);
+  --ui-surface-shadow: 0 8px 32px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --ui-input-bg: rgba(255, 255, 255, 0.72);
+  --ui-input-border: rgba(255, 255, 255, 0.65);
+  --ui-search-bg: rgba(255, 255, 255, 0.72);
+  --ui-search-border: rgba(255, 255, 255, 0.65);
   --ui-title-weight: 700;
-  --ui-title-color: #1a1a2e;
-  --ui-stat-accent: #0891b2;
-  --ui-btn-radius: 999px;
-  --ui-btn-fill: rgba(8, 145, 178, 0.9);
-  --ui-btn-fill-hover: rgba(6, 120, 150, 0.95);
+  --ui-title-color: #0f172a;
+  --ui-stat-accent: #0284c7;
+  --ui-btn-radius: 12px;
+  --ui-btn-fill: linear-gradient(135deg, rgba(2, 132, 199, 0.9) 0%, rgba(6, 182, 212, 0.9) 100%);
+  --ui-btn-fill-hover: linear-gradient(135deg, rgba(3, 105, 161, 0.95) 0%, rgba(8, 145, 178, 0.95) 100%);
   --ui-btn-text: #ffffff;
-  --ui-btn-border: transparent;
-  --ui-btn-shadow: 0 4px 16px rgba(8, 145, 178, 0.25);
-  --ui-sidebar-bg: rgba(255, 255, 255, 0.65);
-  --ui-sidebar-border: rgba(0, 0, 0, 0.06);
-  --ui-sidebar-text: #334155;
-  --ui-sidebar-icon: #0891b2;
-  --ui-sidebar-active-bg: rgba(8, 145, 178, 0.14);
-  --ui-sidebar-active-text: #0c4a6e;
-  --ui-sidebar-active-icon: #0891b2;
-  --ui-sidebar-active-shadow: 0 4px 16px rgba(8, 145, 178, 0.15);
-  --ui-header-bg: rgba(255, 255, 255, 0.72);
-  --ui-chrome-border: rgba(0, 0, 0, 0.06);
-  --ui-hover-bg: rgba(8, 145, 178, 0.08);
-  --ui-hover-strong-bg: rgba(8, 145, 178, 0.14);
-  --ui-muted-text: #64748b;
-  --ui-subtle-surface: rgba(255, 255, 255, 0.38);
-  --ui-subtle-elevated: rgba(255, 255, 255, 0.82);
-  --ui-tooltip-bg: rgba(15, 23, 42, 0.88);
+  --ui-btn-border: rgba(255, 255, 255, 0.45);
+  --ui-btn-shadow: 0 4px 16px rgba(6, 182, 212, 0.35);
+  --ui-sidebar-bg: rgba(255, 255, 255, 0.58);
+  --ui-sidebar-border: rgba(255, 255, 255, 0.7);
+  --ui-sidebar-text: #1e293b;
+  --ui-sidebar-icon: #0284c7;
+  --ui-sidebar-active-bg: rgba(2, 132, 199, 0.12);
+  --ui-sidebar-active-text: #0369a1;
+  --ui-sidebar-active-icon: #0284c7;
+  --ui-sidebar-active-shadow: inset 0 0 0 1px rgba(2, 132, 199, 0.25), 0 4px 14px rgba(2, 132, 199, 0.12);
+  --ui-header-bg: rgba(255, 255, 255, 0.68);
+  --ui-chrome-border: rgba(255, 255, 255, 0.65);
+  --ui-hover-bg: rgba(2, 132, 199, 0.08);
+  --ui-hover-strong-bg: rgba(2, 132, 199, 0.14);
+  --ui-muted-text: #475569;
+  --ui-subtle-surface: rgba(255, 255, 255, 0.45);
+  --ui-subtle-elevated: rgba(255, 255, 255, 0.88);
+  --ui-tooltip-bg: rgba(15, 23, 42, 0.92);
   --ui-tooltip-text: #f8fafc;
-  --ui-overlay-bg: rgba(15, 23, 42, 0.32);
-  --ui-unread-bg: rgba(8, 145, 178, 0.12);
-  --ui-kbd-bg: rgba(255, 255, 255, 0.55);
-  --ui-glass-blur: 18px;
+  --ui-overlay-bg: rgba(15, 23, 42, 0.35);
+  --ui-unread-bg: rgba(2, 132, 199, 0.12);
+  --ui-kbd-bg: rgba(255, 255, 255, 0.6);
+  --ui-glass-blur: 24px;
 }
 
 html.dark[data-ui-theme="glass"] {
-  /* === DARK MODE GLASS — near-invisible surfaces, vivid glow orbs, hairline ring borders === */
-  --ui-surface-bg: rgba(255, 255, 255, 0.04);
-  --ui-surface-border: rgba(255, 255, 255, 0.09);
-  --ui-surface-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 24px 48px rgba(0, 0, 0, 0.6);
-  --ui-input-bg: rgba(255, 255, 255, 0.07);
+  --font-sans:
+    "Sora", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    sans-serif;
+  --font-title:
+    "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --ui-radius-md: 14px;
+  --ui-radius-lg: 18px;
+
+  /* === DARK MODE GLASS — smoked obsidian acrylic with luminous neon cyan aura === */
+  --ui-surface-bg: rgba(15, 23, 42, 0.55);
+  --ui-surface-border: rgba(255, 255, 255, 0.12);
+  --ui-surface-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --ui-input-bg: rgba(255, 255, 255, 0.05);
   --ui-input-border: rgba(255, 255, 255, 0.12);
-  --ui-search-bg: rgba(255, 255, 255, 0.06);
-  --ui-search-border: rgba(255, 255, 255, 0.1);
-  --ui-title-color: #f1f5f9;
+  --ui-search-bg: rgba(255, 255, 255, 0.05);
+  --ui-search-border: rgba(255, 255, 255, 0.12);
+  --ui-title-color: #f8fafc;
   --ui-stat-accent: #22d3ee;
-  --ui-btn-fill: rgba(255, 255, 255, 0.07);
-  --ui-btn-fill-hover: rgba(34, 211, 238, 0.15);
-  --ui-btn-text: #e2e8f0;
-  --ui-btn-shadow: 0 0 24px rgba(34, 211, 238, 0.2);
-  --ui-sidebar-bg: rgba(0, 0, 0, 0.35);
-  --ui-sidebar-border: rgba(255, 255, 255, 0.07);
-  --ui-sidebar-text: #94a3b8;
-  --ui-sidebar-icon: #7dd3fc;
-  --ui-sidebar-active-bg: rgba(34, 211, 238, 0.12);
-  --ui-sidebar-active-text: #e2e8f0;
+  --ui-btn-radius: 12px;
+  --ui-btn-fill: linear-gradient(135deg, rgba(6, 182, 212, 0.25) 0%, rgba(59, 130, 246, 0.25) 100%);
+  --ui-btn-fill-hover: linear-gradient(135deg, rgba(6, 182, 212, 0.4) 0%, rgba(59, 130, 246, 0.4) 100%);
+  --ui-btn-text: #ffffff;
+  --ui-btn-border: rgba(34, 211, 238, 0.45);
+  --ui-btn-shadow: 0 0 24px rgba(34, 211, 238, 0.28);
+  --ui-sidebar-bg: rgba(8, 14, 26, 0.55);
+  --ui-sidebar-border: rgba(255, 255, 255, 0.1);
+  --ui-sidebar-text: #cbd5e1;
+  --ui-sidebar-icon: #38bdf8;
+  --ui-sidebar-active-bg: rgba(34, 211, 238, 0.15);
+  --ui-sidebar-active-text: #ffffff;
   --ui-sidebar-active-icon: #22d3ee;
-  --ui-sidebar-active-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
-  --ui-header-bg: rgba(0, 0, 0, 0.45);
-  --ui-chrome-border: rgba(255, 255, 255, 0.07);
+  --ui-sidebar-active-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.4), 0 0 20px rgba(34, 211, 238, 0.22);
+  --ui-header-bg: rgba(8, 14, 26, 0.6);
+  --ui-chrome-border: rgba(255, 255, 255, 0.1);
   --ui-hover-bg: rgba(34, 211, 238, 0.08);
-  --ui-hover-strong-bg: rgba(34, 211, 238, 0.14);
+  --ui-hover-strong-bg: rgba(34, 211, 238, 0.16);
   --ui-muted-text: #94a3b8;
   --ui-subtle-surface: rgba(255, 255, 255, 0.04);
   --ui-subtle-elevated: rgba(255, 255, 255, 0.08);
   --ui-tooltip-bg: rgba(226, 232, 240, 0.95);
   --ui-tooltip-text: #0f172a;
-  --ui-overlay-bg: rgba(2, 6, 23, 0.62);
-  --ui-unread-bg: rgba(34, 211, 238, 0.16);
+  --ui-overlay-bg: rgba(2, 6, 23, 0.68);
+  --ui-unread-bg: rgba(34, 211, 238, 0.18);
   --ui-kbd-bg: rgba(255, 255, 255, 0.08);
-  --ui-glass-blur: 16px;
+  --ui-glass-blur: 24px;
 }
 
 html[data-ui-theme="glass"] body {
-  /* Light glass: cool gray-blue base with soft desaturated orbs */
+  /* Light glass: oceanic azure base with vivid soft ambient orbs */
   background:
-    radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.15) 0%, transparent 45%),
-    radial-gradient(circle at 80% 80%, rgba(167, 139, 250, 0.15) 0%, transparent 45%),
-    radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.1) 0%, transparent 60%),
-    #f0f4f8;
-  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
+    radial-gradient(circle at 18% 18%, rgba(34, 211, 238, 0.2) 0%, transparent 45%),
+    radial-gradient(circle at 82% 82%, rgba(167, 139, 250, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.14) 0%, transparent 60%),
+    #eef4fa !important;
+  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100% !important;
   animation: glass-aurora-drift 30s ease-in-out infinite;
 }
 
 html.dark[data-ui-theme="glass"] body {
-  /* Dark glass: near-black with vivid glowing orbs */
+  /* Dark glass: deep cosmic obsidian with vivid neon cyan and indigo aurora */
   background:
-    radial-gradient(circle at 15% 20%, rgba(34, 211, 238, 0.22) 0%, transparent 45%),
-    radial-gradient(circle at 85% 75%, rgba(167, 139, 250, 0.2) 0%, transparent 45%),
-    radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.14) 0%, transparent 60%),
-    #05050a;
-  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
+    radial-gradient(circle at 15% 15%, rgba(6, 182, 212, 0.26) 0%, transparent 45%),
+    radial-gradient(circle at 85% 75%, rgba(99, 102, 241, 0.24) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(14, 165, 233, 0.18) 0%, transparent 60%),
+    #050811 !important;
+  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100% !important;
   animation: glass-aurora-drift 30s ease-in-out infinite;
 }
 
