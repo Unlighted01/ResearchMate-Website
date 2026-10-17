@@ -8,6 +8,7 @@
 
 import { supabase } from "../../../services/supabaseClient";
 import {
+  addItem,
   deleteItem,
   updateItem,
   getAllItems,
@@ -265,27 +266,52 @@ export function useDashboardActions({
     // This is set directly on the parent state
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+  const processImportFiles = async (files: File[]) => {
+    if (!files || files.length === 0) return;
 
     setIsImporting(true);
     let successCount = 0;
     const errors: string[] = [];
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     for (const file of files) {
       try {
-        if (file.name.toLowerCase().endsWith(".pdf")) {
+        const lowerName = file.name.toLowerCase();
+        if (lowerName.endsWith(".pdf")) {
           showToast(`Extracting text from "${file.name}"...`, "info");
           await importPdfFile(file, user?.id);
+          successCount++;
+        } else if (lowerName.endsWith(".docx")) {
+          showToast(`Importing Word document "${file.name}"...`, "info");
+          const arrayBuffer = await file.arrayBuffer();
+          const mammoth = await import("mammoth");
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          const rawText = result.value.trim();
+          await addItem({
+            sourceTitle: file.name.replace(/\.docx$/i, ""),
+            text: rawText || `Word Document: ${file.name}`,
+            deviceSource: "web",
+            tags: ["word", "imported-source"],
+          });
+          successCount++;
+        } else if (lowerName.endsWith(".txt") || lowerName.endsWith(".md")) {
+          showToast(`Importing text notes "${file.name}"...`, "info");
+          const text = await file.text();
+          await addItem({
+            sourceTitle: file.name.replace(/\.(txt|md)$/i, ""),
+            text: text.trim() || `Document: ${file.name}`,
+            deviceSource: "web",
+            tags: [lowerName.endsWith(".md") ? "markdown" : "text", "imported-source"],
+          });
           successCount++;
         } else if (file.type.startsWith("image/")) {
           showToast(`Running OCR on "${file.name}"...`, "info");
           await importImageFile(file);
           successCount++;
-        } else if (file.name.toLowerCase().endsWith(".json")) {
+        } else if (lowerName.endsWith(".json")) {
           const count = await importJsonFile(file, user?.id);
           successCount += count;
         } else {
@@ -305,9 +331,22 @@ export function useDashboardActions({
       }
       showToast(`Imported ${successCount} item(s)!`, "success");
     }
-    if (errors.length > 0) showToast(`${errors.length} file(s) failed.`, "error");
+    if (errors.length > 0) {
+      showToast(`${errors.length} file(s) failed: ${errors[0]}`, "error");
+    }
     setIsImporting(false);
-    e.target.value = "";
+  };
+
+  const handleImport = async (
+    e: React.ChangeEvent<HTMLInputElement> | React.MouseEvent<HTMLElement>,
+  ) => {
+    // If e has files from an input change event
+    const target = e.target as any;
+    if (target && target.files && target.files.length > 0) {
+      const files = Array.from(target.files as FileList);
+      await processImportFiles(files);
+      target.value = "";
+    }
   };
 
   return {
@@ -325,5 +364,6 @@ export function useDashboardActions({
     handleAddToCollection,
     handleApplyFilters,
     handleImport,
+    processImportFiles,
   };
 }

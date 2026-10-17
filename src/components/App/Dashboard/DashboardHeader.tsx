@@ -111,7 +111,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         <input
           ref={importFileRef}
           type="file"
-          accept=".json,.pdf,image/*"
+          accept=".pdf,.docx,.doc,.txt,.md,.json,image/*"
           multiple
           className="hidden"
           onChange={onImport}

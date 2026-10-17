@@ -171,7 +171,32 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     data.setIsModalOpen(true);
   };
 
-  // ---------- PART 3E: RENDER ----------
+  // ---------- PART 3E: DRAG AND DROP HANDLERS ----------
+  const [isDraggingOver, setIsDraggingOver] = React.useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length > 0) {
+      await actions.processImportFiles(files);
+    }
+  };
+
+  // ---------- PART 3F: RENDER ----------
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* ========== HEADER ========== */}
@@ -211,7 +236,16 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         )
       ) : data.filteredItems.length === 0 ? (
         /* Empty State */
-        <div className="flex flex-col items-center justify-center py-20 px-4 animate-fade-up">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`flex flex-col items-center justify-center py-20 px-4 animate-fade-up rounded-3xl transition-all ${
+            isDraggingOver
+              ? "bg-indigo-50/80 dark:bg-indigo-950/40 border-2 border-dashed border-indigo-500 scale-[1.01]"
+              : ""
+          }`}
+        >
           <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/50 dark:border-indigo-800/40 rounded-3xl flex items-center justify-center mb-6 shadow-xs">
             <Sparkles className="w-10 h-10 text-indigo-600 dark:text-indigo-400" />
           </div>
@@ -226,16 +260,20 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           <p className="text-gray-500 dark:text-gray-400 text-center max-w-md mb-8 text-sm">
             {data.searchQuery
               ? "Try adjusting your search terms or active filters."
+              : isDraggingOver
+              ? "Drop files here to immediately import into your library!"
               : "Drop PDFs to compare methodologies, transcribe whiteboard derivations to LaTeX, or import your papers."}
           </p>
           {!data.searchQuery && (
             <>
               <button
-                onClick={actions.handleImport}
-                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-full transition-all shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 active:scale-95 text-sm"
+                type="button"
+                onClick={() => data.importFileRef.current?.click()}
+                disabled={data.isImporting}
+                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-full transition-all shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 active:scale-95 text-sm cursor-pointer disabled:opacity-60"
               >
-                <Upload className="w-4 h-4" />
-                <span>Import Papers or PDFs</span>
+                <Upload className={`w-4 h-4 ${data.isImporting ? "animate-bounce" : ""}`} />
+                <span>{data.isImporting ? "Importing Sources..." : "Import Papers or PDFs"}</span>
               </button>
 
               {/* Quick-action grid — 3 core pillars */}

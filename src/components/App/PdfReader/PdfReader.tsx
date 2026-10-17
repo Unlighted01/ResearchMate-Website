@@ -30,6 +30,7 @@ import {
   BookmarkPlus,
   Check,
   Sparkles,
+  Maximize2,
 } from "lucide-react";
 import { importPdfFile } from "../../../services/importService";
 import { clearLocalPdf } from "../../../services/localPdfStore";
