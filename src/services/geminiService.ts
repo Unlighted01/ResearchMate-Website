@@ -238,21 +238,51 @@ export async function extractInsights(text: string): Promise<InsightsResult> {
 // PART 5: CHAT FUNCTIONALITY
 // ============================================
 
+export interface ChatOptions {
+  model?: string;
+  signal?: AbortSignal;
+  mode?: "universal" | "document";
+  documentTitle?: string;
+}
+
 export async function generateChatResponse(
   userMessage: string,
   context: string,
-  model?: string,
-  signal?: AbortSignal,
+  modelOrSignalOrOptions?: string | AbortSignal | ChatOptions,
+  signalOrOptions?: AbortSignal | ChatOptions,
 ): Promise<ChatResult> {
   const message = (userMessage || "").trim();
   if (!message) return { ok: false, response: "", reason: "empty" };
+
+  let model: string | undefined;
+  let signal: AbortSignal | undefined;
+  let mode: "universal" | "document" = "universal";
+  let documentTitle: string | undefined;
+
+  for (const arg of [modelOrSignalOrOptions, signalOrOptions]) {
+    if (!arg) continue;
+    if (typeof arg === "string") {
+      model = arg;
+    } else if (arg instanceof AbortSignal) {
+      signal = arg;
+    } else if (typeof arg === "object") {
+      if ("model" in arg && typeof (arg as ChatOptions).model === "string") model = (arg as ChatOptions).model;
+      if ("signal" in arg && (arg as ChatOptions).signal instanceof AbortSignal) signal = (arg as ChatOptions).signal;
+      if ("mode" in arg && ((arg as ChatOptions).mode === "universal" || (arg as ChatOptions).mode === "document")) {
+        mode = (arg as ChatOptions).mode!;
+      }
+      if ("documentTitle" in arg && typeof (arg as ChatOptions).documentTitle === "string") {
+        documentTitle = (arg as ChatOptions).documentTitle;
+      }
+    }
+  }
 
   try {
     const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/chat`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ message, context, model }),
+      body: JSON.stringify({ message, context, model, mode, documentTitle }),
       signal,
     });
 

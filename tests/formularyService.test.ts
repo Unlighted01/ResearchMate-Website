@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findRelevantFormulary, ACADEMIC_FORMULARY } from "../src/services/formularyService";
+import { findRelevantFormulary, inferDocumentDomain, ACADEMIC_FORMULARY } from "../src/services/formularyService";
 
 describe("formularyService - Academic Micro-Formulary", () => {
   it("contains authoritative categories covering G11 to College 2nd-Year", () => {
@@ -71,5 +71,28 @@ describe("formularyService - Academic Micro-Formulary", () => {
     expect(findRelevantFormulary("")).toEqual([]);
     expect(findRelevantFormulary("random gibberish xyz abc 123")).toEqual([]);
     expect(findRelevantFormulary(null as any)).toEqual([]);
+  });
+
+  it("infers academic domains accurately from title and sample text", () => {
+    expect(inferDocumentDomain("501 Math Word Problems", "Chapter 1: Arithmetic and Fractions")).toBe("math");
+    expect(inferDocumentDomain("Calculus Early Transcendentals", "Derivatives and integrals")).toBe("math");
+    expect(inferDocumentDomain("English Grammar and Sentence Structure", "Subject verb agreement")).toBe("verbal");
+    expect(inferDocumentDomain("University Physics: Mechanics", "Newton laws of motion")).toBe("science");
+    expect(inferDocumentDomain("General Overview", "Random mixed notes")).toBe("general");
+  });
+
+  it("prevents cross-subject contamination when domainFilter is applied", () => {
+    // When inside a Math document, asking for sentence/grammar rules must NOT return English rules
+    const offTopicResult = findRelevantFormulary("how can i properly construct a sentence?", "math");
+    expect(offTopicResult).toEqual([]);
+
+    // When inside a Verbal document, sentence query returns English rules
+    const onTopicResult = findRelevantFormulary("how can i properly construct a sentence with modifier?", "verbal");
+    expect(onTopicResult.length).toBeGreaterThan(0);
+    expect(onTopicResult.join(" ")).toContain("Modifier");
+
+    // When inside a Verbal document, calculus query must NOT return math rules
+    const mathInVerbal = findRelevantFormulary("derivative chain rule", "verbal");
+    expect(mathInVerbal).toEqual([]);
   });
 });

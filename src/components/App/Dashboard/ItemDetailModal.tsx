@@ -37,7 +37,7 @@ import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks } from "..
 import { extractPdfContent } from "../../../services/pdfService";
 import { isPureMathCalculation, solveMath } from "../../../services/mathSolverEngine";
 import { findRelevantKnowledge } from "../../../services/knowledgeDatasets";
-import { findRelevantFormulary } from "../../../services/formularyService";
+import { findRelevantFormulary, inferDocumentDomain } from "../../../services/formularyService";
 import { isMarkdown } from "./dashboardUtils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -256,8 +256,9 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       }
 
       // TIER 3: Knowledge Bank Lookup + Universal Formulary Lookup + AI Pedagogical Tutor
+      const docDomain = inferDocumentDomain(item.sourceTitle, displayText);
       const relevantKnowledge = findRelevantKnowledge(query);
-      const relevantFormulas = findRelevantFormulary(query);
+      const relevantFormulas = findRelevantFormulary(query, docDomain);
 
       let docContext = "";
       if (displayText && displayText.trim()) {
@@ -299,7 +300,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         docContext += `\n\nVERIFIED FORMULARY & GOVERNING LAWS:\n${relevantFormulas.join("\n")}`;
       }
 
-      const chatRes = await generateChatResponse(query, docContext, selectedModel);
+      const chatRes = await generateChatResponse(query, docContext, {
+        model: selectedModel,
+        mode: "document",
+        documentTitle: item.sourceTitle,
+      });
       if (chatRes.ok && chatRes.response) {
         setMessages((prev) => [...prev, { sender: "ai", text: chatRes.response }]);
         // Auto-cache problem solutions to save credits on repeat visits

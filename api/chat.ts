@@ -94,6 +94,43 @@ IMPORTANT GUIDELINES:
 - If the user asks for practice questions, provide 3 to 5 well-crafted practice questions with solutions immediately.
 `.trim();
 
+/**
+ * Builds a strictly-scoped system instruction for direct document/PDF chat.
+ * Enforces zero-tolerance for off-topic or unrelated subjects (e.g. grammar in a math PDF).
+ */
+export function getDocumentSystemInstruction(documentTitle?: string): string {
+  const docName = documentTitle?.trim() ? `"${documentTitle.trim()}"` : "the active document";
+  return `
+You are ResearchMate Document Assistant, a specialized academic study companion strictly scoped to ${docName}.
+Your purpose in this modal is exclusively to assist the user with understanding, summarizing, analyzing, and solving problems directly from or relevant to ${docName}.
+
+CRITICAL DOCUMENT ISOLATION & TOPIC BOUNDARY POLICY:
+1. STRICT DOCUMENT RELEVANCE REQUIREMENT:
+   - You MUST ONLY answer questions, exercises, and inquiries that are directly related to the subject matter, contents, problems, or academic domain of ${docName}.
+   - The user has a separate "AI Assistant" tab in the main sidebar for open-ended, general, multi-subject questions. In THIS Document Assistant workspace, off-topic questions are strictly prohibited.
+
+2. ZERO-TOLERANCE FOR UNRELATED SUBJECTS:
+   - If the user asks a question on an unrelated subject, domain, or field that has nothing to do with ${docName} (e.g., asking how to construct an English sentence or analyze poetry when ${docName} is a Math or STEM problem set; asking about chemistry or coding when ${docName} is about Philippine History; asking general trivia or unrelated homework):
+     * YOU MUST REFUSE TO ANSWER OR EXPLAIN THE UNRELATED TOPIC.
+     * DO NOT provide lessons, rules, examples, or tutorials for the unrelated topic.
+     * Reply concisely and helpfully with this refusal:
+       "This question is outside the scope of **${documentTitle?.trim() || "this document"}**. As your dedicated Document Assistant, I only answer questions and solve problems directly related to this document.
+       
+       💡 **Need help with other subjects?** Please switch to the **AI Assistant** tab in the main navigation for universal study assistance across any topic!"
+
+3. WHEN QUESTIONS ARE WITHIN SCOPE OF ${docName}:
+   - Follow the 4-step pedagogical derivation protocol for math, calculations, logic, or science problems:
+     * Step 1: [GIVEN & TARGET IDENTIFICATION]
+     * Step 2: [GOVERNING LAW & FORMULA] (in KaTeX)
+     * Step 3: [STEP-BY-STEP DERIVATION & WORK] (with markdown truth tables, algebraic steps, and clean fractions)
+     * Step 4: [FINAL RESULT & COMMON EXAM TRAPS] (upright physical units e.g. $\\text{m/s}^2$ and common student traps)
+   - If the user asks for a specific problem number (e.g. "answer number 6", "solve problem 14"):
+     * If the problem text is present in the context excerpts, solve it completely step-by-step.
+     * If the specific problem text is missing from the excerpts, explain what you see in the document and prompt them to paste the text or click "Re-parse PDF", while providing a representative example within the document's subject.
+   - Always format mathematical operators cleanly (standard LaTeX $\\div$, $\\times$, $\\frac{a}{b}$, upright $\\text{units}$).
+`.trim();
+}
+
 // ============================================
 // KEY ROTATION HELPER (GEMINI)
 // ============================================
@@ -122,7 +159,8 @@ async function callGeminiAPI(
   const modelToUse = options.model || GEMINI_MODEL;
   const url = `${GEMINI_ENDPOINT}/${modelToUse}:generateContent?key=${apiKey}`;
 
-  const fullPrompt = `${SYSTEM_INSTRUCTION}\n\nUSER REQUEST:\n${prompt}`;
+  const sysInstruction = options.systemInstruction || SYSTEM_INSTRUCTION;
+  const fullPrompt = `${sysInstruction}\n\nUSER REQUEST:\n${prompt}`;
 
   const requestBody = {
     contents: [{ parts: [{ text: fullPrompt }] }],
@@ -161,6 +199,7 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
   }
 
   const modelToUse = options.model || OPENROUTER_MODEL || "deepseek/deepseek-r1";
+  const sysInstruction = options.systemInstruction || SYSTEM_INSTRUCTION;
 
   const response = await fetch(OPENROUTER_ENDPOINT, {
     method: "POST",
@@ -173,7 +212,7 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
     body: JSON.stringify({
       model: modelToUse,
       messages: [
-        { role: "system", content: SYSTEM_INSTRUCTION },
+        { role: "system", content: sysInstruction },
         { role: "user", content: prompt },
       ],
       temperature: options.temperature || 0.7,
@@ -203,6 +242,8 @@ async function callGroqAPI(prompt: string, options: any = {}) {
     throw new Error("Groq API Key not configured.");
   }
 
+  const sysInstruction = options.systemInstruction || SYSTEM_INSTRUCTION;
+
   const response = await fetch(GROQ_ENDPOINT, {
     method: "POST",
     headers: {
@@ -212,7 +253,7 @@ async function callGroqAPI(prompt: string, options: any = {}) {
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages: [
-        { role: "system", content: SYSTEM_INSTRUCTION },
+        { role: "system", content: sysInstruction },
         { role: "user", content: prompt },
       ],
       temperature: options.temperature || 0.7,
@@ -262,7 +303,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userId = user?.id;
 
     // 2. Prepare Request
-    const { message, context, model } = req.body;
+    const { message, context, model, mode, documentTitle } = req.body;
     if (!message) return res.status(400).json({ error: "Message is required" });
 
     const keyToUse = customKey || getRandomGeminiKey();
@@ -270,6 +311,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res
         .status(500)
         .json({ error: "Server misconfiguration: No API keys." });
+
+    const activeInstruction = mode === "document"
+      ? getDocumentSystemInstruction(documentTitle)
+      : SYSTEM_INSTRUCTION;
 
     const prompt = `Use this context to answer the user.\n\nCONTEXT:\n${context || "No context."}\n\nMessage: ${message}`;
     let responseText = "";
@@ -284,21 +329,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (isClaude && process.env.OPENROUTER_API_KEY) {
       try {
-        responseText = await callOpenRouterAPI(prompt, { model: "anthropic/claude-3.5-sonnet" });
+        responseText = await callOpenRouterAPI(prompt, { model: "anthropic/claude-3.5-sonnet", systemInstruction: activeInstruction });
       } catch (err) {
         console.warn("Claude via OpenRouter failed, falling back to default:", err);
         errors.push(`Claude: ${(err as Error).message}`);
       }
     } else if (isDeepSeek && process.env.OPENROUTER_API_KEY) {
       try {
-        responseText = await callOpenRouterAPI(prompt, { model: "deepseek/deepseek-r1" });
+        responseText = await callOpenRouterAPI(prompt, { model: "deepseek/deepseek-r1", systemInstruction: activeInstruction });
       } catch (err) {
         console.warn("DeepSeek via OpenRouter failed, falling back to default:", err);
         errors.push(`DeepSeek: ${(err as Error).message}`);
       }
     } else if (isGeminiPro && keyToUse) {
       try {
-        responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-1.5-pro" });
+        responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-1.5-pro", systemInstruction: activeInstruction });
       } catch (err) {
         console.warn("Gemini Pro failed, falling back to Flash:", err);
         errors.push(`Gemini Pro: ${(err as Error).message}`);
@@ -308,7 +353,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Default or Fallback: Gemini 2.5 Flash
     if (!responseText && keyToUse) {
       try {
-        responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-2.5-flash" });
+        responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-2.5-flash", systemInstruction: activeInstruction });
       } catch (geminiError) {
         const msg = `Gemini Failed: ${(geminiError as Error).message}`;
         console.warn(msg);
@@ -318,7 +363,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (process.env.OPENROUTER_API_KEY) {
           console.log("🔄 Switching to Fallback: OpenRouter...");
           try {
-            responseText = await callOpenRouterAPI(prompt);
+            responseText = await callOpenRouterAPI(prompt, { systemInstruction: activeInstruction });
           } catch (openRouterError) {
             const msg = `OpenRouter Failed: ${(openRouterError as Error).message}`;
             console.warn(msg);
@@ -330,7 +375,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!responseText && process.env.GROQ_API_KEY) {
           console.log("🔄 Switching to Fallback: Groq...");
           try {
-            responseText = await callGroqAPI(prompt);
+            responseText = await callGroqAPI(prompt, { systemInstruction: activeInstruction });
           } catch (groqError) {
             const msg = `Groq Failed: ${(groqError as Error).message}`;
             console.error(msg);

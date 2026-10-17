@@ -155,16 +155,40 @@ export const ACADEMIC_FORMULARY: FormularyEntry[] = [
   },
 ];
 
+export type AcademicDomain = "math" | "science" | "verbal" | "general";
+
 /**
- * Searches and returns relevant authoritative formula rules based on user question or document terms
+ * Infers the high-level academic domain of a document based on its title and text sample.
  */
-export function findRelevantFormulary(query: string): string[] {
+export function inferDocumentDomain(title: string = "", sampleText: string = ""): AcademicDomain {
+  const combined = `${title} ${sampleText}`.toLowerCase();
+
+  const hasMath = /\b(math|algebra|calculus|geometry|trigonometry|differential|integral|derivative|arithmetic|discrete|equation|numbers?|fractions?|decimals?|percents?|matrix|linear)\b/i.test(combined);
+  const hasScience = /\b(physics|chemistry|biology|kinematics|fluid|thermodynamics|stoichiometry|gas law|molarity|velocity|acceleration)\b/i.test(combined);
+  const hasVerbal = /\b(english|grammar|literature|balarila|filipino|reading comprehension|vocabulary|sentence|paragraph|essay|rhetoric|syntax|clause)\b/i.test(combined);
+
+  if (hasMath && !hasVerbal) return "math";
+  if (hasVerbal && !hasMath) return "verbal";
+  if (hasScience && !hasVerbal) return "science";
+  return "general";
+}
+
+/**
+ * Searches and returns relevant authoritative formula rules based on user question or document terms.
+ * Supports domain filtering to prevent cross-subject contamination (e.g., injecting grammar into math documents).
+ */
+export function findRelevantFormulary(query: string, domainFilter?: AcademicDomain): string[] {
   if (!query || typeof query !== "string") return [];
   const lower = query.toLowerCase();
 
   const matchedRules: string[] = [];
 
   for (const entry of ACADEMIC_FORMULARY) {
+    // Prevent cross-domain leakage when inside a domain-specific document
+    if (domainFilter === "math" && entry.category === "english_verbal") continue;
+    if (domainFilter === "verbal" && entry.category !== "english_verbal") continue;
+    if (domainFilter === "science" && entry.category === "english_verbal") continue;
+
     const isMatched = entry.keywords.some((kw) => lower.includes(kw));
     if (isMatched) {
       matchedRules.push(...entry.rules);
