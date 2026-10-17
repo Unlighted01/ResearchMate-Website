@@ -75,15 +75,35 @@ export function chunkText(
 
   while (start < normalized.length) {
     let end = Math.min(start + effectiveChunkSize, normalized.length);
+    let snappedToProblem = false;
 
     if (end < normalized.length) {
-      // Look backwards from `end` for a whitespace boundary (newline, space, tab)
-      const searchWindowStart = Math.max(start + effectiveOverlap, end - 250);
+      // Look backwards from `end` for a natural problem, paragraph, or sentence boundary
+      const searchWindowStart = Math.max(start + effectiveOverlap, end - 300);
       const windowStr = normalized.slice(searchWindowStart, end);
-      const match = windowStr.match(/\s+[^\s]*$/);
 
-      if (match && match.index !== undefined) {
-        end = searchWindowStart + match.index;
+      // Priority 1: Check for problem or exercise item header (e.g. "\n6. ", "\nProblem 4:", "\nQuestion 5)")
+      // If a new problem starts inside the search window, cut right before it so the problem stays intact in the next chunk.
+      const problemBoundaryMatch = windowStr.match(/\n+(?=(?:(?:Problem|Question|Item|Exercise|Task|Q\.?)\s*#?\s*\d+|\d{1,3}[\.\)]\s+))/i);
+
+      // Priority 2: Check for double newline (paragraph boundary)
+      const paragraphBreakMatch = windowStr.match(/\n\s*\n+[^\n]*$/);
+
+      // Priority 3: Check for single newline
+      const lineBreakMatch = windowStr.match(/\n[^\n]*$/);
+
+      // Priority 4: Standard whitespace word boundary
+      const wordBreakMatch = windowStr.match(/\s+[^\s]*$/);
+
+      if (problemBoundaryMatch && problemBoundaryMatch.index !== undefined && problemBoundaryMatch.index > 0) {
+        end = searchWindowStart + problemBoundaryMatch.index;
+        snappedToProblem = true;
+      } else if (paragraphBreakMatch && paragraphBreakMatch.index !== undefined && paragraphBreakMatch.index > 0) {
+        end = searchWindowStart + paragraphBreakMatch.index;
+      } else if (lineBreakMatch && lineBreakMatch.index !== undefined && lineBreakMatch.index > 0) {
+        end = searchWindowStart + lineBreakMatch.index;
+      } else if (wordBreakMatch && wordBreakMatch.index !== undefined) {
+        end = searchWindowStart + wordBreakMatch.index;
       }
     }
 
@@ -101,11 +121,12 @@ export function chunkText(
       break;
     }
 
-    // Advance start: step back by effectiveOverlap to maintain context continuity
-    let nextStart = end - effectiveOverlap;
+    // Advance start: if cleanly snapped to a problem boundary, start next chunk directly at the problem.
+    // Otherwise step back by effectiveOverlap to maintain context continuity.
+    let nextStart = snappedToProblem ? end : end - effectiveOverlap;
     if (nextStart <= start) {
       nextStart = end;
-    } else {
+    } else if (!snappedToProblem) {
       // Snap nextStart forward to the beginning of the next word to avoid starting mid-word
       while (nextStart < end && !/\s/.test(normalized[nextStart - 1] || " ")) {
         nextStart++;

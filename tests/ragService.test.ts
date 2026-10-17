@@ -63,6 +63,23 @@ describe("ragService - chunkText", () => {
     expect(allChunkTexts).toContain("attention");
     expect(allChunkTexts).toContain("empirical");
   });
+
+  it("snaps chunk boundary before a new numbered problem to keep problem statements intact", () => {
+    const p1 = "1. Solve the linear equation: 3x + 12 = 45 and find x.";
+    const p2 = "2. Evaluate the definite integral of f(x) = 3x^2 + 2x - 5 from x=0 to x=4.";
+    const fullDoc = `${p1}\n\n${p2}`;
+
+    // Size 70 reaches into the beginning of p2, but searchWindow snaps before '\n\n2. '
+    const chunks = chunkText(fullDoc, 70, 15);
+    expect(chunks.length).toBeGreaterThan(1);
+
+    // Chunk 0 must end at p1 without cutting into p2's header
+    expect(chunks[0].text).toContain("1. Solve the linear equation");
+    expect(chunks[0].text).not.toContain("2. Evaluate");
+
+    // Chunk 1 must begin with p2
+    expect(chunks[1].text).toMatch(/^2\.\s+Evaluate/);
+  });
 });
 
 describe("ragService - cosineSimilarity", () => {

@@ -37,6 +37,7 @@ import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks } from "..
 import { extractPdfContent } from "../../../services/pdfService";
 import { isPureMathCalculation, solveMath } from "../../../services/mathSolverEngine";
 import { findRelevantKnowledge } from "../../../services/knowledgeDatasets";
+import { findRelevantFormulary } from "../../../services/formularyService";
 import { isMarkdown } from "./dashboardUtils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -254,8 +255,9 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         }
       }
 
-      // TIER 3: Knowledge Bank Lookup + AI Pedagogical Tutor
+      // TIER 3: Knowledge Bank Lookup + Universal Formulary Lookup + AI Pedagogical Tutor
       const relevantKnowledge = findRelevantKnowledge(query);
+      const relevantFormulas = findRelevantFormulary(query);
 
       let docContext = "";
       if (displayText && displayText.trim()) {
@@ -291,6 +293,10 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
       if (relevantKnowledge.length > 0) {
         docContext += `\n\nVERIFIED REFERENCE KNOWLEDGE:\n${relevantKnowledge.join("\n")}`;
+      }
+
+      if (relevantFormulas.length > 0) {
+        docContext += `\n\nVERIFIED FORMULARY & GOVERNING LAWS:\n${relevantFormulas.join("\n")}`;
       }
 
       const chatRes = await generateChatResponse(query, docContext, selectedModel);
