@@ -290,6 +290,93 @@ export async function generateAiResponse(prompt: string, context: string = ""): 
 }
 
 // ============================================
+// PART 5B: VECTOR EMBEDDINGS (text-embedding-004)
+// ============================================
+
+function createFallbackEmbedding(text: string, dim: number = 768): number[] {
+  const vec = new Array(dim).fill(0);
+  const words = text.toLowerCase().match(/\b\w+\b/g) || [];
+  if (words.length === 0) return vec;
+
+  for (const word of words) {
+    let hash = 0;
+    for (let i = 0; i < word.length; i++) {
+      hash = (hash << 5) - hash + word.charCodeAt(i);
+      hash |= 0;
+    }
+    const idx = Math.abs(hash) % dim;
+    vec[idx] += 1;
+  }
+
+  let norm = 0;
+  for (let i = 0; i < dim; i++) {
+    norm += vec[i] * vec[i];
+  }
+  norm = Math.sqrt(norm);
+  if (norm > 0) {
+    for (let i = 0; i < dim; i++) {
+      vec[i] /= norm;
+    }
+  }
+  return vec;
+}
+
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return new Array(768).fill(0);
+
+  // In browser environment, call the serverless/backend endpoint
+  if (typeof window !== "undefined") {
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/embed`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ text: trimmed }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data.embedding) && data.embedding.length > 0) {
+          return data.embedding;
+        }
+      }
+    } catch (err) {
+      console.warn("generateEmbedding network call failed, falling back to local vectorizer:", err);
+    }
+  }
+
+  return createFallbackEmbedding(trimmed);
+}
+
+export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
+  if (!texts || texts.length === 0) return [];
+  const sanitized = texts.map((t) => (t || "").trim());
+
+  if (typeof window !== "undefined") {
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/embed`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ texts: sanitized }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data.embeddings) && data.embeddings.length === sanitized.length) {
+          return data.embeddings;
+        }
+      }
+    } catch (err) {
+      console.warn("generateEmbeddings network call failed, falling back to local vectorizer:", err);
+    }
+  }
+
+  return sanitized.map((t) => createFallbackEmbedding(t));
+}
+
+// ============================================
 // PART 6: LITERATURE REVIEW MATRIX (Option A)
 // ============================================
 
@@ -443,4 +530,6 @@ export default {
   generateSummary,
   generateLiteratureMatrix,
   runMathOcr,
+  generateEmbedding,
+  generateEmbeddings,
 };

@@ -414,6 +414,62 @@ app.post("/api/chat", requireAuthAndCredits, async (req, res) => {
   }
 });
 
+// Vector Embeddings with text-embedding-004
+app.post("/api/embed", async (req, res) => {
+  try {
+    const { text, texts } = req.body;
+    const apiKey = getRandomKey();
+    if (!apiKey) {
+      return res.status(500).json({ error: "No Gemini API key available" });
+    }
+
+    if (texts && Array.isArray(texts)) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requests: texts.map((t) => ({
+            model: "models/text-embedding-004",
+            content: { parts: [{ text: String(t) }] },
+          })),
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error?.message || `Embedding API error: ${response.status}`);
+      }
+      const data = await response.json();
+      const embeddings = (data.embeddings || []).map((e) => e.values || []);
+      return res.json({ ok: true, embeddings });
+    }
+
+    if (text) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "models/text-embedding-004",
+          content: { parts: [{ text: String(text) }] },
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error?.message || `Embedding API error: ${response.status}`);
+      }
+      const data = await response.json();
+      const embedding = data.embedding?.values || [];
+      return res.json({ ok: true, embedding });
+    }
+
+    return res.status(400).json({ error: "Missing text or texts in request body" });
+  } catch (error) {
+    console.error("Embedding API error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --------------------------------------------
 // PUBLIC ROUTES (No Auth Required for now)
 // --------------------------------------------

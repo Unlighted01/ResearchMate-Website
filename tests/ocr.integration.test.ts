@@ -16,7 +16,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 // time. In tests both env vars are undefined → supabase-js v2 throws
 // "supabaseUrl is required" synchronously, crashing every dynamic import of
 // ocr.ts. Mock the whole module so createClient is never invoked.
-vi.mock("./_utils/auth.js", () => ({
+vi.mock("../api/_utils/auth.js", () => ({
   authenticateUser: vi.fn().mockResolvedValue({
     user: { id: "test-user-id", email: "test@example.com" },
     isFreeTier: true,
@@ -25,6 +25,8 @@ vi.mock("./_utils/auth.js", () => ({
   }),
   deductCredit: vi.fn().mockResolvedValue(49),
   checkRateLimit: vi.fn().mockReturnValue(true),
+  setCorsHeaders: vi.fn(),
+  refundCredit: vi.fn().mockResolvedValue(true),
 }));
 
 // ============================================
@@ -60,7 +62,7 @@ const FONT_SAMPLES: Record<string, string> = {
   arial: `## Introduction\n\nArial is a widely-used sans-serif typeface that appears in many academic and corporate documents. The **key finding** is that sans-serif fonts achieve 94% OCR accuracy at 300 DPI.\n\n- Point one\n- Point two\n- Point three`,
   courier: `\`\`\`\nSELECT * FROM research_items\nWHERE ocr_confidence > 80\nORDER BY created_at DESC;\n\`\`\`\n\nMonospace fonts such as **Courier New** are common in code listings and terminal output.`,
   handwritten: `Dear Professor,\n\nI am writing to request an extension. My notes from the lecture on *March 15* include the following key points:\n\n1. OCR accuracy drops ~30% with cursive handwriting\n2. Post-correction models can recover up to 22% of errors`,
-  degradedScan: `## Chapter 3: Metho d ology\n\nDue to sc an noi se, some ch aracters may be split or m erged. The system's con fidence sco re pe nali zes no isy input usin g a no ise rat io calc ulation.`,
+  degradedScan: `## Chapter 3: Metho d ology\n\nDue to sc an noi se, some ch aracters may be split or m erged. The system's con fidence sco re pe nali zes no isy input usin g a no ise rat io calc ulation. §¬¢¥`,
   multiColumn: `## Left Column\n\nContent from the left column of an academic paper double-column layout.\n\n## Right Column\n\nContent from the right column, read after the full left column is complete.`,
   // Matches the paper's own table format (CLAUDE.md pipe style, 3+ data rows)
   tableContent: [
@@ -130,7 +132,7 @@ describe("calculateOcrConfidence()", () => {
     const base = providerBase[provider] ?? 0.70;
     const lengthBonus = Math.min(0.15, wordCount / 1500);
     const noiseRatio =
-      (text.match(/[^\w\s.,;:!?'"()\-–—]/g) || []).length /
+      (text.match(/[^\w\s.,;:!?'"()\-–—*#%`~|/=\[\]<>\\$]/g) || []).length /
       Math.max(1, text.length);
     const noisePenalty = Math.min(0.15, noiseRatio * 5);
     return Math.min(0.98, Math.max(0.50, base + lengthBonus - noisePenalty));
@@ -210,7 +212,7 @@ describe("OCR handler — request validation", () => {
     process.env.OPENROUTER_API_KEY = "test-openrouter-key";
     // authenticateUser is bypassed via smart-pen service key in most tests
     process.env.SMART_PEN_SERVICE_KEY = "test-smart-pen-secret";
-    const mod = await import("./ocr.js");
+    const mod = await import("../api/ocr.ts");
     handler = mod.default;
   });
 
@@ -271,7 +273,7 @@ describe("OCR handler — font capture scenarios (Smart Pen bypass)", () => {
     process.env.SMART_PEN_SERVICE_KEY = "test-smart-pen-secret";
     process.env.OPENROUTER_API_KEY = "test-openrouter-key";
     process.env.GEMINI_API_KEY = "test-gemini-key";
-    const mod = await import("./ocr.js");
+    const mod = await import("../api/ocr.ts");
     handler = mod.default;
   });
 
@@ -403,7 +405,7 @@ describe("OCR handler — provider fallback chain", () => {
     process.env.OPENROUTER_API_KEY = "test-openrouter-key";
     process.env.GEMINI_API_KEY = "test-gemini-key";
     process.env.OCR_API_KEY = "test-claude-key"; // tertiary provider
-    const mod = await import("./ocr.js");
+    const mod = await import("../api/ocr.ts");
     handler = mod.default;
   });
 
@@ -471,7 +473,7 @@ describe("OCR handler — provider fallback chain", () => {
     vi.resetModules();
     process.env.SMART_PEN_SERVICE_KEY = "test-smart-pen-secret";
     process.env.GEMINI_API_KEY = "test-gemini-key";
-    const mod = await import("./ocr.js");
+    const mod = await import("../api/ocr.ts");
     handler = mod.default;
 
     const fetchSpy = vi.fn().mockResolvedValue(
@@ -549,7 +551,7 @@ Printed standard typefaces dramatically outperform handwriting in OCR pipelines.
 
   it("returns structured Markdown with proper headings for academic papers", async () => {
     vi.resetModules();
-    const mod = await import("./ocr.js");
+    const mod = await import("../api/ocr.ts");
     const handler = mod.default;
 
     vi.stubGlobal(
@@ -582,7 +584,7 @@ Printed standard typefaces dramatically outperform handwriting in OCR pipelines.
 
   it("confidence score is 80+ for long, clean printed-text extraction", async () => {
     vi.resetModules();
-    const mod = await import("./ocr.js");
+    const mod = await import("../api/ocr.ts");
     const handler = mod.default;
 
     // Simulate a long clean document
@@ -609,7 +611,7 @@ Printed standard typefaces dramatically outperform handwriting in OCR pipelines.
 
   it("confidence score is lower for short handwritten-style output", async () => {
     vi.resetModules();
-    const mod = await import("./ocr.js");
+    const mod = await import("../api/ocr.ts");
     const handler = mod.default;
 
     vi.stubGlobal(
@@ -655,7 +657,7 @@ describe("OCR handler — optional summary generation", () => {
   });
 
   it("skips summary when includeSummary=false (Smart Pen path)", async () => {
-    const mod = await import("./ocr.js");
+    const mod = await import("../api/ocr.ts");
     const handler = mod.default;
 
     vi.stubGlobal(

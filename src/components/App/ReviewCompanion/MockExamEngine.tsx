@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { generateAiResponse } from "../../../services/geminiService";
 import { StorageItem } from "../../../services/storageService";
+import { buildSynthesisContext } from "../../../services/ragService";
 
 interface Question {
   id: number;
@@ -67,14 +68,16 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     setIsSubmitted(false);
     setUserAnswers({});
 
-    // Collect context from user materials
-    const contextCorpus = items
-      .slice(0, 8)
-      .map((item) => `${item.sourceTitle}: ${item.aiSummary || item.text || ""}`)
-      .join("\n\n")
-      .slice(0, 10000);
-
     const targetTopic = topicInput.trim() || "Uploaded Course & Review Materials";
+    const isSpecificTopic = Boolean(topicInput.trim());
+
+    // Collect context via RAG: retrieve top relevant chunks across library for specific topic,
+    // or sample evenly distributed chunks across beginning, middle, and end for general synthesis
+    const contextCorpus = await buildSynthesisContext(
+      items,
+      isSpecificTopic ? targetTopic : undefined,
+      6
+    );
 
     const prompt = `You are an expert university professor creating a rigorous academic mock exam.
 Target Subject / Topic: "${targetTopic}"

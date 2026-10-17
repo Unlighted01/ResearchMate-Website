@@ -106,8 +106,9 @@ function calculateOcrConfidence(text: string, provider: string): number {
   const lengthBonus = Math.min(0.15, wordCount / 1500);
 
   // Noise penalty: high ratio of non-standard characters suggests garbled OCR
+  // Note: Markdown formatting and code operators (*, #, `, |, %, /, =, [, ], <, >, $) are expected, not OCR noise
   const noiseRatio =
-    (text.match(/[^\w\s.,;:!?'"()\-–—]/g) || []).length /
+    (text.match(/[^\w\s.,;:!?'"()\-–—*#%`~|/=\[\]<>\\$]/g) || []).length /
     Math.max(1, text.length);
   const noisePenalty = Math.min(0.15, noiseRatio * 5);
 

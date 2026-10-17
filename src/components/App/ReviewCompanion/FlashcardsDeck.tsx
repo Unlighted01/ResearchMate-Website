@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { generateAiResponse } from "../../../services/geminiService";
 import { StorageItem } from "../../../services/storageService";
+import { buildSynthesisContext } from "../../../services/ragService";
 
 interface Flashcard {
   id: number;
@@ -72,13 +73,16 @@ export const FlashcardsDeck: React.FC<FlashcardsDeckProps> = ({
     setIsFlipped(false);
     setCurrentIndex(0);
 
-    const contextCorpus = items
-      .slice(0, 8)
-      .map((item) => `${item.sourceTitle}: ${item.aiSummary || item.text || ""}`)
-      .join("\n\n")
-      .slice(0, 10000);
-
     const targetTopic = topicInput.trim() || "Uploaded Course Materials";
+    const isSpecificTopic = Boolean(topicInput.trim());
+
+    // Collect context via RAG: retrieve top relevant chunks across library for specific topic,
+    // or sample evenly distributed chunks across beginning, middle, and end for general synthesis
+    const contextCorpus = await buildSynthesisContext(
+      items,
+      isSpecificTopic ? targetTopic : undefined,
+      6
+    );
 
     const prompt = `You are an academic flashcard author specializing in high-efficiency active recall.
 Target Subject / Topic: "${targetTopic}"
