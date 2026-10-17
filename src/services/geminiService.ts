@@ -293,19 +293,39 @@ export async function generateAiResponse(prompt: string, context: string = ""): 
 // PART 5B: VECTOR EMBEDDINGS (text-embedding-004)
 // ============================================
 
+const COMMON_STOPWORDS = new Set([
+  "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
+  "by", "from", "up", "about", "into", "through", "after", "is", "am", "are", "was",
+  "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "can",
+  "could", "shall", "should", "will", "would", "may", "might", "must", "it", "its",
+  "this", "that", "these", "those", "i", "you", "he", "she", "we", "they", "me",
+  "him", "her", "us", "them", "my", "your", "his", "their", "what", "which", "who",
+  "whom", "whose", "where", "when", "why", "how", "all", "any", "both", "each",
+  "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own",
+  "same", "so", "than", "too", "very", "just", "now", "answer", "solve", "question",
+  "problem", "number", "exercise", "please", "help"
+]);
+
 function createFallbackEmbedding(text: string, dim: number = 768): number[] {
   const vec = new Array(dim).fill(0);
   const words = text.toLowerCase().match(/\b\w+\b/g) || [];
   if (words.length === 0) return vec;
 
   for (const word of words) {
+    let weight = 1.0;
+    if (COMMON_STOPWORDS.has(word)) {
+      weight = 0.05; // heavily discount generic filler/stop words
+    } else if (/^\d+[a-z]?$/.test(word)) {
+      weight = 3.5; // heavily boost specific question numbers and quantities
+    }
+
     let hash = 0;
     for (let i = 0; i < word.length; i++) {
       hash = (hash << 5) - hash + word.charCodeAt(i);
       hash |= 0;
     }
     const idx = Math.abs(hash) % dim;
-    vec[idx] += 1;
+    vec[idx] += weight;
   }
 
   let norm = 0;

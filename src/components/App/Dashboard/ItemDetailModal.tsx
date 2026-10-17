@@ -26,11 +26,14 @@ import {
   CornerDownLeft,
   ChevronRight,
   Upload,
+  BookOpen,
+  Eye,
+  Layers,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon } from "../../icons";
 import { StorageItem, updateItem, getCachedProblemSolution, saveCachedProblemSolution } from "../../../services/storageService";
 import { generateAiResponse, generateChatResponse, generateEmbedding } from "../../../services/geminiService";
-import { chunkText, findTopKChunks, embedChunks } from "../../../services/ragService";
+import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks } from "../../../services/ragService";
 import { extractPdfContent } from "../../../services/pdfService";
 import { isPureMathCalculation, solveMath } from "../../../services/mathSolverEngine";
 import { findRelevantKnowledge } from "../../../services/knowledgeDatasets";
@@ -106,7 +109,17 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onDelete,
   onItemUpdated,
 }) => {
-  const [activeLeftTab, setActiveLeftTab] = useState<"preview" | "raw">("preview");
+  const displayText = item ? (item.text || item.ocrText || "") : "";
+  const isPdfOrDocument = Boolean(
+    item?.tags?.includes("pdf") ||
+    item?.imageUrl ||
+    item?.sourceTitle?.toLowerCase().endsWith(".pdf") ||
+    (displayText && displayText.length > 2000)
+  );
+
+  const [activeLeftTab, setActiveLeftTab] = useState<"cover" | "preview" | "raw">(
+    isPdfOrDocument ? "cover" : "preview"
+  );
   const [chatInput, setChatInput] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [messages, setMessages] = useState<Array<{ sender: "user" | "ai"; text: string }>>([]);
@@ -117,7 +130,14 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [isReindexing, setIsReindexing] = useState(false);
   const pdfInputRef = React.useRef<HTMLInputElement>(null);
 
-  const displayText = item ? (item.text || item.ocrText || "") : "";
+  // Set default tab to "cover" for books/documents, or "preview" for short notes
+  useEffect(() => {
+    if (isPdfOrDocument) {
+      setActiveLeftTab("cover");
+    } else {
+      setActiveLeftTab("preview");
+    }
+  }, [item?.id]);
 
   const handleReindexPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -129,11 +149,13 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       await updateItem(item.id, {
         text: extracted.text,
         aiSummary: extracted.summary,
+        imageUrl: extracted.coverImageUrl,
       });
       const updatedItem: StorageItem = {
         ...item,
         text: extracted.text,
         aiSummary: extracted.summary,
+        imageUrl: extracted.coverImageUrl,
       };
       if (onItemUpdated) {
         onItemUpdated(updatedItem);
@@ -239,15 +261,17 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           try {
             const queryEmb = await generateEmbedding(query);
             const embedded = await embedChunks(chunks);
-            const topChunks = findTopKChunks(queryEmb, embedded, 4);
+            const topChunks = findTopKChunksHybrid(query, queryEmb, embedded, 4);
             topChunks.sort((a, b) => a.index - b.index);
             const formattedChunks = topChunks.map(
               (c) => `[Source Section ${c.index + 1}]\n${c.text}`
             );
             docContext = `Document Title: "${item.sourceTitle || "Untitled"}"\n\nRelevant Document Excerpts:\n${formattedChunks.join("\n\n")}`;
           } catch (ragErr) {
-            console.warn("RAG retrieval failed, falling back to initial chunks:", ragErr);
-            const fallbackChunks = chunks.slice(0, 4).map(
+            console.warn("RAG retrieval failed, falling back to hybrid chunks:", ragErr);
+            const fallbackChunks = findTopKChunksHybrid(query, [], chunks, 4);
+            fallbackChunks.sort((a, b) => a.index - b.index);
+            const formattedChunks = fallbackChunks.map(
               (c) => `[Source Section ${c.index + 1}]\n${c.text}`
             );
             docContext = `Document Title: "${item.sourceTitle || "Untitled"}"\n\nRelevant Document Excerpts:\n${fallbackChunks.join("\n\n")}`;
@@ -357,6 +381,17 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200/30 dark:border-slate-800/30 bg-white/40 dark:bg-slate-900/30 backdrop-blur-sm z-10">
                   <div className="flex bg-slate-100 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200/30 dark:border-slate-700/30">
                     <button
+                      onClick={() => setActiveLeftTab("cover")}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-semibold transition-all ${
+                        activeLeftTab === "cover"
+                          ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                          : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      Overview
+                    </button>
+                    <button
                       onClick={() => setActiveLeftTab("preview")}
                       className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-semibold transition-all ${
                         activeLeftTab === "preview"
@@ -443,45 +478,145 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 {/* Main Content Workspace Sheet */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                   
-                  {/* Editorial Layout Page Canvas */}
-                  <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl p-6 md:p-8 border border-slate-200/50 dark:border-slate-800/50 shadow-sm min-h-[400px]">
-                    {activeLeftTab === "preview" ? (
-                      <div className="text-base text-slate-700 dark:text-slate-300 leading-relaxed font-sans prose dark:prose-invert max-w-none">
-                        {isMarkdown(displayText) ? (
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm, remarkMath]}
-                            rehypePlugins={[rehypeKatex]}
-                            components={{
-                              h1: ({ children }) => <h1 className="text-xl font-bold text-slate-900 dark:text-white mt-4 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1.5" style={{ fontFamily: "var(--font-title)" }}>{children}</h1>,
-                              h2: ({ children }) => <h2 className="text-lg font-bold text-indigo-900 dark:text-indigo-400 mt-4 mb-2">{children}</h2>,
-                              h3: ({ children }) => <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 mt-3 mb-1">{children}</h3>,
-                              p: ({ children }) => <p className="mb-3.5 leading-relaxed">{children}</p>,
-                              strong: ({ children }) => <strong className="font-bold text-slate-900 dark:text-white">{children}</strong>,
-                              em: ({ children }) => <em className="italic text-slate-500 dark:text-slate-400">{children}</em>,
-                              ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-3 pl-2">{children}</ul>,
-                              ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-3 pl-2">{children}</ol>,
-                              blockquote: ({ children }) => <blockquote className="border-l-4 border-indigo-500/50 dark:border-indigo-400/50 pl-4 italic text-slate-500 dark:text-slate-400 my-3 bg-indigo-500/5 rounded-r-lg py-2 px-3">{children}</blockquote>,
-                              hr: () => <hr className="border-slate-200 dark:border-slate-800 my-4" />,
-                              table: ({ children }) => <div className="overflow-x-auto my-3"><table className="w-full text-xs border-collapse rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">{children}</table></div>,
-                              thead: ({ children }) => <thead className="bg-slate-100 dark:bg-slate-800/80">{children}</thead>,
-                              th: ({ children }) => <th className="border border-slate-200 dark:border-slate-800 px-3 py-2 font-bold text-slate-950 dark:text-white text-left">{children}</th>,
-                              td: ({ children }) => <td className="border border-slate-200 dark:border-slate-800 px-3 py-2 align-top">{children}</td>,
-                            }}
-                          >
-                            {sanitizeMathAndOperators(displayText)}
-                          </ReactMarkdown>
+                  {activeLeftTab === "cover" ? (
+                    <div className="space-y-6">
+                      {/* Editorial Cover Presentation Card */}
+                      <div className="bg-gradient-to-b from-indigo-50/50 via-white to-slate-50 dark:from-slate-900/60 dark:via-slate-900/40 dark:to-slate-950/60 rounded-3xl p-6 md:p-8 border border-slate-200/60 dark:border-slate-800/60 shadow-xs flex flex-col items-center text-center">
+                        
+                        {/* Visual Cover: Rendered Page 1 Image or Elegant Academic Cover Plate */}
+                        {item.imageUrl ? (
+                          <div className="relative group rounded-2xl overflow-hidden shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-w-[240px] max-h-[340px] mb-5 transition-transform duration-300 hover:scale-[1.02]">
+                            <img
+                              src={item.imageUrl}
+                              alt={`${item.sourceTitle || "Document"} Cover`}
+                              className="w-full h-auto max-h-[340px] object-contain rounded-xl"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center p-3">
+                              <span className="text-[11px] font-medium text-white/90 bg-black/50 px-2.5 py-1 rounded-full backdrop-blur-xs flex items-center gap-1">
+                                <Eye className="w-3 h-3" /> Page 1 Cover
+                              </span>
+                            </div>
+                          </div>
                         ) : (
-                          <span className="whitespace-pre-wrap leading-relaxed block">{displayText}</span>
+                          /* Academic Book Cover Graphic for documents without a stored thumbnail */
+                          <div className="w-[190px] h-[260px] rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-slate-900 text-white p-5 shadow-xl border border-indigo-400/20 flex flex-col justify-between mb-5 relative overflow-hidden group">
+                            <div className="absolute -top-12 -right-12 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
+                            <div className="flex items-center justify-between text-indigo-200 text-[10px] font-mono uppercase tracking-widest border-b border-indigo-400/30 pb-2">
+                              <span>ResearchMate</span>
+                              <span>Source</span>
+                            </div>
+                            <div className="my-auto text-left">
+                              <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center mb-3 text-white">
+                                <BookOpen className="w-4 h-4" />
+                              </div>
+                              <h3 className="font-bold text-sm leading-snug line-clamp-4 text-white font-serif">
+                                {item.sourceTitle || "Untitled Document"}
+                              </h3>
+                            </div>
+                            <div className="text-left text-[10px] text-indigo-200/80 font-mono border-t border-indigo-400/30 pt-2">
+                              Indexed Document
+                            </div>
+                          </div>
                         )}
+
+                        {/* Title & Document Badges */}
+                        <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-2 max-w-lg">
+                          {item.sourceTitle || "Untitled Document"}
+                        </h2>
+
+                        <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/40">
+                            <FileText className="w-3 h-3" />
+                            <span>{item.tags?.includes("pdf") ? "PDF Document" : "Study Document"}</span>
+                          </span>
+                          {displayText && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/50 dark:border-slate-700/50">
+                              <Layers className="w-3 h-3" />
+                              <span>~{Math.max(1, Math.ceil(displayText.length / 1800))} Estimated Pages</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Primary Actions */}
+                        <div className="flex flex-wrap items-center justify-center gap-3">
+                          <button
+                            onClick={() => setActiveLeftTab("preview")}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/30 active:scale-98 text-xs cursor-pointer"
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <span>Read Extracted Pages</span>
+                          </button>
+
+                          <button
+                            onClick={() => pdfInputRef.current?.click()}
+                            disabled={isReindexing}
+                            className="flex items-center gap-1.5 px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-semibold rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-xs cursor-pointer shadow-2xs"
+                            title="Re-parse PDF file to refresh text and cover"
+                          >
+                            <Upload className={`w-3.5 h-3.5 ${isReindexing ? "animate-spin" : ""}`} />
+                            <span>{isReindexing ? "Updating Cover..." : "Refresh / Re-parse"}</span>
+                          </button>
+                        </div>
                       </div>
-                    ) : (
-                      <textarea
-                        readOnly
-                        value={displayText}
-                        className="w-full h-[350px] bg-slate-50 dark:bg-slate-950 font-mono text-sm text-slate-700 dark:text-slate-350 p-4 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed resize-none"
-                      />
-                    )}
-                  </div>
+
+                      {/* AI Executive Summary Card */}
+                      {item.aiSummary && (
+                        <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl p-6 border border-slate-200/50 dark:border-slate-800/50 shadow-xs">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-6 h-6 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                              <Sparkles className="w-3.5 h-3.5" />
+                            </div>
+                            <h4 className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                              AI Document Overview & Key Concepts
+                            </h4>
+                          </div>
+                          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-sans whitespace-pre-wrap">
+                            {item.aiSummary}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Editorial Layout Page Canvas */
+                    <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl p-6 md:p-8 border border-slate-200/50 dark:border-slate-800/50 shadow-sm min-h-[400px]">
+                      {activeLeftTab === "preview" ? (
+                        <div className="text-base text-slate-700 dark:text-slate-300 leading-relaxed font-sans prose dark:prose-invert max-w-none">
+                          {isMarkdown(displayText) ? (
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm, remarkMath]}
+                              rehypePlugins={[rehypeKatex]}
+                              components={{
+                                h1: ({ children }) => <h1 className="text-xl font-bold text-slate-900 dark:text-white mt-4 mb-2 border-b border-slate-200 dark:border-slate-800 pb-1.5" style={{ fontFamily: "var(--font-title)" }}>{children}</h1>,
+                                h2: ({ children }) => <h2 className="text-lg font-bold text-indigo-900 dark:text-indigo-400 mt-4 mb-2">{children}</h2>,
+                                h3: ({ children }) => <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 mt-3 mb-1">{children}</h3>,
+                                p: ({ children }) => <p className="mb-3.5 leading-relaxed">{children}</p>,
+                                strong: ({ children }) => <strong className="font-bold text-slate-900 dark:text-white">{children}</strong>,
+                                em: ({ children }) => <em className="italic text-slate-500 dark:text-slate-400">{children}</em>,
+                                ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-3 pl-2">{children}</ul>,
+                                ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-3 pl-2">{children}</ol>,
+                                blockquote: ({ children }) => <blockquote className="border-l-4 border-indigo-500/50 dark:border-indigo-400/50 pl-4 italic text-slate-500 dark:text-slate-400 my-3 bg-indigo-500/5 rounded-r-lg py-2 px-3">{children}</blockquote>,
+                                hr: () => <hr className="border-slate-200 dark:border-slate-800 my-4" />,
+                                table: ({ children }) => <div className="overflow-x-auto my-3"><table className="w-full text-xs border-collapse rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">{children}</table></div>,
+                                thead: ({ children }) => <thead className="bg-slate-100 dark:bg-slate-800/80">{children}</thead>,
+                                th: ({ children }) => <th className="border border-slate-200 dark:border-slate-800 px-3 py-2 font-bold text-slate-950 dark:text-white text-left">{children}</th>,
+                                td: ({ children }) => <td className="border border-slate-200 dark:border-slate-800 px-3 py-2 align-top">{children}</td>,
+                              }}
+                            >
+                              {sanitizeMathAndOperators(displayText)}
+                            </ReactMarkdown>
+                          ) : (
+                            <span className="whitespace-pre-wrap leading-relaxed block">{displayText}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <textarea
+                          readOnly
+                          value={displayText}
+                          className="w-full h-[350px] bg-slate-50 dark:bg-slate-950 font-mono text-sm text-slate-700 dark:text-slate-350 p-4 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed resize-none"
+                        />
+                      )}
+                    </div>
+                  )}
 
                   {/* Dynamic Color Palette Swatch */}
                   <div className="bg-white/40 dark:bg-slate-900/30 backdrop-blur-md rounded-2xl p-4 border border-slate-200/40 dark:border-slate-800/40">
@@ -524,8 +659,8 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Premium Framed Image Preview */}
-                  {item.imageUrl && (
+                  {/* Premium Framed Image Preview (shown when not on cover tab) */}
+                  {item.imageUrl && activeLeftTab !== "cover" && (
                     <div className="bg-white/40 dark:bg-slate-900/30 backdrop-blur-md rounded-2xl p-4 border border-slate-200/40 dark:border-slate-800/40">
                       <h4 className="text-xs font-mono font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
                         Attached Media

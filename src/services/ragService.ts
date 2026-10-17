@@ -175,6 +175,112 @@ export function findTopKChunks<T extends { text: string; embedding: number[] }>(
   return scored.slice(0, Math.max(1, topK)).map((item) => item.chunk);
 }
 
+const COMMON_RETRIEVAL_STOPWORDS = new Set([
+  "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
+  "by", "from", "up", "about", "into", "through", "after", "is", "am", "are", "was",
+  "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "can",
+  "could", "shall", "should", "will", "would", "may", "might", "must", "it", "its",
+  "this", "that", "these", "those", "i", "you", "he", "she", "we", "they", "me",
+  "him", "her", "us", "them", "my", "your", "his", "their", "what", "which", "who",
+  "whom", "whose", "where", "when", "why", "how", "all", "any", "both", "each",
+  "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own",
+  "same", "so", "than", "too", "very", "just", "now", "answer", "solve", "question",
+  "problem", "number", "exercise", "please", "help"
+]);
+
+/**
+ * Extracts target question, problem, or exercise identifier from a user prompt.
+ * e.g. "answer number 6" -> "6", "solve problem 14" -> "14", "#3" -> "3", "exercise 2b" -> "2b".
+ */
+export function extractTargetQuestionNumber(query: string): string | null {
+  if (!query || typeof query !== "string") return null;
+  const normalized = query.trim().toLowerCase();
+
+  // Explicit labels like "number 6", "problem 6", "question 6", "exercise 6", "#6", "item 6", "no. 6"
+  const match = normalized.match(
+    /\b(?:problem|question|exercise|number|item|no\.?|task)\s*#?\s*([0-9]+[a-z]?)\b/i
+  ) || normalized.match(/(?:^|\s)#([0-9]+[a-z]?)\b/i);
+
+  if (match) return match[1];
+
+  // Action commands like "answer 6", "solve 6", "do 6"
+  const actionMatch = normalized.match(/\b(?:answer|solve|do|calculate|explain)\s+([0-9]+[a-z]?)\b/i);
+  if (actionMatch) return actionMatch[1];
+
+  return null;
+}
+
+/**
+ * Checks whether a chunk contains the target problem header or number.
+ * Uses strict boundary matching to avoid false positives (e.g. "6" must NOT match "62" or "16").
+ */
+export function chunkMatchesProblemNumber(chunkText: string, problemNum: string): boolean {
+  if (!chunkText || !problemNum) return false;
+  const escaped = problemNum.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+
+  const patterns = [
+    // Standard numbered lists: "6. ", "6) ", "[6] ", or "\n6. "
+    new RegExp(`(?:^|[\\r\\n\\s])\\[?${escaped}[\\)\\.\\]:]\\s+`, "i"),
+    // Explicit keywords: "Problem 6", "Question 6", "Exercise 6", "#6", "No. 6"
+    new RegExp(`\\b(?:problem|question|exercise|item|number|no\\.?|#)\\s*#?\\s*${escaped}\\b`, "i"),
+  ];
+
+  return patterns.some((regex) => regex.test(chunkText));
+}
+
+/**
+ * Hybrid retrieval combining semantic vector similarity with exact question/problem number
+ * matching and keyword boosting. Ensures specific question lookups (e.g. "answer number 6")
+ * reliably reach the AI's context.
+ */
+export function findTopKChunksHybrid<T extends DocumentChunk & { embedding?: number[] }>(
+  query: string,
+  queryEmbedding: number[],
+  chunks: T[],
+  topK = 4,
+): T[] {
+  if (!chunks || chunks.length === 0) return [];
+  const targetNum = extractTargetQuestionNumber(query);
+
+  const scored = chunks.map((chunk, idx) => {
+    let score = 0;
+
+    // 1. Semantic Cosine Similarity (if vectors available)
+    if (queryEmbedding && queryEmbedding.length > 0 && chunk.embedding && chunk.embedding.length > 0) {
+      score = cosineSimilarity(queryEmbedding, chunk.embedding);
+    }
+
+    // 2. Exact Question / Problem Number Match
+    if (targetNum && chunkMatchesProblemNumber(chunk.text, targetNum)) {
+      score += 2.5; // High priority boost to guarantee top ranking
+    }
+
+    // 3. Problem Continuation: if the previous chunk matched the problem, give this one a boost
+    if (targetNum && idx > 0 && chunkMatchesProblemNumber(chunks[idx - 1].text, targetNum)) {
+      score += 0.9;
+    }
+
+    // 4. Keyword token overlap (discounting stopwords)
+    const cleanQuery = query.toLowerCase().replace(/[^\w\s]/g, " ").trim();
+    const queryTokens = cleanQuery.split(/\s+/).filter((t) => t.length > 1 && !COMMON_RETRIEVAL_STOPWORDS.has(t));
+    if (queryTokens.length > 0) {
+      const lowerChunk = chunk.text.toLowerCase();
+      let matchCount = 0;
+      for (const token of queryTokens) {
+        if (lowerChunk.includes(token)) matchCount++;
+      }
+      score += (matchCount / queryTokens.length) * 0.5;
+    }
+
+    return { chunk, score };
+  });
+
+  // Sort descending by hybrid relevance score
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, Math.max(1, topK)).map((item) => item.chunk);
+}
+
 // ============================================
 // PART 4: CHUNK EMBEDDING & CACHING
 // ============================================
@@ -288,7 +394,7 @@ export async function buildSynthesisContext(
     try {
       const queryEmb = await generateEmbedding(trimmedTopic);
       const embedded = await embedChunks(allChunks);
-      const topChunks = findTopKChunks(queryEmb, embedded, targetChunkCount);
+      const topChunks = findTopKChunksHybrid(trimmedTopic, queryEmb, embedded, targetChunkCount);
 
       if (topChunks.length > 0) {
         return topChunks

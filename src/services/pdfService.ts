@@ -17,16 +17,18 @@ export interface ExtractedPdfResult {
   summary: string;
   pageCount: number;
   hasVisualMath: boolean;
+  coverImageUrl?: string;
 }
 
 /**
- * Robustly extract full text, formulas, and an AI study summary from a PDF file.
+ * Robustly extract full text, formulas, cover snapshot, and an AI study summary from a PDF file.
  */
 export async function extractPdfContent(file: File): Promise<ExtractedPdfResult> {
   const arrayBuffer = await file.arrayBuffer();
   let fullText = "";
   let pageCount = 0;
   let hasVisualMath = false;
+  let coverImageUrl: string | undefined;
 
   try {
     const loadingTask = pdfjsLib.getDocument({
@@ -34,6 +36,28 @@ export async function extractPdfContent(file: File): Promise<ExtractedPdfResult>
     });
     const pdf = await loadingTask.promise;
     pageCount = pdf.numPages;
+
+    // 1. Generate crisp Page 1 Cover Snapshot (rendered to client canvas)
+    if (pageCount > 0 && typeof document !== "undefined") {
+      try {
+        const firstPage = await pdf.getPage(1);
+        const unscaledViewport = firstPage.getViewport({ scale: 1.0 });
+        const targetWidth = 520;
+        const scale = Math.min(Math.max(targetWidth / unscaledViewport.width, 0.75), 1.8);
+        const viewport = firstPage.getViewport({ scale });
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          await firstPage.render({ canvasContext: ctx, viewport }).promise;
+          coverImageUrl = canvas.toDataURL("image/jpeg", 0.85);
+        }
+      } catch (coverErr) {
+        console.warn("Could not generate PDF cover thumbnail:", coverErr);
+      }
+    }
 
     const maxPages = Math.min(pageCount, 40); // extract up to first 40 pages
     for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
@@ -96,5 +120,6 @@ export async function extractPdfContent(file: File): Promise<ExtractedPdfResult>
     summary,
     pageCount,
     hasVisualMath,
+    coverImageUrl,
   };
 }

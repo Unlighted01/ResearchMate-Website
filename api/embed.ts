@@ -19,7 +19,32 @@ function getRandomGeminiKey(): string | undefined {
       return keys[Math.floor(Math.random() * keys.length)];
     }
   }
-  return process.env.GEMINI_API_KEY;
+  return process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+}
+
+// Fallback normalized vector generator (768-dim) in case of API outages or missing keys
+function generateFallbackVector(text: string, dim = 768): number[] {
+  const vec = new Array(dim).fill(0);
+  const words = text.toLowerCase().match(/\b\w+\b/g) || [];
+  if (words.length === 0) return vec;
+
+  for (const word of words) {
+    let hash = 0;
+    for (let i = 0; i < word.length; i++) {
+      hash = (hash << 5) - hash + word.charCodeAt(i);
+      hash |= 0;
+    }
+    const idx = Math.abs(hash) % dim;
+    vec[idx] += 1;
+  }
+
+  let norm = 0;
+  for (let i = 0; i < dim; i++) norm += vec[i] * vec[i];
+  norm = Math.sqrt(norm);
+  if (norm > 0) {
+    for (let i = 0; i < dim; i++) vec[i] /= norm;
+  }
+  return vec;
 }
 
 // ============================================
@@ -113,7 +138,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Determine API Key: User BYOK custom key takes priority, else server pooled key
     const keyToUse = authResult.customKey || getRandomGeminiKey();
     if (!keyToUse) {
-      return res.status(500).json({ error: "Server misconfiguration: No Gemini API keys configured." });
+      console.warn("No Gemini API key available on server, returning normalized fallback vector embeddings.");
+      if (Array.isArray(texts) && texts.length > 0) {
+        return res.status(200).json({
+          ok: true,
+          embeddings: texts.map((t) => generateFallbackVector(String(t || ""))),
+          fallback: true,
+        });
+      }
+      return res.status(200).json({
+        ok: true,
+        embedding: generateFallbackVector(String(text || "")),
+        fallback: true,
+      });
     }
 
     // Batch embedding request
@@ -134,10 +171,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           allEmbeddings.push(...batchEmbs);
         } catch (batchErr) {
           // If batch fails, attempt sequential fallback for resilience
-          console.warn("Batch embedding failed, falling back to sequential:", batchErr);
+          console.warn("Batch embedding failed, falling back to sequential/fallback:", batchErr);
           for (const item of batch) {
-            const single = await callSingleEmbeddingAPI(item, keyToUse);
-            allEmbeddings.push(single);
+            try {
+              const single = await callSingleEmbeddingAPI(item, keyToUse);
+              allEmbeddings.push(single);
+            } catch {
+              allEmbeddings.push(generateFallbackVector(item));
+            }
           }
         }
       }
@@ -154,14 +195,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Text string cannot be empty." });
     }
 
-    const embedding = await callSingleEmbeddingAPI(singleText, keyToUse);
-
+    try {
+      const embedding = await callSingleEmbeddingAPI(singleText, keyToUse);
+      return res.status(200).json({
+        ok: true,
+        embedding,
+      });
+    } catch (singleErr) {
+      console.warn("Single embedding API call failed, using fallback vector:", singleErr);
+      return res.status(200).json({
+        ok: true,
+        embedding: generateFallbackVector(singleText),
+        fallback: true,
+      });
+    }
+  } catch (error) {
+    console.error("Embedding API Error, returning fallback embeddings:", error);
+    const { text, texts } = req.body || {};
+    if (Array.isArray(texts) && texts.length > 0) {
+      return res.status(200).json({
+        ok: true,
+        embeddings: texts.map((t) => generateFallbackVector(String(t || ""))),
+        fallback: true,
+      });
+    }
     return res.status(200).json({
       ok: true,
-      embedding,
+      embedding: generateFallbackVector(String(text || "")),
+      fallback: true,
     });
-  } catch (error) {
-    console.error("Embedding API Error:", error);
-    return res.status(500).json({ error: (error as Error).message || "Embedding generation failed." });
   }
 }

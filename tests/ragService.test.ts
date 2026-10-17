@@ -3,6 +3,9 @@ import {
   chunkText,
   cosineSimilarity,
   findTopKChunks,
+  findTopKChunksHybrid,
+  extractTargetQuestionNumber,
+  chunkMatchesProblemNumber,
   sampleEvenlyDistributedChunks,
   buildSynthesisContext,
   embedChunks,
@@ -200,5 +203,78 @@ describe("ragService - buildSynthesisContext", () => {
   it("returns empty string if no items have text", async () => {
     const context = await buildSynthesisContext([], "Physics");
     expect(context).toBe("");
+  });
+});
+
+describe("ragService - extractTargetQuestionNumber", () => {
+  it("extracts question numbers from varied user query formats", () => {
+    expect(extractTargetQuestionNumber("answer number 6")).toBe("6");
+    expect(extractTargetQuestionNumber("solve problem 14")).toBe("14");
+    expect(extractTargetQuestionNumber("can you do #8 for me")).toBe("8");
+    expect(extractTargetQuestionNumber("explain question 3b")).toBe("3b");
+    expect(extractTargetQuestionNumber("exercise 2")).toBe("2");
+    expect(extractTargetQuestionNumber("calculate item 100")).toBe("100");
+    expect(extractTargetQuestionNumber("no. 5")).toBe("5");
+    expect(extractTargetQuestionNumber("solve 7")).toBe("7");
+  });
+
+  it("returns null when no question number is requested", () => {
+    expect(extractTargetQuestionNumber("summarize the introduction")).toBeNull();
+    expect(extractTargetQuestionNumber("what are the main themes of this paper?")).toBeNull();
+    expect(extractTargetQuestionNumber("")).toBeNull();
+  });
+});
+
+describe("ragService - chunkMatchesProblemNumber", () => {
+  it("matches standard numbered list format for target problem", () => {
+    expect(chunkMatchesProblemNumber("6. Evaluate the expression: 10 + 2 * (8 - 3)", "6")).toBe(true);
+    expect(chunkMatchesProblemNumber("Page 8\n\n6) If a train leaves Chicago...", "6")).toBe(true);
+    expect(chunkMatchesProblemNumber("Problem 6: Calculate the velocity.", "6")).toBe(true);
+    expect(chunkMatchesProblemNumber("Question #6 is about fractions.", "6")).toBe(true);
+  });
+
+  it("does not falsely match numbers that merely contain the digit", () => {
+    // Problem 62 must NOT trigger a match for problem 6
+    expect(chunkMatchesProblemNumber("62. What is the value of x?", "6")).toBe(false);
+    expect(chunkMatchesProblemNumber("16. Which number is greater?", "6")).toBe(false);
+    expect(chunkMatchesProblemNumber("The total is 600 items in inventory.", "6")).toBe(false);
+  });
+});
+
+describe("ragService - findTopKChunksHybrid", () => {
+  it("prioritizes chunk containing exact question number over chunks with filler words", () => {
+    const query = "answer number 6";
+
+    // Simulate the user scenario:
+    // Chunks 62 and 63 repeat "answer" and "number" multiple times.
+    // Chunk 6 has the actual problem 6 without repeating filler words.
+    const chunks = [
+      {
+        chunkId: "c-toc",
+        index: 0,
+        text: "Table of Contents. Section 1: Miscellaneous Math. Section 2: Fractions.",
+      },
+      {
+        chunkId: "c-p6",
+        index: 1,
+        text: "Section 1: Miscellaneous Math\n\n6. Evaluate the expression: 10 + 2 * (8 - 3)\n(a) 20\n(b) 15\n(c) 25\n(d) 30",
+      },
+      {
+        chunkId: "c-p62",
+        index: 5,
+        text: "62. Which number is the correct answer to problem 62? The answer number must be a whole number.",
+      },
+      {
+        chunkId: "c-p63",
+        index: 6,
+        text: "63. State your answer as a rational number. Find the number and check your answer carefully.",
+      },
+    ];
+
+    const results = findTopKChunksHybrid(query, [], chunks, 2);
+    expect(results).toHaveLength(2);
+    // Problem 6 chunk MUST be rank #1
+    expect(results[0].chunkId).toBe("c-p6");
+    expect(results[0].text).toContain("6. Evaluate the expression");
   });
 });

@@ -104,6 +104,7 @@ export async function importPdfFile(
     sourceTitle: file.name.replace(/\.pdf$/i, ""),
     text: extracted.text,
     aiSummary: extracted.summary,
+    imageUrl: extracted.coverImageUrl,
     deviceSource: "web",
     tags: ["pdf", "imported-source"],
   });
