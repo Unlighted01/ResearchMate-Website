@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findRelevantFormulary, inferDocumentDomain, ACADEMIC_FORMULARY } from "../src/services/formularyService";
+import { findRelevantFormulary, inferDocumentDomain, inferQueryDomain, checkDomainCompatibility, ACADEMIC_FORMULARY } from "../src/services/formularyService";
 
 describe("formularyService - Academic Micro-Formulary", () => {
   it("contains authoritative categories covering G11 to College 2nd-Year", () => {
@@ -94,5 +94,35 @@ describe("formularyService - Academic Micro-Formulary", () => {
     // When inside a Verbal document, calculus query must NOT return math rules
     const mathInVerbal = findRelevantFormulary("derivative chain rule", "verbal");
     expect(mathInVerbal).toEqual([]);
+  });
+
+  it("infers query domains accurately", () => {
+    expect(inferQueryDomain("how can i properly construct a sentence?")).toBe("verbal");
+    expect(inferQueryDomain("explain subject-verb agreement")).toBe("verbal");
+    expect(inferQueryDomain("calculate the derivative of sin(x)")).toBe("math");
+    expect(inferQueryDomain("solve problem 6 equation")).toBe("math");
+    expect(inferQueryDomain("hello who are you")).toBeNull();
+  });
+
+  it("strictly detects domain incompatibility and provides clear refusal with redirection", () => {
+    // Math PDF + Verbal Query -> REFUSED
+    const mathVsVerbal = checkDomainCompatibility("math", "how can i properly construct a sentence?", "501 Math Word Problems");
+    expect(mathVsVerbal.isCompatible).toBe(false);
+    expect(mathVsVerbal.refusalMessage).toContain("outside the scope of **501 Math Word Problems**");
+    expect(mathVsVerbal.refusalMessage).toContain("AI Assistant");
+
+    // Math PDF + Math Query with word 'construct' -> ALLOWED (must not false-positive)
+    const mathConstruct = checkDomainCompatibility("math", "how do i construct the equation for problem 3?", "501 Math Word Problems");
+    expect(mathConstruct.isCompatible).toBe(true);
+
+    // Math PDF + Math Query -> ALLOWED
+    const mathNormal = checkDomainCompatibility("math", "answer number 6 for me", "501 Math Word Problems");
+    expect(mathNormal.isCompatible).toBe(true);
+
+    // Verbal PDF + Math Query -> REFUSED
+    const verbalVsMath = checkDomainCompatibility("verbal", "calculate the derivative of 3x^2", "English Grammar Guide");
+    expect(verbalVsMath.isCompatible).toBe(false);
+    expect(verbalVsMath.refusalMessage).toContain("outside the scope of **English Grammar Guide**");
+    expect(verbalVsMath.refusalMessage).toContain("AI Assistant");
   });
 });

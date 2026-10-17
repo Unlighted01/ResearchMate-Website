@@ -199,3 +199,61 @@ export function findRelevantFormulary(query: string, domainFilter?: AcademicDoma
   const uniqueRules = Array.from(new Set(matchedRules));
   return uniqueRules.slice(0, 10);
 }
+
+/**
+ * Infers if a query is clearly specific to an academic domain.
+ */
+export function inferQueryDomain(query: string = ""): AcademicDomain | null {
+  const normalized = query.toLowerCase().trim();
+  if (!normalized) return null;
+
+  // Strong verbal indicators (sentence construction, grammar, literature, parts of speech)
+  const isVerbalQuery = /\b(sentence|grammar|grammatical|balarila|subject[\s-]verb|modifier|parallelism|passive voice|active voice|pronoun|noun|adjective|adverb|verb tense|preposition|metaphor|simile|hyperbole|personification|irony|ng at nang|may at mayroon|din at rin|essay|paragraph|literature|poem|poet|prose)\b/i.test(normalized);
+
+  // Strong math/science indicators
+  const isMathOrScienceQuery = /\b(math|algebra|calculus|derivative|integral|equation|differentiate|solve|formula|kinematics|physics|velocity|acceleration|projectile|geometry|triangle|fraction|decimal|percent|matrix|trig|sine|cosine|tangent|ode|differential equation|stoichiometry|molar|molarity)\b/i.test(normalized);
+
+  if (isVerbalQuery && !isMathOrScienceQuery) return "verbal";
+  if (isMathOrScienceQuery && !isVerbalQuery) return "math";
+  return null;
+}
+
+/**
+ * Checks whether a user's query is compatible with the active document's domain.
+ * Provides instant 0-credit, deterministic refusal for cross-domain queries in Document Mode.
+ */
+export function checkDomainCompatibility(
+  docDomain: AcademicDomain,
+  query: string,
+  docTitle: string = "this document"
+): { isCompatible: boolean; refusalMessage?: string } {
+  if (docDomain === "general") return { isCompatible: true };
+
+  const queryDomain = inferQueryDomain(query);
+  if (!queryDomain || queryDomain === "general") return { isCompatible: true };
+
+  const cleanTitle = docTitle.trim() || "this document";
+
+  if (docDomain === "math" && queryDomain === "verbal") {
+    return {
+      isCompatible: false,
+      refusalMessage: `This question is outside the scope of **${cleanTitle}**.\n\nAs your dedicated Document Assistant, I focus exclusively on the mathematics, word problems, and concepts within this material.\n\n💡 **Need help with English or sentence construction?**\nPlease switch to the **AI Assistant** tab in the main sidebar for universal study assistance across any academic subject!`,
+    };
+  }
+
+  if (docDomain === "verbal" && (queryDomain === "math" || queryDomain === "science")) {
+    return {
+      isCompatible: false,
+      refusalMessage: `This question is outside the scope of **${cleanTitle}**.\n\nAs your dedicated Document Assistant, I focus exclusively on the language, reading, and verbal concepts within this material.\n\n💡 **Need help with Math or Science?**\nPlease switch to the **AI Assistant** tab in the main sidebar for universal study assistance across any academic subject!`,
+    };
+  }
+
+  if (docDomain === "science" && queryDomain === "verbal") {
+    return {
+      isCompatible: false,
+      refusalMessage: `This question is outside the scope of **${cleanTitle}**.\n\nAs your dedicated Document Assistant, I focus exclusively on the scientific concepts and problem sets within this material.\n\n💡 **Need help with English or other subjects?**\nPlease switch to the **AI Assistant** tab in the main sidebar for universal study assistance across any academic subject!`,
+    };
+  }
+
+  return { isCompatible: true };
+}

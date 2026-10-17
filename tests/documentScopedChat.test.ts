@@ -21,7 +21,8 @@ describe("api/chat - Document-Scoped System Instruction", () => {
 
   it("instructs the assistant to decline unrelated subjects like English grammar in a math document", () => {
     const instruction = getDocumentSystemInstruction("501 Math Word Problems");
-    expect(instruction).toContain("YOU MUST REFUSE TO ANSWER OR EXPLAIN THE UNRELATED TOPIC");
+    expect(instruction).toContain("REFUSE TO ANSWER OR EXPLAIN THE UNRELATED TOPIC");
+    expect(instruction).toContain("DO NOT say \"Hello! I can certainly help you");
     expect(instruction).toContain("This question is outside the scope of **501 Math Word Problems**");
     expect(instruction).toContain("AI Assistant");
   });

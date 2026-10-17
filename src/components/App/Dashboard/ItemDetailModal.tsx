@@ -37,7 +37,7 @@ import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks } from "..
 import { extractPdfContent } from "../../../services/pdfService";
 import { isPureMathCalculation, solveMath } from "../../../services/mathSolverEngine";
 import { findRelevantKnowledge } from "../../../services/knowledgeDatasets";
-import { findRelevantFormulary, inferDocumentDomain } from "../../../services/formularyService";
+import { findRelevantFormulary, inferDocumentDomain, checkDomainCompatibility } from "../../../services/formularyService";
 import { isMarkdown } from "./dashboardUtils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -255,8 +255,22 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         }
       }
 
-      // TIER 3: Knowledge Bank Lookup + Universal Formulary Lookup + AI Pedagogical Tutor
+      // TIER 2.5: Document Domain Isolation Gatekeeper (0 credits, instant response)
       const docDomain = inferDocumentDomain(item.sourceTitle, displayText);
+      const domainCheck = checkDomainCompatibility(docDomain, query, item.sourceTitle);
+      if (!domainCheck.isCompatible && domainCheck.refusalMessage) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "ai",
+            text: domainCheck.refusalMessage!,
+          },
+        ]);
+        setIsAiThinking(false);
+        return;
+      }
+
+      // TIER 3: Knowledge Bank Lookup + Universal Formulary Lookup + AI Pedagogical Tutor
       const relevantKnowledge = findRelevantKnowledge(query);
       const relevantFormulas = findRelevantFormulary(query, docDomain);
 
