@@ -104,12 +104,13 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
           )}
         </div>
 
-        {/* Hover Quick Action Buttons */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Quick Action Buttons (always visible on mobile touch, hover on desktop) */}
+        <div className="flex items-center gap-0.5 sm:gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           <button
             onClick={handleCopy}
-            className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             title="Copy excerpt"
+            aria-label="Copy excerpt"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
@@ -118,8 +119,9 @@ const ItemGridCard: React.FC<ItemGridCardProps> = ({
               e.stopPropagation();
               onDelete(item.id);
             }}
-            className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+            className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
             title="Delete item"
+            aria-label="Delete item"
           >
             <TrashIcon size={13} />
           </button>

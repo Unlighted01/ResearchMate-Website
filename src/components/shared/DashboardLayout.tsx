@@ -622,12 +622,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           flex-1 flex flex-col min-h-screen min-w-0
           transition-all duration-300
           ${sidebarCollapsed ? "lg:ml-[108px]" : "lg:ml-[292px]"}
-          p-4 lg:p-6
+          p-3 sm:p-4 lg:p-6
         `}
       >
         {/* Header */}
-        <header className="sticky top-0 z-20 bg-white/85 dark:bg-[#0d1017]/85 backdrop-blur-md rounded-xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs mb-4 lg:mb-6">
-          <div className="h-14 px-4 lg:px-6 flex items-center justify-between gap-4">
+        <header className="sticky top-0 z-20 bg-white/85 dark:bg-[#0d1017]/85 backdrop-blur-md rounded-xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs mb-3 sm:mb-4 lg:mb-6">
+          <div className="h-13 sm:h-14 px-3 sm:px-4 lg:px-6 flex items-center justify-between gap-3 sm:gap-4">
             {/* Left: Mobile Menu + Search */}
             <div className="flex items-center gap-4 flex-1">
               <button

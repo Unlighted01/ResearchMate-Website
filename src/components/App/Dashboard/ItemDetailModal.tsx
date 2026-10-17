@@ -6,7 +6,7 @@
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -120,6 +120,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [activeLeftTab, setActiveLeftTab] = useState<"cover" | "preview" | "raw">(
     isPdfOrDocument ? "cover" : "preview"
   );
+  const [mobileActivePane, setMobileActivePane] = useState<"doc" | "chat">("doc");
   const [chatInput, setChatInput] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [messages, setMessages] = useState<Array<{ sender: "user" | "ai"; text: string }>>([]);
@@ -128,7 +129,8 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [selectedModel, setSelectedModel] = useState<string>("gemini-flash");
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
-  const pdfInputRef = React.useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Set default tab to "cover" for books/documents, or "preview" for short notes
   useEffect(() => {
@@ -138,6 +140,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       setActiveLeftTab("preview");
     }
   }, [item?.id]);
+
+  // Auto-scroll chat to latest message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isAiThinking, mobileActivePane]);
 
   const handleReindexPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -182,10 +189,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     }
   };
 
-  // Reset custom messages when the item changes
+  // Reset custom messages and mobile pane when the item changes
   useEffect(() => {
     setMessages([]);
     setChatInput("");
+    setMobileActivePane("doc");
   }, [item]);
 
   // Handle escape key to close workspace
@@ -339,24 +347,24 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             className="fixed top-0 right-0 h-full w-full sm:w-[85vw] max-w-7xl bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200/50 dark:border-slate-800/50 z-50 flex flex-col overflow-hidden"
           >
             {/* Header Control Panel */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50 dark:border-slate-800/50 bg-slate-50/60 dark:bg-slate-900/60 backdrop-blur-md">
-              <div className="flex items-center gap-3">
-                <span className="p-2 bg-indigo-500/10 text-indigo-500 rounded-lg">
-                  <FileText className="w-5 h-5" />
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200/50 dark:border-slate-800/50 bg-slate-50/60 dark:bg-slate-900/60 backdrop-blur-md pt-[max(0.75rem,env(safe-area-inset-top))] shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2">
+                <span className="p-1.5 sm:p-2 bg-indigo-500/10 text-indigo-500 rounded-lg shrink-0">
+                  <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
                 </span>
-                <div>
+                <div className="min-w-0">
                   <h2 
-                    className="text-lg font-bold text-slate-800 dark:text-slate-100 max-w-[500px] truncate leading-tight"
+                    className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 max-w-[220px] xs:max-w-[320px] sm:max-w-[500px] truncate leading-tight"
                     style={{ fontFamily: "var(--font-title, 'Fraunces', Georgia, serif)" }}
                   >
                     {item.sourceTitle || "Untitled Research Workspace"}
                   </h2>
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-mono">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Indexed {new Date(item.createdAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 text-[11px] sm:text-xs text-slate-400 font-mono">
+                    <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                    <span className="truncate">{new Date(item.createdAt).toLocaleDateString()}</span>
                     <span className="text-slate-300 dark:text-slate-700">•</span>
-                    <Globe className="w-3.5 h-3.5" />
-                    <span className="capitalize">{item.deviceSource || "web"} source</span>
+                    <Globe className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                    <span className="capitalize truncate">{item.deviceSource || "web"}</span>
                   </div>
                 </div>
               </div>
@@ -364,61 +372,98 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               {/* Close controls */}
               <button
                 onClick={onClose}
-                className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-all"
+                className="p-2 min-w-[38px] min-h-[38px] flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-all shrink-0 cursor-pointer"
                 aria-label="Close Workspace"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Mobile View Segmented Switcher (lg:hidden) */}
+            <div className="lg:hidden flex items-center justify-center px-3 py-2 bg-slate-100/80 dark:bg-slate-900/80 border-b border-slate-200/50 dark:border-slate-800/50 shrink-0">
+              <div className="grid grid-cols-2 w-full max-w-sm bg-slate-200/70 dark:bg-slate-800/80 p-1 rounded-xl gap-1 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setMobileActivePane("doc")}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg transition-all ${
+                    mobileActivePane === "doc"
+                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Document</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileActivePane("chat")}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg transition-all relative ${
+                    mobileActivePane === "chat"
+                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>AI Assistant</span>
+                  {messages.length > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse ml-0.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+
             {/* Split Screen Double-Pane Workspace */}
-            <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
               
               {/* LEFT PANE: Premium Editorial Writing Sheet (55% width) */}
-              <div className="w-full lg:w-[55%] lg:border-r border-slate-200/50 dark:border-slate-800/50 flex flex-col shrink-0 lg:shrink bg-slate-50/20 dark:bg-slate-950/10 overflow-visible lg:overflow-hidden border-b lg:border-b-0">
+              <div className={`w-full lg:w-[55%] lg:border-r border-slate-200/50 dark:border-slate-800/50 flex-col shrink-0 lg:shrink bg-slate-50/20 dark:bg-slate-950/10 overflow-hidden min-h-0 ${
+                mobileActivePane === "doc" ? "flex flex-1" : "hidden lg:flex"
+              }`}>
                 
                 {/* Tab Switcher & Quick Actions Strip */}
-                <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200/30 dark:border-slate-800/30 bg-white/40 dark:bg-slate-900/30 backdrop-blur-sm z-10">
-                  <div className="flex bg-slate-100 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200/30 dark:border-slate-700/30">
+                <div className="flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3 border-b border-slate-200/30 dark:border-slate-800/30 bg-white/40 dark:bg-slate-900/30 backdrop-blur-sm z-10 gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar shrink-0">
+                  <div className="flex bg-slate-100 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200/30 dark:border-slate-700/30 shrink-0">
                     <button
                       onClick={() => setActiveLeftTab("cover")}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-semibold transition-all ${
+                      className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-semibold transition-all ${
                         activeLeftTab === "cover"
                           ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
                           : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                       }`}
                     >
                       <BookOpen className="w-3.5 h-3.5" />
-                      Overview
+                      <span>Overview</span>
                     </button>
                     <button
                       onClick={() => setActiveLeftTab("preview")}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-semibold transition-all ${
+                      className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-semibold transition-all ${
                         activeLeftTab === "preview"
                           ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
                           : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                       }`}
                     >
                       <FileText className="w-3.5 h-3.5" />
-                      Formatted
+                      <span className="hidden xs:inline">Formatted</span>
+                      <span className="xs:hidden">Read</span>
                     </button>
                     <button
                       onClick={() => setActiveLeftTab("raw")}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-semibold transition-all ${
+                      className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-semibold transition-all ${
                         activeLeftTab === "raw"
                           ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
                           : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                       }`}
                     >
                       <FileCode className="w-3.5 h-3.5" />
-                      Raw Markdown
+                      <span className="hidden sm:inline">Raw Markdown</span>
+                      <span className="sm:hidden">Raw</span>
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                     <button
                       onClick={() => handleCopyFeedback("markdown", () => onCopyMarkdown(item))}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-sm"
+                      className="flex items-center gap-1 px-2 sm:px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-sm"
                     >
                       {copiedField === "markdown" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                       <span>{copiedField === "markdown" ? "Copied!" : "MD"}</span>
@@ -426,7 +471,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     
                     <button
                       onClick={() => handleCopyFeedback("text", () => onCopyText(displayText))}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-sm"
+                      className="hidden xs:flex items-center gap-1 px-2 sm:px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-sm"
                     >
                       {copiedField === "text" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                       <span>{copiedField === "text" ? "Copied!" : "TEXT"}</span>
@@ -435,11 +480,12 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     <button
                       onClick={() => pdfInputRef.current?.click()}
                       disabled={isReindexing}
-                      className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-750 transition-colors shadow-2xs"
+                      className="flex items-center gap-1 px-2 sm:px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-750 transition-colors shadow-2xs"
                       title="Re-parse PDF file into this note"
                     >
                       <Upload className={`w-3 h-3 ${isReindexing ? "animate-spin" : ""}`} />
-                      <span>{isReindexing ? "Parsing..." : "Re-parse PDF"}</span>
+                      <span className="hidden sm:inline">{isReindexing ? "Parsing..." : "Re-parse PDF"}</span>
+                      <span className="sm:hidden">{isReindexing ? "..." : "PDF"}</span>
                     </button>
                     <input
                       ref={pdfInputRef}
@@ -451,7 +497,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
                     <button
                       onClick={() => onShare(item)}
-                      className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 hover:text-indigo-500 transition-all shadow-sm"
+                      className="p-1.5 min-w-[32px] min-h-[32px] flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 hover:text-indigo-500 transition-all shadow-sm"
                       title="Share Research"
                     >
                       <Share2 className="w-3.5 h-3.5" />
@@ -459,7 +505,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
                     <button
                       onClick={onAddToCollection}
-                      className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 hover:text-emerald-500 transition-all shadow-sm"
+                      className="p-1.5 min-w-[32px] min-h-[32px] flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 hover:text-emerald-500 transition-all shadow-sm"
                       title="Add to Collection"
                     >
                       <FolderPlus className="w-3.5 h-3.5" />
@@ -467,7 +513,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
                     <button
                       onClick={() => onDelete(item.id)}
-                      className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all shadow-sm"
+                      className="p-1.5 min-w-[32px] min-h-[32px] flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all shadow-sm"
                       title="Delete Item"
                     >
                       <TrashIcon size={14} color="currentColor" />
@@ -476,20 +522,20 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 </div>
 
                 {/* Main Content Workspace Sheet */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 min-h-0">
                   
                   {activeLeftTab === "cover" ? (
                     <div className="space-y-6">
                       {/* Editorial Cover Presentation Card */}
-                      <div className="bg-gradient-to-b from-indigo-50/50 via-white to-slate-50 dark:from-slate-900/60 dark:via-slate-900/40 dark:to-slate-950/60 rounded-3xl p-6 md:p-8 border border-slate-200/60 dark:border-slate-800/60 shadow-xs flex flex-col items-center text-center">
+                      <div className="bg-gradient-to-b from-indigo-50/50 via-white to-slate-50 dark:from-slate-900/60 dark:via-slate-900/40 dark:to-slate-950/60 rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-200/60 dark:border-slate-800/60 shadow-xs flex flex-col items-center text-center">
                         
                         {/* Visual Cover: Rendered Page 1 Image or Elegant Academic Cover Plate */}
                         {item.imageUrl ? (
-                          <div className="relative group rounded-2xl overflow-hidden shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-w-[240px] max-h-[340px] mb-5 transition-transform duration-300 hover:scale-[1.02]">
+                          <div className="relative group rounded-2xl overflow-hidden shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-w-[200px] sm:max-w-[240px] max-h-[300px] sm:max-h-[340px] mb-4 sm:mb-5 transition-transform duration-300 hover:scale-[1.02]">
                             <img
                               src={item.imageUrl}
                               alt={`${item.sourceTitle || "Document"} Cover`}
-                              className="w-full h-auto max-h-[340px] object-contain rounded-xl"
+                              className="w-full h-auto max-h-[300px] sm:max-h-[340px] object-contain rounded-xl"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center p-3">
                               <span className="text-[11px] font-medium text-white/90 bg-black/50 px-2.5 py-1 rounded-full backdrop-blur-xs flex items-center gap-1">
@@ -499,17 +545,17 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                           </div>
                         ) : (
                           /* Academic Book Cover Graphic for documents without a stored thumbnail */
-                          <div className="w-[190px] h-[260px] rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-slate-900 text-white p-5 shadow-xl border border-indigo-400/20 flex flex-col justify-between mb-5 relative overflow-hidden group">
+                          <div className="w-[170px] sm:w-[190px] h-[230px] sm:h-[260px] rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-slate-900 text-white p-4 sm:p-5 shadow-xl border border-indigo-400/20 flex flex-col justify-between mb-4 sm:mb-5 relative overflow-hidden group">
                             <div className="absolute -top-12 -right-12 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
                             <div className="flex items-center justify-between text-indigo-200 text-[10px] font-mono uppercase tracking-widest border-b border-indigo-400/30 pb-2">
                               <span>ResearchMate</span>
                               <span>Source</span>
                             </div>
                             <div className="my-auto text-left">
-                              <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center mb-3 text-white">
-                                <BookOpen className="w-4 h-4" />
+                              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/15 flex items-center justify-center mb-2.5 sm:mb-3 text-white">
+                                <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                               </div>
-                              <h3 className="font-bold text-sm leading-snug line-clamp-4 text-white font-serif">
+                              <h3 className="font-bold text-xs sm:text-sm leading-snug line-clamp-4 text-white font-serif">
                                 {item.sourceTitle || "Untitled Document"}
                               </h3>
                             </div>
@@ -520,11 +566,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                         )}
 
                         {/* Title & Document Badges */}
-                        <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-2 max-w-lg">
+                        <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-2 max-w-lg leading-snug">
                           {item.sourceTitle || "Untitled Document"}
                         </h2>
 
-                        <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+                        <div className="flex flex-wrap items-center justify-center gap-2 mb-5 sm:mb-6">
                           <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/40">
                             <FileText className="w-3 h-3" />
                             <span>{item.tags?.includes("pdf") ? "PDF Document" : "Study Document"}</span>
@@ -538,23 +584,32 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                         </div>
 
                         {/* Primary Actions */}
-                        <div className="flex flex-wrap items-center justify-center gap-3">
+                        <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
                           <button
                             onClick={() => setActiveLeftTab("preview")}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/30 active:scale-98 text-xs cursor-pointer"
+                            className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/30 active:scale-98 text-xs cursor-pointer"
                           >
                             <BookOpen className="w-3.5 h-3.5" />
-                            <span>Read Extracted Pages</span>
+                            <span>Read Pages</span>
+                          </button>
+
+                          {/* Quick Switch to AI Assistant on Mobile */}
+                          <button
+                            onClick={() => setMobileActivePane("chat")}
+                            className="lg:hidden flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold rounded-xl border border-indigo-500/20 transition-all text-xs cursor-pointer shadow-2xs"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>Ask AI Tutor</span>
                           </button>
 
                           <button
                             onClick={() => pdfInputRef.current?.click()}
                             disabled={isReindexing}
-                            className="flex items-center gap-1.5 px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-semibold rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-xs cursor-pointer shadow-2xs"
+                            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-semibold rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-xs cursor-pointer shadow-2xs"
                             title="Re-parse PDF file to refresh text and cover"
                           >
                             <Upload className={`w-3.5 h-3.5 ${isReindexing ? "animate-spin" : ""}`} />
-                            <span>{isReindexing ? "Updating Cover..." : "Refresh / Re-parse"}</span>
+                            <span>{isReindexing ? "Updating..." : "Re-parse"}</span>
                           </button>
                         </div>
                       </div>
@@ -699,68 +754,70 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               </div>
 
               {/* RIGHT PANE: Context-Bound AI Chat Console (45% width) */}
-              <div className="w-full lg:w-[45%] flex flex-col bg-slate-50/50 dark:bg-slate-950/20 overflow-visible lg:overflow-hidden min-h-[400px] lg:min-h-0">
+              <div className={`w-full lg:w-[45%] flex-col bg-slate-50/50 dark:bg-slate-950/20 overflow-hidden min-h-0 ${
+                mobileActivePane === "chat" ? "flex flex-1" : "hidden lg:flex"
+              }`}>
                 
                 {/* AI Banner */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50 dark:border-slate-800/50 bg-gradient-to-r from-indigo-500/5 to-purple-500/5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
+                <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200/50 dark:border-slate-800/50 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 shrink-0 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
                       <Sparkles className="w-4 h-4 text-white" />
                     </div>
-                    <div>
-                      <h3 className="text-xs font-bold text-slate-800 dark:text-slate-100 tracking-wide uppercase">
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-slate-800 dark:text-slate-100 tracking-wide uppercase truncate">
                         Document Assistant
                       </h3>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">
+                      <p className="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500 font-mono truncate">
                         Active Context • Document Notes
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <select
                       value={selectedModel}
                       onChange={(e) => setSelectedModel(e.target.value)}
-                      className="text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                      className="text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-2 sm:px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs max-w-[130px] sm:max-w-none"
                       title="Select AI Reasoning Model"
                     >
-                      <option value="gemini-flash">⚡ Gemini 2.5 Flash (Fast Tutor · Free)</option>
-                      <option value="claude-3.5-sonnet">🎓 Claude 3.5 Sonnet (Thesis & Prose · Pro)</option>
-                      <option value="deepseek-r1">📐 DeepSeek-R1 (Math Reasoner · Pro)</option>
-                      <option value="gemini-pro">📚 Gemini 1.5 Pro (Deep Book Reader · Pro)</option>
+                      <option value="gemini-flash">⚡ Gemini Flash (Free)</option>
+                      <option value="claude-3.5-sonnet">🎓 Claude 3.5 Sonnet</option>
+                      <option value="deepseek-r1">📐 DeepSeek-R1 Math</option>
+                      <option value="gemini-pro">📚 Gemini 1.5 Pro</option>
                     </select>
 
                     <button
                       onClick={() => setShowUpgradeModal(true)}
-                      className="px-2 py-1 bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500/20 transition-all shadow-2xs flex items-center gap-1"
+                      className="px-2 py-1.5 bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500/20 transition-all shadow-2xs flex items-center gap-1 shrink-0"
                       title="View Student Pro & Free BYOK details"
                     >
                       <Zap className="w-3 h-3 text-amber-500" />
-                      <span>Pro</span>
+                      <span className="hidden xs:inline">Pro</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Interactive AI Message Flow */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 font-sans">
+                <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 font-sans min-h-0">
                   
                   {/* Static Baseline Spark Query */}
-                  <div className="flex gap-3">
+                  <div className="flex gap-2.5 sm:gap-3">
                     <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center flex-shrink-0 text-slate-500 dark:text-slate-400 text-xs font-medium">
                       You
                     </div>
-                    <div className="bg-slate-100/80 dark:bg-slate-800/60 p-3 rounded-2xl rounded-tl-none text-sm text-slate-705 dark:text-slate-300 max-w-[85%]">
+                    <div className="bg-slate-100/80 dark:bg-slate-800/60 p-3 rounded-2xl rounded-tl-none text-sm text-slate-705 dark:text-slate-300 max-w-[90%] sm:max-w-[85%]">
                       Can you analyze this research card and index its contents?
                     </div>
                   </div>
 
                   {/* AI Initial Summary Response */}
-                  <div className="flex gap-3">
+                  <div className="flex gap-2.5 sm:gap-3">
                     <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 text-white shadow-xs">
                       <Sparkles className="w-3.5 h-3.5" />
                     </div>
                     
-                    <div className="space-y-3 max-w-[85%]">
-                    <div className="bg-indigo-600/5 dark:bg-indigo-950/20 border border-indigo-500/10 p-3 rounded-2xl rounded-tl-none text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                    <div className="space-y-3 max-w-[90%] sm:max-w-[85%]">
+                      <div className="bg-indigo-600/5 dark:bg-indigo-950/20 border border-indigo-500/10 p-3 rounded-2xl rounded-tl-none text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                         {item.aiSummary ? (
                           <div className="space-y-2">
                             <span className="font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 text-xs">
@@ -799,10 +856,10 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
                   {/* Custom Message History */}
                   {messages.map((m, idx) => (
-                    <div key={idx} className={`flex gap-3 ${m.sender === "user" ? "justify-end" : "justify-start"}`}>
+                    <div key={idx} className={`flex gap-2.5 sm:gap-3 ${m.sender === "user" ? "justify-end" : "justify-start"}`}>
                       {m.sender === "user" ? (
                         <>
-                          <div className="bg-indigo-600 text-white p-3 rounded-2xl rounded-tr-none text-sm max-w-[85%]">
+                          <div className="bg-indigo-600 text-white p-3 rounded-2xl rounded-tr-none text-sm max-w-[90%] sm:max-w-[85%]">
                             {m.text}
                           </div>
                           <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 text-slate-700 dark:text-slate-200 text-xs font-medium">
@@ -814,7 +871,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0 text-white">
                             <Sparkles className="w-3.5 h-3.5" />
                           </div>
-                          <div className="bg-indigo-600/5 dark:bg-indigo-950/20 border border-indigo-500/10 p-3 rounded-2xl rounded-tl-none text-sm text-slate-700 dark:text-slate-300 leading-relaxed max-w-[85%] prose dark:prose-invert">
+                          <div className="bg-indigo-600/5 dark:bg-indigo-950/20 border border-indigo-500/10 p-3 rounded-2xl rounded-tl-none text-sm text-slate-700 dark:text-slate-300 leading-relaxed max-w-[90%] sm:max-w-[85%] prose dark:prose-invert">
                             <ReactMarkdown 
                               remarkPlugins={[remarkGfm, remarkMath]}
                               rehypePlugins={[rehypeKatex]}
@@ -829,7 +886,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
                   {/* AI Thinking Indicator */}
                   {isAiThinking && (
-                    <div className="flex gap-3 justify-start">
+                    <div className="flex gap-2.5 sm:gap-3 justify-start">
                       <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0 text-white animate-pulse">
                         <Sparkles className="w-3.5 h-3.5" />
                       </div>
@@ -843,11 +900,13 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     </div>
                   )}
 
+                  {/* Auto-scroll anchor */}
+                  <div ref={messagesEndRef} />
                 </div>
 
                 {/* Quick-Click Preset Prompts Shelf */}
-                <div className="px-6 py-2 border-t border-slate-200/30 dark:border-slate-800/30 bg-slate-50/20 dark:bg-slate-900/20">
-                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                <div className="px-4 sm:px-6 py-2 border-t border-slate-200/30 dark:border-slate-800/30 bg-slate-50/20 dark:bg-slate-900/20 shrink-0">
+                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin no-scrollbar">
                     {[
                       { prompt: "Provide the top 3 key insights and takeaways from this document.", label: "Insights" },
                       { prompt: "Summarize the methodology or key problem-solving approach in this document.", label: "Methodology" },
@@ -869,19 +928,19 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 </div>
 
                 {/* Chat Input Console Form */}
-                <div className="p-4 border-t border-slate-200/50 dark:border-slate-800/50 bg-white dark:bg-slate-900">
+                <div className="p-3 sm:p-4 border-t border-slate-200/50 dark:border-slate-800/50 bg-white dark:bg-slate-900 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                   <form onSubmit={handleSendMessage} className="relative flex items-center">
                     <input
                       type="text"
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       placeholder="Ask the research AI anything about this document..."
-                      className="w-full pl-4 pr-12 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full pl-3.5 pr-11 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                     <button
                       type="submit"
                       disabled={!chatInput.trim()}
-                      className="absolute right-2 p-1.5 bg-indigo-600 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all"
+                      className="absolute right-1.5 p-2 min-w-[36px] min-h-[36px] flex items-center justify-center bg-indigo-600 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all cursor-pointer"
                       aria-label="Send query"
                     >
                       <Send className="w-3.5 h-3.5" />

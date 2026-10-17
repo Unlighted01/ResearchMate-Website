@@ -108,7 +108,7 @@ const ItemListRow: React.FC<ItemListRowProps> = ({
             onDelete(item.id);
           }}
           aria-label="Delete item"
-          className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-md opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-50 dark:hover:bg-rose-950/30"
+          className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all hover:bg-rose-50 dark:hover:bg-rose-950/30"
         >
           <TrashIcon size={14} dangerHover />
         </button>
