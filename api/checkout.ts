@@ -5,10 +5,11 @@ import { authenticateUser, setCorsHeaders, supabase } from "./_utils/auth.js";
 // PAYMONGO UNIFIED CHECKOUT & VERIFICATION ENDPOINT
 // ============================================
 // POST: Initiates hosted PayMongo checkout session for Student Pro (₱199.00)
-// GET / POST (with session_id): Verifies payment status and upgrades user to Student Pro
+// GET / POST (with verify/session_id): Verifies payment status and upgrades user to Student Pro
 // ============================================
 
 const PAYMONGO_API_URL = "https://api.paymongo.com/v1/checkout_sessions";
+const PAYMONGO_PAYMENTS_URL = "https://api.paymongo.com/v1/payments";
 
 export default async function handler(
   req: VercelRequest,
@@ -51,48 +52,102 @@ export default async function handler(
 
   if (isVerify) {
     try {
-      const sessionId = (req.query.session_id as string) || req.body?.session_id;
+      let rawSessionId =
+        (req.query.session_id as string) ||
+        (req.query.sessionId as string) ||
+        req.body?.session_id ||
+        req.body?.sessionId;
 
-      if (!sessionId) {
-        return res.status(400).json({ error: "Missing session_id parameter." });
+      // Filter out invalid placeholder strings
+      if (rawSessionId === "{CHECKOUT_SESSION_ID}" || rawSessionId === "undefined" || rawSessionId === "null") {
+        rawSessionId = undefined;
       }
 
-      const paymongoRes = await fetch(
-        `${PAYMONGO_API_URL}/${sessionId}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            Authorization: authHeader,
-          },
+      // If no session_id provided, look up user's pending subscription_id from database
+      if (!rawSessionId) {
+        const { data: userProfile } = await supabase
+          .from("profiles")
+          .select("subscription_id, subscription_status")
+          .eq("id", userId)
+          .single();
+
+        if (userProfile?.subscription_id) {
+          rawSessionId = userProfile.subscription_id;
         }
-      );
-
-      const paymongoData = await paymongoRes.json();
-
-      if (!paymongoRes.ok) {
-        console.error("❌ PayMongo session fetch error:", paymongoData);
-        return res.status(paymongoRes.status).json({
-          error: paymongoData.errors?.[0]?.detail || "Failed to retrieve checkout session.",
-        });
       }
 
-      const sessionAttrs = paymongoData.data?.attributes;
-      const sessionMetadata = sessionAttrs?.metadata || {};
-      const sessionUserId = sessionMetadata.user_id;
+      let isPaid = false;
+      let matchedSessionId = rawSessionId || "verified_payment";
 
-      // Security check: ensure session belongs to authenticated user
-      if (sessionUserId && sessionUserId !== userId) {
-        return res.status(403).json({
-          error: "This checkout session belongs to another user account.",
-        });
+      // Method 1: Check checkout session by ID (if candidate ID exists)
+      if (rawSessionId) {
+        const candidateIds = [rawSessionId];
+        if (!rawSessionId.startsWith("cs_")) {
+          candidateIds.push(`cs_${rawSessionId}`);
+        } else {
+          candidateIds.push(rawSessionId.replace(/^cs_/, ""));
+        }
+
+        for (const idToTry of candidateIds) {
+          try {
+            const paymongoRes = await fetch(`${PAYMONGO_API_URL}/${idToTry}`, {
+              method: "GET",
+              headers: {
+                Accept: "application/json",
+                Authorization: authHeader,
+              },
+            });
+
+            if (paymongoRes.ok) {
+              const paymongoData = await paymongoRes.json();
+              const sessionAttrs = paymongoData.data?.attributes;
+              const payments = sessionAttrs?.payments || [];
+              const hasPaidPayment = payments.some(
+                (p: any) => p.attributes?.status === "paid"
+              );
+
+              if (sessionAttrs?.status === "paid" || hasPaidPayment) {
+                isPaid = true;
+                matchedSessionId = paymongoData.data?.id || idToTry;
+                break;
+              }
+            }
+          } catch {}
+        }
       }
 
-      const payments = sessionAttrs?.payments || [];
-      const hasPaidPayment = payments.some(
-        (p: any) => p.attributes?.status === "paid"
-      );
-      const isPaid = sessionAttrs?.status === "paid" || hasPaidPayment;
+      // Method 2: Fallback reconciliation via recent payments (matches user's email or metadata)
+      if (!isPaid && userEmail) {
+        try {
+          const paymentsRes = await fetch(`${PAYMONGO_PAYMENTS_URL}?limit=15`, {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+              Authorization: authHeader,
+            },
+          });
+
+          if (paymentsRes.ok) {
+            const paymentsData = await paymentsRes.json();
+            const recentPayments = paymentsData?.data || [];
+
+            const matchedPayment = recentPayments.find((p: any) => {
+              const attrs = p.attributes;
+              const matchesEmail = attrs?.billing?.email?.toLowerCase() === userEmail.toLowerCase();
+              const matchesUser = attrs?.metadata?.user_id === userId;
+              const isStatusPaid = attrs?.status === "paid";
+              return isStatusPaid && (matchesEmail || matchesUser);
+            });
+
+            if (matchedPayment) {
+              isPaid = true;
+              matchedSessionId = matchedPayment.id || matchedSessionId;
+            }
+          }
+        } catch (paymentErr) {
+          console.warn("Fallback payments API check notice:", paymentErr);
+        }
+      }
 
       if (isPaid) {
         const { error: updateError } = await supabase
@@ -100,7 +155,7 @@ export default async function handler(
           .update({
             plan: "student_pro",
             subscription_status: "active",
-            subscription_id: sessionId,
+            subscription_id: matchedSessionId,
             ai_credits: 9999, // Unrestricted credits allocation
             updated_at: new Date().toISOString(),
           })
@@ -117,6 +172,7 @@ export default async function handler(
           ok: true,
           paid: true,
           plan: "student_pro",
+          session_id: matchedSessionId,
           message: "Successfully upgraded to Student Pro!",
         });
       }
@@ -124,8 +180,7 @@ export default async function handler(
       return res.status(200).json({
         ok: true,
         paid: false,
-        status: sessionAttrs?.status || "unpaid",
-        message: "Checkout session is not yet paid.",
+        message: "No paid transaction found yet. Please make sure the payment completed.",
       });
     } catch (error: any) {
       console.error("❌ Verify Checkout Exception:", error);
@@ -162,10 +217,11 @@ export default async function handler(
     const origin =
       (req.headers.origin as string) ||
       process.env.VITE_SITE_URL ||
-      "https://researchmate.vercel.app";
+      "https://research-mate-website.vercel.app";
     const cleanOrigin = origin.replace(/\/+$/, "");
 
-    const successUrl = `${cleanOrigin}/#/app/settings?tab=account&payment=success&session_id={CHECKOUT_SESSION_ID}`;
+    // Clean URL without unsupported template placeholders
+    const successUrl = `${cleanOrigin}/#/app/settings?tab=account&payment=success`;
     const cancelUrl = `${cleanOrigin}/#/app/settings?tab=account&payment=cancelled`;
 
     // PayMongo Payload (₱199.00 = 19900 centavos)
@@ -235,6 +291,22 @@ export default async function handler(
       return res.status(502).json({
         error: "PayMongo did not return a valid checkout URL.",
       });
+    }
+
+    // Save pending session ID to user profile
+    if (sessionId) {
+      try {
+        await supabase
+          .from("profiles")
+          .update({
+            subscription_id: sessionId,
+            subscription_status: "pending_payment",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", userId);
+      } catch (dbErr) {
+        console.warn("Could not record pending session to profile:", dbErr);
+      }
     }
 
     return res.status(200).json({

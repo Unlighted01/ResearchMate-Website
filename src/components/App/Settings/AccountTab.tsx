@@ -62,14 +62,17 @@ const AccountTab: React.FC<AccountTabProps> = ({
 
   const isPro = stats?.plan === "student_pro" && stats?.subscription_status === "active";
 
-  // Check for PayMongo return parameters
+  // Check for PayMongo return parameters or pending session
   useEffect(() => {
     const payment = searchParams.get("payment");
     const sessionId = searchParams.get("session_id");
+    const hasPendingSession = typeof window !== "undefined" && Boolean(localStorage.getItem("researchmate_pending_checkout_session"));
 
-    if (payment === "success" && sessionId) {
+    if (payment === "success" || (hasPendingSession && !isPro)) {
       setVerificationStatus("verifying");
-      verifyPaymentSession(sessionId).then(async (res) => {
+      const idToVerify = sessionId && sessionId !== "{CHECKOUT_SESSION_ID}" ? sessionId : undefined;
+
+      verifyPaymentSession(idToVerify).then(async (res) => {
         if (res.ok && res.paid) {
           setVerificationStatus("success");
           if (showToast) {
@@ -80,14 +83,16 @@ const AccountTab: React.FC<AccountTabProps> = ({
           }
         } else {
           setVerificationStatus("idle");
-          if (showToast) {
+          if (payment === "success" && showToast) {
             showToast("Payment status: " + (res.message || "Pending confirmation"), "info");
           }
         }
         // Clean URL params cleanly
-        searchParams.delete("payment");
-        searchParams.delete("session_id");
-        setSearchParams(searchParams, { replace: true });
+        if (payment) {
+          searchParams.delete("payment");
+          searchParams.delete("session_id");
+          setSearchParams(searchParams, { replace: true });
+        }
       });
     } else if (payment === "cancelled") {
       setVerificationStatus("cancelled");
@@ -97,7 +102,33 @@ const AccountTab: React.FC<AccountTabProps> = ({
       searchParams.delete("payment");
       setSearchParams(searchParams, { replace: true });
     }
-  }, [searchParams, setSearchParams, showToast, onRefreshStats]);
+  }, [searchParams, setSearchParams, showToast, onRefreshStats, isPro]);
+
+  const handleManualVerify = async () => {
+    setVerificationStatus("verifying");
+    try {
+      const res = await verifyPaymentSession();
+      if (res.ok && res.paid) {
+        setVerificationStatus("success");
+        if (showToast) {
+          showToast("🎉 Payment Verified! Welcome to Student Pro.", "success");
+        }
+        if (onRefreshStats) {
+          await onRefreshStats();
+        }
+      } else {
+        setVerificationStatus("idle");
+        if (showToast) {
+          showToast(res.message || "No completed payment found yet.", "info");
+        }
+      }
+    } catch (err: any) {
+      setVerificationStatus("idle");
+      if (showToast) {
+        showToast(err?.message || "Failed to verify payment.", "error");
+      }
+    }
+  };
 
   const handleUpgrade = async () => {
     setIsUpgrading(true);
@@ -251,6 +282,25 @@ const AccountTab: React.FC<AccountTabProps> = ({
                     <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">Maya</span>
                     <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">Cards</span>
                     <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">GrabPay</span>
+                  </div>
+
+                  {/* Manual Payment Verification Link */}
+                  <div className="text-center pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
+                    <button
+                      type="button"
+                      onClick={handleManualVerify}
+                      disabled={verificationStatus === "verifying"}
+                      className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline inline-flex items-center justify-center gap-1.5 font-medium cursor-pointer transition-colors"
+                    >
+                      {verificationStatus === "verifying" ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin text-indigo-600 dark:text-indigo-400" />
+                          <span>Checking PayMongo status...</span>
+                        </>
+                      ) : (
+                        <span>Already paid? Click here to verify & activate Pro &rarr;</span>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>
