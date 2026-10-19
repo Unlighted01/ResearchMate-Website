@@ -163,10 +163,10 @@ export async function generateTags(text: string): Promise<TagsResult> {
 
   try {
     const headers = await getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/generate-tags`, {
+    const response = await fetch(`${API_BASE_URL}/insights`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ text: input }),
+      body: JSON.stringify({ mode: "tags", text: input }),
     });
 
     const data = await response.json();

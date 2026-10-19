@@ -28,7 +28,7 @@ export async function initiateStudentProCheckout(): Promise<void> {
     throw new Error("You must be signed in to upgrade to Student Pro.");
   }
 
-  const response = await fetch(`${API_BASE_URL}/create-checkout`, {
+  const response = await fetch(`${API_BASE_URL}/checkout`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -66,7 +66,7 @@ export async function verifyPaymentSession(
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/verify-checkout-session?session_id=${encodeURIComponent(sessionId)}`,
+      `${API_BASE_URL}/checkout?session_id=${encodeURIComponent(sessionId)}`,
       {
         method: "GET",
         headers: {

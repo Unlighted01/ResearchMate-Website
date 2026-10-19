@@ -148,13 +148,13 @@ async function extractURL(
   useAI: boolean
 ): Promise<ExtractedMetadata> {
   const token = await getAuthToken();
-  const response = await fetch(`${API_BASE_URL}/extract-citation`, {
+  const response = await fetch(`${API_BASE_URL}/cite`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ url, useAI }),
+    body: JSON.stringify({ action: "extract", url, useAI }),
   });
 
   const data = await response.json();
