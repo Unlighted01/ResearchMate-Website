@@ -329,10 +329,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isClaude = model === "claude-3.5-sonnet";
     const isDeepSeek = model === "deepseek-r1";
     const isGeminiPro = model === "gemini-pro";
+    const isProModel = isClaude || isDeepSeek || isGeminiPro;
+
+    // Enforce Pro restriction on flagship models for free tier accounts without BYOK
+    if (isProModel && isFreeTier && !customKey) {
+      return res.status(403).json({
+        error: "Flagship models (Claude 3.5 Sonnet, DeepSeek-R1, and Gemini 1.5 Pro) are exclusive to Student Pro members. Upgrade to unlock unlimited reasoning!",
+        code: "PRO_REQUIRED",
+      });
+    }
+
+    let actualModelUsed = "gemini-2.5-flash";
 
     if (isClaude && process.env.OPENROUTER_API_KEY) {
       try {
         responseText = await callOpenRouterAPI(prompt, { model: "anthropic/claude-3.5-sonnet", systemInstruction: activeInstruction });
+        actualModelUsed = "claude-3.5-sonnet";
       } catch (err) {
         console.warn("Claude via OpenRouter failed, falling back to default:", err);
         errors.push(`Claude: ${(err as Error).message}`);
@@ -340,6 +352,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else if (isDeepSeek && process.env.OPENROUTER_API_KEY) {
       try {
         responseText = await callOpenRouterAPI(prompt, { model: "deepseek/deepseek-r1", systemInstruction: activeInstruction });
+        actualModelUsed = "deepseek-r1";
       } catch (err) {
         console.warn("DeepSeek via OpenRouter failed, falling back to default:", err);
         errors.push(`DeepSeek: ${(err as Error).message}`);
@@ -347,6 +360,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else if (isGeminiPro && keyToUse) {
       try {
         responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-1.5-pro", systemInstruction: activeInstruction });
+        actualModelUsed = "gemini-1.5-pro";
       } catch (err) {
         console.warn("Gemini Pro failed, falling back to Flash:", err);
         errors.push(`Gemini Pro: ${(err as Error).message}`);
@@ -357,6 +371,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!responseText && keyToUse) {
       try {
         responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-2.5-flash", systemInstruction: activeInstruction });
+        actualModelUsed = "gemini-2.5-flash";
       } catch (geminiError) {
         const msg = `Gemini Failed: ${(geminiError as Error).message}`;
         console.warn(msg);
@@ -367,6 +382,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.log("🔄 Switching to Fallback: OpenRouter...");
           try {
             responseText = await callOpenRouterAPI(prompt, { systemInstruction: activeInstruction });
+            actualModelUsed = "openrouter-grok";
           } catch (openRouterError) {
             const msg = `OpenRouter Failed: ${(openRouterError as Error).message}`;
             console.warn(msg);
@@ -379,6 +395,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.log("🔄 Switching to Fallback: Groq...");
           try {
             responseText = await callGroqAPI(prompt, { systemInstruction: activeInstruction });
+            actualModelUsed = "groq-llama";
           } catch (groqError) {
             const msg = `Groq Failed: ${(groqError as Error).message}`;
             console.error(msg);
@@ -402,6 +419,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       response: responseText,
+      model_used: actualModelUsed,
       credits_remaining: creditsRemaining,
     });
   } catch (error) {

@@ -15,6 +15,7 @@ import {
   CreditCard,
   Loader2,
   ExternalLink,
+  Shield,
 } from "lucide-react";
 import { Button, Card, Input } from "../../shared/ui";
 import { TrashIcon } from "../../icons";
@@ -307,6 +308,20 @@ const AccountTab: React.FC<AccountTabProps> = ({
             </div>
           </div>
         )}
+
+        {/* 7-Day Student Satisfaction Guarantee & Refund Policy */}
+        <div className="mt-4 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 text-xs text-slate-600 dark:text-slate-400 space-y-2">
+          <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
+            <Shield className="w-4 h-4 text-emerald-500" />
+            <span>7-Day Student Satisfaction Guarantee & Refund Policy</span>
+          </div>
+          <p className="leading-relaxed">
+            Not satisfied with ResearchMate Student Pro? Request a 100% full refund within <strong>7 days</strong> of subscribing with no hassle. Refunds are credited directly back to your original payment method (GCash, Maya, or Card) via PayMongo. Cancel anytime from this tab — your Pro perks remain active until the end of your billing cycle.
+          </p>
+          <p className="text-[11px] font-mono text-slate-500">
+            For refund inquiries or billing assistance, reach out directly to support at <strong>support@researchmate.app</strong> or <strong>netnetku21@gmail.com</strong>.
+          </p>
+        </div>
       </Card>
 
       {/* Profile Card */}

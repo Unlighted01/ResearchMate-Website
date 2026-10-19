@@ -52,6 +52,7 @@ export interface InsightsResult {
 export interface ChatResult {
   ok: boolean;
   response: string;
+  model_used?: string;
   reason?: string;
   error?: string;
   credits_remaining?: number | string;
@@ -303,6 +304,7 @@ export async function generateChatResponse(
     return {
       ok: true,
       response: data.response || "",
+      model_used: data.model_used || model || "gemini-flash",
       credits_remaining: data.credits_remaining,
     };
   } catch (error) {

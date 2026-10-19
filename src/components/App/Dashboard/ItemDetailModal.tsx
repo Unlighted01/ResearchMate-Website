@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon } from "../../icons";
 import { StorageItem, updateItem, getCachedProblemSolution, saveCachedProblemSolution } from "../../../services/storageService";
-import { initiateStudentProCheckout } from "../../../services/paymongoService";
+import { initiateStudentProCheckout, getUserSubscriptionStatus } from "../../../services/paymongoService";
 import { generateAiResponse, generateChatResponse, generateEmbedding } from "../../../services/geminiService";
 import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks } from "../../../services/ragService";
 import { extractPdfContent } from "../../../services/pdfService";
@@ -127,15 +127,32 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [mobileActivePane, setMobileActivePane] = useState<"doc" | "chat">("doc");
   const [chatInput, setChatInput] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Array<{ sender: "user" | "ai"; text: string }>>([]);
+  const [messages, setMessages] = useState<Array<{ sender: "user" | "ai"; text: string; model?: string }>>([]);
 
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>("gemini-flash");
+  const [isPro, setIsPro] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load user subscription status to configure model access
+  useEffect(() => {
+    getUserSubscriptionStatus().then((status) => {
+      setIsPro(status.isPro);
+    }).catch(() => {});
+  }, []);
+
+  const formatModelBadge = (modelId?: string) => {
+    if (!modelId) return "Gemini 2.5 Flash";
+    if (modelId.includes("claude")) return "Claude 3.5 Sonnet (Pro)";
+    if (modelId.includes("deepseek")) return "DeepSeek-R1 Math (Pro)";
+    if (modelId.includes("1.5-pro") || modelId.includes("gemini-pro")) return "Gemini 1.5 Pro (Pro)";
+    if (modelId.includes("grok")) return "Grok (OpenRouter)";
+    return "Gemini 2.5 Flash";
+  };
 
   // Set default tab to "cover" for books/documents, or "preview" for short notes
   useEffect(() => {
@@ -324,7 +341,10 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         documentTitle: item.sourceTitle,
       });
       if (chatRes.ok && chatRes.response) {
-        setMessages((prev) => [...prev, { sender: "ai", text: chatRes.response }]);
+        setMessages((prev) => [
+          ...prev,
+          { sender: "ai", text: chatRes.response, model: chatRes.model_used },
+        ]);
         // Auto-cache problem solutions to save credits on repeat visits
         if (/problem|question|number|solve|formula/i.test(query)) {
           await saveCachedProblemSolution(item.sourceTitle, query, chatRes.response);
@@ -805,24 +825,41 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <select
                       value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val !== "gemini-flash" && !isPro) {
+                          setShowUpgradeModal(true);
+                          return;
+                        }
+                        setSelectedModel(val);
+                      }}
                       className="text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-2 sm:px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs max-w-[130px] sm:max-w-none"
                       title="Select AI Reasoning Model"
                     >
-                      <option value="gemini-flash">⚡ Gemini Flash (Free)</option>
-                      <option value="claude-3.5-sonnet">🎓 Claude 3.5 Sonnet</option>
-                      <option value="deepseek-r1">📐 DeepSeek-R1 Math</option>
-                      <option value="gemini-pro">📚 Gemini 1.5 Pro</option>
+                      <option value="gemini-flash">⚡ Gemini 2.5 Flash {isPro ? "" : "(Free)"}</option>
+                      <option value="claude-3.5-sonnet">{isPro ? "🎓 Claude 3.5 Sonnet" : "🔒 Claude 3.5 (Pro)"}</option>
+                      <option value="deepseek-r1">{isPro ? "📐 DeepSeek-R1 Math" : "🔒 DeepSeek-R1 (Pro)"}</option>
+                      <option value="gemini-pro">{isPro ? "📚 Gemini 1.5 Pro" : "🔒 Gemini 1.5 Pro (Pro)"}</option>
                     </select>
 
-                    <button
-                      onClick={() => setShowUpgradeModal(true)}
-                      className="px-2 py-1.5 bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500/20 transition-all shadow-2xs flex items-center gap-1 shrink-0"
-                      title="View Student Pro & Free BYOK details"
-                    >
-                      <Zap className="w-3 h-3 text-amber-500" />
-                      <span className="hidden xs:inline">Pro</span>
-                    </button>
+                    {isPro ? (
+                      <div
+                        className="px-2 py-1.5 bg-gradient-to-r from-amber-500/15 via-indigo-500/15 to-purple-500/15 border border-amber-500/30 text-[11px] font-extrabold text-amber-600 dark:text-amber-400 rounded-lg flex items-center gap-1 shadow-2xs shrink-0 cursor-default"
+                        title="Student Pro Active • All Flagship Reasoning Unlocked"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        <span>PRO</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowUpgradeModal(true)}
+                        className="px-2 py-1.5 bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500/20 transition-all shadow-2xs flex items-center gap-1 shrink-0 cursor-pointer"
+                        title="Upgrade to Student Pro for Claude 3.5, DeepSeek-R1 & Gemini 1.5 Pro"
+                      >
+                        <Zap className="w-3 h-3 text-amber-500" />
+                        <span className="hidden xs:inline">Upgrade</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -907,6 +944,12 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                             >
                               {sanitizeMathAndOperators(m.text)}
                             </ReactMarkdown>
+                            {m.model && (
+                              <div className="mt-2 pt-1 border-t border-indigo-500/10 dark:border-indigo-400/10 flex items-center gap-1.5 text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                                <Sparkles className="w-2.5 h-2.5 text-indigo-500" />
+                                <span>Answered by {formatModelBadge(m.model)}</span>
+                              </div>
+                            )}
                           </div>
                         </>
                       )}
