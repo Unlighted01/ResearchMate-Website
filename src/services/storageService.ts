@@ -16,6 +16,7 @@ export interface StorageItem {
   note: string;
   sourceUrl: string;
   sourceTitle: string;
+  title?: string;
   createdAt: string;
   updatedAt?: string;
   aiSummary?: string;

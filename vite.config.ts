@@ -29,6 +29,22 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       sourcemap: mode === 'development',
       minify: mode === 'production' ? 'esbuild' : false,
+      chunkSizeWarningLimit: 1600,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('pdfjs-dist')) return 'vendor-pdf';
+              if (id.includes('katex') || id.includes('mathjs') || id.includes('rehype-katex') || id.includes('remark-math')) return 'vendor-math';
+              if (id.includes('three') || id.includes('react-force-graph') || id.includes('d3')) return 'vendor-viz';
+              if (id.includes('mammoth') || id.includes('docx') || id.includes('jspdf') || id.includes('html2canvas')) return 'vendor-docs';
+              if (id.includes('recharts')) return 'vendor-charts';
+              if (id.includes('lucide-react')) return 'vendor-icons';
+              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'vendor-react';
+            }
+          },
+        },
+      },
     },
 
     // ============================================

@@ -553,7 +553,7 @@ ${matrixData
             Select 2 or more research papers from the selector above and click "Generate Matrix". The AI will read the methodologies, benchmarks, and findings across all papers to populate your synthesis table.
           </p>
           <button
-            onClick={handleSynthesize}
+            onClick={() => handleSynthesize()}
             disabled={selectedIds.size < 2}
             className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition-all shadow-xs disabled:opacity-40"
           >

@@ -25,8 +25,8 @@ export function solveExpressionBackend(expr: string): { success: boolean; result
     let fraction: string | undefined = undefined;
     try {
       const f = math.fraction(normalized);
-      if (f && typeof f === "object" && "n" in f && "d" in f && f.d !== 1) {
-        fraction = `${f.s * f.n}/${f.d}`;
+      if (f && typeof f === "object" && "n" in f && "d" in f && Number((f as any).d) !== 1) {
+        fraction = `${(f as any).s * (f as any).n}/${(f as any).d}`;
       }
     } catch {}
 

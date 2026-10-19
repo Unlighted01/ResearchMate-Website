@@ -51,7 +51,7 @@ export async function extractPdfContent(file: File): Promise<ExtractedPdfResult>
         canvas.height = Math.floor(viewport.height);
         const ctx = canvas.getContext("2d");
         if (ctx) {
-          await firstPage.render({ canvasContext: ctx, viewport }).promise;
+          await firstPage.render({ canvasContext: ctx, viewport } as any).promise;
           coverImageUrl = canvas.toDataURL("image/jpeg", 0.85);
         }
       } catch (coverErr) {
@@ -92,7 +92,7 @@ export async function extractPdfContent(file: File): Promise<ExtractedPdfResult>
       canvas.height = viewport.height;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await page.render({ canvasContext: ctx, viewport } as any).promise;
         const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
         const ocr = await runMathOcr(dataUrl);
         if (ocr.latex || ocr.explanation) {

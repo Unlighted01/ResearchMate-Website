@@ -162,8 +162,8 @@ export function solveMath(rawQuery: string): MathSolveResult {
     try {
       const fractionVal = math.fraction(normalized);
       if (fractionVal && typeof fractionVal === "object" && "n" in fractionVal && "d" in fractionVal) {
-        if (fractionVal.d !== 1) {
-          fractionStr = `${fractionVal.s * fractionVal.n}/${fractionVal.d}`;
+        if (Number((fractionVal as any).d) !== 1) {
+          fractionStr = `${(fractionVal as any).s * (fractionVal as any).n}/${(fractionVal as any).d}`;
         }
       }
     } catch {}

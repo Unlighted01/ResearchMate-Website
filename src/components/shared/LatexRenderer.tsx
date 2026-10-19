@@ -2,7 +2,8 @@ import React, { useMemo } from "react";
 import katex from "katex";
 
 interface LatexRendererProps {
-  content: string;
+  content?: string;
+  latex?: string;
   className?: string;
   inlineOnly?: boolean;
 }
@@ -13,19 +14,20 @@ interface LatexRendererProps {
  */
 export const LatexRenderer: React.FC<LatexRendererProps> = ({
   content,
+  latex,
   className = "",
   inlineOnly = false,
 }) => {
+  const effectiveContent = content || latex || "";
   const renderedElements = useMemo(() => {
-    if (!content) return null;
+    if (!effectiveContent) return null;
 
     // Fast check: does it even contain math delimiters?
-    if (!content.includes("$") && !content.includes("\\begin{")) {
-      return <span className="whitespace-pre-wrap">{content}</span>;
+    if (!effectiveContent.includes("$") && !effectiveContent.includes("\\begin{")) {
+      return <span className="whitespace-pre-wrap">{effectiveContent}</span>;
     }
 
     const segments: React.ReactNode[] = [];
-    let remaining = content;
     let keyIdx = 0;
 
     // Regex to match $$...$$ (block math) or $...$ (inline math)
@@ -37,13 +39,13 @@ export const LatexRenderer: React.FC<LatexRendererProps> = ({
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
-    while ((match = regex.exec(content)) !== null) {
+    while ((match = regex.exec(effectiveContent)) !== null) {
       const matchStart = match.index;
       const matchEnd = regex.lastIndex;
 
       // Plain text before match
       if (matchStart > lastIndex) {
-        const textBefore = content.substring(lastIndex, matchStart);
+        const textBefore = effectiveContent.substring(lastIndex, matchStart);
         segments.push(
           <span key={`text-${keyIdx++}`} className="whitespace-pre-wrap">
             {textBefore}
@@ -93,16 +95,16 @@ export const LatexRenderer: React.FC<LatexRendererProps> = ({
       lastIndex = matchEnd;
     }
 
-    if (lastIndex < content.length) {
+    if (lastIndex < effectiveContent.length) {
       segments.push(
         <span key={`text-${keyIdx++}`} className="whitespace-pre-wrap">
-          {content.substring(lastIndex)}
+          {effectiveContent.substring(lastIndex)}
         </span>
       );
     }
 
     return segments;
-  }, [content, inlineOnly]);
+  }, [effectiveContent, inlineOnly]);
 
   return <div className={`latex-content leading-relaxed ${className}`}>{renderedElements}</div>;
 };

@@ -438,6 +438,10 @@ export interface MatrixRow {
   dataset: string;
   keyFindings: string;
   limitations: string;
+  paperTitle?: string;
+  authorsAndYear?: string;
+  datasetsOrBenchmarks?: string;
+  identifiedGaps?: string;
 }
 
 export interface LiteratureMatrixResult {
