@@ -128,6 +128,9 @@ const SettingsPage: React.FC = () => {
       {data.activeTab === "account" && (
         <AccountTab
           user={data.user}
+          stats={data.stats}
+          onRefreshStats={data.fetchStats}
+          showToast={showToast}
           newPassword={data.newPassword}
           setNewPassword={data.setNewPassword}
           confirmPassword={data.confirmPassword}

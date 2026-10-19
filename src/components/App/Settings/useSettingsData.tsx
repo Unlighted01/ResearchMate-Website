@@ -39,6 +39,8 @@ export interface SettingsStats {
   collections: number;
   summaries: number;
   ai_credits: number;
+  plan?: string;
+  subscription_status?: string;
 }
 
 export interface UseSettingsDataReturn {
@@ -97,6 +99,7 @@ export interface UseSettingsDataReturn {
   handleImport: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleDeleteAccount: () => Promise<void>;
   getTimeUntilReset: () => string;
+  fetchStats: () => Promise<void>;
 }
 
 // ============================================
@@ -193,39 +196,42 @@ export const useSettingsData = (showToast: ShowToast): UseSettingsDataReturn => 
   }, []);
 
   // Fetch stats
+  const fetchStats = async () => {
+    if (!user?.id) return;
+
+    const { count: itemCount } = await supabase
+      .from("items")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+
+    const { count: collectionCount } = await supabase
+      .from("collections")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+
+    const { count: summaryCount } = await supabase
+      .from("items")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .not("ai_summary", "is", null);
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("ai_credits, plan, subscription_status")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    setStats({
+      items: itemCount || 0,
+      collections: collectionCount || 0,
+      summaries: summaryCount || 0,
+      ai_credits: profile?.ai_credits || 0,
+      plan: profile?.plan || "free",
+      subscription_status: profile?.subscription_status || "inactive",
+    });
+  };
+
   useEffect(() => {
-    const fetchStats = async () => {
-      if (!user?.id) return;
-
-      const { count: itemCount } = await supabase
-        .from("items")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
-
-      const { count: collectionCount } = await supabase
-        .from("collections")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
-
-      const { count: summaryCount } = await supabase
-        .from("items")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .not("ai_summary", "is", null);
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("ai_credits")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      setStats({
-        items: itemCount || 0,
-        collections: collectionCount || 0,
-        summaries: summaryCount || 0,
-        ai_credits: profile?.ai_credits || 0,
-      });
-    };
     fetchStats();
   }, [user]);
 
@@ -524,5 +530,6 @@ export const useSettingsData = (showToast: ShowToast): UseSettingsDataReturn => 
     handleImport,
     handleDeleteAccount,
     getTimeUntilReset,
+    fetchStats,
   };
 };

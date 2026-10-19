@@ -29,9 +29,12 @@ import {
   BookOpen,
   Eye,
   Layers,
+  Loader2,
+  CreditCard,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon } from "../../icons";
 import { StorageItem, updateItem, getCachedProblemSolution, saveCachedProblemSolution } from "../../../services/storageService";
+import { initiateStudentProCheckout } from "../../../services/paymongoService";
 import { generateAiResponse, generateChatResponse, generateEmbedding } from "../../../services/geminiService";
 import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks } from "../../../services/ragService";
 import { extractPdfContent } from "../../../services/pdfService";
@@ -129,6 +132,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>("gemini-flash");
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1053,12 +1057,29 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                         </ul>
                       </div>
                       <button
-                        onClick={() => {
-                          alert("Student Pro payment gateway is connecting! In the meantime, use your own free Google key in Settings.");
+                        onClick={async () => {
+                          setIsUpgrading(true);
+                          try {
+                            await initiateStudentProCheckout();
+                          } catch (err: any) {
+                            setIsUpgrading(false);
+                            alert(err?.message || "Failed to start PayMongo checkout.");
+                          }
                         }}
-                        className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
+                        disabled={isUpgrading}
+                        className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors shadow-xs flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        Upgrade to Pro
+                        {isUpgrading ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Connecting PayMongo...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>Upgrade with GCash / Maya (₱199)</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
