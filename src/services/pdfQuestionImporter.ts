@@ -158,10 +158,8 @@ export function detectQaBookLikelihood(text: string): {
 }
 
 /**
- * Two-pass parser:
- * Pass 1 extracts question statements and choices.
- * Pass 2 extracts chapter answer keys and explanations.
- * Then correlates question number N with answer key N.
+ * Unified robust parser for review books (e.g. 501 Math Word Problems, GRE/SAT guides).
+ * Extracts question statements, multiple-choice options, and chapter answer keys across all sections.
  */
 export function parseTwoPassQuestionsAndAnswers(
   pagesOrText: PdfPageWithLayout[] | string
@@ -170,203 +168,227 @@ export function parseTwoPassQuestionsAndAnswers(
 
   if (Array.isArray(pagesOrText)) {
     fullCleanedText = pagesOrText
-      .map((p) => `\n[Page ${p.pageNumber}]\n` + cleanPageText(reconstructStackedFractions(p.items) || p.text))
+      .map((p) => `\n[Page ${p.pageNumber}]\n` + cleanPageText(p.text || reconstructStackedFractions(p.items)))
       .join("\n");
   } else {
     fullCleanedText = cleanPageText(pagesOrText);
   }
 
-  // 1. Split into Chapters or Sections if present
-  // Typical books: Chapter 1 ... Answers ... Chapter 2 ... Answers
-  const sectionChunks = fullCleanedText.split(/(?=(?:^|\n)\s*(?:Chapter\s+\d+|SECTION\s+\d+|PART\s+\d+))/i);
+  const questionsMap = new Map<string, { number: number; stem: string; options: string[]; chapter: string; pageNumber?: number }>();
+  const answersMap = new Map<string, { number: number; letter: string; explanation: string; chapter: string }>();
 
-  const results: ParsedQaItem[] = [];
+  let currentChapter = "Chapter 1";
+  let isAnswerMode = false;
+  let currentPage = 1;
 
-  for (let sIdx = 0; sIdx < sectionChunks.length; sIdx++) {
-    const chunk = sectionChunks[sIdx];
-    const chapterMatch = chunk.match(/(?:^|\n)\s*((?:Chapter|SECTION|PART)\s+\d+[^\n]*)/i);
-    const chapterName = chapterMatch ? chapterMatch[1].trim() : `Section ${sIdx + 1}`;
+  const lines = fullCleanedText.split("\n");
+  let currentNum: number | null = null;
+  let currentBuffer: string[] = [];
 
-    // Split chunk into: (A) Questions Part, and (B) Answers Part
-    // Answers marker pattern
-    const answersSplit = chunk.split(/(?:^|\n)\s*(?:Answers\s+and\s+Explanations|Answer\s+Key|Answers|Solutions)\b/i);
+  const flush = () => {
+    if (currentNum === null || currentBuffer.length === 0) return;
+    const block = currentBuffer.join("\n").trim();
+    currentBuffer = [];
 
-    const questionsText = answersSplit[0] || "";
-    const answersText = answersSplit.slice(1).join("\n") || "";
+    // Split on multiple-choice option markers: a. / b. / c. / d. or (a) / (b)
+    const optSplit = block.split(/(?:^|\n|\s{2,}|\s+(?=[b-dB-D][\.\)]|\([b-dB-D]\)))(?=[a-dA-D][\.\)]|\([a-dA-D]\))/);
 
-    // PASS 1: Extract Questions from questionsText
-    const questionsMap = extractQuestionsFromText(questionsText, chapterName);
+    // If it has multiple-choice choices, IT IS DEFINITIVELY A QUESTION, even if isAnswerMode was on!
+    if (optSplit.length >= 3) {
+      isAnswerMode = false; // Always exit answer mode when a question block is encountered
 
-    // PASS 2: Extract Answer Keys from answersText
-    const answersMap = extractAnswersFromText(answersText);
+      const stem = optSplit[0].replace(/\[Page\s+\d+\]/gi, "").trim();
+      const rawOptions = optSplit.slice(1);
+      const options: string[] = [];
 
-    // CORRELATE: Join Question N with Answer N
-    for (const [num, qData] of questionsMap.entries()) {
-      const aData = answersMap.get(num);
-
-      let correctIndex = 0;
-      let correctLetter = "a";
-      let explanation = "";
-      let hasIncompleteAnswer = false;
-
-      if (aData) {
-        correctLetter = aData.letter.toLowerCase();
-        correctIndex = ["a", "b", "c", "d"].indexOf(correctLetter);
-        if (correctIndex < 0) correctIndex = 0;
-        explanation = aData.explanation || `Answer key: Option ${aData.letter.toUpperCase()}.`;
-      } else {
-        hasIncompleteAnswer = true;
-        explanation = "Answer key not explicitly indexed in this section.";
+      for (const opt of rawOptions) {
+        const clean = opt.replace(/^[a-dA-D][\.\)]\s*|^\([a-dA-D]\)\s*/, "").replace(/\[Page\s+\d+\]/gi, "").trim();
+        if (clean) options.push(clean);
       }
 
-      results.push({
-        id: generateUUID(),
-        number: num,
-        stem: qData.stem,
-        options: qData.options,
-        correctLetter,
-        correctIndex,
-        explanation,
-        chapter: chapterName,
-        pageNumber: qData.pageNumber,
-        hasIncompleteAnswer,
-      });
-    }
-  }
-
-  // If section-based splitting yielded 0 questions (e.g. single continuous book),
-  // run global two-pass across the entire text
-  if (results.length === 0) {
-    const answersSplit = fullCleanedText.split(/(?:^|\n)\s*(?:Answers\s+and\s+Explanations|Answer\s+Key|Answers|Solutions)\b/i);
-    const questionsText = answersSplit[0] || "";
-    const answersText = answersSplit.slice(1).join("\n") || "";
-
-    const questionsMap = extractQuestionsFromText(questionsText, "Comprehensive Review");
-    const answersMap = extractAnswersFromText(answersText);
-
-    for (const [num, qData] of questionsMap.entries()) {
-      const aData = answersMap.get(num);
-      let correctIndex = 0;
-      let correctLetter = "a";
-      let explanation = "";
-      let hasIncompleteAnswer = false;
-
-      if (aData) {
-        correctLetter = aData.letter.toLowerCase();
-        correctIndex = ["a", "b", "c", "d"].indexOf(correctLetter);
-        if (correctIndex < 0) correctIndex = 0;
-        explanation = aData.explanation || `Answer key: Option ${aData.letter.toUpperCase()}.`;
-      } else {
-        hasIncompleteAnswer = true;
-        explanation = "Answer key verified from reference section.";
-      }
-
-      results.push({
-        id: generateUUID(),
-        number: num,
-        stem: qData.stem,
-        options: qData.options,
-        correctLetter,
-        correctIndex,
-        explanation,
-        chapter: "Comprehensive Review",
-        pageNumber: qData.pageNumber,
-        hasIncompleteAnswer,
-      });
-    }
-  }
-
-  return results.sort((a, b) => a.number - b.number);
-}
-
-/**
- * Helper: Extracts question blocks from questions text.
- */
-function extractQuestionsFromText(
-  text: string,
-  chapterName: string
-): Map<number, { stem: string; options: string[]; pageNumber?: number }> {
-  const map = new Map<number, { stem: string; options: string[]; pageNumber?: number }>();
-
-  // Split on question start numbers: e.g. "\n1. " or "\n12) "
-  const questionBlocks = text.split(/(?:^|\n)\s*(?=\d{1,4}[\.\)]\s+)/);
-
-  for (const block of questionBlocks) {
-    const trimmed = block.trim();
-    if (!trimmed) continue;
-
-    // Detect question number: e.g. "1. " or "25) "
-    const numMatch = trimmed.match(/^(\d{1,4})[\.\)]\s+([\s\S]+)/);
-    if (!numMatch) continue;
-
-    const qNum = parseInt(numMatch[1], 10);
-    const content = numMatch[2].trim();
-
-    // Check for page marker
-    let pageNum: number | undefined;
-    const pageMatch = block.match(/\[Page\s+(\d+)\]/i);
-    if (pageMatch) pageNum = parseInt(pageMatch[1], 10);
-
-    // Split content into Question Stem and Options [A, B, C, D]
-    // Options pattern: "a. ", "b. ", "c. ", "d. " or "A) ", "(A)"
-    const optSplit = content.split(/(?:^|\n)\s*(?=[a-dA-D][\.\)]\s+|\([a-dA-D]\)\s+)/);
-
-    const rawStem = (optSplit[0] || "").replace(/\[Page\s+\d+\]/gi, "").trim();
-    const rawOptions = optSplit.slice(1);
-
-    const options: string[] = [];
-    for (const opt of rawOptions) {
-      const optClean = opt.replace(/^[a-dA-D][\.\)]\s*|^\([a-dA-D]\)\s*/, "").trim();
-      if (optClean) options.push(optClean);
-    }
-
-    // Must have a stem and at least 2 choices to be considered a viable question
-    if (rawStem.length > 5) {
-      // Pad to 4 options if book only provided 3 or missing
       while (options.length < 4) {
         options.push(`Choice ${String.fromCharCode(65 + options.length)}`);
       }
 
-      map.set(qNum, {
-        stem: rawStem,
-        options: options.slice(0, 4),
-        pageNumber: pageNum,
-      });
+      if (stem.length > 5) {
+        const key = `${currentChapter}::${currentNum}`;
+        const globalKey = `${currentNum}`;
+        const itemData = {
+          number: currentNum,
+          stem,
+          options: options.slice(0, 4),
+          chapter: currentChapter,
+          pageNumber: currentPage,
+        };
+        questionsMap.set(key, itemData);
+        if (!questionsMap.has(globalKey)) {
+          questionsMap.set(globalKey, itemData);
+        }
+      }
+    } else {
+      // Check if it's an answer key: e.g. "d. Work backwards to find..." or "[d] ..." or "d) ..."
+      // Also handles "Choice D is correct..." or "d - ..." or lone "d"
+      const ansMatch = block.match(/^(?:Choice\s+|Option\s+|\()?([a-dA-D])(?:[\.\)\:\-\s\]]|\s+is\s+correct)?\s*([\s\S]*)/i);
+      if (ansMatch) {
+        const letter = ansMatch[1].toLowerCase();
+        const explanation = (ansMatch[2] || "").replace(/\[Page\s+\d+\]/gi, "").trim();
+        const key = `${currentChapter}::${currentNum}`;
+        const globalKey = `${currentNum}`;
+        const answerData = {
+          number: currentNum,
+          letter,
+          explanation: explanation || `Identified based on answer key (${letter.toUpperCase()}).`,
+          chapter: currentChapter,
+        };
+        answersMap.set(key, answerData);
+        answersMap.set(globalKey, answerData);
+      }
+
+      // Also check if block contains a sequence of quick answers like "1. a  2. b  3. c"
+      const quickAnswers = [...block.matchAll(/(?:^|\s+)(\d{1,4})[\.\)]\s*([a-dA-D])\b/g)];
+      if (quickAnswers.length > 1) {
+        for (const qa of quickAnswers) {
+          const qNum = parseInt(qa[1], 10);
+          const qLetter = qa[2].toLowerCase();
+          const qData = {
+            number: qNum,
+            letter: qLetter,
+            explanation: `Verified correct answer: Option ${qLetter.toUpperCase()}.`,
+            chapter: currentChapter,
+          };
+          answersMap.set(`${currentChapter}::${qNum}`, qData);
+          answersMap.set(String(qNum), qData);
+        }
+      }
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Track page numbers
+    const pageMatch = trimmed.match(/\[Page\s+(\d+)\]/i);
+    if (pageMatch) {
+      currentPage = parseInt(pageMatch[1], 10);
+      continue;
+    }
+
+    // Detect standalone CHAPTER or SECTION line with number on next line
+    if (/^(?:CHAPTER|SECTION|PART)$/i.test(trimmed) && i + 1 < lines.length) {
+      const nextTrimmed = lines[i + 1].trim();
+      if (/^\d+/i.test(nextTrimmed) || /^[A-Z][a-z]+/i.test(nextTrimmed)) {
+        flush();
+        currentChapter = `${trimmed} ${nextTrimmed}`;
+        isAnswerMode = false;
+        currentNum = null;
+        i++; // skip next line since consumed
+        continue;
+      }
+    }
+
+    // Detect chapter headings: Chapter 1 / SECTION 1 / Miscellaneous Math / Fractions / etc.
+    const chMatch = trimmed.match(/^(?:Chapter\s+(\d+)?|SECTION\s+(\d+)?|PART\s+(\d+)?|\b(\d+)\s+(?:Miscellaneous|Fractions|Decimals|Percentages?|Percents|Algebra|Geometry|Word Problems|Practice Test|Set\s+\d+))\b[^\n]*/i);
+    if (chMatch) {
+      flush();
+      currentChapter = chMatch[0].trim();
+      isAnswerMode = false;
+      currentNum = null;
+      continue;
+    }
+
+    // Detect Answers section headers
+    if (/^(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/i.test(trimmed)) {
+      flush();
+      isAnswerMode = true;
+      currentNum = null;
+      continue;
+    }
+
+    // Detect question/answer numbering: "1. ", "64. ", "1) "
+    const numMatch = trimmed.match(/^(\d{1,4})[\.\)]\s+([\s\S]*)/);
+    if (numMatch) {
+      flush();
+      currentNum = parseInt(numMatch[1], 10);
+      currentBuffer = [numMatch[2]];
+      continue;
+    }
+
+    if (currentNum !== null) {
+      currentBuffer.push(line);
+    }
+  }
+  flush();
+
+  // If questionsMap size is 0 (some PDFs put question numbers like "Question 1" or "[1]"), run regex scan
+  if (questionsMap.size === 0) {
+    const rawBlocks = fullCleanedText.split(/(?:^|\n)\s*(?=(?:(?:Question|Problem|Item)\s+)?\d{1,4}[\.\)]\s+)/i);
+    for (const b of rawBlocks) {
+      const match = b.trim().match(/^(?:(?:Question|Problem|Item)\s+)?(\d{1,4})[\.\)]\s+([\s\S]+)/i);
+      if (!match) continue;
+      const num = parseInt(match[1], 10);
+      const content = match[2];
+      const optSplit = content.split(/(?:^|\n|\s{2,}|\s+(?=[b-dB-D][\.\)]|\([b-dB-D]\)))(?=[a-dA-D][\.\)]|\([a-dA-D]\))/);
+      if (optSplit.length >= 3) {
+        const stem = optSplit[0].replace(/\[Page\s+\d+\]/gi, "").trim();
+        const rawOptions = optSplit.slice(1);
+        const options: string[] = [];
+        for (const o of rawOptions) {
+          const c = o.replace(/^[a-dA-D][\.\)]\s*|^\([a-dA-D]\)\s*/, "").replace(/\[Page\s+\d+\]/gi, "").trim();
+          if (c) options.push(c);
+        }
+        while (options.length < 4) options.push(`Choice ${String.fromCharCode(65 + options.length)}`);
+        questionsMap.set(String(num), {
+          number: num,
+          stem,
+          options: options.slice(0, 4),
+          chapter: "General Review",
+        });
+      }
     }
   }
 
-  return map;
-}
+  // De-duplicate questions by number to avoid double counting across key formats
+  const seenNumbers = new Set<number>();
+  const results: ParsedQaItem[] = [];
 
-/**
- * Helper: Extracts answer keys and explanations from answers text.
- */
-function extractAnswersFromText(
-  text: string
-): Map<number, { letter: string; explanation: string }> {
-  const map = new Map<number, { letter: string; explanation: string }>();
+  for (const q of questionsMap.values()) {
+    if (seenNumbers.has(q.number)) continue;
+    seenNumbers.add(q.number);
 
-  // Split on answer numbers: e.g. "\n1. b." or "\n12. c - Explanation" or "\n3. [a]"
-  const answerBlocks = text.split(/(?:^|\n)\s*(?=\d{1,4}[\.\)]\s*(?:[a-dA-D][\.\)\s]|\[[a-dA-D]\]))/);
+    // Look up answer key
+    const ans = answersMap.get(`${q.chapter}::${q.number}`) || answersMap.get(String(q.number));
+    let correctLetter = "a";
+    let correctIndex = 0;
+    let explanation = "Identified based on study materials.";
+    let hasIncompleteAnswer = false;
 
-  for (const block of answerBlocks) {
-    const trimmed = block.trim();
-    if (!trimmed) continue;
+    if (ans) {
+      correctLetter = ans.letter.toLowerCase();
+      correctIndex = ["a", "b", "c", "d"].indexOf(correctLetter);
+      if (correctIndex < 0) correctIndex = 0;
+      explanation = ans.explanation || `Answer: Option ${ans.letter.toUpperCase()}.`;
+    } else {
+      hasIncompleteAnswer = true;
+      explanation = "Answer key not explicitly indexed in this section.";
+    }
 
-    const match = trimmed.match(/^(\d{1,4})[\.\)]\s*(?:([a-dA-D])[\.\)\s]|\[([a-dA-D])\])\s*([\s\S]*)/i);
-    if (!match) continue;
-
-    const aNum = parseInt(match[1], 10);
-    const letter = (match[2] || match[3] || "a").toLowerCase();
-    const explanation = (match[4] || "").replace(/\[Page\s+\d+\]/gi, "").trim();
-
-    map.set(aNum, {
-      letter,
-      explanation: explanation || `Identified based on answer key (${letter.toUpperCase()}).`,
+    results.push({
+      id: generateUUID(),
+      number: q.number,
+      stem: q.stem,
+      options: q.options,
+      correctLetter,
+      correctIndex,
+      explanation,
+      chapter: q.chapter,
+      pageNumber: q.pageNumber,
+      hasIncompleteAnswer,
     });
   }
 
-  return map;
+  return results.sort((a, b) => a.number - b.number);
 }
 
 /**

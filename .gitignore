@@ -43,6 +43,7 @@ lerna-debug.log*
 # AI Agent configs (local tooling — do NOT push)
 .agents/
 .claude/
+scratch/
 CLAUDE.md
 CLAUDE_CODE_SETUP.md
 api/AGENTS.md

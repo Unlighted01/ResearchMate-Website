@@ -132,4 +132,98 @@ Answers and Explanations
     expect(flashcards[0].back).toContain("Fundamental trigonometric limit equals 1.");
     expect(flashcards[0].category).toBe("Calculus");
   });
+
+  it("extracts multiple chapters sequentially without question-answer collisions (501 Math Word Problems pattern)", () => {
+    const multiChapterBook = `
+Chapter 1: Miscellaneous Math
+
+1. Bonnie has twice as many cousins as Robert. George has 5 cousins, which is 11 less than Bonnie has. How many cousins does Robert have?
+a. 4
+b. 5
+c. 6
+d. 8
+
+2. The number of cars in the lot is 30. If 40% are blue, how many are blue?
+a. 10
+b. 12
+c. 14
+d. 16
+
+Answers and Explanations
+1. d. Work backwards to find the solution. George has 5 cousins, which is 11 less than Bonnie has; therefore, Bonnie has 16 cousins. Bonnie has twice as many as Robert has, so half of 16 is 8. Robert has 8 cousins.
+2. b. Multiply 30 by 0.40 to get 12 blue cars.
+
+Chapter 2: Fractions
+
+64. Lori ran 5 1/2 miles Monday, 6 1/4 miles Tuesday, 4 1/2 miles Wednesday, and 2 3/4 miles on Thursday. What is the average number of miles Lori ran?
+a. 5
+b. 4 1/2
+c. 4
+d. 4 3/4
+
+Answers and Explanations
+64. d. Add total miles = 19. Average = 19 / 4 = 4 3/4.
+    `;
+
+    const parsed = parseTwoPassQuestionsAndAnswers(multiChapterBook);
+    expect(parsed.length).toBe(3);
+
+    // Q1 checks
+    expect(parsed[0].number).toBe(1);
+    expect(parsed[0].stem).toContain("Bonnie has twice as many cousins");
+    expect(parsed[0].options).toEqual(["4", "5", "6", "8"]);
+    expect(parsed[0].correctLetter).toBe("d");
+    expect(parsed[0].correctIndex).toBe(3);
+    expect(parsed[0].explanation).toContain("Work backwards to find the solution");
+    expect(parsed[0].hasIncompleteAnswer).toBe(false);
+
+    // Q64 checks (Chapter 2)
+    expect(parsed[2].number).toBe(64);
+    expect(parsed[2].stem).toContain("Lori ran 5 1/2 miles");
+    expect(parsed[2].options).toEqual(["5", "4 1/2", "4", "4 3/4"]);
+    expect(parsed[2].correctLetter).toBe("d");
+    expect(parsed[2].correctIndex).toBe(3);
+    expect(parsed[2].hasIncompleteAnswer).toBe(false);
+  });
+
+  it("handles multi-line chapter headings and single-line options seamlessly", () => {
+    const rawPdfDump = `
+CHAPTER
+1
+Miscellaneous Math
+
+1. Find the sum of angles in a triangle.
+a. 90  b. 180  c. 270  d. 360
+
+Answers and Explanations
+1. b. The interior angles of any triangle sum to 180 degrees.
+
+CHAPTER
+2
+Fractions
+
+64. What is 1/2 plus 1/4?
+a. 1/6  b. 2/6  c. 3/4  d. 1
+
+Answers
+64. c. Find common denominator: 2/4 + 1/4 = 3/4.
+    `;
+
+    const parsed = parseTwoPassQuestionsAndAnswers(rawPdfDump);
+    expect(parsed.length).toBe(2);
+
+    expect(parsed[0].number).toBe(1);
+    expect(parsed[0].chapter).toContain("CHAPTER 1");
+    expect(parsed[0].options).toEqual(["90", "180", "270", "360"]);
+    expect(parsed[0].correctLetter).toBe("b");
+    expect(parsed[0].correctIndex).toBe(1);
+    expect(parsed[0].hasIncompleteAnswer).toBe(false);
+
+    expect(parsed[1].number).toBe(64);
+    expect(parsed[1].chapter).toContain("CHAPTER 2");
+    expect(parsed[1].options).toEqual(["1/6", "2/6", "3/4", "1"]);
+    expect(parsed[1].correctLetter).toBe("c");
+    expect(parsed[1].correctIndex).toBe(2);
+    expect(parsed[1].hasIncompleteAnswer).toBe(false);
+  });
 });
