@@ -148,8 +148,9 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const formatModelBadge = (modelId?: string) => {
     if (!modelId) return "Gemini 2.5 Flash";
     if (modelId.includes("claude")) return "Claude 3.5 Sonnet (Pro)";
-    if (modelId.includes("deepseek")) return "DeepSeek-R1 Math (Pro)";
     if (modelId.includes("1.5-pro") || modelId.includes("gemini-pro")) return "Gemini 1.5 Pro (Pro)";
+    if (modelId.includes("deepseek")) return "DeepSeek-R1 Math";
+    if (modelId.includes("llama")) return "Llama 3.3 70B";
     if (modelId.includes("grok")) return "Grok (OpenRouter)";
     return "Gemini 2.5 Flash";
   };
@@ -827,18 +828,20 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       value={selectedModel}
                       onChange={(e) => {
                         const val = e.target.value;
-                        if (val !== "gemini-flash" && !isPro) {
+                        const isProOption = val === "claude-3.5-sonnet" || val === "gemini-pro";
+                        if (isProOption && !isPro) {
                           setShowUpgradeModal(true);
                           return;
                         }
                         setSelectedModel(val);
                       }}
-                      className="text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-2 sm:px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs max-w-[130px] sm:max-w-none"
+                      className="text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-2 sm:px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs max-w-[140px] sm:max-w-none"
                       title="Select AI Reasoning Model"
                     >
-                      <option value="gemini-flash">⚡ Gemini 2.5 Flash {isPro ? "" : "(Free)"}</option>
+                      <option value="gemini-flash">⚡ Gemini 2.5 Flash (Free)</option>
+                      <option value="llama-3.3-70b">🚀 Llama 3.3 70B (Free)</option>
+                      <option value="deepseek-r1">📐 DeepSeek-R1 Math (Free)</option>
                       <option value="claude-3.5-sonnet">{isPro ? "🎓 Claude 3.5 Sonnet" : "🔒 Claude 3.5 (Pro)"}</option>
-                      <option value="deepseek-r1">{isPro ? "📐 DeepSeek-R1 Math" : "🔒 DeepSeek-R1 (Pro)"}</option>
                       <option value="gemini-pro">{isPro ? "📚 Gemini 1.5 Pro" : "🔒 Gemini 1.5 Pro (Pro)"}</option>
                     </select>
 

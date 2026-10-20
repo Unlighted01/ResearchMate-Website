@@ -254,7 +254,7 @@ async function callGroqAPI(prompt: string, options: any = {}) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: GROQ_MODEL,
+      model: options.model || GROQ_MODEL,
       messages: [
         { role: "system", content: sysInstruction },
         { role: "user", content: prompt },
@@ -325,16 +325,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 3. Call AI (Model-Aware Routing with Fallbacks)
     const errors: string[] = [];
 
-    // Check if user requested a specific flagship model
+    // Check if user requested a specific model
     const isClaude = model === "claude-3.5-sonnet";
-    const isDeepSeek = model === "deepseek-r1";
     const isGeminiPro = model === "gemini-pro";
-    const isProModel = isClaude || isDeepSeek || isGeminiPro;
+    const isDeepSeek = model === "deepseek-r1";
+    const isLlama = model === "llama-3.3-70b";
+    const isProModel = isClaude || isGeminiPro;
 
-    // Enforce Pro restriction on flagship models for free tier accounts without BYOK
+    // Enforce Pro restriction on flagship models (Claude 3.5 & Gemini 1.5 Pro) for free tier accounts without BYOK
     if (isProModel && isFreeTier && !customKey) {
       return res.status(403).json({
-        error: "Flagship models (Claude 3.5 Sonnet, DeepSeek-R1, and Gemini 1.5 Pro) are exclusive to Student Pro members. Upgrade to unlock unlimited reasoning!",
+        error: "Claude 3.5 Sonnet and Gemini 1.5 Pro are exclusive to Student Pro members. Upgrade to unlock!",
         code: "PRO_REQUIRED",
       });
     }
@@ -349,14 +350,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.warn("Claude via OpenRouter failed, falling back to default:", err);
         errors.push(`Claude: ${(err as Error).message}`);
       }
-    } else if (isDeepSeek && process.env.OPENROUTER_API_KEY) {
-      try {
-        responseText = await callOpenRouterAPI(prompt, { model: "deepseek/deepseek-r1", systemInstruction: activeInstruction });
-        actualModelUsed = "deepseek-r1";
-      } catch (err) {
-        console.warn("DeepSeek via OpenRouter failed, falling back to default:", err);
-        errors.push(`DeepSeek: ${(err as Error).message}`);
-      }
     } else if (isGeminiPro && keyToUse) {
       try {
         responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-1.5-pro", systemInstruction: activeInstruction });
@@ -364,6 +357,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch (err) {
         console.warn("Gemini Pro failed, falling back to Flash:", err);
         errors.push(`Gemini Pro: ${(err as Error).message}`);
+      }
+    } else if (isDeepSeek) {
+      // 1. Try Groq (Free DeepSeek-R1 Distill Llama 70B)
+      if (process.env.GROQ_API_KEY) {
+        try {
+          responseText = await callGroqAPI(prompt, { model: "deepseek-r1-distill-llama-70b", systemInstruction: activeInstruction });
+          actualModelUsed = "deepseek-r1";
+        } catch (groqErr) {
+          console.warn("DeepSeek via Groq failed, trying OpenRouter fallback:", groqErr);
+          errors.push(`Groq DeepSeek: ${(groqErr as Error).message}`);
+        }
+      }
+      // 2. Try OpenRouter if Groq did not respond
+      if (!responseText && process.env.OPENROUTER_API_KEY) {
+        try {
+          responseText = await callOpenRouterAPI(prompt, { model: "deepseek/deepseek-r1", systemInstruction: activeInstruction });
+          actualModelUsed = "deepseek-r1";
+        } catch (openRouterErr) {
+          console.warn("DeepSeek via OpenRouter failed:", openRouterErr);
+          errors.push(`OpenRouter DeepSeek: ${(openRouterErr as Error).message}`);
+        }
+      }
+    } else if (isLlama) {
+      // Try Groq (Llama 3.3 70B Versatile)
+      if (process.env.GROQ_API_KEY) {
+        try {
+          responseText = await callGroqAPI(prompt, { model: "llama-3.3-70b-versatile", systemInstruction: activeInstruction });
+          actualModelUsed = "llama-3.3-70b";
+        } catch (groqErr) {
+          console.warn("Llama 3.3 via Groq failed:", groqErr);
+          errors.push(`Groq Llama: ${(groqErr as Error).message}`);
+        }
       }
     }
 

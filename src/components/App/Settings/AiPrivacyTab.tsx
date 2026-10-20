@@ -7,7 +7,7 @@
 // ============================================
 
 import React from "react";
-import { Zap, Key, Eye, EyeOff, Wifi, WifiOff, Shield, Clock } from "lucide-react";
+import { Zap, Key, Eye, EyeOff, Wifi, WifiOff, Shield, Clock, ExternalLink, Sparkles, Lock } from "lucide-react";
 import { Button, Card } from "../../shared/ui";
 import type { SettingsStats } from "./useSettingsData";
 
@@ -124,14 +124,40 @@ const AiPrivacyTab: React.FC<AiPrivacyTabProps> = ({
 
       {/* Personal API Key (BYOK) */}
       <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-          <Key className="w-5 h-5 text-primary-600" /> Personal API Key
-          (Power User)
-        </h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-semibold flex items-center gap-2 text-slate-900 dark:text-white font-title">
+            <Key className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Bring Your Own Key (BYOK)
+          </h3>
+          <span className="px-2 py-0.5 text-[11px] font-bold uppercase rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+            100% Free Forever
+          </span>
+        </div>
         <p className="text-gray-500 text-sm mb-4">
-          Bring your own Gemini API Key to bypass the free daily limits.
-          Your key is stored locally on your device.
+          Bypass daily credit limits completely. Connect your own free Google Gemini API key to study with unlimited AI queries at zero cost.
         </p>
+
+        {/* 3-Step Quick Guide / Toolkit Tip */}
+        <div className="mb-5 p-4 rounded-xl border border-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-indigo-900 dark:text-indigo-200">
+            <Sparkles className="w-4 h-4 text-indigo-500" />
+            <span>How to get your free key in 30 seconds (No credit card needed):</span>
+          </div>
+          <ol className="text-xs text-slate-600 dark:text-slate-300 space-y-2 list-decimal list-inside font-sans">
+            <li>
+              Visit <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-indigo-600 dark:text-indigo-400 font-semibold underline inline-flex items-center gap-1">Google AI Studio <ExternalLink className="w-3 h-3 inline" /></a> and sign in with any Google account.
+            </li>
+            <li>
+              Click the blue <strong>"Create API Key"</strong> button and copy your key (starts with <code className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[11px]">AIz...</code>).
+            </li>
+            <li>
+              Paste it in the box below and click <strong>"Save Key"</strong>. Unlimited free studying is activated!
+            </li>
+          </ol>
+          <div className="pt-2 border-t border-indigo-500/10 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+            <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span>Encrypted as a Secure HttpOnly session cookie. Never shared, logged, or used for model training.</span>
+          </div>
+        </div>
 
         <div className="space-y-4">
           <div className="relative">
@@ -139,12 +165,12 @@ const AiPrivacyTab: React.FC<AiPrivacyTabProps> = ({
               type={showApiKey ? "text" : "password"}
               value={customApiKey}
               onChange={(e) => setCustomApiKey(e.target.value)}
-              placeholder="AIz..."
+              placeholder="AIzSy..."
               className="w-full pl-4 pr-12 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all font-mono text-sm"
             />
             <button
               onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer"
             >
               {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
@@ -164,19 +190,6 @@ const AiPrivacyTab: React.FC<AiPrivacyTabProps> = ({
               Remove Key
             </Button>
           </div>
-
-          <p className="text-xs text-gray-400 mt-2">
-            Get a free key from{" "}
-            <a
-              href="https://aistudio.google.com/app/apikey"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary-500 hover:underline"
-            >
-              Google AI Studio
-            </a>
-            .
-          </p>
         </div>
       </Card>
 
