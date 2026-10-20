@@ -13,20 +13,23 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
 interface AcademicMathViewProps {
-  content: string;
+  content?: string;
+  text?: string;
   className?: string;
   inline?: boolean;
 }
 
 export const AcademicMathView: React.FC<AcademicMathViewProps> = ({
   content,
+  text,
   className = "",
   inline = false,
 }) => {
-  if (!content) return null;
+  const rawText = content || text || "";
+  if (!rawText) return null;
 
   // Pre-process common raw LaTeX anomalies if needed (e.g., KaTeX bracket formatting)
-  const normalizedContent = content
+  const normalizedContent = rawText
     .replace(/\\\[/g, "$$\n")
     .replace(/\\\]/g, "\n$$")
     .replace(/\\\(/g, "$")

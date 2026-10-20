@@ -1,15 +1,7 @@
 // ============================================
 // MOCK EXAM ENGINE - Precision Practice Tests & Diagnostics
 // Universal Academic Workstation (SHS STEM to College 2nd-Year Core)
-// ============================================
-// Features:
-// 1. Configurable Question Counts (5, 10, 20)
-// 2. Custom Passing Benchmark Slider/Presets (75%, 80% CSC/College, 90% Honors)
-// 3. Problem-Boundary Context Sampling & Micro-Formulary Injection
-// 4. KaTeX Math & LaTeX formula rendering across questions and explanations
-// 5. Timed Mode with optional countdown
-// 6. Topic Mastery Diagnostic Breakdown & "Retake Missed Only" Drill
-// 7. Multi-disciplinary academic fallbacks
+// Dual-Entry: Grounded AI Multi-Batch Generation + Manual Editor & TXT/CSV Importer
 // ============================================
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
@@ -17,7 +9,6 @@ import {
   Sparkles,
   CheckCircle2,
   XCircle,
-  HelpCircle,
   RotateCcw,
   Award,
   BookOpen,
@@ -31,37 +22,29 @@ import {
   SlidersHorizontal,
   BarChart2,
   Printer,
-  ChevronRight,
   AlertCircle,
   FileText,
-  Target,
+  Plus,
+  Upload,
+  Edit2,
+  Trash2,
   RefreshCw,
 } from "lucide-react";
-import { generateAiResponse } from "../../../services/geminiService";
 import { StorageItem } from "../../../services/storageService";
-import { buildSynthesisContext } from "../../../services/ragService";
-import { findRelevantFormulary } from "../../../services/formularyService";
+import {
+  Question,
+  generateUUID,
+  saveExamAttempt,
+  getExamAttempts,
+  generateExamInBatches,
+  BatchProgress,
+  ExamSectionConfig,
+  ExamAttemptRecord,
+} from "../../../services/examService";
 import AcademicMathView from "../../shared/AcademicMathView";
-
-export interface Question {
-  id: number;
-  question: string;
-  options: string[];
-  correctIndex: number;
-  explanation: string;
-  topicTag: string;
-}
-
-export interface ExamResult {
-  score: number;
-  total: number;
-  percentage: number;
-  benchmark: number;
-  passed: boolean;
-  date: string;
-  topic: string;
-  durationSeconds?: number;
-}
+import QuestionEditorModal from "./QuestionEditorModal";
+import QuestionImportModal from "./QuestionImportModal";
+import MaterialScopeSelector, { MaterialScopeSelection } from "./MaterialScopeSelector";
 
 export interface MockExamEngineProps {
   items: StorageItem[];
@@ -69,11 +52,11 @@ export interface MockExamEngineProps {
 }
 
 // -------------------------------------------------------------
-// Universal Multi-Discipline Academic Fallback Question Pool
+// Universal Academic Starter Pool (Standard Fallback Bank)
 // -------------------------------------------------------------
 const UNIVERSAL_FALLBACK_POOL: Question[] = [
   {
-    id: 1,
+    id: "fallback-q1",
     question: "Evaluate the limit: $\\lim_{x \\to 0} \\frac{\\sin(3x)}{x}$.",
     options: ["0", "1", "3", "Does not exist"],
     correctIndex: 2,
@@ -81,7 +64,7 @@ const UNIVERSAL_FALLBACK_POOL: Question[] = [
     topicTag: "Calculus & Limits",
   },
   {
-    id: 2,
+    id: "fallback-q2",
     question: "In symbolic logic, which of the following expressions is logically equivalent to the conditional proposition $P \\to Q$?",
     options: ["$\\neg P \\lor Q$", "$\\neg P \\land Q$", "$P \\land \\neg Q$", "$Q \\to P$"],
     correctIndex: 0,
@@ -89,7 +72,7 @@ const UNIVERSAL_FALLBACK_POOL: Question[] = [
     topicTag: "Discrete Mathematics: Logic",
   },
   {
-    id: 3,
+    id: "fallback-q3",
     question: "A $4.0\\text{ kg}$ cart travelling at $5.0\\text{ m/s}$ along a frictionless horizontal track collides and locks together with a stationary $6.0\\text{ kg}$ cart. What is their final combined speed?",
     options: ["$1.5\\text{ m/s}$", "$2.0\\text{ m/s}$", "$2.5\\text{ m/s}$", "$3.3\\text{ m/s}$"],
     correctIndex: 1,
@@ -97,7 +80,7 @@ const UNIVERSAL_FALLBACK_POOL: Question[] = [
     topicTag: "Physics: Mechanics",
   },
   {
-    id: 4,
+    id: "fallback-q4",
     question: "Working together, Pipe A can fill an empty reservoir in 6 hours, while Pipe B can fill it in 12 hours. How many hours will it take to fill the reservoir if both pipes operate simultaneously?",
     options: ["3.0 hours", "4.0 hours", "4.5 hours", "9.0 hours"],
     correctIndex: 1,
@@ -105,7 +88,7 @@ const UNIVERSAL_FALLBACK_POOL: Question[] = [
     topicTag: "Quantitative Word Problems",
   },
   {
-    id: 5,
+    id: "fallback-q5",
     question: "Identify the sentence that correctly adheres to grammatical subject-verb agreement:",
     options: [
       "Neither the supervising professor nor the research scholars was in the laboratory.",
@@ -117,61 +100,6 @@ const UNIVERSAL_FALLBACK_POOL: Question[] = [
     explanation: "Under the Proximity Rule for correlative conjunctions ('Neither... nor'), the finite verb agrees with the closer subject. Here, 'research scholars' is plural and adjacent to the verb, requiring 'were'.",
     topicTag: "Verbal & Written Grammar",
   },
-  {
-    id: 6,
-    question: "Find the derivative of $f(x) = x^2 e^{3x}$ with respect to $x$.",
-    options: [
-      "$2x e^{3x}$",
-      "$3x^2 e^{3x}$",
-      "$x e^{3x}(2 + 3x)$",
-      "$6x e^{3x}$",
-    ],
-    correctIndex: 2,
-    explanation: "Product rule: $\\frac{d}{dx}[u \\cdot v] = u'v + uv'$. Let $u = x^2 \\implies u' = 2x$; $v = e^{3x} \\implies v' = 3e^{3x}$. Thus $f'(x) = 2x e^{3x} + 3x^2 e^{3x} = x e^{3x}(2 + 3x)$.",
-    topicTag: "Calculus & Derivatives",
-  },
-  {
-    id: 7,
-    question: "If an ideal gas enclosed in a piston has its absolute temperature $T$ doubled while its volume $V$ is halved, what happens to the pressure $P$?",
-    options: [
-      "Pressure remains unchanged",
-      "Pressure doubles ($2P$)",
-      "Pressure quadruples ($4P$)",
-      "Pressure is reduced to one-fourth ($\\frac{1}{4}P$)",
-    ],
-    correctIndex: 2,
-    explanation: "Ideal gas law: $P = \\frac{nRT}{V}$. If $T \\to 2T$ and $V \\to \\frac{1}{2}V$, new pressure $P' = \\frac{nR(2T)}{V/2} = 4 \\cdot \\frac{nRT}{V} = 4P$. The pressure quadruples.",
-    topicTag: "Chemistry & Thermodynamics",
-  },
-  {
-    id: 8,
-    question: "If a finite set $S$ has 4 distinct elements ($|S| = 4$), how many proper subsets does set $S$ have?",
-    options: ["14", "15", "16", "32"],
-    correctIndex: 1,
-    explanation: "Total subsets in power set $\\mathcal{P}(S)$ is $2^n = 2^4 = 16$. A proper subset must exclude the set itself, yielding $2^n - 1 = 16 - 1 = 15$ proper subsets.",
-    topicTag: "Discrete Mathematics: Sets",
-  },
-  {
-    id: 9,
-    question: "A student mixes a 10% saline solution with a 50% saline solution to create 40 liters of a 20% saline solution. How many liters of the 10% solution are required?",
-    options: ["10 liters", "25 liters", "30 liters", "35 liters"],
-    correctIndex: 2,
-    explanation: "Let $x$ be liters of 10% solution. Saline balance: $0.10x + 0.50(40 - x) = 0.20(40) \\implies -0.40x + 20 = 8 \\implies -0.40x = -12 \\implies x = 30$ liters.",
-    topicTag: "Algebra & Mixture Problems",
-  },
-  {
-    id: 10,
-    question: "Under the standard SI metric system, what is the coherent derived unit and base breakdown for Work and Energy?",
-    options: [
-      "$\\text{Watt } (\\text{kg}\\cdot\\text{m}^2/\\text{s}^3)$",
-      "$\\text{Newton } (\\text{kg}\\cdot\\text{m}/\\text{s}^2)$",
-      "$\\text{Joule } (\\text{kg}\\cdot\\text{m}^2/\\text{s}^2)$",
-      "$\\text{Pascal } (\\text{kg}/(\\text{m}\\cdot\\text{s}^2))$",
-    ],
-    correctIndex: 2,
-    explanation: "Work is Force $\\times$ Displacement: $W = F \\cdot d = \\text{N} \\cdot \\text{m} = (\\text{kg}\\cdot\\text{m}/\\text{s}^2) \\cdot \\text{m} = \\text{kg}\\cdot\\text{m}^2/\\text{s}^2 = \\text{Joule (J)}$.",
-    topicTag: "Physics: SI Units",
-  },
 ];
 
 export const MockExamEngine: React.FC<MockExamEngineProps> = ({
@@ -180,34 +108,43 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
 }) => {
   // Configuration State
   const [topicInput, setTopicInput] = useState("");
-  const [selectedSourceId, setSelectedSourceId] = useState<string>("all");
-  const [questionCount, setQuestionCount] = useState<5 | 10 | 20>(5);
+  const [scopeSelection, setScopeSelection] = useState<MaterialScopeSelection>({
+    mode: "all",
+    selectedIds: [],
+  });
+  const [presetCount, setPresetCount] = useState<"10" | "25" | "50" | "100" | "160">("10");
+  const [difficulty, setDifficulty] = useState<"easy" | "mixed" | "hard">("mixed");
   const [benchmarkThreshold, setBenchmarkThreshold] = useState<number>(80);
-  const [academicLevel, setAcademicLevel] = useState<string>("auto");
   const [timedMode, setTimedMode] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"stepper" | "list">("stepper");
+  const [showConfigDrawer, setShowConfigDrawer] = useState(false);
+
+  // Modals State
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [questionToEdit, setQuestionToEdit] = useState<Question | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   // Exam Execution State
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationPhase, setGenerationPhase] = useState("");
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
-  const [flaggedIds, setFlaggedIds] = useState<Set<number>>(new Set());
+  const [userAnswers, setUserAnswers] = useState<Record<string, number>>({});
+  const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
-  const [examHistory, setExamHistory] = useState<ExamResult[]>([]);
-  const [showConfigDrawer, setShowConfigDrawer] = useState(false);
+  const [examHistory, setExamHistory] = useState<ExamAttemptRecord[]>([]);
 
-  // Timer Ref
+  // Generation abort controller ref
+  const abortControllerRef = useRef<AbortController | null>(null);
   const timerRef = useRef<any>(null);
 
-  // Load history from localStorage
+  // Load history from Supabase / Local cache
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("rm_exam_history");
-      if (saved) setExamHistory(JSON.parse(saved));
-    } catch {}
+    getExamAttempts().then((attempts) => {
+      setExamHistory(attempts);
+    }).catch(() => {});
   }, []);
 
   // Timer Countdown Effect
@@ -240,7 +177,50 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     return list.slice(0, 5);
   }, [items]);
 
-  // Handle Exam Generation
+  // Filter items based on Scope Selector
+  const targetScopeItems = useMemo(() => {
+    if (scopeSelection.mode === "all") return items;
+    if (scopeSelection.mode === "single") {
+      const singleId = scopeSelection.selectedIds[0];
+      return items.filter((i) => i.id === singleId);
+    }
+    return items.filter((i) => scopeSelection.selectedIds.includes(i.id));
+  }, [scopeSelection, items]);
+
+  // Build section configuration based on preset
+  const buildExamSections = (targetPreset: string, customTopic: string): ExamSectionConfig[] => {
+    const topic = customTopic || "Course Review";
+    if (targetPreset === "160") {
+      // Official Civil Service Commission (CSC) Table of Specifications (TOS)
+      return [
+        { name: "Verbal Ability & Grammar", questionCount: 50, mode: "grounded", topicFocus: `Verbal Ability, English grammar, reading comprehension, vocabulary: ${topic}` },
+        { name: "Analytical & Logical Reasoning", questionCount: 40, mode: "grounded", topicFocus: `Analytical reasoning, syllogisms, logic: ${topic}` },
+        { name: "Numerical & Word Problems", questionCount: 40, mode: "grounded", topicFocus: `Numerical reasoning, word problems, math: ${topic}` },
+        { name: "General Information & Constitution", questionCount: 30, mode: "grounded", topicFocus: `Philippine Constitution, ethics, environmental laws: ${topic}` },
+      ];
+    }
+    if (targetPreset === "100") {
+      return [
+        { name: "Core Fundamentals", questionCount: 50, mode: "grounded", topicFocus: `${topic} core fundamentals` },
+        { name: "Advanced Applications", questionCount: 50, mode: "grounded", topicFocus: `${topic} advanced problems` },
+      ];
+    }
+    if (targetPreset === "50") {
+      return [
+        { name: "Midterm Comprehensive", questionCount: 50, mode: "grounded", topicFocus: topic },
+      ];
+    }
+    if (targetPreset === "25") {
+      return [
+        { name: "Standard Assessment", questionCount: 25, mode: "grounded", topicFocus: topic },
+      ];
+    }
+    return [
+      { name: "Quick Drill", questionCount: 10, mode: "grounded", topicFocus: topic },
+    ];
+  };
+
+  // Handle Multi-Batch Exam Generation
   const handleGenerateExam = async (customQuestionList?: Question[]) => {
     if (customQuestionList && customQuestionList.length > 0) {
       setQuestions(customQuestionList);
@@ -258,114 +238,85 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     setUserAnswers({});
     setFlaggedIds(new Set());
     setActiveQuestionIdx(0);
-    setGenerationPhase("Analyzing syllabus & problem boundaries...");
+    setBatchProgress(null);
+    setGenerationPhase("Initializing multi-batch question synthesis...");
 
-    const targetTopic = topicInput.trim() || (selectedSourceId !== "all" 
-      ? items.find(i => i.id === selectedSourceId)?.title || "Selected Document"
-      : "Uploaded Course & Review Materials");
-    
-    const isSpecificTopic = Boolean(topicInput.trim() || selectedSourceId !== "all");
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-    // Filter items if specific document is selected
-    const sourceItems = selectedSourceId === "all" 
-      ? items 
-      : items.filter(i => i.id === selectedSourceId);
+    const sections = buildExamSections(presetCount, topicInput.trim());
 
     try {
-      // Step 1: Collect distributed context through Problem-Boundary RAG
-      setGenerationPhase(`Extracting problem boundaries (${questionCount} questions)...`);
-      const targetChunks = questionCount <= 5 ? 6 : questionCount <= 10 ? 10 : 14;
-      const contextCorpus = await buildSynthesisContext(
-        sourceItems,
-        isSpecificTopic ? targetTopic : undefined,
-        targetChunks
+      const generated = await generateExamInBatches(
+        targetScopeItems,
+        sections,
+        difficulty,
+        (progress) => {
+          setBatchProgress(progress);
+          setGenerationPhase(`Synthesizing Batch ${progress.currentBatch}/${progress.totalBatches} (${progress.currentSection})...`);
+          // Progressive Streaming: update questions as each batch finishes!
+          setQuestions([...progress.questionsSoFar]);
+          if (timedMode && !secondsRemaining) {
+            setSecondsRemaining(progress.totalQuestions * 90);
+          }
+        },
+        controller.signal
       );
 
-      // Step 2: Inject Relevant Micro-Formularies to guarantee 0-hallucination math/science rules
-      const relevantFormularies = findRelevantFormulary(`${targetTopic} ${contextCorpus.slice(0, 2000)}`);
-      const formularyPromptBlock = relevantFormularies.length > 0
-        ? `\nAuthoritative Academic Formulary Rules (Strictly Enforce in Questions & Solutions):\n${relevantFormularies.map(r => `• ${r}`).join("\n")}\n`
-        : "";
-
-      setGenerationPhase("Synthesizing multi-disciplinary questions & KaTeX formulas...");
-
-      const levelDescriptor = academicLevel === "stem_shs"
-        ? "Senior High School STEM (Grades 11-12 Physics, Calculus, General Chem, Pre-Calculus)"
-        : academicLevel === "college_core"
-        ? "College 1st & 2nd Year Core (Calculus 1-3, Differential Equations, Discrete Math, Mechanics)"
-        : academicLevel === "csc_exam"
-        ? "General Civil Service / Professional Exam (Numerical Reasoning, Logic, Analytical English, Constitution)"
-        : "Adapt to the explicit difficulty level found in the study materials (Grade 11 to College 2nd-Year Core)";
-
-      const prompt = `You are a distinguished university professor & examination board chairperson designing a rigorous academic mock examination.
-Target Subject / Focus: "${targetTopic}"
-Target Academic Level: ${levelDescriptor}
-${formularyPromptBlock}
-Available Student Study Notes & Source Syllabus Chunks:
-${contextCorpus || "Generate a comprehensive academic assessment covering core fundamentals of " + targetTopic}
-
-REQUIREMENTS:
-1. Generate EXACTLY ${questionCount} high-yield, exam-quality questions.
-2. Mix conceptual understanding, formula application, and multi-step quantitative/analytical problem-solving.
-3. Every mathematical formula, equation, variable, or chemical formula MUST be enclosed in standard LaTeX dollar signs (e.g. $x^2 + y^2 = r^2$, $\\int_0^1 x dx$, $\\neg P \\lor Q$, $9.81\\text{ m/s}^2$).
-4. For every question, provide 4 distinct multiple-choice options (labeled A, B, C, D). Ensure distractor choices reflect common student exam pitfalls.
-5. In the "explanation" field, provide a 4-step academic derivation:
-   - Identify the governing law / principle / formula
-   - Show the step-by-step derivation with KaTeX math
-   - Explain why the correct option holds and why common distractor choices are incorrect.
-6. Provide a concise topic tag (e.g. "Calculus", "Thermodynamics", "Logic").
-
-You MUST respond with ONLY a valid raw JSON array of objects, with NO surrounding markdown backticks or commentary:
-[
-  {
-    "id": 1,
-    "question": "Question text with LaTeX formulas ($...$)...",
-    "options": ["Option A ($...$)", "Option B ($...$)", "Option C ($...$)", "Option D ($...$)"],
-    "correctIndex": 0,
-    "explanation": "Governing principle, step-by-step derivation with KaTeX, and common exam trap explanation.",
-    "topicTag": "Specific Topic"
-  }
-]`;
-
-      const response = await generateAiResponse(prompt);
-      const cleanJson = response
-        .replace(/```json/gi, "")
-        .replace(/```/gi, "")
-        .trim();
-
-      const parsed: Question[] = JSON.parse(cleanJson);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Normalize IDs to 1..N
-        const normalized = parsed.map((q, idx) => ({ ...q, id: idx + 1 }));
-        setQuestions(normalized);
-        if (timedMode) setSecondsRemaining(normalized.length * 90);
-        showToast(`Generated ${normalized.length}-question mock exam on "${targetTopic}"!`, "success");
-      } else {
-        throw new Error("Invalid question format received");
+      if (generated.length > 0) {
+        setQuestions(generated);
+        if (timedMode) setSecondsRemaining(generated.length * 90);
+        showToast(`Successfully assembled ${generated.length}-question simulation!`, "success");
       }
     } catch (err: any) {
-      console.error("Exam generation error:", err);
-      // Slice from balanced universal fallback pool
-      const count = Math.min(questionCount, UNIVERSAL_FALLBACK_POOL.length);
-      const fallbackSubset = UNIVERSAL_FALLBACK_POOL.slice(0, count).map((q, idx) => ({
-        ...q,
-        id: idx + 1,
-      }));
-      setQuestions(fallbackSubset);
-      if (timedMode) setSecondsRemaining(fallbackSubset.length * 90);
-      showToast(`Loaded ${fallbackSubset.length} multi-disciplinary practice questions (Offline / Ready Bank).`, "info");
+      if (err.message?.includes("aborted")) {
+        showToast("Generation cancelled.", "info");
+      } else {
+        console.error("Exam generation failed:", err);
+        // Fallback to ready bank
+        setQuestions(UNIVERSAL_FALLBACK_POOL);
+        if (timedMode) setSecondsRemaining(UNIVERSAL_FALLBACK_POOL.length * 90);
+        showToast(`Loaded ${UNIVERSAL_FALLBACK_POOL.length} multi-disciplinary practice questions (Offline Bank).`, "info");
+      }
     } finally {
       setIsGenerating(false);
       setGenerationPhase("");
     }
   };
 
-  const handleSelectAnswer = (qId: number, optionIdx: number) => {
+  // Append 10 More Questions to Active Exam Session
+  const handleAppendTenQuestions = async () => {
+    setIsGenerating(true);
+    setGenerationPhase("Synthesizing 10 additional questions...");
+    try {
+      const extraSection: ExamSectionConfig[] = [
+        {
+          name: topicInput.trim() || "Extended Review",
+          questionCount: 10,
+          mode: "grounded",
+        },
+      ];
+      const extraQuestions = await generateExamInBatches(
+        targetScopeItems,
+        extraSection,
+        difficulty
+      );
+      setQuestions((prev) => [...prev, ...extraQuestions]);
+      showToast(`Appended +${extraQuestions.length} new questions to your active exam!`, "success");
+    } catch {
+      showToast("Failed to generate additional questions.", "error");
+    } finally {
+      setIsGenerating(false);
+      setGenerationPhase("");
+    }
+  };
+
+  const handleSelectAnswer = (qId: string, optionIdx: number) => {
     if (isSubmitted) return;
     setUserAnswers((prev) => ({ ...prev, [qId]: optionIdx }));
   };
 
-  const toggleFlag = (qId: number) => {
+  const toggleFlag = (qId: string) => {
     setFlaggedIds((prev) => {
       const next = new Set(prev);
       if (next.has(qId)) next.delete(qId);
@@ -374,47 +325,56 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
     });
   };
 
-  const handleSubmitExam = (force = false) => {
-    const answeredCount = Object.keys(userAnswers).length;
-    if (!force && answeredCount < questions.length) {
-      const unanswered = questions.length - answeredCount;
-      const proceed = window.confirm(
-        `You have ${unanswered} unanswered question${unanswered > 1 ? "s" : ""}. Submit exam for grading now?`
-      );
-      if (!proceed) return;
-    }
-
-    if (timerRef.current) clearInterval(timerRef.current);
-    setIsSubmitted(true);
-
-    let correctCount = 0;
-    questions.forEach((q) => {
-      if (userAnswers[q.id] === q.correctIndex) correctCount++;
+  // CRUD: Save question from QuestionEditorModal
+  const handleSaveQuestion = (updatedQ: Question) => {
+    setQuestions((prev) => {
+      const idx = prev.findIndex((q) => q.id === updatedQ.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = updatedQ;
+        showToast("Question updated successfully!", "success");
+        return next;
+      }
+      showToast("Custom question added to exam!", "success");
+      return [...prev, updatedQ];
     });
+  };
 
-    const percentage = Math.round((correctCount / questions.length) * 100);
-    const passed = percentage >= benchmarkThreshold;
+  // CRUD: Delete question from active exam
+  const handleDeleteQuestion = (qId: string) => {
+    setQuestions((prev) => {
+      const next = prev.filter((q) => q.id !== qId);
+      if (activeQuestionIdx >= next.length) {
+        setActiveQuestionIdx(Math.max(0, next.length - 1));
+      }
+      return next;
+    });
+    // Remove from answers and flags
+    setUserAnswers((prev) => {
+      const next = { ...prev };
+      delete next[qId];
+      return next;
+    });
+    setFlaggedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(qId);
+      return next;
+    });
+    showToast("Question removed from exam session.", "info");
+  };
 
-    const newResult: ExamResult = {
-      score: correctCount,
-      total: questions.length,
-      percentage,
-      benchmark: benchmarkThreshold,
-      passed,
-      date: new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-      topic: topicInput.trim() || "Materials Review",
-    };
-
-    const updated = [newResult, ...examHistory.slice(0, 9)];
-    setExamHistory(updated);
-    try {
-      localStorage.setItem("rm_exam_history", JSON.stringify(updated));
-    } catch {}
-
-    if (passed) {
-      showToast(`Benchmark Achieved! Scored ${correctCount}/${questions.length} (${percentage}%) vs ${benchmarkThreshold}% target.`, "success");
+  // CRUD: Batch Import questions
+  const handleImportQuestions = (imported: Question[], mode: "append" | "replace") => {
+    if (mode === "replace") {
+      setQuestions(imported);
+      setUserAnswers({});
+      setFlaggedIds(new Set());
+      setActiveQuestionIdx(0);
+      setIsSubmitted(false);
+      showToast(`Replaced exam with ${imported.length} imported questions!`, "success");
     } else {
-      showToast(`Exam complete: ${correctCount}/${questions.length} (${percentage}%). Target was ${benchmarkThreshold}%.`, "info");
+      setQuestions((prev) => [...prev, ...imported]);
+      showToast(`Appended ${imported.length} questions to active exam!`, "success");
     }
   };
 
@@ -431,9 +391,37 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
     return {
       correct,
       total: questions.length,
-      percentage: Math.round((correct / questions.length) * 100),
+      percentage: questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0,
       missed,
     };
+  };
+
+  const handleSubmitExam = async (isAutoSubmit = false) => {
+    if (questions.length === 0) return;
+    setIsSubmitted(true);
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    const { correct, percentage } = calculateScore();
+    const passed = percentage >= benchmarkThreshold;
+
+    const attempt = await saveExamAttempt({
+      exam_id: "active-session",
+      score: correct,
+      total: questions.length,
+      percentage,
+      answers: userAnswers,
+      questions_snapshot: [...questions], // Immutable snapshot
+      duration_seconds: timedMode && secondsRemaining !== null ? questions.length * 90 - secondsRemaining : undefined,
+      passed,
+    });
+
+    setExamHistory((prev) => [attempt, ...prev.slice(0, 9)]);
+
+    if (passed) {
+      showToast(`Benchmark Achieved! Scored ${correct}/${questions.length} (${percentage}%) vs ${benchmarkThreshold}% target.`, "success");
+    } else {
+      showToast(`Exam complete: ${correct}/${questions.length} (${percentage}%). Target was ${benchmarkThreshold}%.`, "info");
+    }
   };
 
   // Topic Breakdown calculation for post-exam analytics
@@ -456,18 +444,15 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
     }));
   }, [isSubmitted, questions, userAnswers]);
 
-  // Handle Retaking only missed questions
   const handleRetakeMissed = () => {
     const { missed } = calculateScore();
     if (missed.length === 0) {
       showToast("100% Score! No missed questions to retake.", "success");
       return;
     }
-    const retakeList = missed.map((q, idx) => ({ ...q, id: idx + 1 }));
-    handleGenerateExam(retakeList);
+    handleGenerateExam(missed);
   };
 
-  // Format seconds to mm:ss
   const formatTimer = (sec: number | null) => {
     if (sec === null) return "--:--";
     const m = Math.floor(sec / 60);
@@ -475,12 +460,11 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Print Exam Sheet handler
   const handlePrintExam = () => {
     window.print();
   };
 
-  const currentQ = questions[activeQuestionIdx];
+  const currentQ = questions[activeQuestionIdx] || questions[0];
 
   return (
     <div className="space-y-6">
@@ -492,10 +476,10 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
           <div>
             <h3 className="text-base font-semibold text-slate-900 dark:text-white font-title flex items-center gap-2">
               <GraduationCap className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              Universal Mock Exam & Diagnostic Suite
+              Universal Mock Exam & Simulator
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
-              Precision practice tests & analytics calibrated from Grade 11 STEM to College 2nd-Year Core.
+              Precision practice tests, manual question builder, past paper importer & 160-item Civil Service simulations.
             </p>
           </div>
 
@@ -515,45 +499,65 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
           </div>
         </div>
 
-        {/* Search & Topic Bar */}
+        {/* Material Scope Selector Component */}
+        <MaterialScopeSelector
+          items={items}
+          selection={scopeSelection}
+          onChange={setScopeSelection}
+        />
+
+        {/* Search, Action Toolbar & Generator Bar */}
         <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
           <div className="flex-1 relative">
             <input
               type="text"
-              placeholder="Focus topic (e.g. 'Thermodynamics', 'Calculus Integrals', 'Truth Tables', or leave blank)..."
+              placeholder="Focus topic / subject (e.g. 'Thermodynamics', 'Logic Syllogisms', 'Philippine Constitution', or leave blank)..."
               value={topicInput}
               onChange={(e) => setTopicInput(e.target.value)}
               className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans"
             />
           </div>
 
-          {items.length > 0 && (
-            <select
-              value={selectedSourceId}
-              onChange={(e) => setSelectedSourceId(e.target.value)}
-              className="px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans"
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* Manual Question Creator */}
+            <button
+              type="button"
+              onClick={() => {
+                setQuestionToEdit(null);
+                setIsEditorOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-colors shrink-0 cursor-pointer"
+              title="Manually create a custom exam question"
             >
-              <option value="all">All Ingested Materials ({items.length})</option>
-              {items.map((it) => (
-                <option key={it.id} value={it.id}>
-                  📄 {it.title?.slice(0, 32) || "Document"}
-                </option>
-              ))}
-            </select>
-          )}
+              <Plus className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Add Question</span>
+            </button>
 
-          <button
-            onClick={() => handleGenerateExam()}
-            disabled={isGenerating}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs disabled:opacity-50 shrink-0 cursor-pointer"
-          >
-            {isGenerating ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="w-3.5 h-3.5" />
-            )}
-            <span>{isGenerating ? "Synthesizing Exam..." : `Generate ${questionCount} Questions`}</span>
-          </button>
+            {/* Batch Question Importer */}
+            <button
+              type="button"
+              onClick={() => setIsImportOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-colors shrink-0 cursor-pointer"
+              title="Paste questions from handouts, past exams or upload CSV"
+            >
+              <Upload className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Import</span>
+            </button>
+
+            {/* AI Multi-Batch Generator */}
+            <button
+              onClick={() => handleGenerateExam()}
+              disabled={isGenerating}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs disabled:opacity-50 shrink-0 cursor-pointer"
+            >
+              {isGenerating ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5" />
+              )}
+              <span>{isGenerating ? "Synthesizing Exam..." : `Generate ${presetCount} Qs`}</span>
+            </button>
+          </div>
         </div>
 
         {/* Quick Suggested Topic Chips */}
@@ -575,74 +579,76 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
         {/* Expandable Parameters Drawer */}
         {showConfigDrawer && (
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 dark:bg-slate-950/30 p-4 rounded-xl">
-            {/* 1. Exam Length */}
+            {/* 1. Exam Length / Presets */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">
-                Questions Count
+                Simulation Length Presets
               </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {[5, 10, 20].map((count) => (
-                  <button
-                    key={count}
-                    onClick={() => setQuestionCount(count as any)}
-                    className={`py-1.5 text-xs rounded-lg border font-mono transition-all ${
-                      questionCount === count
-                        ? "bg-indigo-600 text-white border-indigo-600 font-bold"
-                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300"
-                    }`}
-                  >
-                    {count} Qs
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 2. Benchmark Passing Score */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">
-                  Passing Cutoff
-                </label>
-                <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                  {benchmarkThreshold}%
-                </span>
-              </div>
               <div className="grid grid-cols-3 gap-1.5">
                 {[
-                  { val: 75, label: "75% Pass" },
-                  { val: 80, label: "80% CSC" },
-                  { val: 90, label: "90% Honor" },
-                ].map((preset) => (
+                  { id: "10", label: "10 Qs (Drill)" },
+                  { id: "25", label: "25 Qs" },
+                  { id: "50", label: "50 Qs" },
+                  { id: "100", label: "100 Qs" },
+                  { id: "160", label: "160 Qs (CSC)" },
+                ].map((item) => (
                   <button
-                    key={preset.val}
-                    onClick={() => setBenchmarkThreshold(preset.val)}
-                    className={`py-1.5 text-[11px] rounded-lg border font-mono transition-all ${
-                      benchmarkThreshold === preset.val
+                    key={item.id}
+                    onClick={() => setPresetCount(item.id as any)}
+                    className={`py-1.5 px-1 text-[11px] rounded-lg border font-mono transition-all text-center ${
+                      presetCount === item.id
                         ? "bg-indigo-600 text-white border-indigo-600 font-bold"
                         : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300"
                     }`}
                   >
-                    {preset.label}
+                    {item.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* 3. Target Level */}
+            {/* 2. Difficulty Level */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">
-                Academic Level
+                Difficulty Level
               </label>
-              <select
-                value={academicLevel}
-                onChange={(e) => setAcademicLevel(e.target.value)}
-                className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-700 dark:text-slate-300 font-sans focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value="auto">Auto-Detect from Materials</option>
-                <option value="stem_shs">Senior High STEM (Grades 11-12)</option>
-                <option value="college_core">College 1st-2nd Year Core</option>
-                <option value="csc_exam">Civil Service / GenEd Exam</option>
-              </select>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(["easy", "mixed", "hard"] as const).map((diff) => (
+                  <button
+                    key={diff}
+                    onClick={() => setDifficulty(diff)}
+                    className={`py-1.5 text-xs rounded-lg border capitalize font-sans transition-all ${
+                      difficulty === diff
+                        ? "bg-indigo-600 text-white border-indigo-600 font-bold"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300"
+                    }`}
+                  >
+                    {diff}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. Passing Score Threshold */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-mono text-slate-700 dark:text-slate-300">
+                <span className="font-semibold uppercase tracking-wider">Passing Target</span>
+                <span className="font-bold text-indigo-600 dark:text-indigo-400">{benchmarkThreshold}%</span>
+              </div>
+              <input
+                type="range"
+                min="60"
+                max="95"
+                step="5"
+                value={benchmarkThreshold}
+                onChange={(e) => setBenchmarkThreshold(Number(e.target.value))}
+                className="w-full accent-indigo-600 cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                <span>70% Passing</span>
+                <span>80% CSC Target</span>
+                <span>90% Honors</span>
+              </div>
             </div>
 
             {/* 4. Timed Exam Mode */}
@@ -659,19 +665,58 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
                 }`}
               >
                 <Clock className="w-3.5 h-3.5" />
-                <span>{timedMode ? `Active (90s / Q)` : "Untimed Practice"}</span>
+                <span>{timedMode ? "Active (90s / Q)" : "Untimed Practice"}</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* Generating Progress Indicator */}
+        {/* Multi-Batch Progress & Progressive Start Banner */}
         {isGenerating && (
-          <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/30 rounded-xl border border-indigo-100 dark:border-indigo-900/40 flex items-center gap-3">
-            <Loader2 className="w-4 h-4 text-indigo-600 animate-spin shrink-0" />
-            <div className="text-xs text-indigo-900 dark:text-indigo-200 font-sans">
-              <strong>Synthesizing Assessment:</strong> {generationPhase}
+          <div className="p-4 bg-indigo-50/80 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800 space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
+                {generationPhase}
+              </span>
+              <span className="font-mono text-indigo-700 dark:text-indigo-300 font-bold">
+                {batchProgress?.completedQuestions || 0} / {batchProgress?.totalQuestions || presetCount} Qs (Batch {batchProgress?.currentBatch || 1}/{batchProgress?.totalBatches || 1})
+              </span>
             </div>
+
+            <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div
+                className="bg-indigo-600 h-full transition-all duration-300"
+                style={{
+                  width: `${Math.min(
+                    100,
+                    Math.round(
+                      ((batchProgress?.completedQuestions || 0) / Number(presetCount)) * 100
+                    ) || 15
+                  )}%`,
+                }}
+              />
+            </div>
+
+            {/* Progressive Start: Student doesn't have to wait for all 160 */}
+            {batchProgress?.isFirstBatchReady && (
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
+                  ✓ Batch 1 is ready! You can start taking the test immediately.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsGenerating(false);
+                    setActiveQuestionIdx(0);
+                    showToast("Started exam session! Background questions will finish streaming seamlessly.", "info");
+                  }}
+                  className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                >
+                  Start Answering Now (Q1–Q{batchProgress.completedQuestions}) &rarr;
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -692,7 +737,7 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
               </div>
             </div>
 
-            {/* Center: Timer & Flagging */}
+            {/* Center & Right Controls: Timer, Flagging, ViewMode */}
             <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
               {timedMode && secondsRemaining !== null && (
                 <div
@@ -707,17 +752,19 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
                 </div>
               )}
 
-              <button
-                onClick={() => toggleFlag(currentQ.id)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium border transition-colors ${
-                  flaggedIds.has(currentQ.id)
-                    ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 border-amber-300 dark:border-amber-700"
-                    : "bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-900"
-                }`}
-              >
-                <Flag className="w-3.5 h-3.5" />
-                <span>{flaggedIds.has(currentQ.id) ? "Flagged" : "Flag"}</span>
-              </button>
+              {currentQ && (
+                <button
+                  onClick={() => toggleFlag(currentQ.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
+                    flaggedIds.has(currentQ.id)
+                      ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 border-amber-300 dark:border-amber-700"
+                      : "bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-900"
+                  }`}
+                >
+                  <Flag className="w-3.5 h-3.5" />
+                  <span>{flaggedIds.has(currentQ.id) ? "Flagged" : "Flag"}</span>
+                </button>
+              )}
 
               <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden text-xs">
                 <button
@@ -771,10 +818,8 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
             })}
           </div>
 
-          {/* ------------------------------------------------------------- */}
-          {/* Question Cards (Stepper Mode or List Mode)                   */}
-          {/* ------------------------------------------------------------- */}
-          {(viewMode === "stepper" ? [currentQ] : questions).map((q, localIdx) => {
+          {/* Question Cards (Stepper Mode or List Mode) */}
+          {(viewMode === "stepper" ? (currentQ ? [currentQ] : []) : questions).map((q, localIdx) => {
             const actualIndex = viewMode === "stepper" ? activeQuestionIdx : localIdx;
             const selectedOpt = userAnswers[q.id];
             const isCorrect = selectedOpt === q.correctIndex;
@@ -782,9 +827,9 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
             return (
               <div
                 key={q.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4"
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 relative group"
               >
-                {/* Question Header */}
+                {/* Question Header & Action Controls (Edit & Delete) */}
                 <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                   <div className="flex items-center gap-2 font-mono text-xs">
                     <span className="w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold border border-indigo-200 dark:border-indigo-800">
@@ -795,19 +840,44 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
                     </span>
                   </div>
 
-                  {isSubmitted && (
-                    <span className="flex items-center gap-1 text-xs font-mono font-medium">
-                      {isCorrect ? (
-                        <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Correct
-                        </span>
-                      ) : (
-                        <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800">
-                          <XCircle className="w-3.5 h-3.5" /> Incorrect
-                        </span>
-                      )}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {/* Edit Question */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuestionToEdit(q);
+                        setIsEditorOpen(true);
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      title="Edit this question statement, choices or explanation"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Delete Question */}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteQuestion(q.id)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      title="Remove question from exam"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {isSubmitted && (
+                      <span className="flex items-center gap-1 text-xs font-mono font-medium ml-2">
+                        {isCorrect ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Correct
+                          </span>
+                        ) : (
+                          <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800">
+                            <XCircle className="w-3.5 h-3.5" /> Incorrect
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Question Text with KaTeX Math Rendering */}
@@ -850,12 +920,12 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
                   })}
                 </div>
 
-                {/* Academic 4-Step Explanation with KaTeX */}
+                {/* Academic Explanation with KaTeX */}
                 {isSubmitted && (
                   <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-sans leading-relaxed space-y-2">
                     <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                       <BookOpen className="w-3.5 h-3.5" />
-                      Academic Derivation & Exam Trap Analysis:
+                      Academic Derivation & Solution Rationale:
                     </div>
                     <AcademicMathView content={q.explanation} />
                   </div>
@@ -864,32 +934,64 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
             );
           })}
 
-          {/* Stepper Navigation Footer */}
-          {viewMode === "stepper" && (
-            <div className="flex items-center justify-between gap-3 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+          {/* Stepper Navigation Footer & Extender Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+            {viewMode === "stepper" ? (
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+                <button
+                  onClick={() => setActiveQuestionIdx((prev) => Math.max(0, prev - 1))}
+                  disabled={activeQuestionIdx === 0}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Previous</span>
+                </button>
+
+                <div className="text-xs font-mono text-slate-400">
+                  {activeQuestionIdx + 1} / {questions.length}
+                </div>
+
+                <button
+                  onClick={() => setActiveQuestionIdx((prev) => Math.min(questions.length - 1, prev + 1))}
+                  disabled={activeQuestionIdx === questions.length - 1}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <span>Next</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="text-xs font-mono text-slate-400">
+                Total Exam Items: {questions.length} Questions
+              </div>
+            )}
+
+            {/* Extender & Add buttons */}
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
               <button
-                onClick={() => setActiveQuestionIdx((prev) => Math.max(0, prev - 1))}
-                disabled={activeQuestionIdx === 0}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                type="button"
+                onClick={() => {
+                  setQuestionToEdit(null);
+                  setIsEditorOpen(true);
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Previous</span>
+                <Plus className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Add Question</span>
               </button>
 
-              <div className="text-xs font-mono text-slate-400">
-                {activeQuestionIdx + 1} / {questions.length}
-              </div>
-
               <button
-                onClick={() => setActiveQuestionIdx((prev) => Math.min(questions.length - 1, prev + 1))}
-                disabled={activeQuestionIdx === questions.length - 1}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                type="button"
+                disabled={isGenerating}
+                onClick={handleAppendTenQuestions}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition-colors"
+                title="Synthesize 10 more grounded questions and append them to this exam session"
               >
-                <span>Next</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>+ Generate 10 More</span>
               </button>
             </div>
-          )}
+          </div>
 
           {/* ------------------------------------------------------------- */}
           {/* Submission and Diagnostic Scoring Console                   */}
@@ -1014,6 +1116,26 @@ You MUST respond with ONLY a valid raw JSON array of objects, with NO surroundin
           </div>
         </div>
       )}
+
+      {/* Question Editor Modal */}
+      <QuestionEditorModal
+        isOpen={isEditorOpen}
+        questionToEdit={questionToEdit}
+        onSave={handleSaveQuestion}
+        onClose={() => {
+          setIsEditorOpen(false);
+          setQuestionToEdit(null);
+        }}
+        defaultTopic={topicInput.trim() || "General"}
+      />
+
+      {/* Question Importer Modal */}
+      <QuestionImportModal
+        isOpen={isImportOpen}
+        onImport={handleImportQuestions}
+        onClose={() => setIsImportOpen(false)}
+        defaultTopic={topicInput.trim() || "General"}
+      />
     </div>
   );
 };
