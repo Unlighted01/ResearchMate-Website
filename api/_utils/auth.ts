@@ -58,9 +58,20 @@ export interface AuthResult {
 const ALLOWED_ORIGINS = [
   "https://researchmate.vercel.app",
   "https://www.researchmate.vercel.app",
+  "https://research-mate-website.vercel.app",
   "http://localhost:5173",  // Vite dev
   "http://localhost:3000",  // fallback dev
 ];
+
+export function isOriginAllowed(origin: string): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Whitelist all Vercel production & preview deployment URLs (*.vercel.app)
+  if (/^https:\/\/[a-zA-Z0-9-_.]+\.vercel\.app$/.test(origin)) return true;
+  // Whitelist localhost dev servers
+  if (/^http:\/\/localhost:\d+$/.test(origin)) return true;
+  return false;
+}
 
 /**
  * Sets CORS headers for the response. Returns the matched origin
@@ -71,7 +82,7 @@ export function setCorsHeaders(
   res: VercelResponse,
 ): string {
   const origin = req.headers.origin ?? "";
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : "";
+  const allowed = isOriginAllowed(origin) ? origin : "";
 
   res.setHeader("Access-Control-Allow-Origin", allowed);
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");

@@ -95,6 +95,32 @@ IMPORTANT GUIDELINES:
 `.trim();
 
 /**
+ * Builds a strictly-scoped system instruction for exam question generation.
+ * Enforces raw, parseable JSON arrays without conversational introductory text.
+ */
+export const EXAM_SYSTEM_INSTRUCTION = `
+You are an expert university examination board director and assessment specialist.
+Your mission is to generate authentic, high-yield, syllabus-accurate multiple-choice examination questions based strictly on the provided study material and requirements.
+
+CRITICAL FORMAT RULES:
+1. You must respond with ONLY a valid, parseable JSON array of question objects starting with '[' and ending with ']'.
+2. Do NOT include any markdown conversational prose, commentary, intro, or outro text outside the JSON.
+3. Every mathematical formula, equation, variable, or physical unit MUST use standard KaTeX ($...$). Wrap unit names inside \\text{...} (e.g. $15\\text{ m/s}$, $9.8\\text{ m/s}^2$).
+4. Each question MUST provide exactly 4 distinct choices [A, B, C, D] with plausible distractors, the 0-based index of the correct option (0, 1, 2, or 3), and a clear step-by-step academic explanation.
+
+JSON Schema:
+[
+  {
+    "question": "Question statement?",
+    "options": ["A", "B", "C", "D"],
+    "correctIndex": 0,
+    "explanation": "Detailed step-by-step academic explanation.",
+    "topicTag": "Topic Name"
+  }
+]
+`.trim();
+
+/**
  * Builds a strictly-scoped system instruction for direct document/PDF chat.
  * Enforces zero-tolerance for off-topic or unrelated subjects (e.g. grammar in a math PDF).
  */
@@ -317,9 +343,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const activeInstruction = mode === "document"
       ? getDocumentSystemInstruction(documentTitle)
+      : mode === "exam"
+      ? EXAM_SYSTEM_INSTRUCTION
       : SYSTEM_INSTRUCTION;
 
-    const prompt = `Use this context to answer the user.\n\nCONTEXT:\n${context || "No context."}\n\nMessage: ${message}`;
+    const prompt = mode === "exam"
+      ? `EXAM REQUIREMENTS:\n${message}\n\nSTUDY MATERIAL EXCERPTS:\n${context || "No specific document context provided. Synthesize high-yield academic questions on this topic."}`
+      : `Use this context to answer the user.\n\nCONTEXT:\n${context || "No context."}\n\nMessage: ${message}`;
     let responseText = "";
 
     // 3. Call AI (Model-Aware Routing with Fallbacks)

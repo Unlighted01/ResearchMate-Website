@@ -73,6 +73,7 @@ describe("Phase 1: Exam Schema & Local-First Storage", () => {
 
   it("stores an immutable questions_snapshot in exam attempts", async () => {
     const qId = generateUUID();
+    const examId = generateUUID();
     const originalQuestions: Question[] = [
       {
         id: qId,
@@ -85,7 +86,7 @@ describe("Phase 1: Exam Schema & Local-First Storage", () => {
     ];
 
     const attempt = await saveExamAttempt({
-      exam_id: "exam-123",
+      exam_id: examId,
       score: 1,
       total: 1,
       percentage: 100,
@@ -95,12 +96,13 @@ describe("Phase 1: Exam Schema & Local-First Storage", () => {
     });
 
     expect(attempt.id).toBeDefined();
+    expect(attempt.exam_id).toBe(examId);
     expect(attempt.answers[qId]).toBe(1);
     expect(attempt.questions_snapshot.length).toBe(1);
     expect(attempt.questions_snapshot[0].question).toBe("What is $2 + 2$?");
 
     // Verify retrieval
-    const history = await getExamAttempts("exam-123");
+    const history = await getExamAttempts(examId);
     expect(history.length).toBe(1);
     expect(history[0].questions_snapshot[0].options[1]).toBe("4");
   });

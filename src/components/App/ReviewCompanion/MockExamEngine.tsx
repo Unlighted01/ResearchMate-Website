@@ -29,11 +29,13 @@ import {
   Edit2,
   Trash2,
   RefreshCw,
+  ChevronDown,
 } from "lucide-react";
 import { StorageItem } from "../../../services/storageService";
 import {
   Question,
   generateUUID,
+  saveExam,
   saveExamAttempt,
   getExamAttempts,
   generateExamInBatches,
@@ -135,6 +137,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
   const [examHistory, setExamHistory] = useState<ExamAttemptRecord[]>([]);
+  const [activeExamId, setActiveExamId] = useState<string>(() => generateUUID());
 
   // Generation abort controller ref
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -187,36 +190,39 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     return items.filter((i) => scopeSelection.selectedIds.includes(i.id));
   }, [scopeSelection, items]);
 
-  // Build section configuration based on preset
+  // Build section configuration based on preset and actual study material
   const buildExamSections = (targetPreset: string, customTopic: string): ExamSectionConfig[] => {
-    const topic = customTopic || "Course Review";
+    const docTitle = targetScopeItems.length > 0
+      ? (targetScopeItems[0].title || targetScopeItems[0].sourceTitle || "").replace(/\.[^/.]+$/, "").trim()
+      : "";
+    const topic = customTopic || docTitle || "Course Material";
+
     if (targetPreset === "160") {
-      // Official Civil Service Commission (CSC) Table of Specifications (TOS)
       return [
-        { name: "Verbal Ability & Grammar", questionCount: 50, mode: "grounded", topicFocus: `Verbal Ability, English grammar, reading comprehension, vocabulary: ${topic}` },
-        { name: "Analytical & Logical Reasoning", questionCount: 40, mode: "grounded", topicFocus: `Analytical reasoning, syllogisms, logic: ${topic}` },
-        { name: "Numerical & Word Problems", questionCount: 40, mode: "grounded", topicFocus: `Numerical reasoning, word problems, math: ${topic}` },
-        { name: "General Information & Constitution", questionCount: 30, mode: "grounded", topicFocus: `Philippine Constitution, ethics, environmental laws: ${topic}` },
+        { name: "Foundational Concepts & Principles", questionCount: 40, mode: "grounded", topicFocus: `${topic} - Fundamentals & Core Concepts` },
+        { name: "Core Methodology & Applications", questionCount: 40, mode: "grounded", topicFocus: `${topic} - Applications & Problem Solving` },
+        { name: "Advanced Analysis & Scenarios", questionCount: 40, mode: "grounded", topicFocus: `${topic} - Intermediate to Advanced Analysis` },
+        { name: "Comprehensive Diagnostics & Synthesis", questionCount: 40, mode: "grounded", topicFocus: `${topic} - Multi-Step Problems & Synthesis` },
       ];
     }
     if (targetPreset === "100") {
       return [
-        { name: "Core Fundamentals", questionCount: 50, mode: "grounded", topicFocus: `${topic} core fundamentals` },
-        { name: "Advanced Applications", questionCount: 50, mode: "grounded", topicFocus: `${topic} advanced problems` },
+        { name: "Core Principles & Direct Applications", questionCount: 50, mode: "grounded", topicFocus: `${topic} - Core Principles` },
+        { name: "Advanced Synthesis & Problem Solving", questionCount: 50, mode: "grounded", topicFocus: `${topic} - Advanced Scenarios` },
       ];
     }
     if (targetPreset === "50") {
       return [
-        { name: "Midterm Comprehensive", questionCount: 50, mode: "grounded", topicFocus: topic },
+        { name: "Midterm Comprehensive Assessment", questionCount: 50, mode: "grounded", topicFocus: topic },
       ];
     }
     if (targetPreset === "25") {
       return [
-        { name: "Standard Assessment", questionCount: 25, mode: "grounded", topicFocus: topic },
+        { name: "Standard Assessment Test", questionCount: 25, mode: "grounded", topicFocus: topic },
       ];
     }
     return [
-      { name: "Quick Drill", questionCount: 10, mode: "grounded", topicFocus: topic },
+      { name: "Quick Diagnostic Drill", questionCount: 10, mode: "grounded", topicFocus: topic },
     ];
   };
 
@@ -238,6 +244,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     setUserAnswers({});
     setFlaggedIds(new Set());
     setActiveQuestionIdx(0);
+    setActiveExamId(generateUUID());
     setBatchProgress(null);
     setGenerationPhase("Initializing multi-batch question synthesis...");
 
@@ -370,6 +377,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       setUserAnswers({});
       setFlaggedIds(new Set());
       setActiveQuestionIdx(0);
+      setActiveExamId(generateUUID());
       setIsSubmitted(false);
       showToast(`Replaced exam with ${imported.length} imported questions!`, "success");
     } else {
@@ -404,8 +412,25 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     const { correct, percentage } = calculateScore();
     const passed = percentage >= benchmarkThreshold;
 
+    // Ensure parent exam is registered so foreign key cascade and analytics succeed cleanly
+    try {
+      await saveExam({
+        id: activeExamId,
+        title: topicInput.trim() ? `${topicInput.trim()} Simulation` : "Custom Practice Exam",
+        questions: [...questions],
+        config: {
+          difficulty,
+          timedMode,
+          benchmarkScore: benchmarkThreshold,
+          sections: buildExamSections(presetCount, topicInput.trim()),
+        },
+      });
+    } catch (saveErr) {
+      console.warn("Auto-registering exam session for attempt failed:", saveErr);
+    }
+
     const attempt = await saveExamAttempt({
-      exam_id: "active-session",
+      exam_id: activeExamId,
       score: correct,
       total: questions.length,
       percentage,
@@ -479,7 +504,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
               Universal Mock Exam & Simulator
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
-              Precision practice tests, manual question builder, past paper importer & 160-item Civil Service simulations.
+              Precision practice tests, manual question builder, past paper importer & high-capacity full-length exam simulations.
             </p>
           </div>
 
@@ -511,7 +536,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
           <div className="flex-1 relative">
             <input
               type="text"
-              placeholder="Focus topic / subject (e.g. 'Thermodynamics', 'Logic Syllogisms', 'Philippine Constitution', or leave blank)..."
+              placeholder="Focus topic / subject (e.g. 'Calculus', 'Word Problems', 'Organic Chemistry', or leave blank)..."
               value={topicInput}
               onChange={(e) => setTopicInput(e.target.value)}
               className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans"
@@ -579,32 +604,35 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
         {/* Expandable Parameters Drawer */}
         {showConfigDrawer && (
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 dark:bg-slate-950/30 p-4 rounded-xl">
-            {/* 1. Exam Length / Presets */}
+            {/* 1. Exam Length / Presets Dropdown */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">
-                Simulation Length Presets
+              <label htmlFor="exam-length-select" className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono block">
+                Simulation Length
               </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {[
-                  { id: "10", label: "10 Qs (Drill)" },
-                  { id: "25", label: "25 Qs" },
-                  { id: "50", label: "50 Qs" },
-                  { id: "100", label: "100 Qs" },
-                  { id: "160", label: "160 Qs (CSC)" },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setPresetCount(item.id as any)}
-                    className={`py-1.5 px-1 text-[11px] rounded-lg border font-mono transition-all text-center ${
-                      presetCount === item.id
-                        ? "bg-indigo-600 text-white border-indigo-600 font-bold"
-                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <div className="relative">
+                <select
+                  id="exam-length-select"
+                  value={presetCount}
+                  onChange={(e) => setPresetCount(e.target.value as any)}
+                  className="w-full appearance-none pl-3 pr-8 py-2 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-2xs font-sans"
+                >
+                  <option value="10">10 Questions · Quick Drill (~15m)</option>
+                  <option value="25">25 Questions · Standard Test (~35m)</option>
+                  <option value="50">50 Questions · Midterm (~75m)</option>
+                  <option value="100">100 Questions · Comprehensive (~2.5h)</option>
+                  <option value="160">160 Questions · Full Simulation (~4.0h)</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </div>
               </div>
+              <p className="text-[10px] text-slate-400 font-mono">
+                {presetCount === "10" && "⚡ Fast 1-batch diagnostic drill"}
+                {presetCount === "25" && "📘 2-batch standard syllabus test"}
+                {presetCount === "50" && "📊 3-batch comprehensive midterm"}
+                {presetCount === "100" && "🎯 5-batch comprehensive mock"}
+                {presetCount === "160" && "🏆 8-batch full-scale simulation"}
+              </p>
             </div>
 
             {/* 2. Difficulty Level */}
@@ -646,7 +674,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
               />
               <div className="flex justify-between text-[10px] text-slate-400 font-mono">
                 <span>70% Passing</span>
-                <span>80% CSC Target</span>
+                <span>80% Standard Target</span>
                 <span>90% Honors</span>
               </div>
             </div>

@@ -46,16 +46,16 @@ describe("Phase 4: Multi-Batch Exam Generation & Slicing", () => {
     expect(slices.reduce((acc, s) => acc + s.count, 0)).toBe(50);
   });
 
-  it("partitions the official 160-item Civil Service (CSC) TOS into discrete batches", () => {
-    const cscSections: ExamSectionConfig[] = [
-      { name: "Verbal Ability", questionCount: 50, mode: "grounded" },
-      { name: "Analytical Ability", questionCount: 40, mode: "grounded" },
-      { name: "Numerical Ability", questionCount: 40, mode: "grounded" },
-      { name: "General Info & Constitution", questionCount: 30, mode: "grounded" },
+  it("partitions a 160-item full-scale comprehensive simulation into discrete batches", () => {
+    const fullMockSections: ExamSectionConfig[] = [
+      { name: "Foundational Concepts & Principles", questionCount: 40, mode: "grounded" },
+      { name: "Core Methodology & Applications", questionCount: 40, mode: "grounded" },
+      { name: "Advanced Analysis & Scenarios", questionCount: 40, mode: "grounded" },
+      { name: "Comprehensive Diagnostics & Synthesis", questionCount: 40, mode: "grounded" },
     ];
 
-    const slices = partitionExamSections(cscSections, 20);
-    expect(slices.length).toBe(9); // 50->(20,20,10), 40->(20,20), 40->(20,20), 30->(20,10) = 3+2+2+2 = 9 slices
+    const slices = partitionExamSections(fullMockSections, 20);
+    expect(slices.length).toBe(8); // 40->(20,20) * 4 = 8 slices of 20 items
     expect(slices.reduce((acc, s) => acc + s.count, 0)).toBe(160);
     slices.forEach((s) => expect(s.count).toBeLessThanOrEqual(20));
   });

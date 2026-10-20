@@ -25,6 +25,7 @@ import {
 import { addItem } from "../../../services/storageService";
 import { runMathOcr, generateSummary } from "../../../services/geminiService";
 import { extractPdfContent } from "../../../services/pdfService";
+import { detectQaBookLikelihood } from "../../../services/pdfQuestionImporter";
 import LatexRenderer from "../../shared/LatexRenderer";
 
 interface ReviewMaterialsUploaderProps {
@@ -40,6 +41,7 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
   const [statusText, setStatusText] = useState("");
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [detectedQaBook, setDetectedQaBook] = useState<{ fileName: string; questionCount: number; confidence: number } | null>(null);
 
   // Math OCR result modal
   const [ocrResult, setOcrResult] = useState<{
@@ -100,6 +102,15 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
         } else if (extension === "pdf") {
           setStatusText(`Parsing PDF text & formulas from ${filename}...`);
           const extracted = await extractPdfContent(file);
+
+          const qaCheck = detectQaBookLikelihood(extracted.text);
+          if (qaCheck.isLikelyQa) {
+            setDetectedQaBook({
+              fileName: filename,
+              questionCount: qaCheck.estimatedQuestionCount,
+              confidence: qaCheck.sampleConfidence,
+            });
+          }
 
           await addItem({
             sourceTitle: filename.replace(/\.pdf$/i, ""),
@@ -301,6 +312,45 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
           </div>
         )}
       </div>
+
+      {/* Q&A Exam Book Smart Detection Banner */}
+      {detectedQaBook && (
+        <div className="mx-6 mt-4 p-4 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-lg bg-indigo-600 text-white shrink-0 mt-0.5">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                <span>Q&A Study Book Detected:</span>
+                <span className="font-mono text-indigo-700 dark:text-indigo-300">{detectedQaBook.fileName}</span>
+              </h4>
+              <p className="text-[11px] text-indigo-800/80 dark:text-indigo-300/80 mt-0.5">
+                Identified ~{detectedQaBook.questionCount} formatted questions with chapter answer keys. Import them directly into the Exam Simulator or Flashcards with $0 AI cost!
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                window.location.hash = "#/app/review?tab=exams";
+                setDetectedQaBook(null);
+              }}
+              className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Go to Exam Importer</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setDetectedQaBook(null)}
+              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Workstation Split Body */}
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">

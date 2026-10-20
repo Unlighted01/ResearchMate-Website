@@ -5,8 +5,8 @@
 // ============================================
 
 import { supabase, isAuthenticated, getCurrentUser } from "./supabaseClient";
-import { generateAiResponse } from "./geminiService";
-import { buildSynthesisContext } from "./ragService";
+import { generateAiResponse, generateExamAiResponse } from "./geminiService";
+import { buildSynthesisContext, chunkText } from "./ragService";
 import { findRelevantFormulary } from "./formularyService";
 import { sanitizeCurrencyAndMath } from "./examParser";
 import { StorageItem } from "./storageService";
@@ -193,6 +193,7 @@ export async function saveExam(
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
   const now = new Date().toISOString();
+  const nextVersion = (examData.version || 0) + 1;
 
   const record: ExamRecord = {
     id: examData.id || generateUUID(),
@@ -207,7 +208,7 @@ export async function saveExam(
       sections: [{ name: "General Assessment", questionCount: examData.questions.length, mode: "grounded" }],
     },
     questions: examData.questions,
-    version: (examData.version || 0) + 1,
+    version: nextVersion,
     visibility: examData.visibility || "private",
     created_at: examData.created_at || now,
     updated_at: now,
@@ -216,6 +217,19 @@ export async function saveExam(
   // 1. If authenticated, Supabase is source of truth
   if (isAuth && user) {
     try {
+      // Optimistic concurrency check: if updating existing exam, verify version
+      if (examData.id && examData.version) {
+        const { data: existing } = await supabase
+          .from("exams")
+          .select("version")
+          .eq("id", examData.id)
+          .maybeSingle();
+
+        if (existing && existing.version > examData.version) {
+          throw new Error("Conflict: This exam was modified in another session. Please reload to see latest updates.");
+        }
+      }
+
       const { data, error } = await supabase
         .from("exams")
         .upsert({
@@ -239,7 +253,8 @@ export async function saveExam(
         saveLocalExams([data, ...local]);
         return data;
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.message?.includes("Conflict")) throw err;
       console.warn("Supabase exam upsert failed, caching locally:", err);
     }
   }
@@ -310,9 +325,20 @@ export async function saveExamAttempt(
   const user = await getCurrentUser();
   const now = new Date().toISOString();
 
+  // Ensure exam_id is a valid UUID
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(attemptInput.exam_id || "");
+  const safeExamId = isUuid ? attemptInput.exam_id : generateUUID();
+
+  // Calculate precise percentage with 2 decimals
+  const precisePercentage = attemptInput.total > 0
+    ? Math.round((attemptInput.score / attemptInput.total) * 10000) / 100
+    : 0;
+
   const attempt: ExamAttemptRecord = {
     ...attemptInput,
     id: generateUUID(),
+    exam_id: safeExamId,
+    percentage: precisePercentage,
     user_id: user?.id,
     created_at: now,
   };
@@ -549,6 +575,36 @@ export function partitionExamSections(sections: ExamSectionConfig[], maxBatchSiz
   return slices;
 }
 
+/**
+ * Safely extracts a JSON array of questions from raw model output,
+ * handling markdown code fences, leading/trailing commentary, and trailing commas.
+ */
+export function extractJsonQuestions(raw: string): any[] | null {
+  if (!raw) return null;
+  const clean = raw.replace(/```json/gi, "").replace(/```/gi, "").trim();
+  try {
+    const direct = JSON.parse(clean);
+    if (Array.isArray(direct)) return direct;
+    if (direct && Array.isArray(direct.questions)) return direct.questions;
+  } catch {}
+
+  const match = clean.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      const cleanedTrailing = match[0].replace(/,\s*([\]}])/g, "$1");
+      try {
+        const parsed = JSON.parse(cleanedTrailing);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
 export async function generateExamInBatches(
   sourceItems: StorageItem[],
   sections: ExamSectionConfig[],
@@ -562,6 +618,20 @@ export async function generateExamInBatches(
   const accumulatedQuestions: Question[] = [];
   const generatedStems: string[] = [];
 
+  // Pre-extract chunks from all source items to partition across batches
+  const allItemChunks: string[] = [];
+  if (sourceItems && sourceItems.length > 0) {
+    for (const item of sourceItems) {
+      const text = (item.text || item.ocrText || item.aiSummary || "").trim();
+      if (!text) continue;
+      const chunks = chunkText(text, 1400, 200);
+      const title = item.title || item.sourceTitle || "Course Material";
+      allItemChunks.push(
+        ...chunks.map((c) => `[Source: "${title}" • Part ${c.index + 1}]\n${c.text}`)
+      );
+    }
+  }
+
   for (let bIdx = 0; bIdx < slices.length; bIdx++) {
     if (signal?.aborted) throw new Error("Generation aborted by user");
 
@@ -571,25 +641,30 @@ export async function generateExamInBatches(
     let batchQuestions: Question[] = [];
     let attempts = 0;
     const maxAttempts = 3;
+    let lastErrorMsg = "";
 
     while (attempts < maxAttempts && batchQuestions.length === 0) {
       if (signal?.aborted) throw new Error("Generation aborted by user");
       attempts++;
 
       try {
-        // 1. Context Synthesis
+        // 1. Partition document chunks evenly across batches so every batch has distinct, real content
         let contextCorpus = "";
-        if (slice.mode === "grounded" && sourceItems.length > 0) {
-          const targetChunks = slice.count <= 10 ? 8 : 14;
-          contextCorpus = await buildSynthesisContext(
-            sourceItems,
-            slice.topicFocus || slice.sectionName,
-            targetChunks
-          );
+        if (slice.mode === "grounded" && allItemChunks.length > 0) {
+          const chunksPerBatch = Math.max(4, Math.ceil(allItemChunks.length / slices.length));
+          const startIdx = (bIdx * chunksPerBatch) % allItemChunks.length;
+          const endIdx = Math.min(startIdx + chunksPerBatch, allItemChunks.length);
+          let sliceChunks = allItemChunks.slice(startIdx, endIdx);
+          if (sliceChunks.length < 3 && allItemChunks.length > 0) {
+            sliceChunks = allItemChunks.slice(0, Math.min(allItemChunks.length, 6));
+          }
+          contextCorpus = sliceChunks.join("\n\n");
+        } else if (slice.mode === "grounded" && sourceItems.length > 0) {
+          contextCorpus = await buildSynthesisContext(sourceItems, slice.topicFocus || slice.sectionName, 6);
         }
 
         // 2. Formulary injection
-        const relevantFormularies = findRelevantFormulary(`${slice.sectionName} ${slice.topicFocus || ""} ${contextCorpus.slice(0, 2000)}`);
+        const relevantFormularies = findRelevantFormulary(`${slice.sectionName} ${slice.topicFocus || ""} ${contextCorpus.slice(0, 1500)}`);
         const formularyBlock = relevantFormularies.length > 0
           ? `\nAuthoritative Formulas/Rules:\n${relevantFormularies.map((r) => `• ${r}`).join("\n")}\n`
           : "";
@@ -615,13 +690,13 @@ Course Material Excerpts:
 ${contextCorpus || "Generate comprehensive questions covering essential fundamentals of " + slice.sectionName}
 
 REQUIREMENTS:
-1. Generate EXACTLY ${slice.count} high-yield, exam-quality questions.
+1. Generate EXACTLY ${slice.count} high-yield, exam-quality questions based on the course material excerpts above.
 2. Every mathematical formula, equation, or variable MUST be enclosed in standard LaTeX dollar signs (e.g. $x^2 + y^2 = r^2$, $\\int_0^1 x dx$, $\\neg P \\lor Q$, $9.81\\text{ m/s}^2$).
 3. For every question, provide 4 distinct multiple-choice options (labeled A, B, C, D). Ensure distractor choices reflect common student traps.
 4. In "explanation", provide a step-by-step academic derivation or rationale.
 5. Provide a concise topicTag (e.g. "${slice.sectionName}").
+6. CRITICAL: Output ONLY a valid raw JSON array of objects. Do NOT include markdown introduction, reasoning text, or commentary outside the JSON array.
 
-Respond with ONLY a raw JSON array of objects:
 [
   {
     "question": "Question statement with LaTeX ($...$)?",
@@ -632,9 +707,23 @@ Respond with ONLY a raw JSON array of objects:
   }
 ]`;
 
-        const response = await generateAiResponse(prompt);
-        const cleanJson = response.replace(/```json/gi, "").replace(/```/gi, "").trim();
-        const parsed = JSON.parse(cleanJson);
+        // Request AI response with dedicated exam mode
+        let rawResponse = "";
+        try {
+          const aiResult = await generateExamAiResponse(prompt, contextCorpus, { signal });
+          if (aiResult.ok && aiResult.response) {
+            rawResponse = aiResult.response;
+          } else if (aiResult.reason === "no_credits") {
+            throw new Error("Out of AI credits. Please add a custom key in Settings or upgrade.");
+          } else {
+            rawResponse = await generateAiResponse(prompt);
+          }
+        } catch (aiErr: any) {
+          if (aiErr.message?.includes("credits")) throw aiErr;
+          rawResponse = await generateAiResponse(prompt);
+        }
+
+        const parsed = extractJsonQuestions(rawResponse);
 
         if (Array.isArray(parsed) && parsed.length > 0) {
           batchQuestions = parsed.map((q: any) => ({
@@ -647,21 +736,17 @@ Respond with ONLY a raw JSON array of objects:
             explanation: sanitizeCurrencyAndMath(q.explanation || "Identified based on study materials."),
             topicTag: q.topicTag || slice.sectionName,
           }));
+        } else {
+          throw new Error("Model response was not a valid JSON question array");
         }
-      } catch (batchErr) {
+      } catch (batchErr: any) {
+        lastErrorMsg = batchErr.message || String(batchErr);
         console.warn(`Batch ${bIdx + 1}/${slices.length} attempt ${attempts} failed:`, batchErr);
         if (attempts >= maxAttempts) {
-          // If all retries fail, create fallback questions for this slice so the exam doesn't abort
-          batchQuestions = Array.from({ length: slice.count }).map((_, fIdx) => ({
-            id: generateUUID(),
-            question: `Review question on ${slice.sectionName} (#${accumulatedQuestions.length + fIdx + 1})`,
-            options: ["Option A", "Option B", "Option C", "Option D"],
-            correctIndex: 0,
-            explanation: `Review question generated for ${slice.sectionName}.`,
-            topicTag: slice.sectionName,
-          }));
+          // If all attempts failed, throw a descriptive error rather than generating 160 dummy "Option A, Option B" questions!
+          throw new Error(`Failed to synthesize batch ${bIdx + 1}/${slices.length} (${slice.sectionName}): ${lastErrorMsg}`);
         } else {
-          await new Promise((r) => setTimeout(r, 800));
+          await new Promise((r) => setTimeout(r, 600));
         }
       }
     }

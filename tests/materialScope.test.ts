@@ -39,11 +39,11 @@ describe("Phase 3: Material Scope Selector Logic", () => {
     },
     {
       id: "doc-3",
-      text: "Philippine Constitution 1987",
+      text: "Linear Algebra & Matrices",
       tags: ["pdf"],
       note: "",
       sourceUrl: "",
-      sourceTitle: "Constitution.pdf",
+      sourceTitle: "LinearAlgebra.pdf",
       createdAt: "2026-01-03",
       deviceSource: "manual_upload",
     },

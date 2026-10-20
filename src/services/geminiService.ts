@@ -242,7 +242,7 @@ export async function extractInsights(text: string): Promise<InsightsResult> {
 export interface ChatOptions {
   model?: string;
   signal?: AbortSignal;
-  mode?: "universal" | "document";
+  mode?: "universal" | "document" | "exam";
   documentTitle?: string;
 }
 
@@ -257,7 +257,7 @@ export async function generateChatResponse(
 
   let model: string | undefined;
   let signal: AbortSignal | undefined;
-  let mode: "universal" | "document" = "universal";
+  let mode: "universal" | "document" | "exam" = "universal";
   let documentTitle: string | undefined;
 
   for (const arg of [modelOrSignalOrOptions, signalOrOptions]) {
@@ -269,7 +269,7 @@ export async function generateChatResponse(
     } else if (typeof arg === "object") {
       if ("model" in arg && typeof (arg as ChatOptions).model === "string") model = (arg as ChatOptions).model;
       if ("signal" in arg && (arg as ChatOptions).signal instanceof AbortSignal) signal = (arg as ChatOptions).signal;
-      if ("mode" in arg && ((arg as ChatOptions).mode === "universal" || (arg as ChatOptions).mode === "document")) {
+      if ("mode" in arg && ((arg as ChatOptions).mode === "universal" || (arg as ChatOptions).mode === "document" || (arg as ChatOptions).mode === "exam")) {
         mode = (arg as ChatOptions).mode!;
       }
       if ("documentTitle" in arg && typeof (arg as ChatOptions).documentTitle === "string") {
@@ -319,6 +319,18 @@ export async function generateChatResponse(
 export async function generateAiResponse(prompt: string, context: string = ""): Promise<string> {
   const res = await generateChatResponse(prompt, context);
   return res.ok ? res.response : "";
+}
+
+export async function generateExamAiResponse(
+  prompt: string,
+  context: string = "",
+  options?: { signal?: AbortSignal; model?: string }
+): Promise<{ ok: boolean; response: string; error?: string; reason?: string }> {
+  return await generateChatResponse(prompt, context, {
+    mode: "exam",
+    signal: options?.signal,
+    model: options?.model,
+  });
 }
 
 // ============================================
