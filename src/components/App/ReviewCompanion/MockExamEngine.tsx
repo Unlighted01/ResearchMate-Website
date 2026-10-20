@@ -130,6 +130,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationPhase, setGenerationPhase] = useState("");
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, number>>({});
@@ -246,6 +247,8 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     setActiveQuestionIdx(0);
     setActiveExamId(generateUUID());
     setBatchProgress(null);
+    setGenerationError(null);
+    setQuestions([]); // Clear any previous questions so fresh batches stream in
     setGenerationPhase("Initializing multi-batch question synthesis...");
 
     const controller = new AbortController();
@@ -281,6 +284,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       } else {
         console.error("Exam generation failed:", err);
         const errMsg = err.message || "Request timed out or API failed";
+        setGenerationError(errMsg);
         // If we already accumulated some questions before the error, PRESERVE them!
         setQuestions((prevQuestions) => {
           if (prevQuestions && prevQuestions.length > 0) {
@@ -606,6 +610,59 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                 {top}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Smart Q&A Review Book Detection Callout */}
+        {targetScopeItems.some((item) => /problem|exam|review|math|csc|test|question/i.test(item.title || item.sourceTitle || "")) && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-indigo-50/90 to-purple-50/70 dark:from-indigo-950/40 dark:to-purple-950/30 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl text-xs">
+            <div className="flex items-center gap-2.5 text-indigo-900 dark:text-indigo-200">
+              <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span>
+                <strong>Review Material Detected:</strong> <em>{targetScopeItems[0]?.title || targetScopeItems[0]?.sourceTitle || "Your document"}</em> has real questions and answer keys printed inside.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsImportOpen(true)}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold text-xs shrink-0 cursor-pointer shadow-xs transition-colors"
+            >
+              Import 160+ Qs from Book ($0 Cost) &rarr;
+            </button>
+          </div>
+        )}
+
+        {/* AI Server Error / Key Exhaustion Callout */}
+        {generationError && (
+          <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl space-y-2 text-xs">
+            <div className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>AI Generation Offline: Server API keys are exhausted ({generationError})</span>
+            </div>
+            <p className="text-amber-700 dark:text-amber-300">
+              The public shared AI credits for the server are currently exhausted. You have two immediate options:
+            </p>
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setGenerationError(null);
+                  setIsImportOpen(true);
+                }}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-xs cursor-pointer"
+              >
+                1. Import 160+ Qs Directly from PDF Book ($0 Cost, Instant) &rarr;
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.hash = "#/app/settings";
+                }}
+                className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                2. Connect Free Gemini Key in Settings (BYOK) ⚙️
+              </button>
+            </div>
           </div>
         )}
 
