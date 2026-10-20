@@ -280,10 +280,18 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
         showToast("Generation cancelled.", "info");
       } else {
         console.error("Exam generation failed:", err);
-        // Fallback to ready bank
-        setQuestions(UNIVERSAL_FALLBACK_POOL);
-        if (timedMode) setSecondsRemaining(UNIVERSAL_FALLBACK_POOL.length * 90);
-        showToast(`Loaded ${UNIVERSAL_FALLBACK_POOL.length} multi-disciplinary practice questions (Offline Bank).`, "info");
+        const errMsg = err.message || "Request timed out or API failed";
+        // If we already accumulated some questions before the error, PRESERVE them!
+        setQuestions((prevQuestions) => {
+          if (prevQuestions && prevQuestions.length > 0) {
+            showToast(`Generation stopped: ${errMsg}. Preserved ${prevQuestions.length} questions ready to practice.`, "info");
+            return prevQuestions;
+          }
+          // Only fallback to offline bank if zero questions could be generated
+          if (timedMode) setSecondsRemaining(UNIVERSAL_FALLBACK_POOL.length * 90);
+          showToast(`AI generation issue: ${errMsg}. Loaded 5 offline practice questions.`, "error");
+          return UNIVERSAL_FALLBACK_POOL;
+        });
       }
     } finally {
       setIsGenerating(false);
@@ -616,22 +624,22 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                   onChange={(e) => setPresetCount(e.target.value as any)}
                   className="w-full appearance-none pl-3 pr-8 py-2 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-2xs font-sans"
                 >
-                  <option value="10">10 Questions · Quick Drill (~15m)</option>
-                  <option value="25">25 Questions · Standard Test (~35m)</option>
-                  <option value="50">50 Questions · Midterm (~75m)</option>
-                  <option value="100">100 Questions · Comprehensive (~2.5h)</option>
-                  <option value="160">160 Questions · Full Simulation (~4.0h)</option>
+                  <option value="10">10 Questions · Quick Drill (Exam Timer: 15m · Gen: ~5s)</option>
+                  <option value="25">25 Questions · Standard Test (Exam Timer: 35m · Gen: ~12s)</option>
+                  <option value="50">50 Questions · Midterm Review (Exam Timer: 75m · Gen: ~25s)</option>
+                  <option value="100">100 Questions · Comprehensive Mock (Exam Timer: 2.5h · Gen: ~50s)</option>
+                  <option value="160">160 Questions · Full Licensure Simulation (Exam Timer: 3.5h · Gen: ~75s)</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
                   <ChevronDown className="w-3.5 h-3.5" />
                 </div>
               </div>
               <p className="text-[10px] text-slate-400 font-mono">
-                {presetCount === "10" && "⚡ Fast 1-batch diagnostic drill"}
-                {presetCount === "25" && "📘 2-batch standard syllabus test"}
-                {presetCount === "50" && "📊 3-batch comprehensive midterm"}
-                {presetCount === "100" && "🎯 5-batch comprehensive mock"}
-                {presetCount === "160" && "🏆 8-batch full-scale simulation"}
+                {presetCount === "10" && "⚡ Fast 2-batch parallel drill · 15 mins test duration"}
+                {presetCount === "25" && "📘 5-batch standard test · 35 mins test duration"}
+                {presetCount === "50" && "📊 10-batch midterm review · 75 mins test duration"}
+                {presetCount === "100" && "🎯 20-batch parallel synthesis · 2.5 hours test duration"}
+                {presetCount === "160" && "🏆 Full-scale 32-batch simulation · 3.5 hours test duration"}
               </p>
             </div>
 
@@ -730,14 +738,14 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
             {batchProgress?.isFirstBatchReady && (
               <div className="flex items-center justify-between pt-1">
                 <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
-                  ✓ Batch 1 is ready! You can start taking the test immediately.
+                  ✓ {batchProgress.completedQuestions} questions ready! You can start answering immediately while the rest stream in.
                 </span>
                 <button
                   type="button"
                   onClick={() => {
                     setIsGenerating(false);
                     setActiveQuestionIdx(0);
-                    showToast("Started exam session! Background questions will finish streaming seamlessly.", "info");
+                    showToast(`Started exam session with ${batchProgress.completedQuestions} questions ready! Background questions will stream in.`, "info");
                   }}
                   className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
                 >

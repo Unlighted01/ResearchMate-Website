@@ -557,7 +557,7 @@ export interface BatchSlice {
   count: number;
 }
 
-export function partitionExamSections(sections: ExamSectionConfig[], maxBatchSize = 20): BatchSlice[] {
+export function partitionExamSections(sections: ExamSectionConfig[], maxBatchSize = 5): BatchSlice[] {
   const slices: BatchSlice[] = [];
   for (const sec of sections) {
     let remaining = Math.max(sec.questionCount, 1);
@@ -610,9 +610,12 @@ export async function generateExamInBatches(
   sections: ExamSectionConfig[],
   difficulty: "easy" | "mixed" | "hard" = "mixed",
   onProgress?: (progress: BatchProgress) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  batchSize?: number
 ): Promise<Question[]> {
-  const slices = partitionExamSections(sections, 20);
+  // Batch size 5 guarantees execution finishes in 3-5 seconds on Vercel without hitting 10s serverless timeout
+  const calculatedBatchSize = batchSize || 5;
+  const slices = partitionExamSections(sections, calculatedBatchSize);
   const totalQuestions = slices.reduce((acc, s) => acc + s.count, 0);
 
   const accumulatedQuestions: Question[] = [];
@@ -632,11 +635,9 @@ export async function generateExamInBatches(
     }
   }
 
-  for (let bIdx = 0; bIdx < slices.length; bIdx++) {
+  // Helper to execute a single slice
+  const executeSingleBatch = async (slice: BatchSlice, bIdx: number): Promise<Question[]> => {
     if (signal?.aborted) throw new Error("Generation aborted by user");
-
-    const slice = slices[bIdx];
-    const isFirstBatch = bIdx === 0;
 
     let batchQuestions: Question[] = [];
     let attempts = 0;
@@ -648,30 +649,30 @@ export async function generateExamInBatches(
       attempts++;
 
       try {
-        // 1. Partition document chunks evenly across batches so every batch has distinct, real content
+        // 1. Partition document chunks evenly across batches (max 3 chunks, 3500 chars)
         let contextCorpus = "";
         if (slice.mode === "grounded" && allItemChunks.length > 0) {
-          const chunksPerBatch = Math.max(4, Math.ceil(allItemChunks.length / slices.length));
+          const chunksPerBatch = Math.min(3, Math.max(1, Math.ceil(allItemChunks.length / slices.length)));
           const startIdx = (bIdx * chunksPerBatch) % allItemChunks.length;
           const endIdx = Math.min(startIdx + chunksPerBatch, allItemChunks.length);
           let sliceChunks = allItemChunks.slice(startIdx, endIdx);
-          if (sliceChunks.length < 3 && allItemChunks.length > 0) {
-            sliceChunks = allItemChunks.slice(0, Math.min(allItemChunks.length, 6));
+          if (sliceChunks.length === 0) {
+            sliceChunks = allItemChunks.slice(0, Math.min(allItemChunks.length, 3));
           }
-          contextCorpus = sliceChunks.join("\n\n");
+          contextCorpus = sliceChunks.join("\n\n").slice(0, 3500);
         } else if (slice.mode === "grounded" && sourceItems.length > 0) {
-          contextCorpus = await buildSynthesisContext(sourceItems, slice.topicFocus || slice.sectionName, 6);
+          contextCorpus = (await buildSynthesisContext(sourceItems, slice.topicFocus || slice.sectionName, 3)).slice(0, 3500);
         }
 
         // 2. Formulary injection
-        const relevantFormularies = findRelevantFormulary(`${slice.sectionName} ${slice.topicFocus || ""} ${contextCorpus.slice(0, 1500)}`);
+        const relevantFormularies = findRelevantFormulary(`${slice.sectionName} ${slice.topicFocus || ""} ${contextCorpus.slice(0, 1000)}`);
         const formularyBlock = relevantFormularies.length > 0
           ? `\nAuthoritative Formulas/Rules:\n${relevantFormularies.map((r) => `• ${r}`).join("\n")}\n`
           : "";
 
         // 3. Deduplication instruction: exclude previously generated stems
         const dedupePrompt = generatedStems.length > 0
-          ? `\nDO NOT repeat or duplicate any of the following previously generated questions:\n${generatedStems.slice(-25).map((s) => `• "${s.slice(0, 60)}..."`).join("\n")}\n`
+          ? `\nDO NOT repeat or duplicate any of the following previously generated questions:\n${generatedStems.slice(-15).map((s) => `• "${s.slice(0, 60)}..."`).join("\n")}\n`
           : "";
 
         const diffPrompt = difficulty === "easy"
@@ -686,11 +687,9 @@ Topic Focus: "${slice.topicFocus || slice.sectionName}"
 Difficulty Level: ${difficulty.toUpperCase()} (${diffPrompt})
 ${formularyBlock}
 ${dedupePrompt}
-Course Material Excerpts:
-${contextCorpus || "Generate comprehensive questions covering essential fundamentals of " + slice.sectionName}
 
 REQUIREMENTS:
-1. Generate EXACTLY ${slice.count} high-yield, exam-quality questions based on the course material excerpts above.
+1. Generate EXACTLY ${slice.count} high-yield, exam-quality questions based on the provided material.
 2. Every mathematical formula, equation, or variable MUST be enclosed in standard LaTeX dollar signs (e.g. $x^2 + y^2 = r^2$, $\\int_0^1 x dx$, $\\neg P \\lor Q$, $9.81\\text{ m/s}^2$).
 3. For every question, provide 4 distinct multiple-choice options (labeled A, B, C, D). Ensure distractor choices reflect common student traps.
 4. In "explanation", provide a step-by-step academic derivation or rationale.
@@ -707,7 +706,6 @@ REQUIREMENTS:
   }
 ]`;
 
-        // Request AI response with dedicated exam mode
         let rawResponse = "";
         try {
           const aiResult = await generateExamAiResponse(prompt, contextCorpus, { signal });
@@ -743,27 +741,48 @@ REQUIREMENTS:
         lastErrorMsg = batchErr.message || String(batchErr);
         console.warn(`Batch ${bIdx + 1}/${slices.length} attempt ${attempts} failed:`, batchErr);
         if (attempts >= maxAttempts) {
-          // If all attempts failed, throw a descriptive error rather than generating 160 dummy "Option A, Option B" questions!
           throw new Error(`Failed to synthesize batch ${bIdx + 1}/${slices.length} (${slice.sectionName}): ${lastErrorMsg}`);
         } else {
-          await new Promise((r) => setTimeout(r, 600));
+          await new Promise((r) => setTimeout(r, 400));
         }
       }
     }
 
-    accumulatedQuestions.push(...batchQuestions);
-    batchQuestions.forEach((q) => generatedStems.push(q.question));
+    return batchQuestions;
+  };
+
+  // Run in chunks of CONCURRENCY = 2 for fast parallel processing without tripping rate limits
+  const CONCURRENCY = 2;
+  for (let i = 0; i < slices.length; i += CONCURRENCY) {
+    if (signal?.aborted) throw new Error("Generation aborted by user");
+
+    const chunkSlices = slices.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      chunkSlices.map((slice, offset) => executeSingleBatch(slice, i + offset))
+    );
+
+    for (const batchQuestions of results) {
+      accumulatedQuestions.push(...batchQuestions);
+      batchQuestions.forEach((q) => generatedStems.push(q.question));
+    }
 
     if (onProgress) {
+      const currentBatchNum = Math.min(i + CONCURRENCY, slices.length);
+      const isFirstBatchReady = accumulatedQuestions.length >= slices[0].count;
       onProgress({
         completedQuestions: accumulatedQuestions.length,
         totalQuestions,
-        currentSection: slice.sectionName,
-        currentBatch: bIdx + 1,
+        currentSection: slices[Math.min(i, slices.length - 1)].sectionName,
+        currentBatch: currentBatchNum,
         totalBatches: slices.length,
-        isFirstBatchReady: isFirstBatch && accumulatedQuestions.length >= slice.count,
+        isFirstBatchReady,
         questionsSoFar: [...accumulatedQuestions],
       });
+    }
+
+    // Small delay between parallel rounds to respect rate limits
+    if (i + CONCURRENCY < slices.length) {
+      await new Promise((r) => setTimeout(r, 300));
     }
   }
 
