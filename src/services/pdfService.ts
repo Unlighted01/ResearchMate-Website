@@ -165,10 +165,12 @@ export async function extractPdfContent(
       try {
         const page = await pdf.getPage(pageNum);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(" ")
-          .trim();
+        let pageText = "";
+        for (const item of textContent.items as any[]) {
+          if (!item.str && !item.hasEOL) continue;
+          pageText += (item.str || "") + (item.hasEOL ? "\n" : " ");
+        }
+        pageText = pageText.trim();
 
         if (pageText) {
           fullText += `[Page ${pageNum}]\n${pageText}\n\n`;

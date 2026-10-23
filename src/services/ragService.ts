@@ -13,6 +13,7 @@ export interface DocumentChunk {
   text: string;
   index: number;
   sourceTitle?: string;
+  pageNumber?: number;
 }
 
 export interface EmbeddedChunk extends DocumentChunk {
@@ -22,6 +23,7 @@ export interface EmbeddedChunk extends DocumentChunk {
 export interface SynthesisSourceItem {
   id?: string;
   sourceTitle?: string;
+  pageNumber?: number;
   text?: string;
   aiSummary?: string;
   ocrText?: string;
@@ -59,19 +61,40 @@ export function chunkText(
   const effectiveChunkSize = Math.max(100, chunkSize);
   const effectiveOverlap = Math.max(0, Math.min(overlap, Math.floor(effectiveChunkSize / 2)));
 
+  // Track page markers if present (e.g. "[Page 1]", "[Page 42]")
+  const pageRegex = /\[Page\s+(\d+)\]/gi;
+  const pageMarkers: { pos: number; page: number }[] = [];
+  let pMatch: RegExpExecArray | null;
+  while ((pMatch = pageRegex.exec(normalized)) !== null) {
+    pageMarkers.push({ pos: pMatch.index, page: parseInt(pMatch[1], 10) });
+  }
+
+  const getPageForPos = (pos: number): number | undefined => {
+    if (pageMarkers.length === 0) return undefined;
+    let curr: number | undefined = undefined;
+    for (const m of pageMarkers) {
+      if (m.pos <= pos) curr = m.page;
+      else break;
+    }
+    return curr ?? pageMarkers[0].page;
+  };
+
   if (normalized.length <= effectiveChunkSize) {
-    return [
-      {
-        chunkId: "chunk-0",
-        text: normalized,
-        index: 0,
-      },
-    ];
+    const single: DocumentChunk = {
+      chunkId: "chunk-0",
+      text: normalized,
+      index: 0,
+    };
+    const pageNum = getPageForPos(0);
+    if (pageNum !== undefined) single.pageNumber = pageNum;
+    return [single];
   }
 
   const chunks: DocumentChunk[] = [];
   let start = 0;
   let chunkIndex = 0;
+
+
 
   while (start < normalized.length) {
     let end = Math.min(start + effectiveChunkSize, normalized.length);
@@ -109,11 +132,14 @@ export function chunkText(
 
     const chunkContent = normalized.slice(start, end).trim();
     if (chunkContent.length > 0) {
-      chunks.push({
+      const pageNum = getPageForPos(start);
+      const chunk: DocumentChunk = {
         chunkId: `chunk-${chunkIndex}`,
         text: chunkContent,
         index: chunkIndex,
-      });
+      };
+      if (pageNum !== undefined) chunk.pageNumber = pageNum;
+      chunks.push(chunk);
       chunkIndex++;
     }
 
@@ -439,4 +465,128 @@ export async function buildSynthesisContext(
         `[Source: "${c.sourceTitle}" • Section ${c.index + 1}]\n${c.text}`,
     )
     .join("\n\n");
+}
+
+// ============================================
+// PART 6: NOTEBOOKLM-STYLE CHAT RETRIEVAL
+// ============================================
+
+export interface ChatContextResult {
+  contextText: string;
+  retrievedChunkCount: number;
+  matchedProblemNumber: string | null;
+  primarySourceTitle?: string;
+}
+
+/**
+ * Builds high-fidelity, page-anchored context for AI Chat (NotebookLM style).
+ * Replaces the naive 500-char starvation snippet with intelligent hybrid retrieval
+ * across full PDF documents (up to 35,000 characters).
+ */
+export async function buildChatContext(
+  query: string,
+  allItems: SynthesisSourceItem[],
+  targetItems: SynthesisSourceItem[] = [],
+  options: {
+    maxChars?: number;
+    topK?: number;
+  } = {}
+): Promise<ChatContextResult> {
+  const maxChars = options.maxChars ?? 35000;
+  const topK = options.topK ?? 12;
+  const targetProblem = extractTargetQuestionNumber(query);
+
+  const scopeItems = targetItems.length > 0 ? targetItems : allItems;
+  if (!scopeItems || scopeItems.length === 0) {
+    return {
+      contextText: "No document context available.",
+      retrievedChunkCount: 0,
+      matchedProblemNumber: targetProblem,
+    };
+  }
+
+  // 1. If only 1 document is in scope and it fits completely within maxChars, pass entire full text!
+  if (scopeItems.length === 1) {
+    const single = scopeItems[0];
+    const fullText = (single.text || single.ocrText || single.aiSummary || "").trim();
+    if (fullText.length > 0 && fullText.length <= maxChars) {
+      return {
+        contextText: `[DOCUMENT: "${single.sourceTitle || "Course Material"}" • Complete Text Ingested]\n${fullText}`,
+        retrievedChunkCount: 1,
+        matchedProblemNumber: targetProblem,
+        primarySourceTitle: single.sourceTitle,
+      };
+    }
+  }
+
+  // 2. Multi-document or large document (> maxChars): run hybrid page-aware chunk retrieval
+  const allChunks: DocumentChunk[] = [];
+  for (const item of scopeItems) {
+    const title = item.sourceTitle || "Course Material";
+    const body = (item.text || item.ocrText || item.aiSummary || "").trim();
+    if (!body) continue;
+
+    const chunks = chunkText(body, 1500, 200).map((c) => ({
+      ...c,
+      sourceTitle: title,
+    }));
+    allChunks.push(...chunks);
+  }
+
+  if (allChunks.length === 0) {
+    return {
+      contextText: "No document excerpts could be extracted.",
+      retrievedChunkCount: 0,
+      matchedProblemNumber: targetProblem,
+    };
+  }
+
+  // Embed and perform hybrid retrieval
+  let rankedChunks: DocumentChunk[] = [];
+  try {
+    const queryEmb = await generateEmbedding(query);
+    const embedded = await embedChunks(allChunks);
+    rankedChunks = findTopKChunksHybrid(query, queryEmb, embedded, topK);
+  } catch (err) {
+    console.warn("Vector embedding retrieval fallback to keyword scoring:", err);
+    rankedChunks = findTopKChunksHybrid(query, [], allChunks, topK);
+  }
+
+  // If a specific problem number was matched, also include the consecutive chunk
+  // to ensure options / multi-step solutions are never chopped off
+  if (targetProblem && rankedChunks.length > 0) {
+    const matchedChunk = rankedChunks[0];
+    const originalIdx = allChunks.findIndex(
+      (c) => c.sourceTitle === matchedChunk.sourceTitle && c.index === matchedChunk.index
+    );
+    if (originalIdx >= 0 && originalIdx + 1 < allChunks.length) {
+      const nextChunk = allChunks[originalIdx + 1];
+      if (!rankedChunks.some((r) => r.chunkId === nextChunk.chunkId)) {
+        rankedChunks.splice(1, 0, nextChunk);
+      }
+    }
+  }
+
+  // Assemble the context corpus with explicit page numbers and document titles
+  let currentLength = 0;
+  const contextParts: string[] = [];
+
+  for (const chunk of rankedChunks) {
+    const pageBadge = chunk.pageNumber ? ` • Page ${chunk.pageNumber}` : "";
+    const header = `[Source: "${chunk.sourceTitle}"${pageBadge} • Excerpt ${chunk.index + 1}]`;
+    const block = `${header}\n${chunk.text}`;
+
+    if (currentLength + block.length > maxChars && contextParts.length > 0) {
+      break;
+    }
+    contextParts.push(block);
+    currentLength += block.length;
+  }
+
+  return {
+    contextText: contextParts.join("\n\n---\n\n"),
+    retrievedChunkCount: contextParts.length,
+    matchedProblemNumber: targetProblem,
+    primarySourceTitle: scopeItems[0]?.sourceTitle,
+  };
 }

@@ -649,19 +649,19 @@ export async function generateExamInBatches(
       attempts++;
 
       try {
-        // 1. Partition document chunks evenly across batches (max 3 chunks, 3500 chars)
+        // 1. Partition document chunks evenly across batches (up to 8 chunks, 25,000 chars)
         let contextCorpus = "";
         if (slice.mode === "grounded" && allItemChunks.length > 0) {
-          const chunksPerBatch = Math.min(3, Math.max(1, Math.ceil(allItemChunks.length / slices.length)));
+          const chunksPerBatch = Math.min(8, Math.max(2, Math.ceil(allItemChunks.length / slices.length)));
           const startIdx = (bIdx * chunksPerBatch) % allItemChunks.length;
           const endIdx = Math.min(startIdx + chunksPerBatch, allItemChunks.length);
           let sliceChunks = allItemChunks.slice(startIdx, endIdx);
           if (sliceChunks.length === 0) {
-            sliceChunks = allItemChunks.slice(0, Math.min(allItemChunks.length, 3));
+            sliceChunks = allItemChunks.slice(0, Math.min(allItemChunks.length, 8));
           }
-          contextCorpus = sliceChunks.join("\n\n").slice(0, 3500);
+          contextCorpus = sliceChunks.join("\n\n").slice(0, 25000);
         } else if (slice.mode === "grounded" && sourceItems.length > 0) {
-          contextCorpus = (await buildSynthesisContext(sourceItems, slice.topicFocus || slice.sectionName, 3)).slice(0, 3500);
+          contextCorpus = (await buildSynthesisContext(sourceItems, slice.topicFocus || slice.sectionName, 8)).slice(0, 25000);
         }
 
         // 2. Formulary injection

@@ -8,6 +8,7 @@ import {
   chunkMatchesProblemNumber,
   sampleEvenlyDistributedChunks,
   buildSynthesisContext,
+  buildChatContext,
   embedChunks,
   clearEmbeddingCache,
 } from "../src/services/ragService";
@@ -293,5 +294,49 @@ describe("ragService - findTopKChunksHybrid", () => {
     // Problem 6 chunk MUST be rank #1
     expect(results[0].chunkId).toBe("c-p6");
     expect(results[0].text).toContain("6. Evaluate the expression");
+  });
+
+  it("extracts pageNumber from page headers during chunking", () => {
+    const pagedDoc = `[Page 1]
+Introduction to Calculus and Limits.
+
+[Page 2]
+Derivatives and tangent line definitions.
+
+[Page 42]
+64. If a train leaves at 2:00 PM traveling at 60 mph, calculate arrival time.`;
+
+    const chunks = chunkText(pagedDoc, 1500, 200);
+    expect(chunks.length).toBeGreaterThan(0);
+    expect(chunks[0].pageNumber).toBe(1);
+    expect(chunks[0].text).toContain("Limits");
+  });
+
+  it("builds high-fidelity chat context with exact problem extraction and page attribution (NotebookLM style)", async () => {
+    const sampleItems = [
+      {
+        sourceTitle: "501 Math Word Problems.pdf",
+        text: `[Page 1]
+Table of Contents and Welcome Notes.
+
+[Page 42]
+Chapter 2: Fractions
+
+64. Lori ran 5 1/2 miles Monday, 6 1/4 miles Tuesday, 4 1/2 miles Wednesday, and 2 3/4 miles on Thursday. What is the average number of miles Lori ran?
+a. 5
+b. 4 1/2
+c. 4
+d. 4 3/4
+
+Answers and Explanations
+64. d. Add total miles = 19. Average = 19 / 4 = 4 3/4.`,
+      },
+    ];
+
+    const result = await buildChatContext("solve question 64 and explain", sampleItems);
+    expect(result.matchedProblemNumber).toBe("64");
+    expect(result.retrievedChunkCount).toBeGreaterThan(0);
+    expect(result.contextText).toContain("64. Lori ran");
+    expect(result.contextText).toContain("501 Math Word Problems.pdf");
   });
 });

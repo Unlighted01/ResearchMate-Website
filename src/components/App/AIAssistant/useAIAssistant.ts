@@ -18,6 +18,7 @@ import {
   generateChatResponse,
 } from "../../../services/geminiService";
 import type { SummaryMode } from "../../../services/geminiService";
+import { buildChatContext } from "../../../services/ragService";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -351,34 +352,30 @@ const useAIAssistant = (
       userMsg.text.toLowerCase().includes(`@${i.sourceTitle?.toLowerCase()}`),
     );
 
-    const itemsToUse =
-      mentionedItems.length > 0 ? mentionedItems : items.slice(0, 5);
+    // Intelligent, NotebookLM-style grounded retrieval across full documents (up to 35k chars)
+    const contextResult = await buildChatContext(
+      userMsg.text,
+      items,
+      mentionedItems.length > 0 ? mentionedItems : (selectedItem ? [selectedItem] : []),
+      { maxChars: 35000, topK: 12 }
+    );
 
-    const contextItems = itemsToUse
-      .map(
-        (item) => `
-      Title: ${item.sourceTitle}
-      Date: ${item.createdAt}
-      Summary: ${item.aiSummary || "No summary available"}
-      Content Snippet: ${(item.text || "").substring(0, 500)}...
-    `,
-      )
-      .join("\n---\n");
-
-    const context = `
-    User Saved Research (Prioritize these):
-    ${contextItems}
-    `;
+    const context = contextResult.contextText;
+    const documentTitle = mentionedItems[0]?.sourceTitle || selectedItem?.sourceTitle;
 
     const controller = new AbortController();
     chatAbortRef.current = controller;
-    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+    const timeoutId = setTimeout(() => controller.abort(), 45_000);
 
     try {
       const result = await generateChatResponse(
         userMsg.text,
         context,
-        controller.signal,
+        {
+          signal: controller.signal,
+          documentTitle,
+          mode: documentTitle ? "document" : "universal",
+        }
       );
       clearTimeout(timeoutId);
 

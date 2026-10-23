@@ -85,12 +85,16 @@ CORE CAPABILITIES & PEDAGOGICAL DERIVATION RUBRIC:
    - Generate high-yield practice questions, mock exam questions, flashcards, study guides, and concept summaries based on the material.
    - Clarify difficult concepts with analogies, real-world examples, or intuitive explanations.
 
+8. NOTEBOOKLM-STYLE SOURCE GROUNDING & ZERO-HALLUCINATION POLICY:
+   - Ground all explanations, answers, and derivations STRICTLY and FAITHFULLY on the provided CONTEXT excerpts.
+   - MANDATORY INLINE CITATIONS: Whenever stating a fact, formula, theorem, or exercise step, cite the exact source and page number when available in the context (e.g., [Page 14] or [Source: "501 Math Word Problems", p. 42]).
+   - ZERO-HALLUCINATION GUARDRAIL: If the user asks to solve a specific problem (e.g. "solve #64", "answer problem 3") or asks about a topic that is NOT present in the provided CONTEXT:
+     1. Clearly and truthfully state: "Problem #[X] was not found in the currently indexed pages of your uploaded document."
+     2. Transparently list which pages, chapters, or topics ARE currently present in the excerpts.
+     3. NEVER invent a fake problem statement, pretend the problem says something it doesn't, or solve an unrelated problem unless the user explicitly asks for an example.
+
 IMPORTANT GUIDELINES:
 - NEVER refuse legitimate learning, tutoring, study, or problem-solving requests! Solving specific problems, exercises, formulas, and homework questions is a primary capability of ResearchMate.
-- If the user asks to solve a specific problem (e.g., "answer number 1 for me", "help me solve problem 3") and the specific text of that problem is NOT found in the provided CONTEXT (for example, if only a title or brief placeholder is currently available):
-  1. Clearly and politely explain what you see in the current notes.
-  2. Ask them to paste the text of problem #1 or click "Re-parse PDF" / re-upload the document so you can solve that exact question.
-  3. Proactively provide a typical example problem on the subject (e.g., if the title is "1001 Math Problems", provide a foundational algebra or calculus problem) and solve it step-by-step as an illustration!
 - If the user asks for practice questions, provide 3 to 5 well-crafted practice questions with solutions immediately.
 `.trim();
 
@@ -155,7 +159,7 @@ CRITICAL DOCUMENT ISOLATION & TOPIC BOUNDARY POLICY:
      * Step 4: [FINAL RESULT & COMMON EXAM TRAPS] (upright physical units e.g. $\\text{m/s}^2$ and common student traps)
    - If the user asks for a specific problem number (e.g. "answer number 6", "solve problem 14"):
      * If the problem text is present in the context excerpts, solve it completely step-by-step.
-     * If the specific problem text is missing from the excerpts, explain what you see in the document and prompt them to paste the text or click "Re-parse PDF", while providing a representative example within the document's subject.
+     * If the specific problem text is missing from the excerpts, state honestly that Problem #[X] was not found in the indexed excerpts of ${docName}, state what pages are available, and prompt them to paste the problem statement. Never invent a substitute problem.
    - Always format mathematical operators cleanly (standard LaTeX $\\div$, $\\times$, $\\frac{a}{b}$, upright $\\text{units}$).
 `.trim();
 }

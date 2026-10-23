@@ -101,7 +101,19 @@ function setLocalItems(items: StorageItem[]): void {
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
   } catch (error) {
-    console.error("❌ Error writing to local storage:", error);
+    console.warn("⚠️ LocalStorage quota reached, pruning bulky image thumbnails to preserve text...", error);
+    try {
+      const prunedItems = items.map((item, idx) => {
+        if (idx > 0 && item.imageUrl?.startsWith("data:image")) {
+          const { imageUrl, ...rest } = item;
+          return rest as StorageItem;
+        }
+        return item;
+      });
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(prunedItems));
+    } catch (retryError) {
+      console.error("❌ LocalStorage critically full. Recommend signing in to persist full documents in Cloud.", retryError);
+    }
   }
 }
 
