@@ -6,6 +6,9 @@
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { runMathOcr, generateSummary } from "./geminiService";
+import { createRepresentativeSnippet } from "./ragService";
+
+export { createRepresentativeSnippet };
 
 // Configure same-origin bundled worker (bypasses unpkg CORS and Brave Shield blocks)
 if (typeof window !== "undefined") {
@@ -267,16 +270,6 @@ export async function extractPdfContent(
   // 5. Representative Long-Document Summary Synthesis:
   // Instead of naively cutting off at character 5000 (which only covers pages 1-2),
   // sample beginning, middle, and concluding sections if document is long.
-  function createRepresentativeSnippet(text: string, maxLen = 6000): string {
-    if (text.length <= maxLen) return text;
-    const partLen = Math.floor(maxLen / 3);
-    const beginning = text.slice(0, partLen);
-    const midStart = Math.floor(text.length / 2) - Math.floor(partLen / 2);
-    const middle = text.slice(midStart, midStart + partLen);
-    const end = text.slice(-partLen);
-    return `${beginning}\n\n[... Continuing through core chapters ...]\n\n${middle}\n\n[... Concluding sections ...]\n\n${end}`;
-  }
-
   let summary = "";
   try {
     const summaryExcerpt = createRepresentativeSnippet(cleanText, 6000);

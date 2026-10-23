@@ -8,6 +8,20 @@ import { generateEmbedding, generateEmbeddings } from "./geminiService";
 // PART 1: INTERFACES & TYPES
 // ============================================
 
+/**
+ * Creates a representative sample of a long document for summarization,
+ * extracting beginning (intro/theses), middle (core chapters), and ending (conclusions).
+ */
+export function createRepresentativeSnippet(text: string, maxLen = 6000): string {
+  if (!text || text.length <= maxLen) return text || "";
+  const partLen = Math.floor(maxLen / 3);
+  const beginning = text.slice(0, partLen);
+  const midStart = Math.floor(text.length / 2) - Math.floor(partLen / 2);
+  const middle = text.slice(midStart, midStart + partLen);
+  const end = text.slice(-partLen);
+  return `${beginning}\n\n[... Continuing through core chapters ...]\n\n${middle}\n\n[... Concluding sections ...]\n\n${end}`;
+}
+
 export interface DocumentChunk {
   chunkId: string;
   text: string;
@@ -488,7 +502,7 @@ export async function buildSynthesisContext(
  * Helper: Selects proportional, non-starving chunks across multiple active documents.
  * Ensures every document in scope receives representative chunks in the final retrieval.
  */
-function selectProportionalChunks(
+export function selectProportionalChunks(
   query: string,
   queryEmb: number[],
   activeItems: SynthesisSourceItem[],
