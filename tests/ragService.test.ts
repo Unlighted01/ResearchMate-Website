@@ -11,6 +11,8 @@ import {
   buildChatContext,
   embedChunks,
   clearEmbeddingCache,
+  pinpointProblemAndSolution,
+  chunkMatchesProblemSolution,
 } from "../src/services/ragService";
 
 describe("ragService - chunkText", () => {
@@ -389,5 +391,67 @@ Electrophilic addition reactions across carbon-carbon double bonds.`,
     expect(synthesis).toContain("<sources_manifest count=\"1\">");
     expect(synthesis).toContain("<source_excerpt doc_id=\"doc-1\" title=\"Physics_Mechanics.pdf\"");
     expect(synthesis).toContain("Newton's laws of motion");
+  });
+
+  it("extracts target problem number from user prompts accurately", () => {
+    expect(extractTargetQuestionNumber("can you help me answer number 3?")).toBe("3");
+    expect(extractTargetQuestionNumber("answer number 3")).toBe("3");
+    expect(extractTargetQuestionNumber("solve #64")).toBe("64");
+    expect(extractTargetQuestionNumber("please explain problem 14")).toBe("14");
+    expect(extractTargetQuestionNumber("exercise 2b solution")).toBe("2b");
+  });
+
+  it("pinpoints both question prompt and solution from a simulated textbook corpus", () => {
+    const textbookCorpus = `
+[Page 1]
+1001 Math Problems, Second Edition
+Copyright 2004 LearningExpress, LLC.
+
+[Page 5]
+Chapter 1: Miscellaneous Math
+1. A bakery sells 45 cakes in the morning and 35 cakes in the afternoon. How many cakes are sold?
+2. If x + 5 = 12, what is the value of 2x?
+3. A train travels 300 miles in 4 hours. At the same constant rate of speed, how far will it travel in 6 hours?
+a. 400 miles
+b. 450 miles
+c. 500 miles
+d. 600 miles
+4. What is 25% of 160?
+
+[Page 180]
+Chapter 1: Solutions and Answers
+1. (b) 45 + 35 = 80 total cakes sold.
+2. (c) Subtract 5 from both sides to find x = 7, so 2x = 14.
+3. (b) To find the rate of speed, divide distance by time: 300 miles / 4 hours = 75 mph. Multiply speed by 6 hours: 75 mph * 6 hours = 450 miles.
+4. (a) 0.25 * 160 = 40.
+    `.trim();
+
+    const result = pinpointProblemAndSolution(textbookCorpus, "3");
+    expect(result.problemNumber).toBe("3");
+    expect(result.questionExcerpt).toBeTruthy();
+    expect(result.questionExcerpt).toContain("train travels 300 miles in 4 hours");
+    expect(result.solutionExcerpt).toBeTruthy();
+    expect(result.solutionExcerpt).toContain("75 mph * 6 hours = 450 miles");
+  });
+
+  it("injects pinned problem match block into buildChatContext when problem query is issued", async () => {
+    // Generate a long book corpus (> 45000 chars) to trigger chunking & pinpointing
+    let longBook = `[Page 1]\nTitle: 1001 Math Problems\n\n[Page 5]\n3. A train travels 300 miles in 4 hours. How far does it go in 6 hours?\n\n[Page 180]\n3. (b) Speed is 75 mph. 75 * 6 = 450 miles.\n\n`;
+    for (let i = 10; i <= 200; i++) {
+      longBook += `[Page ${i}]\nChapter ${i} details general algebraic mechanics and computational exercises.\n` + "x ".repeat(300) + "\n\n";
+    }
+
+    const items = [
+      {
+        sourceTitle: "1001 Math Problems.pdf",
+        text: longBook,
+      },
+    ];
+
+    const res = await buildChatContext("can you help me answer number 3?", items);
+    expect(res.matchedProblemNumber).toBe("3");
+    expect(res.contextText).toContain("<pinned_problem_match problem_number=\"3\"");
+    expect(res.contextText).toContain("train travels 300 miles in 4 hours");
+    expect(res.contextText).toContain("Speed is 75 mph");
   });
 });

@@ -204,13 +204,21 @@ export async function extractPdfContent(
 
     // 3. Multi-Page Scanned PDF OCR Fallback:
     // If the PDF contains sparse/scanned pages, run Math Vision OCR across those pages!
-    // Supports up to maxOcrPages (default 25 pages)
-    const maxOcrPages = options?.maxOcrPages ?? 25;
+    // Supports up to maxOcrPages (default 15 pages) with rate-limiting and circuit breaker
+    const maxOcrPages = options?.maxOcrPages ?? 15;
     const pagesToOcr = sparsePageNumbers.slice(0, maxOcrPages);
 
     if (pagesToOcr.length > 0 && typeof document !== "undefined") {
       console.log(`🔍 Detected ${pagesToOcr.length} scanned/sparse pages. Executing Vision OCR...`);
+      let consecutiveOcrFailures = 0;
+
       for (let i = 0; i < pagesToOcr.length; i++) {
+        // Circuit breaker: if 3 consecutive OCR calls fail (e.g. rate limit or offline), break early
+        if (consecutiveOcrFailures >= 3) {
+          console.warn("Stopping Vision OCR fallback early due to consecutive upstream failures.");
+          break;
+        }
+
         const pageNum = pagesToOcr[i];
         if (options?.onProgress) {
           options.onProgress(
@@ -245,14 +253,16 @@ export async function extractPdfContent(
                 targetSlot.isScanned = false; // Successfully transcribed
               }
               hasVisualMath = true;
+              consecutiveOcrFailures = 0;
             }
           }
-        } catch (ocrErr) {
-          console.warn(`Vision OCR fallback failed for page ${pageNum}:`, ocrErr);
+        } catch (ocrErr: any) {
+          consecutiveOcrFailures++;
+          console.warn(`Vision OCR fallback bypassed for page ${pageNum}:`, ocrErr?.message || ocrErr);
         }
 
-        // Brief yield to prevent UI freeze between OCR API calls
-        await new Promise((r) => setTimeout(r, 50));
+        // 200ms yield between OCR API calls to prevent API rate-limiting
+        await new Promise((r) => setTimeout(r, 200));
       }
     }
   } catch (pdfErr) {

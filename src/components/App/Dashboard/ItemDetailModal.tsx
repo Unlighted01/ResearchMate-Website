@@ -43,7 +43,7 @@ import {
 } from "../../../services/conversationService";
 import { initiateStudentProCheckout, getUserSubscriptionStatus } from "../../../services/paymongoService";
 import { generateAiResponse, generateChatResponse, generateEmbedding } from "../../../services/geminiService";
-import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks } from "../../../services/ragService";
+import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks, buildChatContext } from "../../../services/ragService";
 import { extractPdfContent } from "../../../services/pdfService";
 import { isPureMathCalculation, solveMath } from "../../../services/mathSolverEngine";
 import { findRelevantKnowledge } from "../../../services/knowledgeDatasets";
@@ -398,32 +398,13 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
       let docContext = "";
       if (displayText && displayText.trim()) {
-        const chunks = chunkText(displayText, 1500, 200);
-        if (chunks.length <= 3) {
-          const formattedChunks = chunks.map(
-            (c) => `[Source Section ${c.index + 1}]\n${c.text}`
-          );
-          docContext = `Document Title: "${item.sourceTitle || "Untitled"}"\n\nRelevant Document Excerpts:\n${formattedChunks.join("\n\n")}`;
-        } else {
-          try {
-            const queryEmb = await generateEmbedding(query);
-            const embedded = await embedChunks(chunks);
-            const topChunks = findTopKChunksHybrid(query, queryEmb, embedded, 4);
-            topChunks.sort((a, b) => a.index - b.index);
-            const formattedChunks = topChunks.map(
-              (c) => `[Source Section ${c.index + 1}]\n${c.text}`
-            );
-            docContext = `Document Title: "${item.sourceTitle || "Untitled"}"\n\nRelevant Document Excerpts:\n${formattedChunks.join("\n\n")}`;
-          } catch (ragErr) {
-            console.warn("RAG retrieval failed, falling back to hybrid chunks:", ragErr);
-            const fallbackChunks = findTopKChunksHybrid(query, [], chunks, 4);
-            fallbackChunks.sort((a, b) => a.index - b.index);
-            const formattedChunks = fallbackChunks.map(
-              (c) => `[Source Section ${c.index + 1}]\n${c.text}`
-            );
-            docContext = `Document Title: "${item.sourceTitle || "Untitled"}"\n\nRelevant Document Excerpts:\n${fallbackChunks.join("\n\n")}`;
-          }
-        }
+        const chatContextResult = await buildChatContext(
+          query,
+          [item],
+          [item],
+          { maxChars: 45000, topK: 16 }
+        );
+        docContext = chatContextResult.contextText;
       } else {
         docContext = `Document Title: "${item.sourceTitle || "Untitled"}"\n(Note: No body text extracted yet. If the user asks to solve specific problems or analyze sections, explain what is available, offer to solve it if they paste it or re-parse the PDF, and provide a helpful illustrative example).`;
       }

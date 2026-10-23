@@ -273,7 +273,7 @@ export function extractTargetQuestionNumber(query: string): string | null {
 }
 
 /**
- * Checks whether a chunk contains the target problem header or number.
+ * Checks whether a chunk contains the target problem header or question prompt.
  * Uses strict boundary matching to avoid false positives (e.g. "6" must NOT match "62" or "16").
  */
 export function chunkMatchesProblemNumber(chunkText: string, problemNum: string): boolean {
@@ -288,6 +288,105 @@ export function chunkMatchesProblemNumber(chunkText: string, problemNum: string)
   ];
 
   return patterns.some((regex) => regex.test(chunkText));
+}
+
+/**
+ * Checks whether a chunk contains the target problem's official answer key explanation.
+ * e.g. "3. (b) The distance...", "Solution to Problem 3:", "Answers: ... 3. D ..."
+ */
+export function chunkMatchesProblemSolution(chunkText: string, problemNum: string): boolean {
+  if (!chunkText || !problemNum) return false;
+  const escaped = problemNum.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+
+  const patterns = [
+    // Answer key entry: "3. [A-D]", "3. b. ", "3) (c) "
+    new RegExp(`(?:^|[\\r\\n\\s])\\[?${escaped}[\\)\\.\\]:]\\s*(?:\\(?[a-d]\\)?[\\.\\:\\s]|the\\s+correct|since|to\\s+solve)`, "i"),
+    // Explicit solution header: "Solution 3:", "Answer 3:", "Explanation for #3"
+    new RegExp(`\\b(?:solutions?|answers?|explanations?)\\b[\\s\\S]{0,80}?\\b${escaped}[\\)\\.\\]:]`, "i"),
+  ];
+
+  return patterns.some((regex) => regex.test(chunkText));
+}
+
+export interface PinpointResult {
+  problemNumber: string;
+  questionExcerpt: string | null;
+  solutionExcerpt: string | null;
+}
+
+/**
+ * Scans a full textbook or document to pinpoint both the initial Question Statement
+ * and the matching Answer Key / Explanation excerpt for a specific problem number.
+ */
+export function pinpointProblemAndSolution(
+  fullText: string,
+  problemNum: string
+): PinpointResult {
+  if (!fullText || !problemNum) {
+    return { problemNumber: problemNum, questionExcerpt: null, solutionExcerpt: null };
+  }
+
+  const escaped = problemNum.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+
+  // Detect whether the document contains an "Answers", "Solutions", or "Answer Key" section
+  const answersHeaderIdx = fullText.search(
+    /(?:^|[\r\n])\s*(?:(?:chapter|section|part)\s+\d+[:\s-]*)?(?:answers?\s+(?:and|&)\s+explanations?|answers?|solutions?|answer\s+key)(?:[:\s\r\n]|$)/i
+  );
+
+  let questionSearchText = fullText;
+  let solutionSearchText = fullText;
+
+  if (answersHeaderIdx > 500) {
+    // Split into Questions section (front/middle) and Solutions section (middle/back)
+    questionSearchText = fullText.slice(0, answersHeaderIdx);
+    solutionSearchText = fullText.slice(answersHeaderIdx);
+  }
+
+  // 1. Locate Question Prompt in questions section:
+  // e.g. "3. A train travels...", "Problem 3: What is...", "3) Solve..."
+  const questionRegex = new RegExp(
+    `(?:^|[\\r\\n])\\s*(?:(?:problem|question|exercise|item|no\\.?)\\s*#?\\s*)?${escaped}[\\.\\)\\:\\]]\\s+([\\s\\S]{25,1200}?)(?=(?:^[\\r\\n]\\s*(?:(?:problem|question|exercise|item|no\\.?)\\s*#?\\s*)?\\d+[\\.\\)\\:\\]]|\\n\\n\\n|$))`,
+    "im"
+  );
+
+  // 2. Locate Solution in answer key / solutions section:
+  // e.g. "3. (b) To find...", "3. b. ", "3. Choice (B)..."
+  const solutionRegex = new RegExp(
+    `(?:^|[\\r\\n])\\s*(?:(?:problem|question|exercise|no\\.?)\\s*#?\\s*)?${escaped}[\\.\\)\\:\\]]\\s+([\\s\\S]{15,1200}?)(?=(?:^[\\r\\n]\\s*(?:(?:problem|question|exercise|no\\.?)\\s*#?\\s*)?\\d+[\\.\\)\\:\\]]|\\n\\n\\n|$))`,
+    "im"
+  );
+
+  let questionExcerpt: string | null = null;
+  let solutionExcerpt: string | null = null;
+
+  const qMatch = questionSearchText.match(questionRegex) || fullText.match(questionRegex);
+  if (qMatch) {
+    questionExcerpt = qMatch[0].trim();
+  }
+
+  const sMatch = solutionSearchText.match(solutionRegex);
+  if (sMatch) {
+    solutionExcerpt = sMatch[0].trim();
+  }
+
+  // Fallback: If answers section was not split or sMatch is identical to qMatch,
+  // search specifically after "answers" or "solutions" keyword
+  if (!solutionExcerpt || solutionExcerpt === questionExcerpt) {
+    const fallbackAnswerIdx = fullText.search(
+      new RegExp(`\\b(?:answers|solutions|explanations)\\b[\\s\\S]{0,500}?(?:^|[\\r\\n])\\s*${escaped}[\\.\\)\\:]`, "i")
+    );
+    if (fallbackAnswerIdx >= 0) {
+      solutionExcerpt = fullText.slice(fallbackAnswerIdx, fallbackAnswerIdx + 1200).trim();
+    } else {
+      solutionExcerpt = null;
+    }
+  }
+
+  return {
+    problemNumber: problemNum,
+    questionExcerpt,
+    solutionExcerpt,
+  };
 }
 
 /**
@@ -313,25 +412,33 @@ export function findTopKChunksHybrid<T extends DocumentChunk & { embedding?: num
     }
 
     // 2. Exact Question / Problem Number Match
-    if (targetNum && chunkMatchesProblemNumber(chunk.text, targetNum)) {
-      score += 2.5; // High priority boost to guarantee top ranking
+    if (targetNum) {
+      if (chunkMatchesProblemNumber(chunk.text, targetNum)) {
+        score += 3.0; // High priority boost for question prompt
+      }
+      if (chunkMatchesProblemSolution(chunk.text, targetNum)) {
+        score += 2.5; // High priority boost for verified solution/explanation
+      }
     }
 
     // 3. Problem Continuation: if the previous chunk matched the problem, give this one a boost
-    if (targetNum && idx > 0 && chunkMatchesProblemNumber(chunks[idx - 1].text, targetNum)) {
-      score += 0.9;
+    if (targetNum && idx > 0 && (chunkMatchesProblemNumber(chunks[idx - 1].text, targetNum) || chunkMatchesProblemSolution(chunks[idx - 1].text, targetNum))) {
+      score += 1.2;
     }
 
-    // 4. Keyword token overlap (discounting stopwords)
+    // 4. Keyword token overlap (discounting stopwords, but preserving digits like "3")
     const cleanQuery = query.toLowerCase().replace(/[^\w\s]/g, " ").trim();
-    const queryTokens = cleanQuery.split(/\s+/).filter((t) => t.length > 1 && !COMMON_RETRIEVAL_STOPWORDS.has(t));
+    const queryTokens = cleanQuery
+      .split(/\s+/)
+      .filter((t) => (t.length > 1 || /^\d+$/.test(t)) && !COMMON_RETRIEVAL_STOPWORDS.has(t));
+
     if (queryTokens.length > 0) {
       const lowerChunk = chunk.text.toLowerCase();
       let matchCount = 0;
       for (const token of queryTokens) {
         if (lowerChunk.includes(token)) matchCount++;
       }
-      score += (matchCount / queryTokens.length) * 0.5;
+      score += (matchCount / queryTokens.length) * 0.6;
     }
 
     return { chunk, score };
@@ -564,8 +671,8 @@ export async function buildChatContext(
     topK?: number;
   } = {}
 ): Promise<ChatContextResult> {
-  const maxChars = options.maxChars ?? 35000;
-  const topK = options.topK ?? 12;
+  const maxChars = options.maxChars ?? 45000;
+  const topK = options.topK ?? 16;
   const targetProblem = extractTargetQuestionNumber(query);
 
   const scopeItems = targetItems.length > 0 ? targetItems : allItems;
@@ -591,6 +698,28 @@ export async function buildChatContext(
         primarySourceTitle: single.sourceTitle,
       };
     }
+  }
+
+  // 1B. Pinpointed Question and Answer Key Scan for targeted problem queries (e.g. "answer number 3")
+  const pinnedProblemBlocks: string[] = [];
+  if (targetProblem) {
+    scopeItems.forEach((item, docIdx) => {
+      const body = (item.text || item.ocrText || item.aiSummary || "").trim();
+      if (!body) return;
+      const pinpointed = pinpointProblemAndSolution(body, targetProblem);
+      if (pinpointed.questionExcerpt || pinpointed.solutionExcerpt) {
+        const title = item.sourceTitle || `Course Material ${docIdx + 1}`;
+        let block = `<pinned_problem_match problem_number="${targetProblem}" source="${title}">`;
+        if (pinpointed.questionExcerpt) {
+          block += `\n[VERIFIED QUESTION STATEMENT]\n${pinpointed.questionExcerpt}\n`;
+        }
+        if (pinpointed.solutionExcerpt) {
+          block += `\n[VERIFIED ANSWER KEY / SOLUTION EXCERPT]\n${pinpointed.solutionExcerpt}\n`;
+        }
+        block += `</pinned_problem_match>`;
+        pinnedProblemBlocks.push(block);
+      }
+    });
   }
 
   // 2. Multi-document or large document (> maxChars): chunk each document with explicit docId
@@ -670,6 +799,14 @@ export async function buildChatContext(
 
   let currentLength = manifest.length + 10;
   const contextParts: string[] = [manifest];
+
+  // Prepend pinned problem question statement and answer key if located
+  if (pinnedProblemBlocks.length > 0) {
+    for (const pinned of pinnedProblemBlocks) {
+      contextParts.push(pinned);
+      currentLength += pinned.length;
+    }
+  }
 
   for (const chunk of rankedChunks) {
     const pageBadge = chunk.pageNumber ? ` • Page ${chunk.pageNumber}` : "";
