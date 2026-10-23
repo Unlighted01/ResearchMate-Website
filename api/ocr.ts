@@ -457,7 +457,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Service-to-service bypass for Smart Pen (no user session, no credit deduction)
     const serviceKey = req.headers["x-smart-pen-key"];
-    if (serviceKey && serviceKey === process.env.SMART_PEN_SERVICE_KEY) {
+    if (serviceKey && process.env.SMART_PEN_SERVICE_KEY && serviceKey === process.env.SMART_PEN_SERVICE_KEY) {
       const ocrResult = await extractTextFromImage(image, mode);
       if (!ocrResult.success) {
         return res.status(422).json({ success: false, error: ocrResult.error });

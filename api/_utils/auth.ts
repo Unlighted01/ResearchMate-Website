@@ -201,15 +201,15 @@ export async function authenticateUser(
 
     const credits = profile?.ai_credits ?? 0;
 
-    // TEMPORARY BYPASS FOR LOAD TESTING
-    // if (credits <= 0) {
-    //   return {
-    //     error: "Out of AI Credits",
-    //     statusCode: 403,
-    //     user: null,
-    //     isFreeTier: true,
-    //   };
-    // }
+    // Enforce credit limits for free tier accounts without BYOK
+    if (credits <= 0) {
+      return {
+        error: "Out of AI Credits. Upgrade to Student Pro or configure your own Gemini API key in Settings.",
+        statusCode: 403,
+        user: null,
+        isFreeTier: true,
+      };
+    }
 
     if (!checkRateLimit(user.id)) {
       return {
