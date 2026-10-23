@@ -384,10 +384,10 @@ ${matrix
                   </div>
                 </div>
 
-                <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-4 shadow-xs">
+                <div className="p-4 sm:p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-4 shadow-xs">
                   {synthesisDraft ? (
                     synthesisDraft.split("\n\n").map((para, i) => (
-                      <p key={i} className="text-sm text-slate-800 dark:text-slate-250 leading-relaxed font-sans">
+                      <p key={i} className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-sans">
                         {para}
                       </p>
                     ))

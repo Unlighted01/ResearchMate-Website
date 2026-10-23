@@ -406,7 +406,7 @@ Respond ONLY with a valid raw JSON array of objects:
           {/* Flashcard Flipper Container */}
           <div
             onClick={() => setIsFlipped(!isFlipped)}
-            className="min-h-[280px] sm:min-h-[320px] p-8 sm:p-12 rounded-3xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-sm hover:border-indigo-400/50 dark:hover:border-indigo-600/50 transition-all flex flex-col justify-between cursor-pointer select-none relative group"
+            className="min-h-[260px] sm:min-h-[320px] p-5 sm:p-10 rounded-3xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-sm hover:border-indigo-400/50 dark:hover:border-indigo-600/50 transition-all flex flex-col justify-between cursor-pointer select-none relative group"
           >
             <div className="flex items-center justify-between text-xs font-mono text-slate-400">
               <span className="uppercase tracking-widest text-[10px] font-bold">
@@ -428,41 +428,42 @@ Respond ONLY with a valid raw JSON array of objects:
           </div>
 
           {/* Flipper Controls Bar */}
-          <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between gap-2 sm:gap-4 p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
             <button
               onClick={handlePrev}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
-              <span>Previous</span>
+              <span className="hidden sm:inline">Previous</span>
             </button>
 
             {/* Active Recall Confidence Scoring */}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => toggleMastered(currentCard.id)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer ${
                   masteredIds.has(currentCard.id)
                     ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                     : "bg-emerald-600 hover:bg-emerald-700 text-white"
                 }`}
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>{masteredIds.has(currentCard.id) ? "Mark as Review Again" : "Got It Right (Mastered)"}</span>
+                <span className="sm:hidden">{masteredIds.has(currentCard.id) ? "Review" : "Mastered"}</span>
+                <span className="hidden sm:inline">{masteredIds.has(currentCard.id) ? "Mark as Review Again" : "Got It Right (Mastered)"}</span>
               </button>
             </div>
 
             <button
               onClick={handleNext}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
-              <span>Next</span>
+              <span className="hidden sm:inline">Next</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
           {/* Extender & Reset Deck Toolbar */}
-          <div className="flex items-center justify-between text-xs font-mono text-slate-500 pt-1">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-mono text-slate-500 pt-1">
             <button
               type="button"
               onClick={() => handleGenerateCards(10)}

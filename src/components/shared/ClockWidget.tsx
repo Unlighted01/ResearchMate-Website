@@ -459,10 +459,10 @@ const ClockWidget: React.FC<ClockWidgetProps> = ({
 
   // Position classes map
   const positionClasses: Record<string, string> = {
-    "top-right": "top-20 right-6",
-    "top-left": "top-20 left-6",
-    "bottom-right": "bottom-6 right-6",
-    "bottom-left": "bottom-6 left-6",
+    "top-right": "top-16 sm:top-20 right-3 sm:right-6",
+    "top-left": "top-16 sm:top-20 left-3 sm:left-6",
+    "bottom-right": "bottom-4 sm:bottom-6 right-3 sm:right-6",
+    "bottom-left": "bottom-4 sm:bottom-6 left-3 sm:left-6",
   };
 
   const currentPosClass = positionClasses[widgetPosition] || positionClasses["bottom-right"];
@@ -534,7 +534,7 @@ const ClockWidget: React.FC<ClockWidgetProps> = ({
       style={{ animationDuration: "0.3s" }}
     >
       {/* Glassmorphism Container */}
-      <div className="relative backdrop-blur-2xl bg-white/95 dark:bg-slate-900/95 rounded-3xl border border-white/20 dark:border-white/10 shadow-2xl overflow-hidden p-5 min-w-[320px] max-w-[345px] transition-all">
+      <div className="relative backdrop-blur-2xl bg-white/95 dark:bg-slate-900/95 rounded-3xl border border-white/20 dark:border-white/10 shadow-2xl overflow-hidden p-4 sm:p-5 w-[calc(100vw-1.5rem)] max-w-[345px] transition-all">
         {/* Glow Gradients */}
         <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-[#007AFF]/20 via-[#5856D6]/10 to-transparent rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-gradient-to-tr from-[#34C759]/15 to-transparent rounded-full blur-2xl pointer-events-none" />

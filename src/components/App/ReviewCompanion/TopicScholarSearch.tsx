@@ -87,7 +87,7 @@ export const TopicScholarSearch: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Console Header & Search Bar Card */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
         <div>
           <h3 className="text-base font-semibold text-slate-900 dark:text-white font-title flex items-center gap-2">
             <Globe className="w-4 h-4 text-slate-700 dark:text-slate-300" />
@@ -119,7 +119,7 @@ export const TopicScholarSearch: React.FC = () => {
             <button
               key={idx}
               onClick={() => setQuery(suggested)}
-              className="text-[11px] px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors border border-slate-200/60 dark:border-slate-750 font-sans"
+              className="text-[11px] px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors border border-slate-200/60 dark:border-slate-700 font-sans"
             >
               {suggested}
             </button>

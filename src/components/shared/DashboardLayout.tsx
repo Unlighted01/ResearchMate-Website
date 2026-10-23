@@ -739,7 +739,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 6 }}
                         transition={{ duration: 0.15 }}
-                        className="notifications-dropdown absolute right-[-50px] sm:right-0 top-full mt-2 w-80 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden z-30"
+                        className="notifications-dropdown absolute right-0 top-full mt-2 w-[calc(100vw-1.5rem)] max-w-sm sm:w-80 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden z-30"
                       >
                         <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-900/50">
                           <h3 className="font-semibold text-slate-900 dark:text-slate-100 font-title text-sm">
@@ -862,7 +862,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 6 }}
                         transition={{ duration: 0.15 }}
-                        className="profile-dropdown absolute right-0 top-full mt-2 w-64 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden z-30"
+                        className="profile-dropdown absolute right-0 top-full mt-2 w-[calc(100vw-1.5rem)] max-w-xs sm:w-64 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden z-30"
                       >
                         <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50">
                           {localStorage.getItem("rm_guest_mode") === "true" ? (

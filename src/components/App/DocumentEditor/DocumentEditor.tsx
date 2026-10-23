@@ -54,6 +54,7 @@ const DocumentEditor: React.FC = () => {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [bibFormat, setBibFormat] = useState<CitationFormat>("apa");
   const [importingWord, setImportingWord] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const emptyFileInputRef = useRef<HTMLInputElement>(null);
 
   // Banner shown after a paper arrives from Discover page
@@ -368,21 +369,40 @@ const DocumentEditor: React.FC = () => {
   // ---------- PART 2C: RENDER ----------
   return (
     <>
-      <div className="flex h-[calc(100vh-4rem)] rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1C1C1E] animate-fade-in-up">
-        <DocumentSidebar
-          documents={documents}
-          currentDocId={currentDoc?.id || null}
-          onSelect={handleSelectDocument}
-          onNew={openTitleModal}
-          onRename={handleRenameDocument}
-          onDelete={handleDeleteDocument}
-          onDeleteMany={handleDeleteManyDocuments}
-          onImportWord={handleImportWord}
-          importingWord={importingWord}
-        />
+      <div className="flex h-[calc(100vh-4rem)] rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1C1C1E] animate-fade-in-up relative">
+        {/* Responsive Document Sidebar Drawer */}
+        <div className={`${mobileSidebarOpen ? "flex fixed inset-0 z-40 bg-white dark:bg-[#1C1C1E] p-4" : "hidden"} md:flex md:static md:p-0 flex-shrink-0`}>
+          <DocumentSidebar
+            documents={documents}
+            currentDocId={currentDoc?.id || null}
+            onSelect={(id) => {
+              handleSelectDocument(id);
+              setMobileSidebarOpen(false);
+            }}
+            onNew={openTitleModal}
+            onRename={handleRenameDocument}
+            onDelete={handleDeleteDocument}
+            onDeleteMany={handleDeleteManyDocuments}
+            onImportWord={handleImportWord}
+            importingWord={importingWord}
+          />
+        </div>
 
         {currentDoc ? (
           <div className="flex-1 flex flex-col min-w-0 relative">
+            {/* Mobile document drawer toggle header */}
+            <div className="md:hidden flex items-center justify-between px-3 py-1.5 bg-slate-100/90 dark:bg-slate-900/90 border-b border-gray-200 dark:border-gray-800 text-xs shrink-0">
+              <button
+                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-semibold text-slate-700 dark:text-slate-300"
+              >
+                <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                <span>{mobileSidebarOpen ? "Close Docs" : "All Docs"}</span>
+              </button>
+              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
+                {currentDoc.title || "Untitled Document"}
+              </span>
+            </div>
             {/* Discover banner */}
             {discoverBanner && (
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-purple-600 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg animate-fade-in-up">

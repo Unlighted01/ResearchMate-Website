@@ -100,7 +100,7 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
       {/* Modal */}
       <div className="relative bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-auto z-10">
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-[#1C1C1E] border-b border-gray-200 dark:border-gray-800 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white dark:bg-[#1C1C1E] border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
               <Filter className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -122,14 +122,14 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
           {/* Date Range */}
           <div>
             <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
               <Calendar className="w-4 h-4" />
               Date Range
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
                   From
@@ -177,7 +177,7 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
               <Laptop className="w-4 h-4" />
               Device Source
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {deviceSources.map((source) => (
                 <button
                   key={source.id}
@@ -252,7 +252,7 @@ const AdvancedSearchFilter: React.FC<AdvancedSearchFilterProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white dark:bg-[#1C1C1E] border-t border-gray-200 dark:border-gray-800 px-6 py-4 flex items-center justify-between">
+        <div className="sticky bottom-0 bg-white dark:bg-[#1C1C1E] border-t border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
           <button
             onClick={handleReset}
             className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"

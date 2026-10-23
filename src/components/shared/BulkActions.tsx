@@ -39,13 +39,13 @@ const BulkActions: React.FC<BulkActionsProps> = ({
 
   return (
     <div
-      className="fixed top-4 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-top-4 duration-300"
+      className="fixed top-4 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-top-4 duration-300 w-[calc(100vw-1.5rem)] max-w-2xl px-1"
       role="region"
       aria-label="Bulk actions"
     >
-      <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 px-6 py-4 flex items-center gap-4">
+      <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-2.5 sm:py-4 flex items-center justify-between gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
         {/* Selection Info */}
-        <div className="flex items-center gap-3 border-r border-gray-200 dark:border-gray-800 pr-4">
+        <div className="flex items-center gap-2 sm:gap-3 border-r border-gray-200 dark:border-gray-800 pr-3 sm:pr-4 shrink-0">
           <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
             <CheckSquare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
@@ -62,7 +62,7 @@ const BulkActions: React.FC<BulkActionsProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Select/Deselect All */}
           <button
             onClick={allSelected ? onDeselectAll : onSelectAll}

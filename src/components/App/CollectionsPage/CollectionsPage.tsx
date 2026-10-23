@@ -372,7 +372,7 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({ useToast }) => {
             setFormColor(DEFAULT_COLOR);
             setIsCreateModalOpen(true);
           }}
-          className="bg-slate-900 hover:bg-slate-850 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs"
+          className="bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs"
         >
           <FolderPlus className="w-3.5 h-3.5 mr-1.5" /> New Collection
         </Button>

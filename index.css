@@ -2200,4 +2200,27 @@ html.dark .spotlight-card::before {
   cursor: ew-resize;
   cursor: col-resize;
 }
+
+/* ============================================
+   KATEX & MATH DARK MODE OPTIMIZATION
+   ============================================ */
+.dark .katex,
+.dark .katex .katex-html,
+.dark .academic-math-view,
+.dark .katex-display {
+  color: #f1f5f9 !important;
+}
+
+.dark .katex .rule,
+.dark .katex .hline,
+.dark .katex .frac-line {
+  border-color: #f1f5f9 !important;
+}
+
+/* Mobile Touch Scroll Smoothing */
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+}
 

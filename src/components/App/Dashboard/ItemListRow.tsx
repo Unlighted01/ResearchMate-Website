@@ -40,7 +40,7 @@ const ItemListRow: React.FC<ItemListRowProps> = ({
   return (
     <div
       onClick={() => onClick(item)}
-      className={`flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-850/60 border-b border-slate-200/80 dark:border-slate-800 transition-colors group cursor-pointer border-l-3 ${colorTagBorder} ${
+      className={`flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 border-b border-slate-200/80 dark:border-slate-800 transition-colors group cursor-pointer border-l-3 ${colorTagBorder} ${
         isSelected ? "bg-indigo-50/30 dark:bg-indigo-950/20" : ""
       }`}
     >

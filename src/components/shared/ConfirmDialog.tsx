@@ -95,7 +95,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       />
 
       {/* Dialog */}
-      <div className="relative bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-2xl max-w-md w-full p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-200">
         {/* Close button */}
         <button
           onClick={onClose}
@@ -107,7 +107,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </button>
 
         {/* Content */}
-        <div className="px-6 pt-12 pb-6 text-center">
+        <div className="px-2 sm:px-6 pt-6 sm:pt-10 pb-2 sm:pb-4 text-center">
           {/* Icon - Proper sizing with flex centering */}
           <div
             className={`w-16 h-16 ${styles.iconBg} rounded-full flex items-center justify-center mx-auto mb-5 flex-shrink-0`}

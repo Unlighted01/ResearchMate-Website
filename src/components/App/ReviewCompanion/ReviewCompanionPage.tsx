@@ -217,7 +217,7 @@ export const ReviewCompanionPage: React.FC<ReviewCompanionProps> = ({ useToast }
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-750">
+                        <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700">
                           {item.tags?.includes("pdf")
                             ? "PDF Document"
                             : item.tags?.includes("word-doc")

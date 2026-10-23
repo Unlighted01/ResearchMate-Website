@@ -339,7 +339,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5 text-slate-500" />
                   <span>Change File</span>
@@ -356,14 +356,14 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
             </div>
           ) : (
             /* Source Switcher Tabs when no data is loaded yet */
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-3 overflow-x-auto no-scrollbar pb-1">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={() => setActiveTab("pdf")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                     activeTab === "pdf"
                       ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
-                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
                   }`}
                 >
                   <FileText className="w-3.5 h-3.5" />
@@ -371,10 +371,10 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
                 </button>
                 <button
                   onClick={() => setActiveTab("paste")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                     activeTab === "paste"
                       ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
-                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
                   }`}
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -382,10 +382,10 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
                 </button>
                 <button
                   onClick={() => setActiveTab("csv")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                     activeTab === "csv"
                       ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
-                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
                   }`}
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -724,7 +724,7 @@ Answers and Explanations
               type="button"
               disabled={!hasLoadedQuestions || isSavingFlashcards}
               onClick={handleExportFlashcards}
-              className="px-3.5 py-2 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-2 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
               title="Create an active recall flashcard deck from these questions"
             >
               <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
@@ -736,7 +736,7 @@ Answers and Explanations
               type="button"
               disabled={!hasLoadedQuestions}
               onClick={() => handleApplyImport("append")}
-              className="px-3.5 py-2 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-all disabled:opacity-40 cursor-pointer"
+              className="px-3.5 py-2 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-all disabled:opacity-40 cursor-pointer"
             >
               Append (+{parseResult?.validCount || 0})
             </button>

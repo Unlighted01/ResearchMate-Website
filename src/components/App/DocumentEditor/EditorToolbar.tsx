@@ -253,7 +253,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   // ---------- PART 5C: RENDER ----------
 
   return (
-    <div className="flex items-center flex-nowrap gap-0.5 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-sm relative z-20">
+    <div className="flex items-center flex-nowrap gap-0.5 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-sm relative z-20 overflow-x-auto no-scrollbar">
       {/* ---- Undo / Redo / Print ---- */}
       <ToolbarBtn
         onClick={() => editor.chain().focus().undo().run()}

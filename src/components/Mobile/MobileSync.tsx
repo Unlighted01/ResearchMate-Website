@@ -406,7 +406,7 @@ const MobileSync: React.FC = () => {
           <button
             onClick={handleCaptureClick}
             disabled={uploading}
-            className="w-48 h-48 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 disabled:opacity-40 disabled:pointer-events-none text-white flex flex-col items-center justify-center shadow-xl shadow-blue-900/10 active:scale-95 transition-all border-4 border-slate-900 hover:border-slate-850"
+            className="w-48 h-48 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 disabled:opacity-40 disabled:pointer-events-none text-white flex flex-col items-center justify-center shadow-xl shadow-blue-900/10 active:scale-95 transition-all border-4 border-slate-900 hover:border-slate-800"
             title="Scan handwritten notebook page"
           >
             {uploading ? (

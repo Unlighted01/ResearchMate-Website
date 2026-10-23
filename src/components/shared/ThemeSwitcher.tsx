@@ -89,7 +89,7 @@ export const ThemeSwitcher: React.FC<ThemeSwitcherProps> = ({ className = "" }) 
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.96 }}
             transition={{ duration: 0.15 }}
-            className="theme-surface absolute right-0 top-full mt-2 w-72 rounded-2xl shadow-xl border border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl p-3 z-50 overflow-hidden"
+            className="theme-surface absolute right-0 top-full mt-2 w-[calc(100vw-1.5rem)] max-w-xs sm:w-72 rounded-2xl shadow-xl border border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl p-3 z-50 overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-100 dark:border-slate-800/80">

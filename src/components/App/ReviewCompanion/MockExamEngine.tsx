@@ -528,7 +528,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       {/* ------------------------------------------------------------- */}
       {/* 1. Console Header & Exam Customization Bar                    */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
           <div>
             <h3 className="text-base font-semibold text-slate-900 dark:text-white font-title flex items-center gap-2">
@@ -583,7 +583,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                 setQuestionToEdit(null);
                 setIsEditorOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-colors shrink-0 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-colors shrink-0 cursor-pointer"
               title="Manually create a custom exam question"
             >
               <Plus className="w-3.5 h-3.5 text-indigo-500" />
@@ -594,7 +594,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
             <button
               type="button"
               onClick={() => setIsImportOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-colors shrink-0 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-colors shrink-0 cursor-pointer"
               title="Paste questions from handouts, past exams or upload CSV"
             >
               <Upload className="w-3.5 h-3.5 text-indigo-500" />
@@ -907,7 +907,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                   className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                     flaggedIds.has(currentQ.id)
                       ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 border-amber-300 dark:border-amber-700"
-                      : "bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-900"
+                      : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-900"
                   }`}
                 >
                   <Flag className="w-3.5 h-3.5" />
@@ -976,7 +976,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
             return (
               <div
                 key={q.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 relative group"
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4 relative group"
               >
                 {/* Question Header & Action Controls (Edit & Delete) */}
                 <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3">
@@ -1040,7 +1040,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                     const isSelected = selectedOpt === optIdx;
                     const isOptionCorrect = q.correctIndex === optIdx;
 
-                    let btnStyle = "border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100/70 dark:hover:bg-slate-850/60";
+                    let btnStyle = "border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100/70 dark:hover:bg-slate-800/60";
 
                     if (isSubmitted) {
                       if (isOptionCorrect) {
@@ -1145,14 +1145,14 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
           {/* ------------------------------------------------------------- */}
           {/* Submission and Diagnostic Scoring Console                   */}
           {/* ------------------------------------------------------------- */}
-          <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm space-y-6">
+          <div className="p-4 sm:p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm space-y-6">
             {isSubmitted ? (
               <div className="space-y-6">
                 {/* Result Hero Banner */}
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-slate-100 dark:border-slate-800/80">
                   <div className="flex items-center gap-4">
                     <div
-                      className={`w-16 h-16 rounded-2xl flex items-center justify-center font-bold font-title text-xl shadow-xs ${
+                      className={`w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-2xl flex items-center justify-center font-bold font-title text-lg sm:text-xl shadow-xs ${
                         calculateScore().percentage >= benchmarkThreshold
                           ? "bg-emerald-600 text-white"
                           : "bg-amber-600 text-white"
@@ -1161,15 +1161,15 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                       {calculateScore().percentage}%
                     </div>
                     <div>
-                      <div className="text-base font-bold text-slate-900 dark:text-white font-title flex items-center gap-2">
+                      <div className="text-sm sm:text-base font-bold text-slate-900 dark:text-white font-title flex items-center gap-2">
                         {calculateScore().percentage >= benchmarkThreshold ? (
                           <>
-                            <Award className="w-5 h-5 text-emerald-500" />
+                            <Award className="w-5 h-5 text-emerald-500 shrink-0" />
                             Benchmark Achieved ({calculateScore().correct} / {calculateScore().total} Correct)
                           </>
                         ) : (
                           <>
-                            <AlertCircle className="w-5 h-5 text-amber-500" />
+                            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
                             Needs Reinforcement ({calculateScore().correct} / {calculateScore().total} Correct)
                           </>
                         )}
@@ -1183,11 +1183,11 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5 flex-wrap">
+                  <div className="flex items-center gap-2.5 flex-wrap w-full md:w-auto">
                     {calculateScore().missed.length > 0 && (
                       <button
                         onClick={handleRetakeMissed}
-                        className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                         <span>Retake Missed Only ({calculateScore().missed.length})</span>
@@ -1196,7 +1196,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
 
                     <button
                       onClick={handlePrintExam}
-                      className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-semibold transition-all cursor-pointer"
                     >
                       <Printer className="w-3.5 h-3.5" />
                       <span>Print / Export Exam</span>
@@ -1204,7 +1204,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
 
                     <button
                       onClick={() => handleGenerateExam()}
-                      className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                       <span>New Mock Exam</span>

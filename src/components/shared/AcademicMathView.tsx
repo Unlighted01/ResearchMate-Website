@@ -50,7 +50,7 @@ export const AcademicMathView: React.FC<AcademicMathViewProps> = ({
             </div>
           ),
           th: ({ node, ...props }) => (
-            <th className="px-3 py-1.5 bg-slate-100 dark:bg-slate-850 font-semibold text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-800" {...props} />
+            <th className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 font-semibold text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-800" {...props} />
           ),
           td: ({ node, ...props }) => (
             <td className="px-3 py-1.5 text-slate-700 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800/60" {...props} />

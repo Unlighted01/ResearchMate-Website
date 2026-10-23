@@ -647,7 +647,7 @@ const PdfReader: React.FC = () => {
           </div>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-850 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-medium text-xs rounded-lg transition-colors shadow-xs"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-medium text-xs rounded-lg transition-colors shadow-xs"
           >
             <Upload className="w-3.5 h-3.5" />
             Upload PDF
@@ -684,7 +684,7 @@ const PdfReader: React.FC = () => {
           <div className="flex gap-2 mt-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-850 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"
             >
               <Upload className="w-3.5 h-3.5" />
               Upload PDF

@@ -321,7 +321,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                       <div className="text-xs font-semibold text-gray-900 dark:text-white">
                         {action.label}
                       </div>
-                      <div className="text-[11px] text-gray-500 dark:text-gray-450 mt-0.5">
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                         {action.sub}
                       </div>
                     </Link>
