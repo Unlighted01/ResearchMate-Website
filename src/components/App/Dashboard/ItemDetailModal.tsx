@@ -32,6 +32,7 @@ import {
   Loader2,
   CreditCard,
   Trash2,
+  FileEdit,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon } from "../../icons";
 import { StorageItem, updateItem, getCachedProblemSolution, saveCachedProblemSolution } from "../../../services/storageService";
@@ -217,6 +218,26 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     navigator.clipboard.writeText(transcript);
     setCopiedField("chat_transcript");
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const handleSaveTranscriptToManuscript = () => {
+    if (messages.length === 0) return;
+    const transcript = messages
+      .map(
+        (m) =>
+          `**${m.sender === "user" ? "You" : `ResearchMate AI (${formatModelBadge(m.model)})`}**:\n${m.text}`,
+      )
+      .join("\n\n");
+    sessionStorage.setItem(
+      "rm_studynote_to_editor",
+      JSON.stringify({
+        title: `${item.sourceTitle || "Document"} - Study Derivations`,
+        text: transcript,
+        sourceTitle: item.sourceTitle,
+      })
+    );
+    onClose();
+    window.location.hash = "#/app/research?tab=editor";
   };
 
   const handleReindexPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -927,6 +948,14 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
                     {messages.length > 0 && (
                       <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-700 pl-1.5 ml-0.5">
+                        <button
+                          onClick={handleSaveTranscriptToManuscript}
+                          className="p-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shadow-2xs cursor-pointer"
+                          title="Save this conversation to Manuscript Editor"
+                        >
+                          <FileEdit className="w-3.5 h-3.5" />
+                        </button>
+
                         <button
                           onClick={handleCopyTranscript}
                           className="p-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors shadow-2xs cursor-pointer"

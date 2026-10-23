@@ -100,6 +100,53 @@ const DocumentEditor: React.FC = () => {
       setTimeout(() => setDiscoverBanner(null), 5000);
     } catch { /* malformed payload — ignore */ }
 
+    // ── AI Study Note / Derivation → Editor handoff ─────────────────────
+    const studyNoteRaw = sessionStorage.getItem("rm_studynote_to_editor");
+    if (studyNoteRaw) {
+      sessionStorage.removeItem("rm_studynote_to_editor");
+      try {
+        const payload = JSON.parse(studyNoteRaw) as {
+          title: string;
+          text: string;
+          sourceTitle?: string;
+        };
+        const paragraphs = (payload.text || "")
+          .split("\n\n")
+          .map((p) => p.trim())
+          .filter(Boolean);
+
+        const nodes: Record<string, unknown>[] = [
+          {
+            type: "heading",
+            attrs: { level: 3 },
+            content: [{ type: "text", text: payload.title || "AI Study Note / Derivation" }],
+          },
+          ...(payload.sourceTitle
+            ? [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "text",
+                      marks: [{ type: "italic" }],
+                      text: `Source Reference: ${payload.sourceTitle}`,
+                    },
+                  ],
+                },
+              ]
+            : []),
+          ...paragraphs.map((p) => ({
+            type: "paragraph",
+            content: [{ type: "text", text: p }],
+          })),
+          { type: "paragraph" },
+        ];
+        editor.chain().focus().insertContent(nodes).run();
+        setDiscoverBanner("Study note successfully added to manuscript");
+        setTimeout(() => setDiscoverBanner(null), 5000);
+      } catch { /* malformed payload */ }
+    }
+
     // ── STEM Math LaTeX → Editor handoff ──────────────────────────────
     const latexRaw = sessionStorage.getItem("rm_latex_to_editor");
     if (latexRaw) {

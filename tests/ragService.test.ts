@@ -338,5 +338,56 @@ Answers and Explanations
     expect(result.retrievedChunkCount).toBeGreaterThan(0);
     expect(result.contextText).toContain("64. Lori ran");
     expect(result.contextText).toContain("501 Math Word Problems.pdf");
+    expect(result.contextText).toContain("<sources_manifest count=\"1\">");
+    expect(result.contextText).toContain("<source_excerpt doc_id=\"doc-1\"");
+  });
+
+  it("builds multi-source context with XML manifest and proportional non-interleaved document excerpts", async () => {
+    const multiItems = [
+      {
+        sourceTitle: "Calculus_Volume_1.pdf",
+        text: `[Page 1]
+Limits and continuity of single-variable functions.
+[Page 12]
+The derivative is the instantaneous rate of change: f'(x) = lim (f(x+h) - f(x))/h.`,
+      },
+      {
+        sourceTitle: "Organic_Chemistry_Notes.pdf",
+        text: `[Page 1]
+Introduction to alkanes, alkenes, and alkynes nomenclature.
+[Page 8]
+Electrophilic addition reactions across carbon-carbon double bonds.`,
+      },
+    ];
+
+    const result = await buildChatContext("compare derivatives and alkenes", multiItems);
+
+    expect(result.retrievedChunkCount).toBeGreaterThanOrEqual(2);
+    // Manifest must list both documents
+    expect(result.contextText).toContain("<sources_manifest count=\"2\">");
+    expect(result.contextText).toContain("<source id=\"doc-1\" title=\"Calculus_Volume_1.pdf\"");
+    expect(result.contextText).toContain("<source id=\"doc-2\" title=\"Organic_Chemistry_Notes.pdf\"");
+
+    // Excerpts must be tagged with explicit doc_id
+    expect(result.contextText).toContain("<source_excerpt doc_id=\"doc-1\" title=\"Calculus_Volume_1.pdf\"");
+    expect(result.contextText).toContain("<source_excerpt doc_id=\"doc-2\" title=\"Organic_Chemistry_Notes.pdf\"");
+
+    // Document contents must be present
+    expect(result.contextText).toContain("Limits and continuity");
+    expect(result.contextText).toContain("alkanes, alkenes");
+  });
+
+  it("builds synthesis context with structured source tags for mock exams and flashcards", async () => {
+    const items = [
+      {
+        sourceTitle: "Physics_Mechanics.pdf",
+        text: "Newton's laws of motion govern macroscopic mechanical systems.",
+      },
+    ];
+
+    const synthesis = await buildSynthesisContext(items, "Newton's Laws", 4);
+    expect(synthesis).toContain("<sources_manifest count=\"1\">");
+    expect(synthesis).toContain("<source_excerpt doc_id=\"doc-1\" title=\"Physics_Mechanics.pdf\"");
+    expect(synthesis).toContain("Newton's laws of motion");
   });
 });

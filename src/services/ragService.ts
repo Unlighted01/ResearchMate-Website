@@ -14,6 +14,7 @@ export interface DocumentChunk {
   index: number;
   sourceTitle?: string;
   pageNumber?: number;
+  docId?: string;
 }
 
 export interface EmbeddedChunk extends DocumentChunk {
@@ -409,6 +410,7 @@ export function sampleEvenlyDistributedChunks<T>(chunks: T[], count = 5): T[] {
  * Builds high-yield context for Mock Exam and Flashcard synthesis:
  * - If a specific topic is requested: uses vector RAG to find the top most relevant chunks across the library.
  * - For general synthesis: samples evenly distributed chunks across the entire material (beginning, middle, and end).
+ * - Enforces NotebookLM-style structured XML manifest and source isolation tags.
  */
 export async function buildSynthesisContext(
   items: SynthesisSourceItem[],
@@ -420,56 +422,112 @@ export async function buildSynthesisContext(
   const trimmedTopic = (topic || "").trim();
   const isSpecificTopic = Boolean(trimmedTopic);
 
-  // 1. Chunk all available items
+  // 1. Chunk all available items with document tracking
   const allChunks: DocumentChunk[] = [];
-  for (const item of items) {
-    const title = item.sourceTitle || "Course Material";
-    const bodyText = (item.text || item.ocrText || item.aiSummary || "").trim();
-    if (!bodyText) continue;
+  const validItems: SynthesisSourceItem[] = [];
 
+  items.forEach((item, docIdx) => {
+    const docId = `doc-${docIdx + 1}`;
+    const title = item.sourceTitle || `Course Material ${docIdx + 1}`;
+    const bodyText = (item.text || item.ocrText || item.aiSummary || "").trim();
+    if (!bodyText) return;
+
+    validItems.push(item);
     const itemChunks = chunkText(bodyText, 1500, 200).map((c) => ({
       ...c,
+      chunkId: `${docId}-${c.chunkId}`,
       sourceTitle: title,
+      docId,
     }));
     allChunks.push(...itemChunks);
-  }
+  });
 
   if (allChunks.length === 0) return "";
+
+  // Sources manifest header
+  const manifest = `<sources_manifest count="${validItems.length}">\n` +
+    validItems
+      .map(
+        (item, idx) =>
+          `  <source id="doc-${idx + 1}" title="${item.sourceTitle || 'Course Material ' + (idx + 1)}" />`
+      )
+      .join("\n") +
+    `\n</sources_manifest>`;
+
+  let finalChunks: DocumentChunk[] = [];
 
   // 2. Specific Topic: Retrieve top-K most relevant chunks using vector embeddings
   if (isSpecificTopic) {
     try {
       const queryEmb = await generateEmbedding(trimmedTopic);
       const embedded = await embedChunks(allChunks);
-      const topChunks = findTopKChunksHybrid(trimmedTopic, queryEmb, embedded, targetChunkCount);
-
-      if (topChunks.length > 0) {
-        return topChunks
-          .map(
-            (c) =>
-              `[Source: "${c.sourceTitle}" • Section ${c.index + 1}]\n${c.text}`,
-          )
-          .join("\n\n");
-      }
+      finalChunks = findTopKChunksHybrid(trimmedTopic, queryEmb, embedded, targetChunkCount);
     } catch (err) {
       console.warn("Topic RAG synthesis retrieval failed, falling back to distributed chunks:", err);
+      finalChunks = sampleEvenlyDistributedChunks(allChunks, targetChunkCount);
     }
+  } else {
+    // 3. General Synthesis: Sample evenly distributed chunks covering beginning, middle, and end
+    finalChunks = sampleEvenlyDistributedChunks(allChunks, targetChunkCount);
   }
 
-  // 3. General Synthesis: Sample evenly distributed chunks covering beginning, middle, and end
-  const sampledChunks = sampleEvenlyDistributedChunks(allChunks, targetChunkCount);
+  // Format with structured source tags
+  const formattedExcerpts = finalChunks.map(
+    (c) =>
+      `<source_excerpt doc_id="${c.docId || 'doc-1'}" title="${c.sourceTitle}" section="${c.index + 1}">\n[Source: "${c.sourceTitle}" • Section ${c.index + 1}]\n${c.text}\n</source_excerpt>`
+  );
 
-  return sampledChunks
-    .map(
-      (c) =>
-        `[Source: "${c.sourceTitle}" • Section ${c.index + 1}]\n${c.text}`,
-    )
-    .join("\n\n");
+  return `${manifest}\n\n${formattedExcerpts.join("\n\n")}`;
 }
 
 // ============================================
 // PART 6: NOTEBOOKLM-STYLE CHAT RETRIEVAL
 // ============================================
+
+/**
+ * Helper: Selects proportional, non-starving chunks across multiple active documents.
+ * Ensures every document in scope receives representative chunks in the final retrieval.
+ */
+function selectProportionalChunks(
+  query: string,
+  queryEmb: number[],
+  activeItems: SynthesisSourceItem[],
+  allChunksToScore: (DocumentChunk & { embedding?: number[] })[],
+  topK: number,
+): DocumentChunk[] {
+  if (activeItems.length <= 1) {
+    return findTopKChunksHybrid(query, queryEmb, allChunksToScore, topK);
+  }
+
+  const guaranteedPerDoc = Math.max(1, Math.floor((topK * 0.75) / activeItems.length));
+  const selectedChunkIds = new Set<string>();
+  const perDocSelected: DocumentChunk[] = [];
+
+  for (let i = 0; i < activeItems.length; i++) {
+    const docId = `doc-${i + 1}`;
+    const docChunks = allChunksToScore.filter((c) => c.docId === docId);
+    if (docChunks.length === 0) continue;
+
+    const topForDoc = findTopKChunksHybrid(query, queryEmb, docChunks, guaranteedPerDoc);
+    for (const tc of topForDoc) {
+      if (!selectedChunkIds.has(tc.chunkId)) {
+        selectedChunkIds.add(tc.chunkId);
+        perDocSelected.push(tc);
+      }
+    }
+  }
+
+  // Fill remaining budget up to topK with highest-scoring chunks globally
+  const globalRanked = findTopKChunksHybrid(query, queryEmb, allChunksToScore, topK);
+  for (const gc of globalRanked) {
+    if (!selectedChunkIds.has(gc.chunkId) && perDocSelected.length < topK) {
+      selectedChunkIds.add(gc.chunkId);
+      perDocSelected.push(gc);
+    }
+  }
+
+  return perDocSelected;
+}
 
 export interface ChatContextResult {
   contextText: string;
@@ -480,8 +538,8 @@ export interface ChatContextResult {
 
 /**
  * Builds high-fidelity, page-anchored context for AI Chat (NotebookLM style).
- * Replaces the naive 500-char starvation snippet with intelligent hybrid retrieval
- * across full PDF documents (up to 35,000 characters).
+ * Replaces flat snippet dump with structured multi-source XML manifest,
+ * proportional per-document chunk allocation, and zero-cross-contamination isolation.
  */
 export async function buildChatContext(
   query: string,
@@ -510,8 +568,10 @@ export async function buildChatContext(
     const single = scopeItems[0];
     const fullText = (single.text || single.ocrText || single.aiSummary || "").trim();
     if (fullText.length > 0 && fullText.length <= maxChars) {
+      const docTitle = single.sourceTitle || "Course Material";
+      const manifest = `<sources_manifest count="1">\n  <source id="doc-1" title="${docTitle}" />\n</sources_manifest>`;
       return {
-        contextText: `[DOCUMENT: "${single.sourceTitle || "Course Material"}" • Complete Text Ingested]\n${fullText}`,
+        contextText: `${manifest}\n\n<source_excerpt doc_id="doc-1" title="${docTitle}" page="all">\n[DOCUMENT: "${docTitle}" • Complete Text Ingested]\n${fullText}\n</source_excerpt>`,
         retrievedChunkCount: 1,
         matchedProblemNumber: targetProblem,
         primarySourceTitle: single.sourceTitle,
@@ -519,19 +579,25 @@ export async function buildChatContext(
     }
   }
 
-  // 2. Multi-document or large document (> maxChars): run hybrid page-aware chunk retrieval
+  // 2. Multi-document or large document (> maxChars): chunk each document with explicit docId
   const allChunks: DocumentChunk[] = [];
-  for (const item of scopeItems) {
-    const title = item.sourceTitle || "Course Material";
-    const body = (item.text || item.ocrText || item.aiSummary || "").trim();
-    if (!body) continue;
+  const activeItems: SynthesisSourceItem[] = [];
 
+  scopeItems.forEach((item, docIdx) => {
+    const docId = `doc-${docIdx + 1}`;
+    const title = item.sourceTitle || `Course Material ${docIdx + 1}`;
+    const body = (item.text || item.ocrText || item.aiSummary || "").trim();
+    if (!body) return;
+
+    activeItems.push(item);
     const chunks = chunkText(body, 1500, 200).map((c) => ({
       ...c,
+      chunkId: `${docId}-${c.chunkId}`,
       sourceTitle: title,
+      docId,
     }));
     allChunks.push(...chunks);
-  }
+  });
 
   if (allChunks.length === 0) {
     return {
@@ -541,19 +607,21 @@ export async function buildChatContext(
     };
   }
 
-  // Embed and perform hybrid retrieval
+  // 3. Proportional & Hybrid Retrieval:
+  // If multiple documents are selected, ensure every document gets fair chunk representation
   let rankedChunks: DocumentChunk[] = [];
+
   try {
     const queryEmb = await generateEmbedding(query);
     const embedded = await embedChunks(allChunks);
-    rankedChunks = findTopKChunksHybrid(query, queryEmb, embedded, topK);
+    rankedChunks = selectProportionalChunks(query, queryEmb, activeItems, embedded, topK);
   } catch (err) {
     console.warn("Vector embedding retrieval fallback to keyword scoring:", err);
-    rankedChunks = findTopKChunksHybrid(query, [], allChunks, topK);
+    rankedChunks = selectProportionalChunks(query, [], activeItems, allChunks, topK);
   }
 
   // If a specific problem number was matched, also include the consecutive chunk
-  // to ensure options / multi-step solutions are never chopped off
+  // to ensure multi-step options/solutions are never chopped off
   if (targetProblem && rankedChunks.length > 0) {
     const matchedChunk = rankedChunks[0];
     const originalIdx = allChunks.findIndex(
@@ -567,16 +635,34 @@ export async function buildChatContext(
     }
   }
 
-  // Assemble the context corpus with explicit page numbers and document titles
-  let currentLength = 0;
-  const contextParts: string[] = [];
+  // Group chunks by document and sort each document's chunks by original sequential index
+  // This maintains natural reading order and prevents confusing text interleaving
+  rankedChunks.sort((a, b) => {
+    if (a.docId !== b.docId) {
+      return (a.docId || "").localeCompare(b.docId || "");
+    }
+    return a.index - b.index;
+  });
+
+  // Assemble the context corpus with manifest and explicit XML isolation tags
+  const manifest = `<sources_manifest count="${activeItems.length}">\n` +
+    activeItems
+      .map(
+        (item, idx) =>
+          `  <source id="doc-${idx + 1}" title="${item.sourceTitle || 'Course Material ' + (idx + 1)}" />`
+      )
+      .join("\n") +
+    `\n</sources_manifest>`;
+
+  let currentLength = manifest.length + 10;
+  const contextParts: string[] = [manifest];
 
   for (const chunk of rankedChunks) {
     const pageBadge = chunk.pageNumber ? ` • Page ${chunk.pageNumber}` : "";
     const header = `[Source: "${chunk.sourceTitle}"${pageBadge} • Excerpt ${chunk.index + 1}]`;
-    const block = `${header}\n${chunk.text}`;
+    const block = `<source_excerpt doc_id="${chunk.docId || 'doc-1'}" title="${chunk.sourceTitle}"${chunk.pageNumber ? ` page="${chunk.pageNumber}"` : ""} section="${chunk.index + 1}">\n${header}\n${chunk.text}\n</source_excerpt>`;
 
-    if (currentLength + block.length > maxChars && contextParts.length > 0) {
+    if (currentLength + block.length > maxChars && contextParts.length > 1) {
       break;
     }
     contextParts.push(block);
@@ -585,7 +671,7 @@ export async function buildChatContext(
 
   return {
     contextText: contextParts.join("\n\n---\n\n"),
-    retrievedChunkCount: contextParts.length,
+    retrievedChunkCount: contextParts.length - 1, // minus manifest
     matchedProblemNumber: targetProblem,
     primarySourceTitle: scopeItems[0]?.sourceTitle,
   };

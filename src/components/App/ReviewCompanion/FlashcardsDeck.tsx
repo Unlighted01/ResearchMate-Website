@@ -138,11 +138,12 @@ Available Course Materials:
 ${contextCorpus || "Generate essential review flashcards for " + targetTopic}
 
 REQUIREMENTS:
-1. Generate EXACTLY ${countToGenerate} active-recall flashcard pairs.
-2. Front: Crisp concept prompt, theorem statement request, or key problem.
-3. Back: Clear, authoritative explanation, formula, or derivation.
-4. Render all mathematical equations, variables, and units in standard LaTeX dollar signs (e.g. $E = mc^2$, $\\Delta S \\ge 0$, $\\neg P \\lor Q$).
-5. Assign a concise category tag (e.g. "Calculus", "Physics", "Discrete Logic").
+1. Generate EXACTLY ${countToGenerate} high-yield active-recall flashcard pairs based STRICTLY on the provided course material excerpts.
+2. Grounded Conceptual Contrast: Test distinctions, governing conditions, common exam traps, and specific mechanisms explained in the source text—never superficial dictionary definitions.
+3. Front: Focused, thought-provoking prompt, boundary condition inquiry, or conceptual comparison (e.g. "Under what conditions does Theorem X fail?", "What is the physical meaning of [Variable] in [Context]?").
+4. Back: Authoritative, step-by-step explanation or formula. Explicitly highlight the core intuition and frequent student misconceptions.
+5. LaTeX Standard: Render all mathematical equations, variables, chemical symbols, and units in standard LaTeX ($...$).
+6. Assign a concise category tag (e.g. "Calculus", "Physics", "Discrete Logic").
 
 Respond ONLY with a valid raw JSON array of objects:
 [

@@ -32,12 +32,12 @@ const OCR_EXTRACTION_PROMPT = `Extract ALL text from this image exactly as it ap
 CRITICAL INSTRUCTIONS:
 - Transcribe every word exactly as printed or written — do NOT paraphrase, summarize, or restructure
 - Preserve the original paragraph structure and line breaks
-- If mathematical expressions or equations appear, transcribe them using standard LaTeX delimiters ($...$ for inline, $$...$$ for block display formulas)
+- Mathematical expressions, formulas, variables, and units MUST be transcribed using standard LaTeX delimiters ($...$ for inline, $$...$$ for block display formulas)
 - Do NOT add formatting: no bullet points, no dashes, no headers, no bold, no italics unless they represent mathematical or structured notation
 - Do NOT add symbols or characters that are not in the original text
 - IGNORE these page artifacts: standalone page numbers, repeating headers/footers, watermarks, scan noise
 - Multi-column layouts: read the LEFT column completely first, then the RIGHT column
-- Tables: preserve the content in reading order, separate columns with spaces
+- Tables & Grids: transcribe ALL tables and tabular data as clean Markdown pipe tables (| Header 1 | Header 2 | ... |). Preserve column alignment, numerical cell values, and row order. NEVER collapse tables into space-separated text.
 - If handwriting is messy or text is unclear, make your best guess at the actual words
 - Do NOT output any conversational text, commentary, or labels — just the text from the image
 - If the image contains no visible text at all, return exactly: [NO TEXT DETECTED]
@@ -52,7 +52,7 @@ CRITICAL INSTRUCTIONS:
   * Use $...$ for inline variables and mathematical symbols within text.
 - Use standard LaTeX math environments and commands (e.g., \\begin{aligned}...\\end{aligned}, \\begin{pmatrix}...\\end{pmatrix}, \\frac{num}{den}, \\sqrt{}, \\int, \\sum, \\partial, \\nabla, Greek letters, sub/superscripts).
 - Transcribe handwritten notation with maximum fidelity: preserve every step of a multi-line derivation.
-- Accompanying prose, explanations, theorem names, or notes around the math should be preserved in plain text, with all inline symbols formatted in $...$.
+- Accompanying prose, explanations, theorem names, or notes around the math should be preserved in plain text, with all inline symbols formatted in $...$. Format any tabular data or experimental measurements as clean Markdown pipe tables (| Col 1 | Col 2 |).
 - Do NOT output conversational chatter or markdown fences (\`\`\`latex) unless wrapping code.
 - If the image contains no visible mathematical expressions or text, return exactly: [NO TEXT DETECTED]
 

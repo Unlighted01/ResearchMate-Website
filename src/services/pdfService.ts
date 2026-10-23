@@ -119,16 +119,22 @@ export async function extractAllPagesWithLayout(
 
 /**
  * Robustly extract full text, formulas, cover snapshot, and an AI study summary from a PDF file.
+ * Supports multi-page scanned document OCR with canvas rendering and representative long-document summaries.
  */
 export async function extractPdfContent(
   file: File,
-  options?: { maxPages?: number; onProgress?: (page: number, total: number) => void }
+  options?: {
+    maxPages?: number;
+    maxOcrPages?: number;
+    onProgress?: (page: number, total: number, message?: string) => void;
+  }
 ): Promise<ExtractedPdfResult> {
   const arrayBuffer = await file.arrayBuffer();
-  let fullText = "";
   let pageCount = 0;
   let hasVisualMath = false;
   let coverImageUrl: string | undefined;
+  const pagesData: { pageNum: number; text: string; isScanned?: boolean }[] = [];
+  const sparsePageNumbers: number[] = [];
 
   try {
     const loadingTask = pdfjsLib.getDocument({
@@ -159,66 +165,122 @@ export async function extractPdfContent(
       }
     }
 
-    // Default to extracting the entire document (or user specified limit)
+    // 2. Extract text layer from all pages
     const maxPages = options?.maxPages ? Math.min(pageCount, options.maxPages) : pageCount;
     for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      let pageText = "";
       try {
         const page = await pdf.getPage(pageNum);
         const textContent = await page.getTextContent();
-        let pageText = "";
         for (const item of textContent.items as any[]) {
           if (!item.str && !item.hasEOL) continue;
           pageText += (item.str || "") + (item.hasEOL ? "\n" : " ");
         }
         pageText = pageText.trim();
-
-        if (pageText) {
-          fullText += `[Page ${pageNum}]\n${pageText}\n\n`;
-        }
       } catch (pageErr) {
         console.warn(`Error reading page ${pageNum}:`, pageErr);
       }
 
-      if (options?.onProgress && pageNum % 10 === 0) {
-        options.onProgress(pageNum, maxPages);
+      // Detect pages with negligible text (scanned page, handwriting, diagram, formula sheet)
+      const isSparse = pageText.length < 40;
+      if (isSparse) {
+        sparsePageNumbers.push(pageNum);
+      }
+
+      pagesData.push({
+        pageNum,
+        text: pageText,
+        isScanned: isSparse,
+      });
+
+      if (options?.onProgress && pageNum % 5 === 0) {
+        options.onProgress(pageNum, maxPages, `Reading document pages: ${pageNum}/${maxPages}`);
         await new Promise((r) => setTimeout(r, 0));
+      }
+    }
+
+    // 3. Multi-Page Scanned PDF OCR Fallback:
+    // If the PDF contains sparse/scanned pages, run Math Vision OCR across those pages!
+    // Supports up to maxOcrPages (default 25 pages)
+    const maxOcrPages = options?.maxOcrPages ?? 25;
+    const pagesToOcr = sparsePageNumbers.slice(0, maxOcrPages);
+
+    if (pagesToOcr.length > 0 && typeof document !== "undefined") {
+      console.log(`🔍 Detected ${pagesToOcr.length} scanned/sparse pages. Executing Vision OCR...`);
+      for (let i = 0; i < pagesToOcr.length; i++) {
+        const pageNum = pagesToOcr[i];
+        if (options?.onProgress) {
+          options.onProgress(
+            pageNum,
+            maxPages,
+            `Running Math Vision OCR on scanned page ${pageNum} (${i + 1}/${pagesToOcr.length})...`
+          );
+        }
+
+        try {
+          const page = await pdf.getPage(pageNum);
+          const unscaledViewport = page.getViewport({ scale: 1.0 });
+          // Scale to 1200px width for high OCR clarity
+          const targetOcrWidth = 1200;
+          const scale = Math.min(Math.max(targetOcrWidth / unscaledViewport.width, 1.0), 2.0);
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.floor(viewport.width);
+          canvas.height = Math.floor(viewport.height);
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            await page.render({ canvasContext: ctx, viewport } as any).promise;
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+            const ocr = await runMathOcr(dataUrl);
+
+            const ocrContent = [ocr.latex, ocr.explanation].filter(Boolean).join("\n\n").trim();
+            if (ocrContent) {
+              const targetSlot = pagesData.find((p) => p.pageNum === pageNum);
+              if (targetSlot) {
+                targetSlot.text = ocrContent;
+                targetSlot.isScanned = false; // Successfully transcribed
+              }
+              hasVisualMath = true;
+            }
+          }
+        } catch (ocrErr) {
+          console.warn(`Vision OCR fallback failed for page ${pageNum}:`, ocrErr);
+        }
+
+        // Brief yield to prevent UI freeze between OCR API calls
+        await new Promise((r) => setTimeout(r, 50));
       }
     }
   } catch (pdfErr) {
     console.error("PDF parse error:", pdfErr);
   }
 
-  // If text extraction yielded very little text (e.g. scanned math book / image pages),
-  // render the first page to a canvas and run Math Vision OCR!
-  if (fullText.trim().length < 50 && pageCount > 0) {
-    try {
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 1.5 });
-      const canvas = document.createElement("canvas");
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        await page.render({ canvasContext: ctx, viewport } as any).promise;
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        const ocr = await runMathOcr(dataUrl);
-        if (ocr.latex || ocr.explanation) {
-          fullText = `${ocr.latex}\n\n${ocr.explanation}`;
-          hasVisualMath = true;
-        }
-      }
-    } catch (ocrErr) {
-      console.warn("Visual OCR fallback failed:", ocrErr);
-    }
-  }
+  // 4. Assemble the complete document corpus
+  const validPages = pagesData.filter((p) => p.text.trim().length > 0);
+  let fullText = validPages
+    .map((p) => `[Page ${p.pageNum}]\n${p.text}`)
+    .join("\n\n");
 
   const cleanText = fullText.trim() || `PDF Document: ${file.name} (${pageCount} pages). Ready for review.`;
 
-  // Generate executive summary via Gemini
+  // 5. Representative Long-Document Summary Synthesis:
+  // Instead of naively cutting off at character 5000 (which only covers pages 1-2),
+  // sample beginning, middle, and concluding sections if document is long.
+  function createRepresentativeSnippet(text: string, maxLen = 6000): string {
+    if (text.length <= maxLen) return text;
+    const partLen = Math.floor(maxLen / 3);
+    const beginning = text.slice(0, partLen);
+    const midStart = Math.floor(text.length / 2) - Math.floor(partLen / 2);
+    const middle = text.slice(midStart, midStart + partLen);
+    const end = text.slice(-partLen);
+    return `${beginning}\n\n[... Continuing through core chapters ...]\n\n${middle}\n\n[... Concluding sections ...]\n\n${end}`;
+  }
+
   let summary = "";
   try {
-    summary = await generateSummary(cleanText.slice(0, 5000));
+    const summaryExcerpt = createRepresentativeSnippet(cleanText, 6000);
+    summary = await generateSummary(summaryExcerpt);
   } catch {
     summary = `Synthesized review index for ${file.name} (${pageCount} pages)`;
   }

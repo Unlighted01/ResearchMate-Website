@@ -3,6 +3,7 @@
 // ============================================
 
 import React, { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
 import {
@@ -24,6 +25,7 @@ import {
   Copy,
   History,
   Plus,
+  FileEdit,
 } from "lucide-react";
 import { StorageItem } from "../../../services/storageService";
 import { ChatMessage } from "./useAIAssistant";
@@ -97,6 +99,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   handleSelectThread,
   handleDeleteThread,
 }) => {
+  const navigate = useNavigate();
+
   // Source pane states
   const [sourceSearch, setSourceSearch] = useState("");
   const [selectedPreviewItem, setSelectedPreviewItem] = useState<StorageItem | null>(null);
@@ -116,6 +120,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleSaveToManuscript = (text: string, title = "AI Study Derivation") => {
+    sessionStorage.setItem(
+      "rm_studynote_to_editor",
+      JSON.stringify({
+        title,
+        text,
+        sourceTitle: "AI Assistant Workspace",
+      })
+    );
+    navigate("/app/research?tab=editor");
   };
 
   const handleSourceClick = (item: StorageItem) => {
@@ -378,10 +394,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   >
                     {/* Copy and Actions overlay */}
                     {isAI && (
-                      <div className="absolute top-2 right-2 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200">
+                      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200">
+                        <button
+                          onClick={() => handleSaveToManuscript(msg.text)}
+                          className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-750 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg shadow-sm transition-colors cursor-pointer"
+                          title="Save to Manuscript Editor"
+                        >
+                          <FileEdit className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={() => handleCopyMessage(msg.text, msg.id)}
-                          className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-750 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg shadow-sm transition-colors"
+                          className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-750 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg shadow-sm transition-colors cursor-pointer"
                           title="Copy response"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
