@@ -118,6 +118,10 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   const [difficulty, setDifficulty] = useState<"easy" | "mixed" | "hard">("mixed");
   const [benchmarkThreshold, setBenchmarkThreshold] = useState<number>(80);
   const [timedMode, setTimedMode] = useState<boolean>(false);
+  const [timePerQuestion, setTimePerQuestion] = useState<number>(() => {
+    const val = parseInt(localStorage.getItem("examTimePerQuestion") || "67", 10);
+    return isNaN(val) || val <= 0 ? 67 : val;
+  });
   const [viewMode, setViewMode] = useState<"stepper" | "list">("stepper");
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
 
@@ -235,7 +239,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       setUserAnswers({});
       setFlaggedIds(new Set());
       setActiveQuestionIdx(0);
-      if (timedMode) setSecondsRemaining(customQuestionList.length * 90);
+      if (timedMode) setSecondsRemaining(customQuestionList.length * timePerQuestion);
       showToast(`Started targeted review on ${customQuestionList.length} questions!`, "info");
       return;
     }
@@ -267,7 +271,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
           // Progressive Streaming: update questions as each batch finishes!
           setQuestions([...progress.questionsSoFar]);
           if (timedMode && !secondsRemaining) {
-            setSecondsRemaining(progress.totalQuestions * 90);
+            setSecondsRemaining(progress.totalQuestions * timePerQuestion);
           }
         },
         controller.signal
@@ -275,7 +279,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
 
       if (generated.length > 0) {
         setQuestions(generated);
-        if (timedMode) setSecondsRemaining(generated.length * 90);
+        if (timedMode) setSecondsRemaining(generated.length * timePerQuestion);
         showToast(`Successfully assembled ${generated.length}-question simulation!`, "success");
       }
     } catch (err: any) {
@@ -292,7 +296,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
             return prevQuestions;
           }
           // Only fallback to offline bank if zero questions could be generated
-          if (timedMode) setSecondsRemaining(UNIVERSAL_FALLBACK_POOL.length * 90);
+          if (timedMode) setSecondsRemaining(UNIVERSAL_FALLBACK_POOL.length * timePerQuestion);
           showToast(`AI generation issue: ${errMsg}. Loaded 5 offline practice questions.`, "error");
           return UNIVERSAL_FALLBACK_POOL;
         });
@@ -448,7 +452,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       percentage,
       answers: userAnswers,
       questions_snapshot: [...questions], // Immutable snapshot
-      duration_seconds: timedMode && secondsRemaining !== null ? questions.length * 90 - secondsRemaining : undefined,
+      duration_seconds: timedMode && secondsRemaining !== null ? questions.length * timePerQuestion - secondsRemaining : undefined,
       passed,
     });
 
@@ -746,9 +750,16 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
 
             {/* 4. Timed Exam Mode */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">
-                Timed Simulation
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">
+                  Timed Simulation
+                </label>
+                {timedMode && (
+                  <span className="text-[10px] font-mono font-bold text-amber-600 dark:text-amber-400">
+                    {timePerQuestion}s / item
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => setTimedMode(!timedMode)}
                 className={`w-full py-1.5 px-3 rounded-lg border text-xs font-medium flex items-center justify-center gap-2 transition-all ${
@@ -758,8 +769,37 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                 }`}
               >
                 <Clock className="w-3.5 h-3.5" />
-                <span>{timedMode ? "Active (90s / Q)" : "Untimed Practice"}</span>
+                <span>{timedMode ? `Active (${timePerQuestion}s / Q)` : "Untimed Practice"}</span>
               </button>
+
+              {/* Pace Preset Chips */}
+              {timedMode && (
+                <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+                  {[
+                    { s: 67, label: "67s (CSC)" },
+                    { s: 60, label: "60s" },
+                    { s: 72, label: "72s" },
+                    { s: 90, label: "90s" },
+                    { s: 120, label: "120s" },
+                  ].map((preset) => (
+                    <button
+                      key={preset.s}
+                      type="button"
+                      onClick={() => {
+                        setTimePerQuestion(preset.s);
+                        localStorage.setItem("examTimePerQuestion", String(preset.s));
+                      }}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all shrink-0 ${
+                        timePerQuestion === preset.s
+                          ? "bg-amber-500 text-white shadow-xs"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -7,7 +7,7 @@
 // ============================================
 
 import React from "react";
-import { Palette, Sun, Moon, Monitor, Clock, Timer, Zap, Feather, Layers, Sparkles, Check } from "lucide-react";
+import { Palette, Sun, Moon, Monitor, Clock, Timer, Zap, Feather, Layers, Sparkles, Check, Target } from "lucide-react";
 import { Card, Toggle } from "../../shared/ui";
 import { ResearchMateLogo } from "../../shared/ResearchMateLogo";
 import { type VisualTheme } from "../../../context/ThemeContext";
@@ -298,10 +298,11 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
               Default Widget Tab
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {[
                 { id: "clock", label: "Clock", icon: Clock },
                 { id: "pomodoro", label: "Pomodoro", icon: Timer },
+                { id: "practice", label: "Practice", icon: Target },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -478,6 +479,82 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
                 );
               }}
             />
+          </div>
+        </div>
+
+        {/* Timed Practice Drill & CSC Exam Pacer Settings */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+            <Target className="w-4 h-4 text-amber-500" /> Timed Practice & CSC Exam Pacer
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+            {/* Default Target Pace */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                Target Pace per Problem
+              </label>
+              <select
+                value={localStorage.getItem("practicePaceSeconds") || "67"}
+                onChange={(e) => {
+                  localStorage.setItem("practicePaceSeconds", e.target.value);
+                  window.dispatchEvent(new Event("practiceSettingsChange"));
+                  showToast(`Target pace set to ${e.target.value}s per problem`, "info");
+                }}
+                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-semibold"
+              >
+                <option value="45">45 Seconds (Speed Drill)</option>
+                <option value="60">60 Seconds (1 Min / Question)</option>
+                <option value="67">67 Seconds (CSC 150Q / 3h Simulation)</option>
+                <option value="72">72 Seconds (Standard 3h / 150Q)</option>
+                <option value="90">90 Seconds (Standard Exam)</option>
+                <option value="120">120 Seconds (Math / Analytical)</option>
+              </select>
+            </div>
+
+            {/* Default Target Problems */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                Target Questions
+              </label>
+              <select
+                value={localStorage.getItem("practiceTotalQuestions") || "150"}
+                onChange={(e) => {
+                  localStorage.setItem("practiceTotalQuestions", e.target.value);
+                  window.dispatchEvent(new Event("practiceSettingsChange"));
+                  showToast(`Target problems set to ${e.target.value}`, "info");
+                }}
+                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-semibold"
+              >
+                <option value="25">25 Problems (Quick Quiz)</option>
+                <option value="50">50 Problems (Half-Exam)</option>
+                <option value="100">100 Problems</option>
+                <option value="150">150 Problems (CSC Full Exam)</option>
+                <option value="170">170 Problems (CSC Professional)</option>
+              </select>
+            </div>
+
+            {/* Auto-Advance Mode */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                On Pace Expiration
+              </label>
+              <select
+                value={localStorage.getItem("practiceAutoAdvance") === "true" ? "auto" : "overtime"}
+                onChange={(e) => {
+                  const isAuto = e.target.value === "auto";
+                  localStorage.setItem("practiceAutoAdvance", String(isAuto));
+                  window.dispatchEvent(new Event("practiceSettingsChange"));
+                  showToast(
+                    isAuto ? "Auto-advance to next question on 0s" : "Tracking overtime on 0s",
+                    "info",
+                  );
+                }}
+                className="w-full p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-semibold"
+              >
+                <option value="overtime">Count Overtime (Red Warning)</option>
+                <option value="auto">Auto-Advance to Next Problem</option>
+              </select>
+            </div>
           </div>
         </div>
       </Card>
