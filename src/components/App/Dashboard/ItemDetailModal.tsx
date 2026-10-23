@@ -6,7 +6,7 @@
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -32,7 +32,6 @@ import {
   Loader2,
   CreditCard,
   Trash2,
-  Check,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon } from "../../icons";
 import { StorageItem, updateItem, getCachedProblemSolution, saveCachedProblemSolution } from "../../../services/storageService";
