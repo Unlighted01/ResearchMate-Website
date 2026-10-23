@@ -27,6 +27,7 @@ import { runMathOcr, generateSummary } from "../../../services/geminiService";
 import { extractPdfContent } from "../../../services/pdfService";
 import { detectQaBookLikelihood } from "../../../services/pdfQuestionImporter";
 import LatexRenderer from "../../shared/LatexRenderer";
+import { useNotifications } from "../../../context/NotificationContext";
 
 interface ReviewMaterialsUploaderProps {
   onMaterialUploaded?: () => void;
@@ -37,6 +38,7 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
   onMaterialUploaded,
   showToast,
 }) => {
+  const { addNotification } = useNotifications();
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -177,6 +179,13 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
 
     if (successCount > 0) {
       showToast(`Ingested ${successCount} study material(s) into review corpus.`, "success");
+      addNotification({
+        type: "ocr_job",
+        title: "Materials Ingested",
+        message: `Indexed ${successCount} document(s) into review corpus. Ready for mock exams.`,
+        actionUrl: "/app/review",
+        actionLabel: "Review Hub",
+      });
       if (onMaterialUploaded) onMaterialUploaded();
     }
   };
@@ -271,6 +280,13 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
       });
 
       showToast("Formula digitized and compiled into LaTeX!", "success");
+      addNotification({
+        type: "ocr_job",
+        title: "STEM Math OCR Complete",
+        message: `Digitized handwritten equation into KaTeX (${ocr.latex.slice(0, 35)}...).`,
+        actionUrl: "/app/review",
+        actionLabel: "View Formula",
+      });
       if (onMaterialUploaded) onMaterialUploaded();
     } catch (err: any) {
       showToast("Math OCR extraction failed: " + err.message, "error");

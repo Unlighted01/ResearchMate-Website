@@ -31,6 +31,7 @@ import { StorageItem } from "../../../services/storageService";
 import { ChatMessage } from "./useAIAssistant";
 import ConversationDrawer from "./ConversationDrawer";
 import { ConversationSummary } from "../../../services/conversationService";
+import { useNotifications } from "../../../context/NotificationContext";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -100,6 +101,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   handleDeleteThread,
 }) => {
   const navigate = useNavigate();
+  const { addNotification } = useNotifications();
 
   // Source pane states
   const [sourceSearch, setSourceSearch] = useState("");
@@ -131,6 +133,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         sourceTitle: "AI Assistant Workspace",
       })
     );
+    addNotification({
+      type: "manuscript",
+      title: "Saved to Manuscript",
+      message: `Transferred "${title}" to your living manuscript editor.`,
+      actionUrl: "/app/research?tab=editor",
+      actionLabel: "Open Editor",
+    });
     navigate("/app/research?tab=editor");
   };
 

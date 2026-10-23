@@ -47,6 +47,7 @@ import AcademicMathView from "../../shared/AcademicMathView";
 import QuestionEditorModal from "./QuestionEditorModal";
 import QuestionImportModal from "./QuestionImportModal";
 import MaterialScopeSelector, { MaterialScopeSelection } from "./MaterialScopeSelector";
+import { useNotifications } from "../../../context/NotificationContext";
 
 export interface MockExamEngineProps {
   items: StorageItem[];
@@ -108,6 +109,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   items,
   showToast,
 }) => {
+  const { addNotification } = useNotifications();
   // Configuration State
   const [topicInput, setTopicInput] = useState("");
   const [scopeSelection, setScopeSelection] = useState<MaterialScopeSelection>({
@@ -460,8 +462,22 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
 
     if (passed) {
       showToast(`Benchmark Achieved! Scored ${correct}/${questions.length} (${percentage}%) vs ${benchmarkThreshold}% target.`, "success");
+      addNotification({
+        type: "exam_result",
+        title: "Benchmark Target Achieved!",
+        message: `Scored ${correct}/${questions.length} (${percentage}%) on "${topicInput.trim() || "Practice Exam"}". Target was ${benchmarkThreshold}%.`,
+        actionUrl: "/app/review",
+        actionLabel: "Review Answers",
+      });
     } else {
       showToast(`Exam complete: ${correct}/${questions.length} (${percentage}%). Target was ${benchmarkThreshold}%.`, "info");
+      addNotification({
+        type: "exam_result",
+        title: "Exam Session Complete",
+        message: `Scored ${correct}/${questions.length} (${percentage}%) on "${topicInput.trim() || "Practice Exam"}". Target was ${benchmarkThreshold}%.`,
+        actionUrl: "/app/review",
+        actionLabel: "Review Answers",
+      });
     }
   };
 

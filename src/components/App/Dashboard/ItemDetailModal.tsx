@@ -48,6 +48,7 @@ import { extractPdfContent } from "../../../services/pdfService";
 import { isPureMathCalculation, solveMath } from "../../../services/mathSolverEngine";
 import { findRelevantKnowledge } from "../../../services/knowledgeDatasets";
 import { findRelevantFormulary, inferDocumentDomain, checkDomainCompatibility } from "../../../services/formularyService";
+import { useNotifications } from "../../../context/NotificationContext";
 import { isMarkdown } from "./dashboardUtils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -120,6 +121,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onDelete,
   onItemUpdated,
 }) => {
+  const { addNotification } = useNotifications();
   const displayText = item ? (item.text || item.ocrText || "") : "";
   const isPdfOrDocument = Boolean(
     item?.tags?.includes("pdf") ||
@@ -236,6 +238,13 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         sourceTitle: item.sourceTitle,
       })
     );
+    addNotification({
+      type: "manuscript",
+      title: "Saved to Manuscript",
+      message: `Exported discussion for "${item.sourceTitle || "Document"}" to living manuscript.`,
+      actionUrl: "/app/research?tab=editor",
+      actionLabel: "Open Editor",
+    });
     onClose();
     window.location.hash = "#/app/research?tab=editor";
   };
@@ -261,6 +270,13 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       if (onItemUpdated) {
         onItemUpdated(updatedItem);
       }
+      addNotification({
+        type: "ocr_job",
+        title: "PDF Re-indexed",
+        message: `Extracted and indexed ${extracted.pageCount} page(s) from "${file.name}".`,
+        actionUrl: `/app/library?id=${item.id}`,
+        actionLabel: "View Document",
+      });
       appendMessage({
         sender: "ai",
         text: `✅ Successfully extracted and indexed **${extracted.pageCount} pages** from **${file.name}**!\n\nYou can now ask me to solve specific problems (e.g. *"solve problem 1"*), explain formulas, or generate mock practice questions.`,

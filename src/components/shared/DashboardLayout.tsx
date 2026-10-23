@@ -40,9 +40,10 @@ import {
   Sliders,
   GraduationCap,
   BrainCircuit,
+  Award,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
-import { getAllItems, subscribeToItems } from "../../services/storageService";
+import { subscribeToItems } from "../../services/storageService";
 
 // ============================================
 // PART 2: CONSTANTS
@@ -79,6 +80,10 @@ const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
 
 const getActivityIcon = (type: string) => {
   const icons: Record<string, React.ReactNode> = {
+    ocr_job: <FileText className="w-4 h-4 text-purple-500" />,
+    exam_result: <Award className="w-4 h-4 text-amber-500" />,
+    manuscript: <FileEdit className="w-4 h-4 text-indigo-500" />,
+    spaced_review: <BookOpen className="w-4 h-4 text-emerald-500" />,
     sync: <Laptop className="w-4 h-4 text-[#34C759]" />,
     summary: <MessageSquare className="w-4 h-4 text-[#007AFF]" />,
     collection: <FolderOpen className="w-4 h-4 text-[#AF52DE]" />,
@@ -130,6 +135,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     notifications: activities,
     unreadCount,
     markAllAsRead,
+    markAsRead,
+    clearNotifications,
     addNotification,
   } = useNotifications();
 
@@ -152,7 +159,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   // ---------- PART 4A: EFFECTS ----------
 
-  // Load user and sidebar state and generate AI suggestion
+  // Load user and sidebar state
   useEffect(() => {
     const isGuest = localStorage.getItem("rm_guest_mode") === "true";
     
@@ -161,36 +168,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         navigate("/");
       } else {
         setUser(data.user);
-        if (data.user) {
-          addNotification(
-            "login",
-            `Welcome back, ${data.user.email?.split("@")[0] || "researcher"}!`,
-          );
-          
-          // Generate AI recommendation/suggestion based on saved items
-          getAllItems(50).then((items) => {
-            if (items && items.length > 0) {
-              const itemWithoutSummary = items.find((item) => !item.aiSummary);
-              if (itemWithoutSummary) {
-                addNotification(
-                  "info",
-                  `💡 AI Recommendation: Try summarizing "${itemWithoutSummary.sourceTitle || "Untitled"}" to extract key insights.`,
-                );
-              } else {
-                const randomItem = items[Math.floor(Math.random() * items.length)];
-                addNotification(
-                  "info",
-                  `💡 AI Tip: Use the Editor to draft a report referencing "${randomItem.sourceTitle || "Untitled"}".`,
-                );
-              }
-            } else {
-              addNotification(
-                "info",
-                "💡 Get Started: Save a webpage or upload a PDF to build your library!",
-              );
-            }
-          }).catch(() => {});
-        }
       }
     });
 
@@ -198,7 +175,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     if (savedState === "true") {
       setSidebarCollapsed(true);
     }
-  }, [navigate, addNotification]);
+  }, [navigate]);
 
   // Global Realtime Activity Notifications Listener
   useEffect(() => {
@@ -215,17 +192,27 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       unsubscribeItems = subscribeToItems(userId, (payload) => {
         if (payload.eventType === "INSERT" && payload.new) {
           const device = payload.new.deviceSource || "web";
+          let title = "Item Ingested";
           let message = `New item "${payload.new.sourceTitle || "Untitled"}" saved to library.`;
           
           if (device === "extension") {
+            title = "Extension Sync";
             message = `New paper ingested: "${payload.new.sourceTitle || "Untitled"}"`;
           } else if (device === "mobile_scanner" || device === "mobile") {
-            message = `New document scanned and saved via Mobile Sync: "${payload.new.sourceTitle || "Untitled"}"`;
+            title = "Mobile Sync";
+            message = `New document scanned: "${payload.new.sourceTitle || "Untitled"}"`;
           } else if (device === "tablet_sync") {
-            message = `New tablet sync note saved: "${payload.new.sourceTitle || "Untitled"}"`;
+            title = "Tablet Sync";
+            message = `New tablet note saved: "${payload.new.sourceTitle || "Untitled"}"`;
           }
           
-          addNotification("sync", message);
+          addNotification({
+            type: "sync",
+            title,
+            message,
+            actionUrl: `/app/library?id=${payload.new.id}`,
+            actionLabel: "View in Library",
+          });
           if (showToast) showToast("New item synced!", "success");
         }
       });
@@ -234,11 +221,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       const channel = supabase.channel(`user-sync:${userId}`);
       channel
         .on("broadcast", { event: "mobile-connected" }, () => {
-          addNotification("sync", "Mobile scanner connected successfully.");
+          addNotification({
+            type: "sync",
+            title: "Device Paired",
+            message: "Mobile scanner paired successfully.",
+            actionUrl: "/app/sync",
+            actionLabel: "Sync Center",
+          });
           if (showToast) showToast("Mobile scanner connected!", "success");
         })
         .on("broadcast", { event: "new-scan" }, () => {
-          addNotification("sync", "New scan synced from mobile device.");
+          addNotification({
+            type: "sync",
+            title: "Mobile Capture",
+            message: "New note synced from mobile device.",
+            actionUrl: "/app/sync",
+            actionLabel: "View Scans",
+          });
           if (showToast) showToast("New note synced from mobile!", "success");
         })
         .subscribe();
@@ -746,14 +745,24 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                           <h3 className="font-semibold text-slate-900 dark:text-slate-100 font-title text-sm">
                             Activity & Updates
                           </h3>
-                          {unreadCount > 0 && (
-                            <button
-                              onClick={markAllAsRead}
-                              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
-                            >
-                              Mark all read
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {unreadCount > 0 && (
+                              <button
+                                onClick={markAllAsRead}
+                                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                              >
+                                Mark all read
+                              </button>
+                            )}
+                            {activities.length > 0 && (
+                              <button
+                                onClick={clearNotifications}
+                                className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium"
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-900">
                           {activities.length === 0 ? (
@@ -767,7 +776,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                             activities.map((activity) => (
                               <div
                                 key={activity.id}
+                                onClick={() => {
+                                  markAsRead(activity.id);
+                                  if (activity.actionUrl) {
+                                    navigate(activity.actionUrl);
+                                    setNotificationsOpen(false);
+                                  }
+                                }}
                                 className={`px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-colors ${
+                                  activity.actionUrl ? "cursor-pointer" : ""
+                                } ${
                                   !activity.read ? "bg-indigo-50/40 dark:bg-indigo-950/20" : ""
                                 }`}
                               >
@@ -776,12 +794,24 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                                     {getActivityIcon(activity.type)}
                                   </div>
                                   <div className="flex-1 min-w-0">
+                                    {activity.title && (
+                                      <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-0.5">
+                                        {activity.title}
+                                      </p>
+                                    )}
                                     <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
                                       {activity.message}
                                     </p>
-                                    <p className="text-[10px] font-mono text-slate-400 mt-1">
-                                      {formatTimeAgo(activity.time)}
-                                    </p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-[10px] font-mono text-slate-400">
+                                        {formatTimeAgo(activity.time)}
+                                      </span>
+                                      {activity.actionLabel && (
+                                        <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                                          {activity.actionLabel} &rarr;
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                   {!activity.read && (
                                     <div className="w-1.5 h-1.5 bg-indigo-600 dark:bg-indigo-400 rounded-full flex-shrink-0 mt-1.5" />
