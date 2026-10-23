@@ -48,6 +48,13 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
     handleKeyDown,
     credits,
     clearHistory,
+    isDrawerOpen,
+    setIsDrawerOpen,
+    activeThreadId,
+    conversations,
+    handleNewChat,
+    handleSelectThread,
+    handleDeleteThread,
   } = useAIAssistant(showToast);
 
   return (
@@ -140,6 +147,13 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
           insertMention={insertMention}
           handleKeyDown={handleKeyDown}
           clearHistory={clearHistory}
+          isDrawerOpen={isDrawerOpen}
+          setIsDrawerOpen={setIsDrawerOpen}
+          activeThreadId={activeThreadId}
+          conversations={conversations}
+          handleNewChat={handleNewChat}
+          handleSelectThread={handleSelectThread}
+          handleDeleteThread={handleDeleteThread}
         />
       )}
 

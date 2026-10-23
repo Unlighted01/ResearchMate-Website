@@ -22,9 +22,13 @@ import {
   Database,
   ArrowRight,
   Copy,
+  History,
+  Plus,
 } from "lucide-react";
 import { StorageItem } from "../../../services/storageService";
 import { ChatMessage } from "./useAIAssistant";
+import ConversationDrawer from "./ConversationDrawer";
+import { ConversationSummary } from "../../../services/conversationService";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -45,6 +49,13 @@ interface ChatPanelProps {
   insertMention: (item: StorageItem) => void;
   handleKeyDown: (e: React.KeyboardEvent) => void;
   clearHistory: () => void;
+  isDrawerOpen?: boolean;
+  setIsDrawerOpen?: (v: boolean) => void;
+  activeThreadId?: string | null;
+  conversations?: ConversationSummary[];
+  handleNewChat?: () => void;
+  handleSelectThread?: (threadId: string) => Promise<void>;
+  handleDeleteThread?: (threadId: string) => Promise<void>;
 }
 
 // ============================================
@@ -78,6 +89,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   insertMention,
   handleKeyDown,
   clearHistory,
+  isDrawerOpen,
+  setIsDrawerOpen,
+  activeThreadId,
+  conversations = [],
+  handleNewChat,
+  handleSelectThread,
+  handleDeleteThread,
 }) => {
   // Source pane states
   const [sourceSearch, setSourceSearch] = useState("");
@@ -131,10 +149,23 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const userMessages = chatHistory.filter((m) => m.role === "user").length;
 
   return (
-    <div className="h-[650px] grid grid-cols-1 lg:grid-cols-12 bg-white dark:bg-[#1C1C1E] rounded-3xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden shadow-xl animate-fade-in-up">
-      {/* ============================================
-          LEFT PANE: LIVE CONTEXT SOURCES (4 Cols)
-          ============================================ */}
+    <div className="relative h-[650px] flex bg-white dark:bg-[#1C1C1E] rounded-3xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden shadow-xl animate-fade-in-up">
+      {/* Slide-out / Collapsible Conversation Drawer */}
+      <ConversationDrawer
+        isOpen={!!isDrawerOpen}
+        onClose={() => setIsDrawerOpen?.(false)}
+        conversations={conversations}
+        activeThreadId={activeThreadId || null}
+        onSelectThread={(id) => handleSelectThread?.(id)}
+        onNewChat={() => handleNewChat?.()}
+        onDeleteThread={(id) => handleDeleteThread?.(id)}
+      />
+
+      {/* Main Grid: Left Sources (4 cols) & Right Chat (8 cols) */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-w-0 h-full">
+        {/* ============================================
+            LEFT PANE: LIVE CONTEXT SOURCES (4 Cols)
+            ============================================ */}
       <div className="lg:col-span-4 border-r border-slate-200/80 dark:border-slate-800/80 flex flex-col h-full bg-slate-50/60 dark:bg-black/10">
         {/* Source Header */}
         <div className="px-4 py-4 border-b border-slate-200/80 dark:border-slate-800/80">
@@ -252,31 +283,63 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           ============================================ */}
       <div className="lg:col-span-8 flex flex-col h-full bg-slate-50/20 dark:bg-[#151516]/40">
         {/* Chat header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#1C1C1E]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#1C1C1E] gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Conversation Drawer Toggle Button */}
+            <button
+              onClick={() => setIsDrawerOpen?.(!isDrawerOpen)}
+              className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isDrawerOpen
+                  ? "bg-indigo-50 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400"
+                  : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+              }`}
+              title="Toggle chat history drawer"
+            >
+              <History className="w-4 h-4 text-indigo-500" />
+              <span className="hidden sm:inline">History</span>
+            </button>
+
+            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
               <Sparkles className="w-4 h-4 text-[#007AFF]" />
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Active Synthesis Stream</h3>
-              <p className="text-[10px] text-slate-400">Context is automatically retrieved from mentioned nodes.</p>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                Active Synthesis Stream
+              </h3>
+              <p className="text-[10px] text-slate-400 truncate">
+                Context is automatically retrieved from mentioned nodes.
+              </p>
             </div>
             {userMessages > 0 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold ml-2">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold ml-1 shrink-0 hidden sm:inline-block">
                 {userMessages} {userMessages === 1 ? "turn" : "turns"}
               </span>
             )}
           </div>
-          {chatHistory.length > 1 && (
-            <button
-              onClick={clearHistory}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
-              title="Reset conversation state"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Clear Stream
-            </button>
-          )}
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {handleNewChat && (
+              <button
+                onClick={handleNewChat}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 rounded-xl transition-all cursor-pointer"
+                title="Start a fresh conversation"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">New Chat</span>
+              </button>
+            )}
+
+            {chatHistory.length > 1 && (
+              <button
+                onClick={clearHistory}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all cursor-pointer"
+                title="Reset conversation state"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Clear</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Messages Stream */}
@@ -456,6 +519,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             Active Synthesizer: Context derived from notes. 1 Token per query.
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

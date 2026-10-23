@@ -6,7 +6,7 @@
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   getAllItems,
   updateItem,
@@ -19,17 +19,22 @@ import {
 } from "../../../services/geminiService";
 import type { SummaryMode } from "../../../services/geminiService";
 import { buildChatContext } from "../../../services/ragService";
+import {
+  ConversationSummary,
+  ConversationThread,
+  ChatMessage,
+  listConversations,
+  getConversation,
+  saveConversation,
+  deleteConversation,
+  generateThreadTitle,
+} from "../../../services/conversationService";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
 // ============================================
 
-export interface ChatMessage {
-  id: string;
-  role: "user" | "ai";
-  text: string;
-  timestamp: number;
-}
+export type { ChatMessage } from "../../../services/conversationService";
 
 export interface UseAIAssistantReturn {
   // Tab state
@@ -76,6 +81,15 @@ export interface UseAIAssistantReturn {
   // Credits
   credits: number | string;
 
+  // Conversation Drawer / Multi-Thread
+  isDrawerOpen: boolean;
+  setIsDrawerOpen: (v: boolean) => void;
+  activeThreadId: string | null;
+  conversations: ConversationSummary[];
+  handleNewChat: () => void;
+  handleSelectThread: (threadId: string) => Promise<void>;
+  handleDeleteThread: (threadId: string) => Promise<void>;
+
   // Conversation management
   clearHistory: () => void;
 }
@@ -103,8 +117,22 @@ const useAIAssistant = (
   // Credits
   const [credits, setCredits] = useState<number | string>("...");
 
+  // Drawer & Multi-Thread State
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(() => {
+    return localStorage.getItem("rm_active_thread_id") || null;
+  });
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+
   // Persist chat history in localStorage (keyed per user once session loads)
   const CHAT_STORAGE_KEY = "rm_chat_history";
+
+  const defaultWelcomeMessage: ChatMessage = {
+    id: "welcome",
+    role: "ai",
+    text: "Hello! I'm ResearchMate AI. I can help you analyze your saved research, find connections, or summarize complex topics. How can I help you today?",
+    timestamp: Date.now(),
+  };
 
   // Chat state — restore from localStorage if available
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>(() => {
@@ -115,14 +143,7 @@ const useAIAssistant = (
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch { /* ignore */ }
-    return [
-      {
-        id: "welcome",
-        role: "ai",
-        text: "Hello! I'm ResearchMate AI. I can help you analyze your saved research, find connections, or summarize complex topics. How can I help you today?",
-        timestamp: Date.now(),
-      },
-    ];
+    return [defaultWelcomeMessage];
   });
 
   const [chatInput, setChatInput] = useState("");
@@ -136,25 +157,112 @@ const useAIAssistant = (
   const [cursorPosition, setCursorPosition] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ---------- PART 3B: EFFECTS ----------
+  // ---------- PART 3B: EFFECTS & CONVERSATION HANDLERS ----------
 
-  // Persist chat history to localStorage whenever it changes
-  useEffect(() => {
+  // Refresh conversation list from IndexedDB
+  const refreshConversations = useCallback(async () => {
     try {
-      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatHistory));
-    } catch { /* quota exceeded — ignore */ }
-  }, [chatHistory, CHAT_STORAGE_KEY]);
+      const list = await listConversations();
+      setConversations(list);
+    } catch (e) {
+      console.warn("Failed to list conversations:", e);
+    }
+  }, []);
 
-  const clearHistory = () => {
+  useEffect(() => {
+    refreshConversations();
+  }, [refreshConversations]);
+
+  // Restore active thread if it exists on mount
+  useEffect(() => {
+    if (activeThreadId) {
+      getConversation(activeThreadId)
+        .then((thread) => {
+          if (thread && thread.messages && thread.messages.length > 0) {
+            setChatHistory(thread.messages);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeThreadId]);
+
+  // Handle starting a fresh conversation
+  const handleNewChat = useCallback(() => {
     const welcome: ChatMessage = {
       id: "welcome",
       role: "ai",
       text: "Hello! I'm ResearchMate AI. I can help you analyze your saved research, find connections, or summarize complex topics. How can I help you today?",
       timestamp: Date.now(),
     };
+    const newId = `chat_${Date.now()}`;
+    setActiveThreadId(newId);
+    localStorage.setItem("rm_active_thread_id", newId);
     setChatHistory([welcome]);
-    localStorage.removeItem(CHAT_STORAGE_KEY);
-  };
+  }, []);
+
+  // Handle selecting an existing conversation
+  const handleSelectThread = useCallback(async (threadId: string) => {
+    setActiveThreadId(threadId);
+    localStorage.setItem("rm_active_thread_id", threadId);
+    const thread = await getConversation(threadId);
+    if (thread && thread.messages) {
+      setChatHistory(thread.messages);
+    }
+  }, []);
+
+  // Handle deleting a conversation thread
+  const handleDeleteThread = useCallback(
+    async (threadId: string) => {
+      await deleteConversation(threadId);
+      setConversations((prev) => prev.filter((c) => c.id !== threadId));
+      if (activeThreadId === threadId) {
+        handleNewChat();
+      }
+    },
+    [activeThreadId, handleNewChat],
+  );
+
+  // Auto-persist conversation thread to IndexedDB when user messages exist
+  useEffect(() => {
+    const hasUserMsg = chatHistory.some((m) => m.role === "user");
+    if (!hasUserMsg) return;
+
+    const threadId = activeThreadId || `chat_${Date.now()}`;
+    if (!activeThreadId) {
+      setActiveThreadId(threadId);
+      localStorage.setItem("rm_active_thread_id", threadId);
+    }
+
+    const firstUserMsg = chatHistory.find((m) => m.role === "user");
+    const title = generateThreadTitle(firstUserMsg?.text || "New Conversation");
+
+    const thread: ConversationThread = {
+      id: threadId,
+      title,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      messages: chatHistory,
+    };
+
+    saveConversation(thread)
+      .then(() => refreshConversations())
+      .catch((err) => console.warn("Failed to auto-save conversation thread:", err));
+  }, [chatHistory, activeThreadId, refreshConversations]);
+
+  // Persist chat history to localStorage fallback as well
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatHistory));
+    } catch { /* quota exceeded — ignore */ }
+  }, [chatHistory, CHAT_STORAGE_KEY]);
+
+  const clearHistory = useCallback(async () => {
+    if (activeThreadId) {
+      await deleteConversation(activeThreadId);
+      refreshConversations();
+    }
+    handleNewChat();
+  }, [activeThreadId, refreshConversations, handleNewChat]);
 
   // Fetch credits on mount
   useEffect(() => {
@@ -485,6 +593,13 @@ const useAIAssistant = (
     handleKeyDown,
     credits,
     clearHistory,
+    isDrawerOpen,
+    setIsDrawerOpen,
+    activeThreadId,
+    conversations,
+    handleNewChat,
+    handleSelectThread,
+    handleDeleteThread,
   };
 };
 

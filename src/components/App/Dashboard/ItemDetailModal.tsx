@@ -31,9 +31,16 @@ import {
   Layers,
   Loader2,
   CreditCard,
+  Trash2,
+  Check,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon } from "../../icons";
 import { StorageItem, updateItem, getCachedProblemSolution, saveCachedProblemSolution } from "../../../services/storageService";
+import {
+  getItemConversation,
+  saveItemConversation,
+  clearItemConversation,
+} from "../../../services/conversationService";
 import { initiateStudentProCheckout, getUserSubscriptionStatus } from "../../../services/paymongoService";
 import { generateAiResponse, generateChatResponse, generateEmbedding } from "../../../services/geminiService";
 import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks } from "../../../services/ragService";
@@ -169,6 +176,50 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isAiThinking, mobileActivePane]);
 
+  // Append a message and persist to IndexedDB
+  const appendMessage = useCallback(
+    (msg: { sender: "user" | "ai"; text: string; model?: string }) => {
+      setMessages((prev) => {
+        const next = [...prev, msg];
+        if (item?.id) {
+          saveItemConversation(
+            item.id,
+            next.map((m, idx) => ({
+              id: `msg_${idx}_${Date.now()}`,
+              role: m.sender,
+              text: m.text,
+              timestamp: Date.now(),
+              model: m.model,
+            })),
+            item.sourceTitle || item.title,
+            selectedModel,
+          ).catch((err) => console.warn("Could not persist item conversation:", err));
+        }
+        return next;
+      });
+    },
+    [item?.id, item?.sourceTitle, item?.title, selectedModel],
+  );
+
+  const handleClearChat = async () => {
+    if (!item?.id) return;
+    await clearItemConversation(item.id);
+    setMessages([]);
+  };
+
+  const handleCopyTranscript = () => {
+    if (messages.length === 0) return;
+    const transcript = messages
+      .map(
+        (m) =>
+          `**${m.sender === "user" ? "You" : `ResearchMate AI (${formatModelBadge(m.model)})`}**:\n${m.text}`,
+      )
+      .join("\n\n---\n\n");
+    navigator.clipboard.writeText(transcript);
+    setCopiedField("chat_transcript");
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
   const handleReindexPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !item) return;
@@ -190,34 +241,56 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       if (onItemUpdated) {
         onItemUpdated(updatedItem);
       }
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "ai",
-          text: `✅ Successfully extracted and indexed **${extracted.pageCount} pages** from **${file.name}**!\n\nYou can now ask me to solve specific problems (e.g. *"solve problem 1"*), explain formulas, or generate mock practice questions.`,
-        },
-      ]);
+      appendMessage({
+        sender: "ai",
+        text: `✅ Successfully extracted and indexed **${extracted.pageCount} pages** from **${file.name}**!\n\nYou can now ask me to solve specific problems (e.g. *"solve problem 1"*), explain formulas, or generate mock practice questions.`,
+      });
     } catch (err: any) {
       console.error("Failed to re-index PDF:", err);
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "ai",
-          text: `⚠️ Could not extract text from this PDF: ${err?.message || "Unknown error"}. Try uploading another version or pasting the problem directly.`,
-        },
-      ]);
+      appendMessage({
+        sender: "ai",
+        text: `⚠️ Could not extract text from this PDF: ${err?.message || "Unknown error"}. Try uploading another version or pasting the problem directly.`,
+      });
     } finally {
       setIsReindexing(false);
       if (e.target) e.target.value = "";
     }
   };
 
-  // Reset custom messages and mobile pane when the item changes
+  // Restore persistent item conversation when opening or changing item
   useEffect(() => {
-    setMessages([]);
+    let isCancelled = false;
     setChatInput("");
     setMobileActivePane("doc");
-  }, [item]);
+
+    if (item?.id) {
+      getItemConversation(item.id)
+        .then((thread) => {
+          if (!isCancelled) {
+            if (thread && thread.messages && thread.messages.length > 0) {
+              setMessages(
+                thread.messages.map((m) => ({
+                  sender: m.role,
+                  text: m.text,
+                  model: m.model,
+                })),
+              );
+            } else {
+              setMessages([]);
+            }
+          }
+        })
+        .catch(() => {
+          if (!isCancelled) setMessages([]);
+        });
+    } else {
+      setMessages([]);
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [item?.id]);
 
   // Handle escape key to close workspace
   useEffect(() => {
@@ -241,7 +314,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     const query = (customMsg || chatInput).trim();
     if (!query || !item || isAiThinking) return;
 
-    setMessages((prev) => [...prev, { sender: "user", text: query }]);
+    appendMessage({ sender: "user", text: query });
     setChatInput("");
     setIsAiThinking(true);
 
@@ -249,13 +322,10 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       // TIER 1: Check Cached Problem Solutions (0 credits, instant response)
       const cachedSolution = await getCachedProblemSolution(item.sourceTitle, query);
       if (cachedSolution) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "ai",
-            text: `${cachedSolution}\n\n*(Loaded from verified solution cache • 0 credits consumed)*`,
-          },
-        ]);
+        appendMessage({
+          sender: "ai",
+          text: `${cachedSolution}\n\n*(Loaded from verified solution cache • 0 credits consumed)*`,
+        });
         setIsAiThinking(false);
         return;
       }
@@ -264,13 +334,10 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       if (isPureMathCalculation(query)) {
         const mathResult = solveMath(query);
         if (mathResult.success) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              sender: "ai",
-              text: `${mathResult.explanationMarkdown}\n\n*(Computed deterministically via Math.js engine • 0 credits consumed)*`,
-            },
-          ]);
+          appendMessage({
+            sender: "ai",
+            text: `${mathResult.explanationMarkdown}\n\n*(Computed deterministically via Math.js engine • 0 credits consumed)*`,
+          });
           await saveCachedProblemSolution(item.sourceTitle, query, mathResult.explanationMarkdown);
           setIsAiThinking(false);
           return;
@@ -281,13 +348,10 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       const docDomain = inferDocumentDomain(item.sourceTitle, displayText);
       const domainCheck = checkDomainCompatibility(docDomain, query, item.sourceTitle);
       if (!domainCheck.isCompatible && domainCheck.refusalMessage) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "ai",
-            text: domainCheck.refusalMessage!,
-          },
-        ]);
+        appendMessage({
+          sender: "ai",
+          text: domainCheck.refusalMessage!,
+        });
         setIsAiThinking(false);
         return;
       }
@@ -342,10 +406,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         documentTitle: item.sourceTitle,
       });
       if (chatRes.ok && chatRes.response) {
-        setMessages((prev) => [
-          ...prev,
-          { sender: "ai", text: chatRes.response, model: chatRes.model_used },
-        ]);
+        appendMessage({
+          sender: "ai",
+          text: chatRes.response,
+          model: chatRes.model_used,
+        });
         // Auto-cache problem solutions to save credits on repeat visits
         if (/problem|question|number|solve|formula/i.test(query)) {
           await saveCachedProblemSolution(item.sourceTitle, query, chatRes.response);
@@ -361,15 +426,12 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       if (err.message?.toLowerCase().includes("credit")) {
         setShowUpgradeModal(true);
       }
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "ai",
-          text: err.message?.toLowerCase().includes("credit")
-            ? `⚠️ You have used all your free AI credits. You can add your personal free Google key in Settings for unlimited studying, or upgrade to Student Pro!`
-            : `I had trouble connecting to the AI service. If this document was recently uploaded without text, click **Re-parse PDF** above to re-index its pages.`,
-        },
-      ]);
+      appendMessage({
+        sender: "ai",
+        text: err.message?.toLowerCase().includes("credit")
+          ? `⚠️ You have used all your free AI credits. You can add your personal free Google key in Settings for unlimited studying, or upgrade to Student Pro!`
+          : `I had trouble connecting to the AI service. If this document was recently uploaded without text, click **Re-parse PDF** above to re-index its pages.`,
+      });
     } finally {
       setIsAiThinking(false);
     }
@@ -862,6 +924,30 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                         <Zap className="w-3 h-3 text-amber-500" />
                         <span className="hidden xs:inline">Upgrade</span>
                       </button>
+                    )}
+
+                    {messages.length > 0 && (
+                      <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-700 pl-1.5 ml-0.5">
+                        <button
+                          onClick={handleCopyTranscript}
+                          className="p-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors shadow-2xs cursor-pointer"
+                          title={copiedField === "chat_transcript" ? "Copied transcript!" : "Copy conversation transcript"}
+                        >
+                          {copiedField === "chat_transcript" ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                          ) : (
+                            <CopyIcon className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+
+                        <button
+                          onClick={handleClearChat}
+                          className="p-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors shadow-2xs cursor-pointer"
+                          title="Clear discussion history for this item"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
