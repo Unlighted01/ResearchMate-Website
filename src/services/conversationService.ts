@@ -11,6 +11,7 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   model?: string;
+  imageUrl?: string; // Optional attached screenshot or diagram data URL
 }
 
 export interface ConversationThread {

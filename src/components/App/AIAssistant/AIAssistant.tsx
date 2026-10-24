@@ -40,6 +40,11 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
     chatEndRef,
     chatAbortRef,
     handleSendMessage,
+    attachedImage,
+    setAttachedImage,
+    handleImagePaste,
+    handleImageSelect,
+    handleRemoveAttachedImage,
     isMentionMenuOpen,
     filteredMentions,
     inputRef,
@@ -140,6 +145,10 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
           chatEndRef={chatEndRef}
           chatAbortRef={chatAbortRef}
           handleSendMessage={handleSendMessage}
+          attachedImage={attachedImage}
+          handleImagePaste={handleImagePaste}
+          handleImageSelect={handleImageSelect}
+          handleRemoveAttachedImage={handleRemoveAttachedImage}
           isMentionMenuOpen={isMentionMenuOpen}
           filteredMentions={filteredMentions}
           inputRef={inputRef}

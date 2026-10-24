@@ -58,7 +58,7 @@ export async function runOcr(
 /**
  * Read a File as a base64 data URL.
  */
-function readFileAsDataUrl(file: File): Promise<string> {
+export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
@@ -68,7 +68,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 /**
- * Import a single image file: run OCR and insert to DB.
+ * Import a single image file: run OCR and insert to DB/IndexedDB.
  */
 export async function importImageFile(file: File): Promise<void> {
   const base64DataUrl = await readFileAsDataUrl(file);
@@ -78,17 +78,16 @@ export async function importImageFile(file: File): Promise<void> {
     throw new Error("No readable text found in image.");
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { error } = await supabase.from("items").insert({
-    user_id: user?.id,
+  await addItem({
+    sourceTitle: file.name.replace(/\.[^/.]+$/, "") || "Visual Note",
     text: data.ocrText.trim(),
-    source_title: file.name,
-    device_source: "smart_pen",
-    ocr_confidence: data.ocrConfidence ?? null,
+    ocrText: data.ocrText.trim(),
+    aiSummary: data.aiSummary || null,
+    imageUrl: base64DataUrl,
+    deviceSource: "smart_pen",
+    ocrConfidence: data.ocrConfidence ?? null,
+    tags: ["image", "ocr", "imported-source"],
   });
-  if (error) throw error;
 }
 
 /**

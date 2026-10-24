@@ -33,6 +33,7 @@ import {
   CreditCard,
   Trash2,
   FileEdit,
+  Image as ImageIcon,
 } from "lucide-react";
 import { TrashIcon, CopyIcon, ExternalLinkIcon } from "../../icons";
 import { StorageItem, updateItem, getCachedProblemSolution, saveCachedProblemSolution } from "../../../services/storageService";
@@ -42,7 +43,7 @@ import {
   clearItemConversation,
 } from "../../../services/conversationService";
 import { initiateStudentProCheckout, getUserSubscriptionStatus } from "../../../services/paymongoService";
-import { generateAiResponse, generateChatResponse, generateEmbedding } from "../../../services/geminiService";
+import { generateAiResponse, generateChatResponse, generateEmbedding, runMathOcr } from "../../../services/geminiService";
 import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks, buildChatContext } from "../../../services/ragService";
 import { extractPdfContent } from "../../../services/pdfService";
 import { isPureMathCalculation, solveMath } from "../../../services/mathSolverEngine";
@@ -136,7 +137,14 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [mobileActivePane, setMobileActivePane] = useState<"doc" | "chat">("doc");
   const [chatInput, setChatInput] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Array<{ sender: "user" | "ai"; text: string; model?: string }>>([]);
+  const [messages, setMessages] = useState<Array<{ sender: "user" | "ai"; text: string; model?: string; imageUrl?: string }>>([]);
+  const [attachedImage, setAttachedImage] = useState<{
+    file?: File;
+    dataUrl: string;
+    name: string;
+  } | null>(null);
+  const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>("gemini-flash");
@@ -180,7 +188,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
   // Append a message and persist to IndexedDB
   const appendMessage = useCallback(
-    (msg: { sender: "user" | "ai"; text: string; model?: string }) => {
+    (msg: { sender: "user" | "ai"; text: string; model?: string; imageUrl?: string }) => {
       setMessages((prev) => {
         const next = [...prev, msg];
         if (item?.id) {
@@ -190,6 +198,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               id: `msg_${idx}_${Date.now()}`,
               role: m.sender,
               text: m.text,
+              imageUrl: m.imageUrl,
               timestamp: Date.now(),
               model: m.model,
             })),
@@ -308,6 +317,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 thread.messages.map((m) => ({
                   sender: m.role,
                   text: m.text,
+                  imageUrl: m.imageUrl,
                   model: m.model,
                 })),
               );
@@ -345,55 +355,119 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  const handleImagePaste = (e: React.ClipboardEvent) => {
+    const clipboardItems = e.clipboardData?.items;
+    if (!clipboardItems) return;
+    for (let i = 0; i < clipboardItems.length; i++) {
+      const it = clipboardItems[i];
+      if (it.type.startsWith("image/")) {
+        const file = it.getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string;
+          if (dataUrl) {
+            setAttachedImage({
+              file,
+              dataUrl,
+              name: file.name || `screenshot_${Date.now()}.png`,
+            });
+          }
+        };
+        reader.readAsDataURL(file);
+        e.preventDefault();
+        break;
+      }
+    }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setAttachedImage({
+          file,
+          dataUrl,
+          name: file.name,
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   const handleSendMessage = async (e?: React.FormEvent, customMsg?: string) => {
     if (e) e.preventDefault();
-    const query = (customMsg || chatInput).trim();
+    const currentAttached = attachedImage;
+    const query = (customMsg || chatInput).trim() || (currentAttached ? "Explain or extract the content of this screenshot." : "");
     if (!query || !item || isAiThinking) return;
 
-    appendMessage({ sender: "user", text: query });
+    appendMessage({ sender: "user", text: query, imageUrl: currentAttached?.dataUrl });
     setChatInput("");
+    setAttachedImage(null);
     setIsAiThinking(true);
 
     try {
-      // TIER 1: Check Cached Problem Solutions (0 credits, instant response)
-      const cachedSolution = await getCachedProblemSolution(item.sourceTitle, query);
-      if (cachedSolution) {
-        appendMessage({
-          sender: "ai",
-          text: `${cachedSolution}\n\n*(Loaded from verified solution cache • 0 credits consumed)*`,
-        });
-        setIsAiThinking(false);
-        return;
+      let visualOcrText = "";
+      if (currentAttached?.dataUrl) {
+        try {
+          const ocrRes = await runMathOcr(currentAttached.dataUrl);
+          if (ocrRes.ok) {
+            const parts = [ocrRes.latex, ocrRes.explanation].filter(Boolean);
+            if (parts.length > 0) {
+              visualOcrText = parts.join("\n\n");
+            }
+          }
+        } catch (ocrErr) {
+          console.warn("Math/Vision OCR error in Document Assistant:", ocrErr);
+        }
       }
 
-      // TIER 2: Pure Math & Unit Conversion Local Solver (0 credits, 100% accurate)
-      if (isPureMathCalculation(query)) {
-        const mathResult = solveMath(query);
-        if (mathResult.success) {
+      // TIER 1: Check Cached Problem Solutions (0 credits, instant response)
+      if (!currentAttached) {
+        const cachedSolution = await getCachedProblemSolution(item.sourceTitle, query);
+        if (cachedSolution) {
           appendMessage({
             sender: "ai",
-            text: `${mathResult.explanationMarkdown}\n\n*(Computed deterministically via Math.js engine • 0 credits consumed)*`,
+            text: `${cachedSolution}\n\n*(Loaded from verified solution cache • 0 credits consumed)*`,
           });
-          await saveCachedProblemSolution(item.sourceTitle, query, mathResult.explanationMarkdown);
+          setIsAiThinking(false);
+          return;
+        }
+
+        // TIER 2: Pure Math & Unit Conversion Local Solver (0 credits, 100% accurate)
+        if (isPureMathCalculation(query)) {
+          const mathResult = solveMath(query);
+          if (mathResult.success) {
+            appendMessage({
+              sender: "ai",
+              text: `${mathResult.explanationMarkdown}\n\n*(Computed deterministically via Math.js engine • 0 credits consumed)*`,
+            });
+            await saveCachedProblemSolution(item.sourceTitle, query, mathResult.explanationMarkdown);
+            setIsAiThinking(false);
+            return;
+          }
+        }
+
+        // TIER 2.5: Document Domain Isolation Gatekeeper (0 credits, instant response)
+        const docDomain = inferDocumentDomain(item.sourceTitle, displayText);
+        const domainCheck = checkDomainCompatibility(docDomain, query, item.sourceTitle);
+        if (!domainCheck.isCompatible && domainCheck.refusalMessage) {
+          appendMessage({
+            sender: "ai",
+            text: domainCheck.refusalMessage!,
+          });
           setIsAiThinking(false);
           return;
         }
       }
 
-      // TIER 2.5: Document Domain Isolation Gatekeeper (0 credits, instant response)
-      const docDomain = inferDocumentDomain(item.sourceTitle, displayText);
-      const domainCheck = checkDomainCompatibility(docDomain, query, item.sourceTitle);
-      if (!domainCheck.isCompatible && domainCheck.refusalMessage) {
-        appendMessage({
-          sender: "ai",
-          text: domainCheck.refusalMessage!,
-        });
-        setIsAiThinking(false);
-        return;
-      }
-
       // TIER 3: Knowledge Bank Lookup + Universal Formulary Lookup + AI Pedagogical Tutor
       const relevantKnowledge = findRelevantKnowledge(query);
+      const docDomain = inferDocumentDomain(item.sourceTitle, displayText);
       const relevantFormulas = findRelevantFormulary(query, docDomain);
 
       let docContext = "";
@@ -407,6 +481,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         docContext = chatContextResult.contextText;
       } else {
         docContext = `Document Title: "${item.sourceTitle || "Untitled"}"\n(Note: No body text extracted yet. If the user asks to solve specific problems or analyze sections, explain what is available, offer to solve it if they paste it or re-parse the PDF, and provide a helpful illustrative example).`;
+      }
+
+      if (visualOcrText) {
+        const visualContext = `[USER ATTACHED SCREENSHOT OCR CONTENT (${currentAttached?.name || "image"})]:\n"""\n${visualOcrText}\n"""\n\n`;
+        docContext = visualContext + docContext;
       }
 
       if (relevantKnowledge.length > 0) {
@@ -1040,7 +1119,17 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       {m.sender === "user" ? (
                         <>
                           <div className="bg-indigo-600 text-white p-3 rounded-2xl rounded-tr-none text-sm max-w-[90%] sm:max-w-[85%]">
-                            {m.text}
+                            {m.imageUrl && (
+                              <div className="mb-2">
+                                <img
+                                  src={m.imageUrl}
+                                  alt="Attached screenshot"
+                                  onClick={() => setEnlargedImageUrl(m.imageUrl || null)}
+                                  className="max-h-52 max-w-full rounded-xl object-contain cursor-zoom-in border border-white/20 shadow-md bg-black/10 hover:opacity-95 transition-all"
+                                />
+                              </div>
+                            )}
+                            <div>{m.text}</div>
                           </div>
                           <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 text-slate-700 dark:text-slate-200 text-xs font-medium">
                             You
@@ -1115,22 +1204,77 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
                 {/* Chat Input Console Form */}
                 <div className="p-3 sm:p-4 border-t border-slate-200/50 dark:border-slate-800/50 bg-white dark:bg-slate-900 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-                  <form onSubmit={handleSendMessage} className="relative flex items-center">
-                    <input
-                      type="text"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      placeholder="Ask the research AI anything about this document..."
-                      className="w-full pl-3.5 pr-11 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
+                  {/* Attached Image preview chip */}
+                  {attachedImage && (
+                    <div className="mb-2.5 flex items-center justify-between p-2 bg-indigo-50/90 dark:bg-indigo-950/50 border border-indigo-200/80 dark:border-indigo-800/80 rounded-xl w-fit max-w-full">
+                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                        <img
+                          src={attachedImage.dataUrl}
+                          alt="Screenshot preview"
+                          onClick={() => setEnlargedImageUrl(attachedImage.dataUrl)}
+                          className="w-9 h-9 object-cover rounded-lg border border-indigo-200 dark:border-indigo-700 shrink-0 cursor-zoom-in"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-200 truncate max-w-[200px]">
+                            {attachedImage.name}
+                          </p>
+                          <p className="text-[10px] text-indigo-600 dark:text-indigo-400">
+                            Math & Vision OCR enabled
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAttachedImage(null)}
+                        className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Remove image"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Hidden file input */}
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+
+                  <form onSubmit={handleSendMessage} className="relative flex items-center gap-1.5">
                     <button
-                      type="submit"
-                      disabled={!chatInput.trim()}
-                      className="absolute right-1.5 p-2 min-w-[36px] min-h-[36px] flex items-center justify-center bg-indigo-600 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all cursor-pointer"
-                      aria-label="Send query"
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="p-2 sm:p-2.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer shrink-0 border border-slate-200/60 dark:border-slate-800"
+                      title="Attach screenshot or picture (Ctrl+V supported)"
                     >
-                      <Send className="w-3.5 h-3.5" />
+                      <ImageIcon className="w-4 h-4" />
                     </button>
+
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onPaste={handleImagePaste}
+                        placeholder={
+                          attachedImage
+                            ? "Ask a question about this screenshot..."
+                            : "Ask anything about this document or paste screenshot (Ctrl+V)..."
+                        }
+                        className="w-full pl-3.5 pr-11 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!chatInput.trim() && !attachedImage}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 min-w-[36px] min-h-[36px] flex items-center justify-center bg-indigo-600 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all cursor-pointer"
+                        aria-label="Send query"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </form>
                 </div>
 
@@ -1244,6 +1388,32 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               </div>
             )}
           </AnimatePresence>
+
+          {/* Screenshot Enlarge Modal */}
+          {enlargedImageUrl && (
+            <div
+              className="fixed inset-0 z-[110] bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
+              onClick={() => setEnlargedImageUrl(null)}
+            >
+              <div
+                className="relative max-w-4xl max-h-[90vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl p-2 border border-slate-700"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => setEnlargedImageUrl(null)}
+                  className="absolute top-4 right-4 p-2 bg-black/60 hover:bg-black/90 text-white rounded-full z-10 transition-colors cursor-pointer"
+                  title="Close preview"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <img
+                  src={enlargedImageUrl}
+                  alt="Enlarged screenshot"
+                  className="max-h-[85vh] max-w-full object-contain rounded-2xl mx-auto"
+                />
+              </div>
+            </div>
+          )}
         </>
       )}
     </AnimatePresence>,

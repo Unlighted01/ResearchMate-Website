@@ -16,6 +16,7 @@ import { supabase } from "../../../services/supabaseClient";
 import {
   generateSummary,
   generateChatResponse,
+  runMathOcr,
 } from "../../../services/geminiService";
 import type { SummaryMode } from "../../../services/geminiService";
 import { buildChatContext } from "../../../services/ragService";
@@ -67,6 +68,13 @@ export interface UseAIAssistantReturn {
   chatEndRef: React.RefObject<HTMLDivElement>;
   chatAbortRef: React.MutableRefObject<AbortController | null>;
   handleSendMessage: () => Promise<void>;
+
+  // Screenshot / Image attachment state
+  attachedImage: { file?: File; dataUrl: string; name: string } | null;
+  setAttachedImage: (img: { file?: File; dataUrl: string; name: string } | null) => void;
+  handleImagePaste: (e: React.ClipboardEvent) => void;
+  handleImageSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleRemoveAttachedImage: () => void;
 
   // Mention state
   isMentionMenuOpen: boolean;
@@ -150,6 +158,13 @@ const useAIAssistant = (
   const [isChatting, setIsChatting] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatAbortRef = useRef<AbortController | null>(null);
+
+  // Screenshot / Image attachment state
+  const [attachedImage, setAttachedImage] = useState<{
+    file?: File;
+    dataUrl: string;
+    name: string;
+  } | null>(null);
 
   // Mention state
   const [isMentionMenuOpen, setIsMentionMenuOpen] = useState(false);
@@ -441,20 +456,100 @@ const useAIAssistant = (
     );
   };
 
+  const handleImagePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const clipboardItems = e.clipboardData?.items;
+      if (!clipboardItems) return;
+      for (let i = 0; i < clipboardItems.length; i++) {
+        const item = clipboardItems[i];
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const dataUrl = event.target?.result as string;
+            if (dataUrl) {
+              setAttachedImage({
+                file,
+                dataUrl,
+                name: file.name || `screenshot_${Date.now()}.png`,
+              });
+              showToast("Screenshot attached!", "success");
+            }
+          };
+          reader.readAsDataURL(file);
+          e.preventDefault();
+          break;
+        }
+      }
+    },
+    [showToast],
+  );
+
+  const handleImageSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        showToast("Please select a valid image file", "error");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        if (dataUrl) {
+          setAttachedImage({
+            file,
+            dataUrl,
+            name: file.name,
+          });
+          showToast("Image attached!", "success");
+        }
+      };
+      reader.readAsDataURL(file);
+      e.target.value = "";
+    },
+    [showToast],
+  );
+
+  const handleRemoveAttachedImage = useCallback(() => {
+    setAttachedImage(null);
+  }, []);
+
   const handleSendMessage = async () => {
-    if (!chatInput.trim() || isChatting) return;
+    if ((!chatInput.trim() && !attachedImage) || isChatting) return;
+
+    const currentAttachedImage = attachedImage;
+    const textToSend = chatInput.trim() || (currentAttachedImage ? "Explain or extract the content of this image." : "");
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
-      text: chatInput,
+      text: textToSend,
+      imageUrl: currentAttachedImage?.dataUrl,
       timestamp: Date.now(),
     };
 
     setChatHistory((prev) => [...prev, userMsg]);
     setChatInput("");
+    setAttachedImage(null);
     setIsMentionMenuOpen(false);
     setIsChatting(true);
+
+    let visualOcrText = "";
+    if (currentAttachedImage?.dataUrl) {
+      try {
+        const ocrResult = await runMathOcr(currentAttachedImage.dataUrl);
+        if (ocrResult.ok) {
+          const parts = [ocrResult.latex, ocrResult.explanation].filter(Boolean);
+          if (parts.length > 0) {
+            visualOcrText = parts.join("\n\n");
+          }
+        }
+      } catch (ocrErr) {
+        console.warn("OCR extraction on attached image failed:", ocrErr);
+      }
+    }
 
     const mentionedItems = items.filter((i) =>
       userMsg.text.toLowerCase().includes(`@${i.sourceTitle?.toLowerCase()}`),
@@ -468,7 +563,12 @@ const useAIAssistant = (
       { maxChars: 35000, topK: 12 }
     );
 
-    const context = contextResult.contextText;
+    let context = contextResult.contextText;
+    if (visualOcrText) {
+      const imageContext = `\n\n[USER ATTACHED IMAGE OCR EXTRACT (${currentAttachedImage?.name || "image"})]:\n"""\n${visualOcrText}\n"""\n`;
+      context = context ? `${imageContext}\n${context}` : imageContext;
+    }
+
     const documentTitle = mentionedItems[0]?.sourceTitle || selectedItem?.sourceTitle;
 
     const controller = new AbortController();
@@ -583,6 +683,11 @@ const useAIAssistant = (
     chatEndRef,
     chatAbortRef,
     handleSendMessage,
+    attachedImage,
+    setAttachedImage,
+    handleImagePaste,
+    handleImageSelect,
+    handleRemoveAttachedImage,
     isMentionMenuOpen,
     setIsMentionMenuOpen,
     mentionQuery,

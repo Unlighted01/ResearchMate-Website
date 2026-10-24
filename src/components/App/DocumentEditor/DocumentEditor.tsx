@@ -8,7 +8,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Editor } from "@tiptap/react";
-import { FileEdit, X, Sparkles, Upload, Loader2, Plus } from "lucide-react";
+import { FileEdit, X, Sparkles, Upload, Loader2, Plus, FileText } from "lucide-react";
 
 import useDocumentEditor from "./useDocumentEditor";
 import DocumentSidebar from "./DocumentSidebar";

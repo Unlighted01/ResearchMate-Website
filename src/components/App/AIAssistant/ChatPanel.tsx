@@ -26,8 +26,9 @@ import {
   History,
   Plus,
   FileEdit,
+  Image as ImageIcon,
 } from "lucide-react";
-import { StorageItem } from "../../../services/storageService";
+import { StorageItem, addItem } from "../../../services/storageService";
 import { ChatMessage } from "./useAIAssistant";
 import ConversationDrawer from "./ConversationDrawer";
 import { ConversationSummary } from "../../../services/conversationService";
@@ -45,6 +46,10 @@ interface ChatPanelProps {
   chatEndRef: React.RefObject<HTMLDivElement>;
   chatAbortRef: React.MutableRefObject<AbortController | null>;
   handleSendMessage: () => Promise<void>;
+  attachedImage?: { file?: File; dataUrl: string; name: string } | null;
+  handleImagePaste?: (e: React.ClipboardEvent) => void;
+  handleImageSelect?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleRemoveAttachedImage?: () => void;
   isMentionMenuOpen: boolean;
   filteredMentions: StorageItem[];
   inputRef: React.RefObject<HTMLInputElement>;
@@ -85,6 +90,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   chatEndRef,
   chatAbortRef,
   handleSendMessage,
+  attachedImage,
+  handleImagePaste,
+  handleImageSelect,
+  handleRemoveAttachedImage,
   isMentionMenuOpen,
   filteredMentions,
   inputRef,
@@ -102,6 +111,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 }) => {
   const navigate = useNavigate();
   const { addNotification } = useNotifications();
+  const imageInputRef = React.useRef<HTMLInputElement>(null);
+  const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
 
   // Source pane states
   const [sourceSearch, setSourceSearch] = useState("");
@@ -437,6 +448,43 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         : "bg-white dark:bg-[#2C2C2E] text-slate-800 dark:text-slate-200 border-slate-200/50 dark:border-slate-800 rounded-tl-none"
                     }`}
                   >
+                    {/* Render attached image if present */}
+                    {msg.imageUrl && (
+                      <div className="mb-2.5">
+                        <img
+                          src={msg.imageUrl}
+                          alt="Screenshot capture"
+                          onClick={() => setEnlargedImageUrl(msg.imageUrl || null)}
+                          className="max-h-56 max-w-full rounded-xl object-contain cursor-zoom-in border border-white/20 shadow-md hover:opacity-95 transition-all bg-black/10"
+                        />
+                        <div className="mt-1 flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addItem({
+                                sourceTitle: `Screenshot Capture (${new Date(msg.timestamp).toLocaleDateString()})`,
+                                deviceSource: "mobile_scanner",
+                                imageUrl: msg.imageUrl,
+                                text: msg.text || "Screenshot attachment",
+                                ocrText: msg.text,
+                                tags: ["Screenshot", "AI Chat"],
+                              }).then(() => {
+                                addNotification({
+                                  type: "info",
+                                  title: "Saved to Library",
+                                  message: "Screenshot saved into your Study & Review materials.",
+                                });
+                              });
+                            }}
+                            className="text-[10px] text-white/80 hover:text-white bg-black/25 hover:bg-black/45 px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
+                            title="Save screenshot to Study & Review library"
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span>Save to Library</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {/* Copy and Actions overlay */}
                     {isAI && (
                       <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200">
@@ -515,72 +563,127 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
         {/* Input Bar Section */}
         <div className="p-4 bg-white dark:bg-[#1C1C1E] border-t border-slate-200/80 dark:border-slate-800/80">
-          <div className="relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={chatInput}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                items.length > 0
-                  ? "Query notes or PDFs (Type @ to mention, or click items on the left)..."
-                  : "Collect reference materials to activate the synthesis engine..."
-              }
-              className="w-full pl-4 pr-12 py-4 bg-slate-100 dark:bg-[#2C2C2E] rounded-2xl text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/35 transition-all border border-slate-200/50 dark:border-slate-700/50"
-              disabled={isChatting}
-            />
+          {/* Thumbnail preview chip for attached screenshot */}
+          {attachedImage && (
+            <div className="mb-2.5 flex items-center justify-between p-2 bg-indigo-50/90 dark:bg-indigo-950/50 border border-indigo-200/80 dark:border-indigo-800/80 rounded-2xl w-fit max-w-full">
+              <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                <img
+                  src={attachedImage.dataUrl}
+                  alt="Attached preview"
+                  onClick={() => setEnlargedImageUrl(attachedImage.dataUrl)}
+                  className="w-10 h-10 object-cover rounded-xl border border-indigo-200 dark:border-indigo-700 shrink-0 cursor-zoom-in"
+                />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-200 truncate max-w-[220px]">
+                    {attachedImage.name}
+                  </p>
+                  <p className="text-[10px] text-indigo-600 dark:text-indigo-400">
+                    Math & Vision OCR enabled
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveAttachedImage}
+                className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                title="Remove image"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
-            {/* Float Menu: Mention suggestions */}
-            <AnimatePresence>
-              {isMentionMenuOpen && filteredMentions.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 5, scale: 0.95 }}
-                  className="absolute bottom-full mb-3 left-0 w-[calc(100vw-3rem)] max-w-xs sm:w-72 bg-white dark:bg-[#2C2C2E] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-30"
+          {/* Hidden File Input for Image Selection */}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+            onChange={handleImageSelect}
+            className="hidden"
+          />
+
+          <div className="relative flex items-center gap-2">
+            {/* Attachment Button */}
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              className="p-3 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all cursor-pointer shrink-0 border border-slate-200/60 dark:border-slate-700/60"
+              title="Attach screenshot or picture (or Ctrl+V paste directly)"
+              aria-label="Attach picture"
+            >
+              <ImageIcon className="w-4 h-4" />
+            </button>
+
+            <div className="relative flex-1">
+              <input
+                ref={inputRef}
+                type="text"
+                value={chatInput}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onPaste={handleImagePaste}
+                placeholder={
+                  attachedImage
+                    ? "Ask a question about this screenshot (or press Enter)..."
+                    : items.length > 0
+                    ? "Query notes, PDFs, or paste screenshot (Ctrl+V)..."
+                    : "Collect reference materials or paste screenshot (Ctrl+V)..."
+                }
+                className="w-full pl-4 pr-12 py-4 bg-slate-100 dark:bg-[#2C2C2E] rounded-2xl text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/35 transition-all border border-slate-200/50 dark:border-slate-700/50"
+                disabled={isChatting}
+              />
+
+              {/* Float Menu: Mention suggestions */}
+              <AnimatePresence>
+                {isMentionMenuOpen && filteredMentions.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 5, scale: 0.95 }}
+                    className="absolute bottom-full mb-3 left-0 w-[calc(100vw-3rem)] max-w-xs sm:w-72 bg-white dark:bg-[#2C2C2E] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-30"
+                  >
+                    <div className="px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Suggest Research Node
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {filteredMentions.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => insertMention(item)}
+                          className="w-full text-left px-3.5 py-2.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-blue-500/10 hover:text-blue-500 dark:hover:text-blue-400 transition-colors truncate flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+                        >
+                          <div className="p-1 bg-slate-100 dark:bg-slate-800 rounded shrink-0">
+                            {getSourceIcon(item.deviceSource || "web")}
+                          </div>
+                          <span className="truncate">{item.sourceTitle || "Untitled"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Processing / Send Controls */}
+              {isChatting ? (
+                <button
+                  onClick={() => chatAbortRef.current?.abort()}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 p-2 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all shadow-md active:scale-95"
+                  title="Abort stream request"
                 >
-                  <div className="px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    Suggest Research Node
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {filteredMentions.map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => insertMention(item)}
-                        className="w-full text-left px-3.5 py-2.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-blue-500/10 hover:text-blue-500 dark:hover:text-blue-400 transition-colors truncate flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0"
-                      >
-                        <div className="p-1 bg-slate-100 dark:bg-slate-800 rounded shrink-0">
-                          {getSourceIcon(item.deviceSource || "web")}
-                        </div>
-                        <span className="truncate">{item.sourceTitle || "Untitled"}</span>
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
+                  <X className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!chatInput.trim() && !attachedImage}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 p-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white rounded-xl transition-all disabled:opacity-40 disabled:bg-slate-400 shrink-0 shadow-md hover:shadow-blue-500/10 active:scale-95 cursor-pointer"
+                  title="Transmit prompt"
+                  aria-label="Send message"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
               )}
-            </AnimatePresence>
-
-            {/* Processing / Send Controls */}
-            {isChatting ? (
-              <button
-                onClick={() => chatAbortRef.current?.abort()}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 p-2 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all shadow-md active:scale-95"
-                title="Abort stream request"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                onClick={handleSendMessage}
-                disabled={!chatInput.trim()}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 p-2.5 bg-[#007AFF] hover:bg-[#0066DD] text-white rounded-xl transition-all disabled:opacity-40 disabled:bg-slate-400 shrink-0 shadow-md hover:shadow-blue-500/10 active:scale-95"
-                title="Transmit prompt"
-                aria-label="Send message"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            )}
+            </div>
           </div>
           <p className="text-[10px] text-center text-slate-400 mt-2.5 flex items-center justify-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-blue-500 animate-pulse" />
@@ -589,6 +692,32 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
       </div>
       </div>
+
+      {/* Zoom / Lightbox Modal */}
+      {enlargedImageUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setEnlargedImageUrl(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl p-2 border border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setEnlargedImageUrl(null)}
+              className="absolute top-4 right-4 p-2 bg-black/60 hover:bg-black/90 text-white rounded-full z-10 transition-colors cursor-pointer"
+              title="Close preview"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={enlargedImageUrl}
+              alt="Enlarged screenshot"
+              className="max-h-[85vh] max-w-full object-contain rounded-2xl mx-auto"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

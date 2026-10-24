@@ -4,7 +4,7 @@
 // Supports PDF, DOCX (Word), PNG/JPEG images, and Live Camera STEM Math OCR
 // ============================================
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import mammoth from "mammoth";
 import {
   Upload,
@@ -57,6 +57,36 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Support pasting screenshots directly via Ctrl+V anywhere on the page
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const clipboardItems = e.clipboardData?.items;
+      if (!clipboardItems) return;
+
+      const pastedFiles: File[] = [];
+      for (let i = 0; i < clipboardItems.length; i++) {
+        const item = clipboardItems[i];
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(/:/g, "-");
+            const renamed = new File([file], `Pasted-Note-${timeStr}.png`, { type: file.type });
+            pastedFiles.push(renamed);
+          }
+        }
+      }
+
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        showToast(`Pasted ${pastedFiles.length} screenshot(s). Processing visual note...`, "info");
+        await processFiles(pastedFiles);
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, []);
 
   // Common file processor (supports PDF, DOCX, images, markdown)
   const processFiles = async (files: FileList | File[]) => {
@@ -122,7 +152,7 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
             tags: ["pdf", "review-material"],
           });
           successCount++;
-        } else if (["png", "jpg", "jpeg"].includes(extension || "")) {
+        } else if (["png", "jpg", "jpeg", "webp", "gif", "avif"].includes(extension || "") || file.type.startsWith("image/")) {
           // Image / diagram / formula photo
           setStatusText(`Analyzing visual study note: ${filename}...`);
           const reader = new FileReader();
@@ -406,7 +436,10 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
                 Word (.docx)
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
-                Diagrams (.png, .jpg)
+                Diagrams (.png, .jpg, .webp)
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-semibold">
+                Paste Screenshot (Ctrl+V)
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
                 Markdown (.md, .txt)
@@ -419,7 +452,7 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.docx,.png,.jpg,.jpeg,.txt,.md"
+              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,image/*"
               onChange={handleFileChange}
               className="hidden"
             />
