@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Button, Card, Input } from "../shared/ui";
-import BubbleBackground from "../shared/BubbleBackground";
 import { ResearchMateLogo } from "../shared/ResearchMateLogo";
 import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
@@ -68,7 +67,6 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
     };
   }, []);
   const { visualTheme } = useTheme();
-  const isBubbleTheme = false;
   const authBackgroundClass =
     visualTheme === "glass"
       ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"
@@ -252,8 +250,7 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
     return (
       <div className="theme-page min-h-screen flex items-center justify-center px-4 relative">
         <div className={`fixed inset-0 z-0 ${authBackgroundClass}`} />
-        <BubbleBackground bubbleCount={10} enabled={isBubbleTheme} />
-        <div className="w-full max-w-sm content-above-bubbles">
+        <div className="w-full max-w-sm">
           <div className="text-center mb-8">
             <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
               <Mail className="w-8 h-8 text-white" />
@@ -325,8 +322,7 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
         </div>
       )}
       <div className={`fixed inset-0 z-0 ${authBackgroundClass}`} />
-      <BubbleBackground bubbleCount={10} enabled={isBubbleTheme} />
-      <div className="w-full max-w-sm content-above-bubbles">
+      <div className="w-full max-w-sm">
         {/* Back Link */}
         <div className="mb-4 text-left">
           <Link

@@ -16,6 +16,7 @@ import {
   FolderPlus,
   BookOpen,
   MessageSquare,
+  Award,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Modal } from "../../shared/ui";
@@ -255,14 +256,14 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           >
             {data.searchQuery
               ? "No results found"
-              : "Synthesize your research"}
+              : "Build your study library"}
           </h3>
           <p className="text-gray-500 dark:text-gray-400 text-center max-w-md mb-8 text-sm">
             {data.searchQuery
               ? "Try adjusting your search terms or active filters."
               : isDraggingOver
               ? "Drop files here to immediately import into your library!"
-              : "Drop PDFs to compare methodologies, transcribe whiteboard derivations to LaTeX, or import your papers."}
+              : "Drop your reviewer PDFs, exam question sets, or study materials here to start practice and review."}
           </p>
           {!data.searchQuery && (
             <>
@@ -273,7 +274,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-full transition-all shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 active:scale-95 text-sm cursor-pointer disabled:opacity-60"
               >
                 <Upload className={`w-4 h-4 ${data.isImporting ? "animate-bounce" : ""}`} />
-                <span>{data.isImporting ? "Importing Sources..." : "Import Papers or PDFs"}</span>
+                <span>{data.isImporting ? "Importing Sources..." : "Upload Reviewers or PDFs"}</span>
               </button>
 
               {/* Quick-action grid — 3 core pillars */}
@@ -284,26 +285,26 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     {
-                      to: "/app/pdf-reader",
-                      icon: BookOpen,
-                      label: "Ingest PDF",
-                      sub: "Automated analysis",
-                      color: "text-indigo-600 dark:text-indigo-400",
-                      bg: "bg-indigo-500/10",
-                    },
-                    {
-                      to: "/app/smart-pen",
-                      icon: Calculator,
-                      label: "STEM Math OCR",
-                      sub: "Transcribe to LaTeX",
+                      to: "/app/review?tab=exams",
+                      icon: Award,
+                      label: "Mock Exams & Practice",
+                      sub: "Timed tests, scoring & review",
                       color: "text-amber-600 dark:text-amber-400",
                       bg: "bg-amber-500/10",
                     },
                     {
-                      to: "/app/editor",
-                      icon: FileEdit,
-                      label: "Manuscript Draft",
-                      sub: "TipTap + Overleaf export",
+                      to: "/app/research?tab=pdf",
+                      icon: BookOpen,
+                      label: "Study Materials & Reader",
+                      sub: "Read, annotate & study PDFs",
+                      color: "text-indigo-600 dark:text-indigo-400",
+                      bg: "bg-indigo-500/10",
+                    },
+                    {
+                      to: "/app/assistant",
+                      icon: MessageSquare,
+                      label: "AI Study Assistant",
+                      sub: "Grounded Q&A & explanations",
                       color: "text-emerald-600 dark:text-emerald-400",
                       bg: "bg-emerald-500/10",
                     },

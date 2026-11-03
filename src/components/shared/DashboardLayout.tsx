@@ -12,7 +12,6 @@ import { supabase } from "../../services/supabaseClient";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import CommandPalette from "./CommandPalette";
-import ClockWidget from "./ClockWidget";
 import { ResearchMateLogo } from "./ResearchMateLogo";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { motion, AnimatePresence } from "motion/react";
@@ -36,7 +35,6 @@ import {
   FileText,
   ChevronLeft,
   BookOpen,
-  Timer,
   Sliders,
   GraduationCap,
   BrainCircuit,
@@ -127,9 +125,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [showClockWidget, setShowClockWidget] = useState(
-    () => localStorage.getItem("showClockWidget") !== "false",
-  );
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const {
     notifications: activities,
@@ -285,16 +280,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  // Listen for clock widget toggle from settings
-  useEffect(() => {
-    const handleClockToggle = () => {
-      setShowClockWidget(localStorage.getItem("showClockWidget") !== "false");
-    };
-    window.addEventListener("clockWidgetToggle", handleClockToggle);
-    return () =>
-      window.removeEventListener("clockWidgetToggle", handleClockToggle);
   }, []);
 
   // ---------- PART 4B: HANDLERS ----------
@@ -685,35 +670,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <span className="hidden sm:inline">SYNCED</span>
               </div>
 
-              {/* Action Bar (Theme Switcher + Timer + Notifications + Profile) */}
+              {/* Action Bar (Theme Switcher + Notifications + Profile) */}
               <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800">
                 {/* Theme & Mode Switcher */}
                 <ThemeSwitcher />
-
-                {/* Clock & Pomodoro Quick Toggle */}
-                <button
-                  onClick={() => {
-                    const nextState = !(localStorage.getItem("showClockWidget") !== "false");
-                    setShowClockWidget(nextState);
-                    localStorage.setItem("showClockWidget", String(nextState));
-                    window.dispatchEvent(new Event("clockWidgetToggle"));
-                    if (showToast) {
-                      showToast(
-                        nextState ? "Workstation timer displayed" : "Workstation timer hidden",
-                        "info",
-                      );
-                    }
-                  }}
-                  aria-label="Toggle Clock & Pomodoro Widget"
-                  title={showClockWidget ? "Hide Workstation Timer" : "Show Workstation Timer"}
-                  className={`p-2 rounded-md transition-colors relative flex items-center justify-center ${
-                    showClockWidget
-                      ? "text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 shadow-xs"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <Timer className="w-4 h-4" />
-                </button>
 
                 {/* Notifications */}
                 <div className="relative flex items-center justify-center">
@@ -957,15 +917,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
         </main>
       </div>
-
-      {/* Clock Widget */}
-      <ClockWidget
-        isVisible={showClockWidget}
-        onClose={() => {
-          setShowClockWidget(false);
-          localStorage.setItem("showClockWidget", "false");
-        }}
-      />
 
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>

@@ -6,7 +6,7 @@
 // ============================================
 
 export interface FormularyEntry {
-  category: "discrete_math" | "calculus_ode" | "physics_chem" | "english_verbal";
+  category: "discrete_math" | "calculus_ode" | "physics_chem" | "english_verbal" | "exam_numerical";
   keywords: string[];
   rules: string[];
 }
@@ -153,6 +153,61 @@ export const ACADEMIC_FORMULARY: FormularyEntry[] = [
       "Gamit ng 'Din/Daw' vs 'Rin/Raw': 'Rin/Raw' kung ang sinusundang salita ay nagtatapos sa patinig (a, e, i, o, u) o malapatinig (w, y). 'Din/Daw' kung nagtatapos sa katinig.",
     ],
   },
+  // -------------------------------------------------------------
+  // 5. CIVIL SERVICE & COMPETITIVE EXAM NUMERICAL SHORTCUTS
+  // -------------------------------------------------------------
+  {
+    category: "exam_numerical",
+    keywords: ["work", "rate", "pipe", "cistern", "together", "alone", "job"],
+    rules: [
+      "Two-Worker Joint Rate Shortcut: T = (A * B) / (A + B). E.g., Person A in 4 days, Person B in 6 days => (4*6)/(4+6) = 2.4 days.",
+      "Inlet and Drain Pipes: Net Rate = 1/T = 1/A - 1/B => T = (A * B) / (B - A).",
+      "Work-Rate Formula: Work = Rate * Time. Individual rate = 1/Time.",
+    ],
+  },
+  {
+    category: "exam_numerical",
+    keywords: ["man-day", "men", "workers", "days", "inverse variation", "wall", "project"],
+    rules: [
+      "Man-Days Inverse Variation: M₁ * D₁ * H₁ = M₂ * D₂ * H₂ (Work remains constant).",
+      "Inverse Proportion Rule: As number of workers increases, time required decreases proportionally.",
+    ],
+  },
+  {
+    category: "exam_numerical",
+    keywords: ["speed", "distance", "relative motion", "average speed", "overtake", "opposite direction", "same direction"],
+    rules: [
+      "Round-Trip Average Speed: v_avg = (2 * v₁ * v₂) / (v₁ + v₂) (Harmonic mean when distances are equal; NEVER arithmetic mean!).",
+      "Relative Speed (Opposite Directions): S_rel = v₁ + v₂ (Time to meet = Distance / S_rel).",
+      "Relative Speed (Same Direction / Overtake): S_rel = |v₁ - v₂| (Time to overtake = Lead Distance / |v₁ - v₂|).",
+      "Distance Formula: Distance = Speed * Time.",
+    ],
+  },
+  {
+    category: "exam_numerical",
+    keywords: ["discount", "consecutive discount", "percentage", "markup", "profit", "loss"],
+    rules: [
+      "Consecutive Discounts Shortcut: Net Discount = d₁ + d₂ - (d₁ * d₂) / 100 %. E.g., 20% and 10% => 20 + 10 - 2 = 28% net discount.",
+      "Partitive Proportion (Ratio Sum of Parts): Multiplier k = Total / (a + b + c). Each share = part * k.",
+      "Percentage Profit/Loss on Cost: % Profit = (Selling Price - Cost Price) / Cost Price * 100%.",
+    ],
+  },
+  {
+    category: "exam_numerical",
+    keywords: ["mixture", "alligation", "solution", "acid", "concentration"],
+    rules: [
+      "Alligation Cross Shortcut: Ratio of Cheaper : Dearer = (Dearer Price - Mean Price) : (Mean Price - Cheaper Price).",
+      "Mixture Conservation: Total pure substance = C₁ * V₁ + C₂ * V₂ = C_mix * (V₁ + V₂).",
+    ],
+  },
+  {
+    category: "exam_numerical",
+    keywords: ["age", "years old", "father", "son", "twice as old"],
+    rules: [
+      "Age Difference Invariance: The difference in age between two individuals remains constant regardless of elapsed years.",
+      "Age Problem Setup: Set variable x for current age. In 'n' years => (x + n); 'n' years ago => (x - n).",
+    ],
+  },
 ];
 
 export type AcademicDomain = "math" | "science" | "verbal" | "general";
@@ -163,7 +218,7 @@ export type AcademicDomain = "math" | "science" | "verbal" | "general";
 export function inferDocumentDomain(title: string = "", sampleText: string = ""): AcademicDomain {
   const combined = `${title} ${sampleText}`.toLowerCase();
 
-  const hasMath = /\b(math|algebra|calculus|geometry|trigonometry|differential|integral|derivative|arithmetic|discrete|equation|numbers?|fractions?|decimals?|percents?|matrix|linear)\b/i.test(combined);
+  const hasMath = /\b(math|algebra|calculus|geometry|trigonometry|differential|integral|derivative|arithmetic|discrete|equation|numbers?|fractions?|decimals?|percents?|matrix|linear|word problems?|numerical reasoning|work rate|man-days|alligation)\b/i.test(combined);
   const hasScience = /\b(physics|chemistry|biology|kinematics|fluid|thermodynamics|stoichiometry|gas law|molarity|velocity|acceleration)\b/i.test(combined);
   const hasVerbal = /\b(english|grammar|literature|balarila|filipino|reading comprehension|vocabulary|sentence|paragraph|essay|rhetoric|syntax|clause)\b/i.test(combined);
 

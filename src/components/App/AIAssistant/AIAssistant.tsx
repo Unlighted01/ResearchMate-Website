@@ -60,6 +60,12 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
     handleNewChat,
     handleSelectThread,
     handleDeleteThread,
+    selectedSourceIds,
+    toggleSourceSelection,
+    selectAllSources,
+    clearAllSources,
+    handleDirectUploadSource,
+    isUploadingSource,
   } = useAIAssistant(showToast);
 
   return (
@@ -163,6 +169,12 @@ const AIAssistant: React.FC<AIProps> = ({ useToast }) => {
           handleNewChat={handleNewChat}
           handleSelectThread={handleSelectThread}
           handleDeleteThread={handleDeleteThread}
+          selectedSourceIds={selectedSourceIds}
+          toggleSourceSelection={toggleSourceSelection}
+          selectAllSources={selectAllSources}
+          clearAllSources={clearAllSources}
+          handleDirectUploadSource={handleDirectUploadSource}
+          isUploadingSource={isUploadingSource}
         />
       )}
 

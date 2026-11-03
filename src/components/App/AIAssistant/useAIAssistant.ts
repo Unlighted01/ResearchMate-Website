@@ -10,6 +10,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   getAllItems,
   updateItem,
+  addItem,
   StorageItem,
 } from "../../../services/storageService";
 import { supabase } from "../../../services/supabaseClient";
@@ -100,6 +101,14 @@ export interface UseAIAssistantReturn {
 
   // Conversation management
   clearHistory: () => void;
+
+  // Source Grounding Selection State
+  selectedSourceIds: Set<string>;
+  toggleSourceSelection: (id: string) => void;
+  selectAllSources: () => void;
+  clearAllSources: () => void;
+  handleDirectUploadSource: (file: File) => Promise<void>;
+  isUploadingSource: boolean;
 }
 
 // ============================================
@@ -113,6 +122,8 @@ const useAIAssistant = (
   const [activeTab, setActiveTab] = useState<"overview" | "chat">("overview");
   const [items, setItems] = useState<StorageItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(new Set());
+  const [isUploadingSource, setIsUploadingSource] = useState(false);
 
   // Summary state
   const [summarizing, setSummarizing] = useState<string | null>(null);
@@ -304,13 +315,72 @@ const useAIAssistant = (
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Load items on mount
+  // Load items on mount and initialize grounding selection
   useEffect(() => {
     getAllItems(100).then((data) => {
       setItems(data);
       setLoading(false);
+      setSelectedSourceIds(new Set(data.map((d) => d.id)));
     });
   }, []);
+
+  const toggleSourceSelection = useCallback((id: string) => {
+    setSelectedSourceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectAllSources = useCallback(() => {
+    setSelectedSourceIds(new Set(items.map((i) => i.id)));
+  }, [items]);
+
+  const clearAllSources = useCallback(() => {
+    setSelectedSourceIds(new Set());
+  }, []);
+
+  const handleDirectUploadSource = useCallback(async (file: File) => {
+    if (!file) return;
+    setIsUploadingSource(true);
+    try {
+      showToast(`Ingesting "${file.name}"...`, "info");
+      let extractedText = "";
+
+      if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+        const { extractAllPagesWithLayout } = await import("../../../services/pdfService");
+        const res = await extractAllPagesWithLayout(file);
+        extractedText = res.fullText;
+      } else {
+        extractedText = await file.text();
+      }
+
+      if (!extractedText.trim()) {
+        showToast("No readable text found in document", "error");
+        return;
+      }
+
+      const newItem = await addItem({
+        text: extractedText,
+        sourceTitle: file.name,
+        deviceSource: "manual_upload",
+        tags: ["study_source", file.name.endsWith(".pdf") ? "pdf" : "document"],
+      });
+
+      setItems((prev) => [newItem, ...prev]);
+      setSelectedSourceIds((prev) => new Set([...prev, newItem.id]));
+      showToast(`Added "${file.name}" to active study context!`, "success");
+    } catch (err) {
+      console.error("Direct upload failed:", err);
+      showToast(`Failed to upload "${file.name}"`, "error");
+    } finally {
+      setIsUploadingSource(false);
+    }
+  }, [showToast]);
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -555,21 +625,33 @@ const useAIAssistant = (
       userMsg.text.toLowerCase().includes(`@${i.sourceTitle?.toLowerCase()}`),
     );
 
-    // Intelligent, NotebookLM-style grounded retrieval across full documents (up to 35k chars)
-    const contextResult = await buildChatContext(
-      userMsg.text,
-      items,
-      mentionedItems.length > 0 ? mentionedItems : (selectedItem ? [selectedItem] : []),
-      { maxChars: 35000, topK: 12 }
-    );
+    // Explicit NotebookLM-style grounding: only use checked sources
+    const activeCheckedItems = items.filter((i) => selectedSourceIds.has(i.id));
 
-    let context = contextResult.contextText;
+    const targetScopeItems =
+      mentionedItems.length > 0
+        ? mentionedItems
+        : activeCheckedItems;
+
+    const isSingleDoc = targetScopeItems.length === 1;
+    const documentTitle = isSingleDoc ? targetScopeItems[0].sourceTitle : undefined;
+    const chatMode: "document" | "universal" = isSingleDoc ? "document" : "universal";
+
+    let context = "";
+    if (targetScopeItems.length > 0) {
+      const contextResult = await buildChatContext(
+        userMsg.text,
+        targetScopeItems,
+        targetScopeItems,
+        { maxChars: 35000, topK: 12 }
+      );
+      context = contextResult.contextText;
+    }
+
     if (visualOcrText) {
       const imageContext = `\n\n[USER ATTACHED IMAGE OCR EXTRACT (${currentAttachedImage?.name || "image"})]:\n"""\n${visualOcrText}\n"""\n`;
       context = context ? `${imageContext}\n${context}` : imageContext;
     }
-
-    const documentTitle = mentionedItems[0]?.sourceTitle || selectedItem?.sourceTitle;
 
     const controller = new AbortController();
     chatAbortRef.current = controller;
@@ -582,7 +664,7 @@ const useAIAssistant = (
         {
           signal: controller.signal,
           documentTitle,
-          mode: documentTitle ? "document" : "universal",
+          mode: chatMode,
         }
       );
       clearTimeout(timeoutId);
@@ -705,6 +787,14 @@ const useAIAssistant = (
     handleNewChat,
     handleSelectThread,
     handleDeleteThread,
+
+    // Source Grounding Selection
+    selectedSourceIds,
+    toggleSourceSelection,
+    selectAllSources,
+    clearAllSources,
+    handleDirectUploadSource,
+    isUploadingSource,
   };
 };
 

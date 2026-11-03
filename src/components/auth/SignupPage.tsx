@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../services/supabaseClient";
 import { Input } from "../shared/ui";
-import BubbleBackground from "../shared/BubbleBackground";
 import { ResearchMateLogo } from "../shared/ResearchMateLogo";
 import { useTheme } from "../../context/ThemeContext";
 import { isValidEmail, validatePassword } from "../../../lib/validation";
@@ -65,7 +64,6 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const hcaptchaRef = useRef<HCaptcha>(null);
 
   const { visualTheme } = useTheme();
-  const isBubbleTheme = false;
   const authBackgroundClass =
     visualTheme === "glass"
       ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"
@@ -255,8 +253,7 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
         </div>
       )}
       <div className={`fixed inset-0 z-0 ${authBackgroundClass}`} />
-      <BubbleBackground bubbleCount={10} enabled={isBubbleTheme} />
-      <div className="w-full max-w-sm content-above-bubbles">
+      <div className="w-full max-w-sm">
         {/* Back Link */}
         <div className="mb-4 text-left">
           <Link
