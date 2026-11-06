@@ -47,6 +47,9 @@ import DashboardStatsBar from "./DashboardStatsBar";
 import ItemGridCard from "./ItemGridCard";
 import ItemListRow from "./ItemListRow";
 import ItemDetailModal from "./ItemDetailModal";
+import { DailySprintModal } from "./DailySprintModal";
+import { getReadinessStats, ExamReadinessStats } from "../../../services/examReadinessService";
+import { Zap, Target, BookOpen, Flame } from "lucide-react";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -70,6 +73,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
 
   // ---------- PART 3B: ACTIONS HOOK ----------
   const { batch } = useIngestion();
+  const [readinessStats, setReadinessStats] = React.useState<ExamReadinessStats>(() => getReadinessStats());
+  const [isSprintModalOpen, setIsSprintModalOpen] = React.useState(false);
   const actions = useDashboardActions({
     items: data.items,
     setItems: data.setItems,
@@ -175,6 +180,113 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         onImport={actions.handleImport}
       />
 
+      {/* ========== EXAM COMMAND CENTER HERO ========== */}
+      <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-950 text-white rounded-3xl p-6 sm:p-7 shadow-xl border border-indigo-800/40 relative overflow-hidden">
+        <div className="absolute -right-20 -top-20 w-80 h-80 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-20 -bottom-20 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          {/* Left Column: Readiness Gauge & Streaks */}
+          <div className="space-y-3 max-w-xl">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/10 text-indigo-200 border border-white/10 font-bold">
+                Civil Service & Entrance Exam Benchmark
+              </span>
+              <span className="text-xs font-mono text-indigo-300 flex items-center gap-1">
+                🔥 {readinessStats.streakDays}-Day Streak
+              </span>
+            </div>
+
+            <div className="flex items-baseline gap-4">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl sm:text-5xl font-extrabold font-mono tracking-tight text-white">
+                  {readinessStats.isCalibrated ? `${readinessStats.score}%` : "—"}
+                </span>
+                <span className="text-xs font-mono text-indigo-300">
+                  {readinessStats.isCalibrated ? "/ 100" : ""}
+                </span>
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-indigo-200 font-title">
+                  Exam Readiness Score
+                </span>
+                <p className="text-xs text-indigo-300/80 font-mono">
+                  {!readinessStats.isCalibrated
+                    ? "Uncalibrated • Take a 5-min sprint to gauge readiness"
+                    : readinessStats.isPassing
+                    ? "🟢 Projected Passing (Target: ≥80% passing benchmark)"
+                    : `🔴 ${readinessStats.passingThreshold - readinessStats.score}% below the 80% passing threshold`}
+                </p>
+              </div>
+            </div>
+
+            {/* Readiness Progress Gauge Bar */}
+            <div className="w-full bg-white/10 h-2.5 rounded-full overflow-hidden relative">
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-white/60 z-10"
+                style={{ left: "80%" }}
+                title="80% Passing Benchmark"
+              />
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  !readinessStats.isCalibrated
+                    ? "bg-slate-700 w-0"
+                    : readinessStats.isPassing
+                    ? "bg-emerald-400"
+                    : "bg-gradient-to-r from-amber-400 to-rose-400"
+                }`}
+                style={{ width: `${Math.min(100, Math.max(5, readinessStats.score))}%` }}
+              />
+            </div>
+
+            {/* Weakness Alert */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+              {readinessStats.primaryWeakness ? (
+                <span className="inline-flex items-center gap-1.5 text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1 rounded-xl font-mono text-[11px]">
+                  ⚠️ Priority Focus: <strong>{readinessStats.primaryWeakness}</strong> ({readinessStats.categoryAccuracies[readinessStats.primaryWeakness]?.percent}% accuracy)
+                </span>
+              ) : (
+                <span className="text-indigo-200/80 text-[11px] font-mono">
+                  Benchmark: 80% on Numerical, Verbal & General Info.
+                </span>
+              )}
+              <span className="text-slate-400 font-mono text-[11px]">
+                • {readinessStats.totalQuestionsSolved} questions solved
+              </span>
+            </div>
+          </div>
+
+          {/* Right Column: 1-Click Action */}
+          <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 shrink-0">
+            <button
+              onClick={() => setIsSprintModalOpen(true)}
+              className="flex items-center justify-center gap-3 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-emerald-500 hover:from-indigo-400 hover:to-emerald-400 text-white font-bold text-sm shadow-xl shadow-indigo-500/25 active:scale-95 transition-all cursor-pointer group"
+            >
+              <Zap className="w-5 h-5 fill-white group-hover:scale-110 transition-transform shrink-0" />
+              <div className="text-left">
+                <div className="text-sm font-bold leading-tight">Start 5-Minute Daily Sprint</div>
+                <div className="text-[10px] font-mono text-indigo-100/80 font-normal">5 Rapid-Fire Questions • PracticePacer</div>
+              </div>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <Link
+                to="/app/review?tab=exams"
+                className="flex-1 text-center py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-semibold text-white transition-colors"
+              >
+                Full Mock Exam
+              </Link>
+              <Link
+                to="/app/assistant"
+                className="flex-1 text-center py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-semibold text-white transition-colors"
+              >
+                Shortcut Tutor
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
       {/* ========== SEARCH & FILTERS ========== */}
       <DashboardToolbar
         searchQuery={data.searchQuery}

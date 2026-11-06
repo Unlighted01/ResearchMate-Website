@@ -139,6 +139,53 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
+  const [twinQuestions, setTwinQuestions] = useState<Record<string, {
+    loading: boolean;
+    data: ExamQuestion | null;
+    userAnswer: string | null;
+    isCorrect: boolean | null;
+  }>>({});
+
+  const handleGenerateTwin = async (q: Question) => {
+    setTwinQuestions((prev) => ({
+      ...prev,
+      [q.id]: { loading: true, data: null, userAnswer: null, isCorrect: null },
+    }));
+
+    try {
+      const correctText = q.options[q.correctIndex] || "";
+      const twin = await generateTwinQuestion({
+        question: q.question,
+        options: q.options,
+        correctAnswer: correctText,
+        explanation: q.explanation,
+        topic: q.topicTag,
+      });
+
+      setTwinQuestions((prev) => ({
+        ...prev,
+        [q.id]: { loading: false, data: twin, userAnswer: null, isCorrect: null },
+      }));
+    } catch (err) {
+      console.error("Twin question generation failed:", err);
+      setTwinQuestions((prev) => ({
+        ...prev,
+        [q.id]: { loading: false, data: null, userAnswer: null, isCorrect: null },
+      }));
+    }
+  };
+
+  const handleAnswerTwin = (qId: string, chosenOption: string, twin: ExamQuestion) => {
+    const isCorrect = chosenOption === twin.correctAnswer;
+    setTwinQuestions((prev) => ({
+      ...prev,
+      [qId]: {
+        ...prev[qId],
+        userAnswer: chosenOption,
+        isCorrect,
+      },
+    }));
+  };
   const [userAnswers, setUserAnswers] = useState<Record<string, number>>({});
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -459,6 +506,26 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     });
 
     setExamHistory((prev) => [attempt, ...prev.slice(0, 9)]);
+
+    try {
+      const categoryBreakdown: Record<string, { correct: number; total: number }> = {};
+      questions.forEach((q) => {
+        const cat = q.topicTag || "General";
+        if (!categoryBreakdown[cat]) categoryBreakdown[cat] = { correct: 0, total: 0 };
+        categoryBreakdown[cat].total += 1;
+        if (userAnswers[q.id] === q.correctIndex) categoryBreakdown[cat].correct += 1;
+      });
+
+      recordExamAttempt({
+        scorePercent: percentage,
+        correctCount: correct,
+        totalQuestions: questions.length,
+        mode: "mock",
+        categoryBreakdown,
+      });
+    } catch (readinessErr) {
+      console.warn("Could not record attempt to examReadinessService:", readinessErr);
+    }
 
     if (passed) {
       showToast(`Benchmark Achieved! Scored ${correct}/${questions.length} (${percentage}%) vs ${benchmarkThreshold}% target.`, "success");
