@@ -48,10 +48,10 @@ const navigationActions = [
     path: "/app/ai-assistant",
   },
   {
-    id: "citations",
-    label: "Go to Citations",
-    icon: Quote,
-    path: "/app/citations",
+    id: "reader",
+    label: "Go to Reviewer Reader",
+    icon: BookOpen,
+    path: "/app/reader",
   },
   {
     id: "smart-pen",

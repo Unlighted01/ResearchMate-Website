@@ -369,7 +369,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                         ? "text-cyan-600 dark:text-cyan-300 bg-cyan-50/80 dark:bg-cyan-950/40 border-cyan-200/50 dark:border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]"
                         : "text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800/70 border-zinc-200 dark:border-zinc-700"
                     }`}>
-                      STUDIO
+                      EXAM PREP
                     </span>
                   </motion.div>
                 )}

@@ -31,7 +31,6 @@ import MarketingHome from "./components/marketing/MarketingHome";
 import SettingsPage from "./components/App/Settings";
 import Dashboard from "./components/App/Dashboard";
 import CollectionsPage from "./components/App/CollectionsPage";
-import { CitationGenerator } from "./components/App/Citations";
 import MobileSync from "./components/Mobile/MobileSync";
 
 // ============================================
@@ -305,7 +304,7 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import AIAssistant from "./components/App/AIAssistant";
-import ResearchHubPage from "./components/App/ResearchHub/ResearchHubPage";
+import PdfReader from "./components/App/PdfReader/PdfReader";
 import ReviewCompanionPage from "./components/App/ReviewCompanion/ReviewCompanionPage";
 import SupportPage from "./components/marketing/SupportPage";
 
@@ -442,17 +441,7 @@ export default function App() {
                           }
                         />
 
-                        {/* 2. Research & Thesis Suite (Matrix, Editor, Citations, PDF) */}
-                        <Route
-                          path="research"
-                          element={
-                            <ResearchHubPage
-                              useToast={() => ({ showToast, ToastComponent })}
-                            />
-                          }
-                        />
-
-                        {/* 3. Study & Review Companion (Materials Ingest, Mock Exams, Flashcards, Search) */}
+                        {/* 2. Practice & Mock Simulator (Materials Ingest, Mock Exams, Flashcards, Scholar Search) */}
                         <Route
                           path="review"
                           element={
@@ -462,7 +451,7 @@ export default function App() {
                           }
                         />
 
-                        {/* 4. AI Assistant */}
+                        {/* 3. AI Speed Tutor */}
                         <Route
                           path="assistant"
                           element={
@@ -472,6 +461,12 @@ export default function App() {
                           }
                         />
 
+                        {/* 4. Dedicated Reviewer PDF Reader */}
+                        <Route
+                          path="reader"
+                          element={<PdfReader />}
+                        />
+
                         {/* 5. Settings */}
                         <Route
                           path="settings"
@@ -479,10 +474,11 @@ export default function App() {
                         />
 
                         {/* Backward Compatibility Redirects */}
-                        <Route path="literature-matrix" element={<Navigate to="/app/research?tab=matrix" replace />} />
-                        <Route path="editor" element={<Navigate to="/app/research?tab=editor" replace />} />
-                        <Route path="citations" element={<Navigate to="/app/research?tab=citations" replace />} />
-                        <Route path="pdf-reader" element={<Navigate to="/app/research?tab=pdf" replace />} />
+                        <Route path="research" element={<Navigate to="/app/dashboard" replace />} />
+                        <Route path="literature-matrix" element={<Navigate to="/app/dashboard" replace />} />
+                        <Route path="editor" element={<Navigate to="/app/dashboard" replace />} />
+                        <Route path="citations" element={<Navigate to="/app/dashboard" replace />} />
+                        <Route path="pdf-reader" element={<Navigate to="/app/reader" replace />} />
                         <Route path="smart-pen" element={<Navigate to="/app/review?tab=materials" replace />} />
                         <Route path="pair-pen" element={<Navigate to="/app/review?tab=materials" replace />} />
                         <Route path="ai-assistant" element={<Navigate to="/app/assistant" replace />} />

@@ -33,7 +33,6 @@ import KeyboardShortcutsModal from "../../shared/KeyboardShortcutsModal";
 import BulkActions from "../../shared/BulkActions";
 import AdvancedSearchFilter from "../../shared/AdvancedSearchFilter";
 import ConfirmDialog from "../../shared/ConfirmDialog";
-import LiteratureMatrixModal from "../LiteratureMatrix/LiteratureMatrixModal";
 import {
   generateLiteratureMatrix,
   MatrixRow,
@@ -93,47 +92,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     filteredItems: data.filteredItems,
   });
 
-  // ---------- PART 3C: LITERATURE REVIEW MATRIX (Option A) ----------
-  const [showMatrixModal, setShowMatrixModal] = React.useState(false);
-  const [matrixData, setMatrixData] = React.useState<MatrixRow[]>([]);
-  const [crossPaperGaps, setCrossPaperGaps] = React.useState<string[]>([]);
-  const [synthesisDraft, setSynthesisDraft] = React.useState<string>("");
-  const [isGeneratingMatrix, setIsGeneratingMatrix] = React.useState(false);
 
-  const handleGenerateLiteratureMatrix = async () => {
-    const selectedList = data.items.filter((item) =>
-      data.selectedItems.has(item.id),
-    );
-
-    if (selectedList.length < 2) {
-      showToast(
-        "Please select at least 2 papers to generate a comparative literature matrix.",
-        "info",
-      );
-      return;
-    }
-
-    setIsGeneratingMatrix(true);
-    setShowMatrixModal(true);
-    try {
-      const result = await generateLiteratureMatrix(selectedList);
-      if (!result.ok) {
-        throw new Error(result.error || "Failed to generate literature matrix.");
-      }
-      setMatrixData(result.matrix);
-      setCrossPaperGaps(result.crossPaperGaps);
-      setSynthesisDraft(result.synthesisDraft);
-      showToast("Literature matrix synthesized successfully!", "success");
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Matrix generation failed",
-        "error",
-      );
-      setShowMatrixModal(false);
-    } finally {
-      setIsGeneratingMatrix(false);
-    }
-  };
 
   // ---------- PART 3D: KEYBOARD SHORTCUTS ----------
   useKeyboardShortcuts([
@@ -504,7 +463,6 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           data.setCollectionActionType("bulk");
           data.setShowCollectionModal(true);
         }}
-        onGenerateMatrix={handleGenerateLiteratureMatrix}
         isGeneratingMatrix={isGeneratingMatrix}
         isDeleting={data.isBulkDeleting}
       />
@@ -568,15 +526,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         availableTags={data.allTags}
       />
 
-      {/* Option A: Literature Review Matrix Modal */}
-      <LiteratureMatrixModal
-        isOpen={showMatrixModal}
-        onClose={() => setShowMatrixModal(false)}
-        matrix={matrixData}
-        crossPaperGaps={crossPaperGaps}
-        synthesisDraft={synthesisDraft}
-        isLoading={isGeneratingMatrix}
-      />
+
     </div>
   );
 };
