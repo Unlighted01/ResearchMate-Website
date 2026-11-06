@@ -369,7 +369,7 @@ const useAIAssistant = (
       const newItem = await addItem({
         text: extractedText,
         sourceTitle: file.name,
-        deviceSource: "manual_upload",
+        deviceSource: "web",
         tags: ["study_source", file.name.endsWith(".pdf") ? "pdf" : "document"],
       });
 

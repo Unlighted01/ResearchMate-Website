@@ -17,6 +17,8 @@ import {
   BookOpen,
   MessageSquare,
   Award,
+  CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Modal } from "../../shared/ui";
@@ -33,10 +35,6 @@ import KeyboardShortcutsModal from "../../shared/KeyboardShortcutsModal";
 import BulkActions from "../../shared/BulkActions";
 import AdvancedSearchFilter from "../../shared/AdvancedSearchFilter";
 import ConfirmDialog from "../../shared/ConfirmDialog";
-import {
-  generateLiteratureMatrix,
-  MatrixRow,
-} from "../../../services/geminiService";
 
 import { useDashboardData } from "./useDashboardData";
 import { useDashboardActions } from "./useDashboardActions";
@@ -49,7 +47,7 @@ import ItemListRow from "./ItemListRow";
 import ItemDetailModal from "./ItemDetailModal";
 import { DailySprintModal } from "./DailySprintModal";
 import { getReadinessStats, ExamReadinessStats } from "../../../services/examReadinessService";
-import { Zap, Target, BookOpen, Flame } from "lucide-react";
+import { Zap, Target, Flame } from "lucide-react";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -575,7 +573,6 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           data.setCollectionActionType("bulk");
           data.setShowCollectionModal(true);
         }}
-        isGeneratingMatrix={isGeneratingMatrix}
         isDeleting={data.isBulkDeleting}
       />
 

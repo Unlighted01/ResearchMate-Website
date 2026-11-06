@@ -1,3 +1,4 @@
+import type { DeviceSource } from "../types";
 // ============================================
 // INGESTION CONTEXT & ENGINE
 // Provides granular, real-time extraction progress
@@ -53,7 +54,7 @@ export interface IngestionBatch {
 
 export interface IngestFilesOptions {
   tags?: string[];
-  deviceSource?: string;
+  deviceSource?: DeviceSource;
   onItemSuccess?: (item: StorageItem) => void;
   onBatchComplete?: (successCount: number, errorCount: number) => void;
 }

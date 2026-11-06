@@ -239,7 +239,7 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
 
               {/* Question Text */}
               <div className="text-sm sm:text-base font-medium text-slate-900 dark:text-slate-100 leading-relaxed">
-                <LatexRenderer text={activeQ.question} />
+                <LatexRenderer content={activeQ.question} />
               </div>
 
               {/* 4 Options */}
@@ -265,7 +265,7 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
                         {letter}
                       </span>
                       <span className="flex-1">
-                        <LatexRenderer text={opt} />
+                        <LatexRenderer content={opt} />
                       </span>
                     </button>
                   );
@@ -337,7 +337,7 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
                       </div>
 
                       <p className="text-slate-800 dark:text-slate-200 font-medium">
-                        <LatexRenderer text={q.question} />
+                        <LatexRenderer content={q.question} />
                       </p>
 
                       <div className="flex flex-col sm:flex-row gap-2 sm:items-center text-[11px] font-mono pt-1">
@@ -349,7 +349,7 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
                       {/* Explanation / Shortcut */}
                       {q.explanation && (
                         <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-sans">
-                          <LatexRenderer text={q.explanation} />
+                          <LatexRenderer content={q.explanation} />
                         </div>
                       )}
 
@@ -385,7 +385,7 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
                               </div>
 
                               <p className="font-medium text-slate-900 dark:text-slate-100 text-xs">
-                                <LatexRenderer text={twinState.data.question} />
+                                <LatexRenderer content={twinState.data.question} />
                               </p>
 
                               {/* Twin options */}
@@ -409,7 +409,7 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
                                           : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-indigo-50/50"
                                       }`}
                                     >
-                                      <LatexRenderer text={tOpt} />
+                                      <LatexRenderer content={tOpt} />
                                     </button>
                                   );
                                 })}

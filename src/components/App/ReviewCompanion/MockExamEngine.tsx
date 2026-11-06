@@ -42,7 +42,10 @@ import {
   BatchProgress,
   ExamSectionConfig,
   ExamAttemptRecord,
+  generateTwinQuestion,
+  ExamQuestion,
 } from "../../../services/examService";
+import { recordExamAttempt } from "../../../services/examReadinessService";
 import AcademicMathView from "../../shared/AcademicMathView";
 import QuestionEditorModal from "./QuestionEditorModal";
 import QuestionImportModal from "./QuestionImportModal";

@@ -19,6 +19,7 @@ import {
   FileText,
   ArrowRight,
   Command,
+  BookOpen,
 } from "lucide-react";
 import { getAllItems, StorageItem } from "../../services/storageService";
 
