@@ -21,6 +21,7 @@ import {
 } from "../../../services/geminiService";
 import type { SummaryMode } from "../../../services/geminiService";
 import { buildChatContext } from "../../../services/ragService";
+import { useIngestion } from "../../../context/IngestionContext";
 import {
   ConversationSummary,
   ConversationThread,
@@ -107,7 +108,7 @@ export interface UseAIAssistantReturn {
   toggleSourceSelection: (id: string) => void;
   selectAllSources: () => void;
   clearAllSources: () => void;
-  handleDirectUploadSource: (file: File) => Promise<void>;
+  handleDirectUploadSource: (files: File | File[] | FileList) => Promise<void>;
   isUploadingSource: boolean;
 }
 
@@ -168,6 +169,7 @@ const useAIAssistant = (
   const [chatInput, setChatInput] = useState("");
   const [isChatting, setIsChatting] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const { ingestFiles, batch, isIngesting } = useIngestion();
   const chatAbortRef = useRef<AbortController | null>(null);
 
   // Screenshot / Image attachment state

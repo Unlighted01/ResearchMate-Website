@@ -28,6 +28,7 @@ import { extractPdfContent } from "../../../services/pdfService";
 import { detectQaBookLikelihood } from "../../../services/pdfQuestionImporter";
 import LatexRenderer from "../../shared/LatexRenderer";
 import { useNotifications } from "../../../context/NotificationContext";
+import { useIngestion } from "../../../context/IngestionContext";
 
 interface ReviewMaterialsUploaderProps {
   onMaterialUploaded?: () => void;
@@ -39,6 +40,7 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
   showToast,
 }) => {
   const { addNotification } = useNotifications();
+  const { ingestFiles, batch } = useIngestion();
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [isCameraOpen, setIsCameraOpen] = useState(false);

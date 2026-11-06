@@ -14,6 +14,7 @@ import { useNotifications } from "../../context/NotificationContext";
 import CommandPalette from "./CommandPalette";
 import { ResearchMateLogo } from "./ResearchMateLogo";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import { IngestionProgressBar } from "./IngestionProgressBar";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Table2,

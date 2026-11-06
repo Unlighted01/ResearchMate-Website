@@ -102,7 +102,7 @@ export async function extractAllPagesWithLayout(
       console.warn(`Error extracting layout for page ${pageNum}:`, pageErr);
     }
 
-    if (onProgress && pageNum % 5 === 0) {
+    if (onProgress) {
       onProgress(pageNum, pageCount);
       // Yield to event loop to keep UI responsive
       await new Promise((r) => setTimeout(r, 0));
@@ -196,7 +196,7 @@ export async function extractPdfContent(
         isScanned: isSparse,
       });
 
-      if (options?.onProgress && pageNum % 5 === 0) {
+      if (options?.onProgress) {
         options.onProgress(pageNum, maxPages, `Reading document pages: ${pageNum}/${maxPages}`);
         await new Promise((r) => setTimeout(r, 0));
       }
@@ -282,10 +282,18 @@ export async function extractPdfContent(
   // sample beginning, middle, and concluding sections if document is long.
   let summary = "";
   try {
+    if (options?.onProgress) {
+      options.onProgress(pageCount, pageCount, `Synthesizing study summary...`);
+      await new Promise((r) => setTimeout(r, 0));
+    }
     const summaryExcerpt = createRepresentativeSnippet(cleanText, 6000);
     summary = await generateSummary(summaryExcerpt);
   } catch {
     summary = `Synthesized review index for ${file.name} (${pageCount} pages)`;
+  }
+
+  if (options?.onProgress) {
+    options.onProgress(pageCount, pageCount, `Extraction complete`);
   }
 
   return {

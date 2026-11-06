@@ -23,6 +23,7 @@ import { exportItems } from "../../../utils/export";
 import { generateMarkdownTemplate } from "../../../utils/markdownGenerator";
 import { importImageFile, importPdfFile, importJsonFile } from "../../../services/importService";
 import { useNotifications } from "../../../context/NotificationContext";
+import { useIngestion } from "../../../context/IngestionContext";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -74,6 +75,7 @@ export function useDashboardActions({
   filteredItems,
 }: UseDashboardActionsParams) {
   const { addNotification } = useNotifications();
+  const { ingestFiles } = useIngestion();
 
   const handleGenerateSummary = async (item: StorageItem) => {
     if (isSummarizingItem) return;
@@ -270,71 +272,28 @@ export function useDashboardActions({
     if (!files || files.length === 0) return;
 
     setIsImporting(true);
-    let successCount = 0;
-    const errors: string[] = [];
+    try {
+      const { successCount, errors } = await ingestFiles(files, {
+        onItemSuccess: (newItem) => {
+          setItems((prev) => [newItem, ...prev.filter((i) => i.id !== newItem.id)]);
+        },
+      });
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    for (const file of files) {
-      try {
-        const lowerName = file.name.toLowerCase();
-        if (lowerName.endsWith(".pdf")) {
-          showToast(`Extracting text from "${file.name}"...`, "info");
-          await importPdfFile(file, user?.id);
-          successCount++;
-        } else if (lowerName.endsWith(".docx")) {
-          showToast(`Importing Word document "${file.name}"...`, "info");
-          const arrayBuffer = await file.arrayBuffer();
-          const mammoth = await import("mammoth");
-          const result = await mammoth.extractRawText({ arrayBuffer });
-          const rawText = result.value.trim();
-          await addItem({
-            sourceTitle: file.name.replace(/\.docx$/i, ""),
-            text: rawText || `Word Document: ${file.name}`,
-            deviceSource: "web",
-            tags: ["word", "imported-source"],
-          });
-          successCount++;
-        } else if (lowerName.endsWith(".txt") || lowerName.endsWith(".md")) {
-          showToast(`Importing text notes "${file.name}"...`, "info");
-          const text = await file.text();
-          await addItem({
-            sourceTitle: file.name.replace(/\.(txt|md)$/i, ""),
-            text: text.trim() || `Document: ${file.name}`,
-            deviceSource: "web",
-            tags: [lowerName.endsWith(".md") ? "markdown" : "text", "imported-source"],
-          });
-          successCount++;
-        } else if (file.type.startsWith("image/")) {
-          showToast(`Running OCR on "${file.name}"...`, "info");
-          await importImageFile(file);
-          successCount++;
-        } else if (lowerName.endsWith(".json")) {
-          const count = await importJsonFile(file, user?.id);
-          successCount += count;
-        } else {
-          errors.push(`"${file.name}": unsupported format`);
+      if (successCount > 0) {
+        try {
+          const fresh = await getAllItems();
+          setItems(fresh);
+        } catch (refreshErr) {
+          console.error("Failed to refresh items after import:", refreshErr);
         }
-      } catch (err: any) {
-        errors.push(`"${file.name}": ${err.message}`);
+        showToast(`Successfully imported ${successCount} study material(s)!`, "success");
       }
-    }
-
-    if (successCount > 0) {
-      try {
-        const fresh = await getAllItems();
-        setItems(fresh);
-      } catch (refreshErr) {
-        console.error("Failed to refresh items after import:", refreshErr);
+      if (errors.length > 0) {
+        showToast(`${errors.length} file(s) had issues: ${errors[0]}`, "error");
       }
-      showToast(`Imported ${successCount} item(s)!`, "success");
+    } finally {
+      setIsImporting(false);
     }
-    if (errors.length > 0) {
-      showToast(`${errors.length} file(s) failed: ${errors[0]}`, "error");
-    }
-    setIsImporting(false);
   };
 
   const handleImport = async (

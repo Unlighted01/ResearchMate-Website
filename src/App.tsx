@@ -15,6 +15,7 @@ import { supabase } from "./services/supabaseClient";
 // Context
 import { ThemeProvider } from "./context/ThemeContext";
 import { NotificationProvider } from "./context/NotificationContext";
+import { IngestionProvider } from "./context/IngestionContext";
 
 // Components & Layouts
 import { MarketingLayout } from "./components/shared/MarketingLayout";
@@ -387,6 +388,7 @@ export default function App() {
         {ToastComponent}
         <OfflineDetector />
         <NotificationProvider>
+          <IngestionProvider>
           <HashRouter>
             <Routes>
               {/* Public Routes - Single Page Marketing */}
@@ -498,6 +500,7 @@ export default function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </HashRouter>
+        </IngestionProvider>
         </NotificationProvider>
       </ThemeProvider>
     </ErrorBoundary>

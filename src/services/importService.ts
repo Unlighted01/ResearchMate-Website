@@ -7,7 +7,7 @@
 // ============================================
 
 import { supabase } from "./supabaseClient";
-import { addItem } from "./storageService";
+import { addItem, StorageItem } from "./storageService";
 import { extractPdfContent } from "./pdfService";
 
 // ============================================
@@ -96,10 +96,11 @@ export async function importImageFile(file: File): Promise<void> {
 export async function importPdfFile(
   file: File,
   userId?: string,
-): Promise<void> {
-  const extracted = await extractPdfContent(file);
+  onProgress?: (page: number, total: number, message?: string) => void,
+): Promise<StorageItem> {
+  const extracted = await extractPdfContent(file, { onProgress });
 
-  await addItem({
+  const item = await addItem({
     sourceTitle: file.name.replace(/\.pdf$/i, ""),
     text: extracted.text,
     aiSummary: extracted.summary,
@@ -107,6 +108,8 @@ export async function importPdfFile(
     deviceSource: "web",
     tags: ["pdf", "imported-source"],
   });
+
+  return item;
 }
 
 /**

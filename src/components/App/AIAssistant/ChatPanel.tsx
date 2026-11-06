@@ -34,6 +34,7 @@ import { StorageItem, addItem } from "../../../services/storageService";
 import { ChatMessage } from "./useAIAssistant";
 import ConversationDrawer from "./ConversationDrawer";
 import { ConversationSummary } from "../../../services/conversationService";
+import { useIngestion } from "../../../context/IngestionContext";
 import { useNotifications } from "../../../context/NotificationContext";
 
 // ============================================
@@ -70,7 +71,7 @@ interface ChatPanelProps {
   toggleSourceSelection: (id: string) => void;
   selectAllSources: () => void;
   clearAllSources: () => void;
-  handleDirectUploadSource: (file: File) => Promise<void>;
+  handleDirectUploadSource: (files: File | File[] | FileList) => Promise<void>;
   isUploadingSource: boolean;
 }
 

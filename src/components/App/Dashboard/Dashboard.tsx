@@ -41,6 +41,7 @@ import {
 
 import { useDashboardData } from "./useDashboardData";
 import { useDashboardActions } from "./useDashboardActions";
+import { useIngestion } from "../../../context/IngestionContext";
 import DashboardHeader from "./DashboardHeader";
 import DashboardToolbar from "./DashboardToolbar";
 import DashboardStatsBar from "./DashboardStatsBar";
@@ -69,6 +70,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const data = useDashboardData(showToast);
 
   // ---------- PART 3B: ACTIONS HOOK ----------
+  const { batch } = useIngestion();
   const actions = useDashboardActions({
     items: data.items,
     setItems: data.setItems,
@@ -224,6 +226,47 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         advancedFilters={data.advancedFilters}
         onShowAdvancedFilters={() => data.setShowAdvancedFilters(true)}
       />
+
+      {/* ========== LIVE INGESTION PROGRESS BANNER ========== */}
+      {batch.isActive && (
+        <div className="bg-indigo-50/90 dark:bg-indigo-950/40 border border-indigo-200/90 dark:border-indigo-800/60 rounded-2xl p-4 shadow-xs animate-fade-in">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              {batch.isCompleted ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              ) : (
+                <Loader2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-spin shrink-0" />
+              )}
+              <span className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                {batch.isCompleted
+                  ? "All Materials Ingested Successfully!"
+                  : `Ingesting Material ${batch.completedCount + 1} of ${batch.totalFiles}`}
+              </span>
+            </div>
+            <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+              {batch.overallPercent}%
+            </span>
+          </div>
+
+          <div className="w-full bg-indigo-100 dark:bg-indigo-900/60 h-2 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                batch.isCompleted
+                  ? "bg-emerald-500"
+                  : "bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500"
+              }`}
+              style={{ width: `${Math.max(4, batch.overallPercent)}%` }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between mt-2 text-[11px] text-slate-600 dark:text-slate-400">
+            <span className="font-mono font-medium truncate max-w-xs sm:max-w-md text-slate-800 dark:text-slate-200">
+              {batch.currentFileName}
+            </span>
+            <span>{batch.statusMessage}</span>
+          </div>
+        </div>
+      )}
 
       {/* ========== STATS BAR ========== */}
       <DashboardStatsBar stats={data.stats} />
