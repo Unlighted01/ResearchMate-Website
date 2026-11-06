@@ -128,6 +128,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const { addNotification } = useNotifications();
   const imageInputRef = React.useRef<HTMLInputElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const { batch } = useIngestion();
   const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
 
   // Source pane states
