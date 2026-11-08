@@ -28,6 +28,7 @@ import {
   toFlashcards,
   ParsedQaItem,
 } from "../../../services/pdfQuestionImporter";
+import { saveQuestionsToBank } from "../../../services/questionBankService";
 import AcademicMathView from "../../shared/AcademicMathView";
 
 interface QuestionImportModalProps {
@@ -230,6 +231,10 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
     const validQuestions = parseResult.items
       .filter((i) => i.isValid)
       .map((i) => i.question);
+
+    // Persist into user's local question bank (100% offline)
+    saveQuestionsToBank(validQuestions, fileName || defaultTopic || "Imported Reviewer", mode);
+
     onImport(validQuestions, mode);
     onClose();
   };

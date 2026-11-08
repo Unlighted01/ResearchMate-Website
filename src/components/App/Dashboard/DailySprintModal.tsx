@@ -27,6 +27,8 @@ import {
   ExamReadinessStats,
 } from "../../../services/examReadinessService";
 import { generateTwinQuestion, ExamQuestion } from "../../../services/examService";
+import { generateParametricTwin } from "../../../services/twinTemplateService";
+import { recordQuestionResult } from "../../../services/questionBankService";
 import LatexRenderer from "../../shared/LatexRenderer";
 
 interface DailySprintModalProps {
@@ -135,6 +137,9 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
       const isCorrect = userAnswers[idx] === q.correctAnswer;
       if (isCorrect) correctCount++;
 
+      // Update question accuracy in local Question Bank (if question exists in bank)
+      recordQuestionResult(q.id, isCorrect);
+
       const cat = q.category || "General";
       if (!categoryBreakdown[cat]) categoryBreakdown[cat] = { correct: 0, total: 0 };
       categoryBreakdown[cat].total += 1;
@@ -169,6 +174,27 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
   };
 
   const handleGenerateTwin = async (idx: number, original: SprintQuestionItem) => {
+    // 1. Try local parametric math/logic twin generator first (0ms, $0 offline)
+    const localTwin = generateParametricTwin({
+      question: original.question,
+      explanation: original.explanation,
+      category: original.category,
+    });
+
+    if (localTwin) {
+      setTwinQuestions((prev) => ({
+        ...prev,
+        [idx]: {
+          loading: false,
+          data: localTwin,
+          userAnswer: null,
+          isCorrect: null,
+        },
+      }));
+      return;
+    }
+
+    // 2. Fall back to AI-assisted twin question generator
     setTwinQuestions((prev) => ({
       ...prev,
       [idx]: { loading: true, data: null, userAnswer: null, isCorrect: null },

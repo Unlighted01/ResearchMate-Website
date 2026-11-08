@@ -50,10 +50,15 @@ export interface FullPdfExtractionResult {
  * Essential for the No-AI question importer (stacked fractions, multi-column analysis).
  */
 export async function extractAllPagesWithLayout(
-  file: File,
+  fileOrBuffer: File | ArrayBuffer | Uint8Array,
   onProgress?: (current: number, total: number) => void
 ): Promise<FullPdfExtractionResult> {
-  const arrayBuffer = await file.arrayBuffer();
+  const arrayBuffer =
+    fileOrBuffer instanceof ArrayBuffer
+      ? fileOrBuffer
+      : fileOrBuffer instanceof Uint8Array
+      ? fileOrBuffer.buffer
+      : await fileOrBuffer.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf = await loadingTask.promise;
   const pageCount = pdf.numPages;

@@ -5,6 +5,7 @@
 // ============================================
 
 import { StorageItem } from "./storageService";
+import { sampleSprintQuestions } from "./questionBankService";
 
 export interface CategoryScore {
   correct: number;
@@ -198,9 +199,28 @@ export const EXTENDED_SPRINT_POOL: SprintQuestionItem[] = [
 ];
 
 /**
- * Get randomized questions for a sprint, optionally filtered by category
+ * Get randomized questions for a sprint:
+ * Prioritizes questions from user's personal uploaded Question Bank.
+ * Falls back to high-yield calibration pool if bank is empty.
  */
 export function getSprintQuestions(category?: string, count: number = 5): SprintQuestionItem[] {
+  // 1. Check if user has uploaded questions in their personal Question Bank
+  const userSample = sampleSprintQuestions(count, category);
+  if (userSample.length > 0) {
+    return userSample.map((q) => {
+      const correctChoice = q.options[q.correctIndex] || q.options[0] || "";
+      return {
+        id: q.id,
+        question: q.question,
+        options: q.options,
+        correctAnswer: correctChoice,
+        category: q.topicTag || "General",
+        explanation: q.explanation || `Verified correct answer: Option ${String.fromCharCode(65 + q.correctIndex)}: ${correctChoice}`,
+      };
+    });
+  }
+
+  // 2. Cold-start fallback: Universal high-yield logic and math pool
   let pool = EXTENDED_SPRINT_POOL;
   if (category && category !== "All Topics") {
     const filtered = pool.filter((q) => q.category.toLowerCase().includes(category.toLowerCase()));

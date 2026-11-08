@@ -19,8 +19,18 @@ import {
   ArrowLeft,
   X,
   ExternalLink,
+  Zap,
+  Loader2,
 } from "lucide-react";
 import { StorageItem, getAllItems, updateItem, addItem } from "../../../services/storageService";
+import { Question, generateUUID } from "../../../services/examService";
+import { extractAllPagesWithLayout } from "../../../services/pdfService";
+import {
+  parseTwoPassQuestionsAndAnswers,
+  ParsedQaItem,
+} from "../../../services/pdfQuestionImporter";
+import { saveQuestionsToBank } from "../../../services/questionBankService";
+import { generateExtractiveSummary } from "../../../services/extractiveSummaryService";
 import {
   CitationMetadata,
   extractDoi,
@@ -70,6 +80,7 @@ export const DocumentStudio: React.FC<DocumentStudioProps> = ({ useToast }) => {
   const [citations, setCitations] = useState<CitationMetadata[]>([]);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
+  const [isExtractingQuestions, setIsExtractingQuestions] = useState(false);
 
   // Floating Selection Coordinates
   const [selectionCoords, setSelectionCoords] = useState<SelectionCoordinates | null>(null);
@@ -254,6 +265,53 @@ export const DocumentStudio: React.FC<DocumentStudioProps> = ({ useToast }) => {
     showToast(`Inserted ${inTextCitation} into notes!`, "success");
   };
 
+  // 1-Click Deterministic Question Extractor ($0 cost, 100% offline)
+  const handleExtractQuestionsFromPdf = async () => {
+    if (!fileData && !activeItem?.text) {
+      showToast("Please open a reviewer PDF or document first.", "info");
+      return;
+    }
+
+    setIsExtractingQuestions(true);
+    try {
+      let parsedItems: ParsedQaItem[] = [];
+
+      if (fileData) {
+        const extraction = await extractAllPagesWithLayout(fileData);
+        parsedItems = parseTwoPassQuestionsAndAnswers(extraction.pages);
+      } else if (activeItem?.text) {
+        parsedItems = parseTwoPassQuestionsAndAnswers(activeItem.text);
+      }
+
+      if (parsedItems.length === 0) {
+        showToast("No structured Q&A pattern detected in this document.", "info");
+        return;
+      }
+
+      const questions: Question[] = parsedItems.map((item) => ({
+        id: item.id || generateUUID(),
+        question: item.stem,
+        options: item.options,
+        correctIndex: item.correctIndex,
+        explanation: item.explanation,
+        topicTag: item.chapter || "General Review",
+      }));
+
+      const { addedCount, totalCount } = saveQuestionsToBank(
+        questions,
+        documentTitle || "Reviewer Book",
+        "append"
+      );
+
+      showToast(`Indexed ${addedCount} practice questions from "${documentTitle}" into your Question Bank! (Total: ${totalCount})`, "success");
+    } catch (err: any) {
+      console.error("PDF extraction error:", err);
+      showToast(`Extraction failed: ${err.message}`, "error");
+    } finally {
+      setIsExtractingQuestions(false);
+    }
+  };
+
   // Layout Width Calculation
   const getPaneWidths = () => {
     switch (layoutMode) {
@@ -375,6 +433,20 @@ export const DocumentStudio: React.FC<DocumentStudioProps> = ({ useToast }) => {
               <span>AI Tutor</span>
             </button>
           </div>
+
+          <button
+            onClick={handleExtractQuestionsFromPdf}
+            disabled={isExtractingQuestions}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+            title="Extract questions and answer keys from this reviewer into your Question Bank ($0 AI cost)"
+          >
+            {isExtractingQuestions ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Zap className="w-3.5 h-3.5 fill-white" />
+            )}
+            <span className="hidden sm:inline">Extract Practice Test</span>
+          </button>
 
           <button
             onClick={() => fileInputRef.current?.click()}

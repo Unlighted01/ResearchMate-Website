@@ -40,6 +40,7 @@ import {
   GraduationCap,
   BrainCircuit,
   Award,
+  Zap,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { subscribeToItems } from "../../services/storageService";
@@ -669,6 +670,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/25 text-emerald-700 dark:text-emerald-400 text-xs font-mono font-medium select-none">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 <span className="hidden sm:inline">SYNCED</span>
+              </div>
+
+              {/* Local-First Architecture Badge */}
+              <div
+                className="hidden lg:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono tracking-wide bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80"
+                title="Zero-cost deterministic compute active: PDF Q&A extraction, practice exams, timers, and shortcuts run 100% locally."
+              >
+                <Zap className="w-3 h-3 text-indigo-600 dark:text-indigo-400 fill-current" />
+                <span>LOCAL-FIRST CORE</span>
               </div>
 
               {/* Action Bar (Theme Switcher + Notifications + Profile) */}

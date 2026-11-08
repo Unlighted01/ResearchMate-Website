@@ -45,6 +45,8 @@ import DashboardStatsBar from "./DashboardStatsBar";
 import ItemGridCard from "./ItemGridCard";
 import ItemListRow from "./ItemListRow";
 import ItemDetailModal from "./ItemDetailModal";
+import QuestionImportModal from "../ReviewCompanion/QuestionImportModal";
+import { getBankStats, QuestionBankStats } from "../../../services/questionBankService";
 import { DailySprintModal } from "./DailySprintModal";
 import { getReadinessStats, ExamReadinessStats } from "../../../services/examReadinessService";
 import { Zap, Target, Flame } from "lucide-react";
@@ -73,6 +75,8 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const { batch } = useIngestion();
   const [readinessStats, setReadinessStats] = React.useState<ExamReadinessStats>(() => getReadinessStats());
   const [isSprintModalOpen, setIsSprintModalOpen] = React.useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
+  const [bankStats, setBankStats] = React.useState<QuestionBankStats>(() => getBankStats());
   const actions = useDashboardActions({
     items: data.items,
     setItems: data.setItems,
@@ -252,6 +256,9 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
               <span className="text-slate-400 font-mono text-[11px]">
                 • {readinessStats.totalQuestionsSolved} questions solved
               </span>
+              <span className="text-indigo-200 font-mono text-[11px] bg-white/10 px-2.5 py-0.5 rounded-md border border-white/10">
+                📚 Bank: {bankStats.totalQuestions} Questions {bankStats.sourceDocuments.length > 0 ? `(${bankStats.sourceDocuments.length} doc)` : ""}
+              </span>
             </div>
           </div>
 
@@ -282,6 +289,14 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 Shortcut Tutor
               </Link>
             </div>
+
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-semibold text-white transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <Upload className="w-3.5 h-3.5 text-indigo-300" />
+              <span>Extract Questions from Reviewer</span>
+            </button>
           </div>
         </div>
       </div>
@@ -644,6 +659,20 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
             setReadinessStats(updatedStats);
           }
         }}
+      />
+
+      {/* Reviewer Question Importer Modal */}
+      <QuestionImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => {
+          setIsImportModalOpen(false);
+          setBankStats(getBankStats());
+        }}
+        onImport={(importedQuestions) => {
+          showToast(`Successfully indexed ${importedQuestions.length} questions into your Question Bank!`, "success");
+          setBankStats(getBankStats());
+        }}
+        defaultTopic="General"
       />
 
 
