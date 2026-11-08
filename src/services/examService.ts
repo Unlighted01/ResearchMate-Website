@@ -828,6 +828,7 @@ export interface ExamQuestion {
   correctAnswer: string;
   explanation: string;
   topic?: string;
+  distractorReasons?: Record<string, string>;
 }
 
 export interface TwinQuestionInput {

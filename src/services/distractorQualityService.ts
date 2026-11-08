@@ -33,7 +33,7 @@ export const DEFAULT_DISTRACTOR_CONFIG: DistractorQualityConfig = {
   tooEasyAccuracyThreshold: 0.95,
 };
 
-// Common English stopwords and generic exam phrasing to ignore in stem-leak detection
+// Common English grammatical stopwords and generic exam framing
 export const STOPWORDS = new Set([
   "a", "about", "above", "after", "again", "against", "all", "also", "am", "an", "and", "any", "are", "aren't",
   "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "can", "can't",
@@ -46,9 +46,9 @@ export const STOPWORDS = new Set([
   "they", "this", "those", "through", "to", "too", "under", "until", "up", "very", "was", "wasn't", "we", "were",
   "weren't", "what", "when", "where", "which", "while", "who", "whom", "why", "with", "would", "wouldn't", "you",
   "your", "yours", "yourself", "yourselves",
-  // Common reviewer/exam boilerplate
+  // Common generic exam instructions (domain nouns like "public" or "officials" are NOT excluded)
   "which", "following", "defined", "under", "term", "section", "rule", "provision", "stated", "act",
-  "conduct", "norm", "norms", "refers", "means", "shall", "order", "code", "public", "officials", "employees"
+  "refers", "means", "shall", "order"
 ]);
 
 export const ABSOLUTE_WORDS = ["always", "never", "only", "exclusively", "solely", "impossible"];
@@ -71,6 +71,7 @@ export interface DistractorLintIssue {
 
 export interface DistractorLintResult {
   passed: boolean;
+  canShipAsMcq: boolean;
   autoFixed: boolean;
   fixedStem?: string;
   issues: DistractorLintIssue[];
@@ -88,6 +89,127 @@ export function normalizeOptionText(text: string): string {
     .replace(/[^\w\s.%-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export interface ParsedNumericOption {
+  value: number;
+  unit: string;
+}
+
+/**
+ * Parses numeric options like "15 days", "25 %", "₱5,000", "$60 km/h",
+ * or phrased numeric options like "Under 18 years of age", "Within 15 days".
+ */
+export function parseNumericOption(text: string): ParsedNumericOption | null {
+  const norm = normalizeOptionText(text);
+
+  // 1. Leading number: "$ 15.5", "15 days", "25 %"
+  const leadingMatch = norm.match(/^[\$€£₱]?\s*(\d+(?:\.\d+)?)\s*(.*)$/i);
+  if (leadingMatch) {
+    const val = parseFloat(leadingMatch[1]);
+    if (!isNaN(val)) {
+      return {
+        value: val,
+        unit: (leadingMatch[2] || "").trim().toLowerCase(),
+      };
+    }
+  }
+
+  // 2. Embedded numeric quantity within template: "under 18 years of age"
+  const embeddedMatch = norm.match(/^(.*?)\b(\d+(?:\.\d+)?)\b\s*(.*)$/i);
+  if (embeddedMatch) {
+    const val = parseFloat(embeddedMatch[2]);
+    if (!isNaN(val)) {
+      const template = `${(embeddedMatch[1] || "").trim()} ___ ${(embeddedMatch[3] || "").trim()}`.toLowerCase();
+      return {
+        value: val,
+        unit: template,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Compares two options for duplicate detection.
+ * If both options are numeric with distinct numbers (e.g. "15 days" vs "25 days"),
+ * they are mathematically distinct and return 0.0 similarity.
+ */
+export function compareOptionDuplicateSimilarity(optA: string, optB: string): number {
+  const normA = normalizeOptionText(optA);
+  const normB = normalizeOptionText(optB);
+  if (normA === normB) return 1.0;
+  if (!normA || !normB) return 0.0;
+
+  const numA = parseNumericOption(optA);
+  const numB = parseNumericOption(optB);
+
+  if (numA && numB) {
+    // If the numbers are mathematically different, they are definitely distinct options!
+    if (Math.abs(numA.value - numB.value) > 1e-6) {
+      return 0.0;
+    }
+    // Same number: compare units (e.g. "15 days" vs "15 working days")
+    if (numA.unit === numB.unit) return 1.0;
+    return computeStringSimilarity(numA.unit, numB.unit);
+  }
+
+  return computeStringSimilarity(normA, normB);
+}
+
+/**
+ * Morphological stemmer: strips common inflections (plurals, -ing, -ed)
+ * and derivational suffixes (-tion, -ism, -ity, -ment, -ness, -al, -ly)
+ * to compare lexical roots.
+ */
+export function stemWord(word: string): string {
+  let s = word.toLowerCase().trim().replace(/[^a-z]/g, "");
+  if (s.length <= 3) return s;
+
+  // Plurals and third-person singular
+  if (s.endsWith("ies") && s.length > 4) {
+    s = s.slice(0, -3) + "y";
+  } else if (s.endsWith("sses")) {
+    s = s.slice(0, -2);
+  } else if (s.endsWith("s") && !s.endsWith("ss") && !s.endsWith("us") && !s.endsWith("is") && s.length > 3) {
+    s = s.slice(0, -1);
+  }
+
+  // -ing and -ed
+  if (s.endsWith("ing") && s.length > 5) {
+    s = s.slice(0, -3);
+  } else if (s.endsWith("ed") && s.length > 4) {
+    s = s.slice(0, -2);
+  }
+
+  // Common derivational suffixes: -tional, -tion, -sion, -ity, -ism, -ness, -ment, -al, -ly
+  if (s.endsWith("tional") && s.length > 7) {
+    s = s.slice(0, -4);
+  }
+  if ((s.endsWith("tion") || s.endsWith("sion")) && s.length > 5) {
+    s = s.slice(0, -3);
+  } else if (s.endsWith("ism") && s.length > 5) {
+    s = s.slice(0, -3);
+    if (s.endsWith("al") && s.length > 5) s = s.slice(0, -2);
+  } else if (s.endsWith("ity") && s.length > 5) {
+    s = s.slice(0, -3);
+  } else if (s.endsWith("ness") && s.length > 6) {
+    s = s.slice(0, -4);
+  } else if (s.endsWith("ment") && s.length > 6) {
+    s = s.slice(0, -4);
+  } else if (s.endsWith("ly") && s.length > 4) {
+    s = s.slice(0, -2);
+  } else if (s.endsWith("al") && s.length > 5 && !s.endsWith("cial") && !s.endsWith("tial")) {
+    s = s.slice(0, -2);
+  }
+
+  // Strip silent terminal 'e' for length > 4 so root matches -ing/-ed forms (e.g. receive vs receiving -> receiv)
+  if (s.endsWith("e") && s.length > 4) {
+    s = s.slice(0, -1);
+  }
+
+  return s;
 }
 
 /**
@@ -166,7 +288,7 @@ export function lintDistractorQuality(
 
   // Skip non-MCQ questions
   if (item.questionType === "free_response" || !item.options || item.options.length < 2) {
-    return { passed: true, autoFixed: false, issues: [], reasons: [] };
+    return { passed: true, canShipAsMcq: true, autoFixed: false, issues: [], reasons: [] };
   }
 
   const correctIdx = item.correctIndex >= 0 && item.correctIndex < item.options.length ? item.correctIndex : 0;
@@ -175,21 +297,27 @@ export function lintDistractorQuality(
 
   // -------------------------------------------------------------
   // 1. DUPLICATE OR NEAR-DUPLICATE OPTIONS
+  // Compares numeric options mathematically (25 days !== 15 days),
+  // and textual options via Levenshtein/token containment.
   // -------------------------------------------------------------
-  const normalizedOpts = item.options.map(normalizeOptionText);
-  for (let i = 0; i < normalizedOpts.length; i++) {
-    for (let j = i + 1; j < normalizedOpts.length; j++) {
-      if (normalizedOpts[i] === normalizedOpts[j]) {
+  for (let i = 0; i < item.options.length; i++) {
+    for (let j = i + 1; j < item.options.length; j++) {
+      const optA = item.options[i];
+      const optB = item.options[j];
+      const normA = normalizeOptionText(optA);
+      const normB = normalizeOptionText(optB);
+
+      if (normA === normB) {
         issues.push({
           rule: "duplicate-option",
-          message: `Duplicate option detected: "${item.options[i]}" and "${item.options[j]}"`,
+          message: `Duplicate option detected: "${optA}" and "${optB}"`,
         });
       } else {
-        const sim = computeStringSimilarity(normalizedOpts[i], normalizedOpts[j]);
+        const sim = compareOptionDuplicateSimilarity(optA, optB);
         if (sim >= cfg.nearDuplicateThreshold) {
           issues.push({
             rule: "duplicate-option",
-            message: `Near-duplicate option detected (${Math.round(sim * 100)}% similar): "${item.options[i]}" vs "${item.options[j]}"`,
+            message: `Near-duplicate option detected (${Math.round(sim * 100)}% similar): "${optA}" vs "${optB}"`,
           });
         }
       }
@@ -198,25 +326,47 @@ export function lintDistractorQuality(
 
   // -------------------------------------------------------------
   // 2. STEM-LEAK CHECK & AUTO-FIX
-  // Content words of the correct option appearing in the stem but NOT in the distractors.
+  // Content words of the correct option (stemmed) appearing in the stem
+  // but NOT shared by the distractors.
   // -------------------------------------------------------------
-  const correctWords = extractContentWords(correctOpt, cfg.minContentWordLength);
-  const distractorWordsSet = new Set<string>();
+  const rawCorrectWords = normalizeOptionText(correctOpt)
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
+
+  // Collect all stemmed words from distractors
+  const distractorStemsSet = new Set<string>();
   for (const d of distractorOpts) {
-    for (const w of extractContentWords(d, cfg.minContentWordLength)) {
-      distractorWordsSet.add(w);
+    const dWords = normalizeOptionText(d)
+      .split(/\s+/)
+      .filter((w) => w.length >= 3 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
+    for (const dw of dWords) {
+      distractorStemsSet.add(stemWord(dw));
     }
   }
 
-  // Check whole phrase leak first (e.g. "Commitment to public interest", "Professionalism")
+  // Find all words in correct option whose stem is UNLIKELY to be shared by any distractor
+  const uniqueOptionWords = rawCorrectWords.filter((w) => !distractorStemsSet.has(stemWord(w)));
+
+  // Extract all words from the stem
+  const stemWords = currentStem.toLowerCase().split(/[^\w]+/);
+  const stemStems = stemWords.map(stemWord);
+
+  // Identify any leaked words
+  const leakedTargetWords: string[] = [];
+  for (const cw of uniqueOptionWords) {
+    const sTarget = stemWord(cw);
+    if (stemStems.includes(sTarget) || stemWords.includes(cw.toLowerCase())) {
+      leakedTargetWords.push(cw);
+    }
+  }
+
+  // Check whole phrase leak (e.g. "Commitment to public interest")
   const normCorrect = normalizeOptionText(correctOpt);
   const normStem = currentStem.toLowerCase();
-
   let leakedPhrase: string | null = null;
   if (normCorrect.length >= 5 && !STOPWORDS.has(normCorrect)) {
     const phraseRegex = new RegExp(`\\b${escapeRegExp(normCorrect)}\\b`, "i");
     if (phraseRegex.test(normStem)) {
-      // Check if this phrase is in any distractor
       const inDistractor = distractorOpts.some((d) => normalizeOptionText(d).includes(normCorrect));
       if (!inDistractor) {
         leakedPhrase = normCorrect;
@@ -224,52 +374,92 @@ export function lintDistractorQuality(
     }
   }
 
-  // Check individual content word leaks
-  const leakedContentWords: string[] = [];
-  for (const cw of correctWords) {
-    if (!distractorWordsSet.has(cw)) {
-      const wordRegex = new RegExp(`\\b${escapeRegExp(cw)}\\b`, "i");
-      if (wordRegex.test(normStem)) {
-        leakedContentWords.push(cw);
+  // Also check digit leak if correct option is numeric (e.g. 18 or "18 years")
+  const numCorrect = parseNumericOption(correctOpt);
+  let digitLeak: number | null = null;
+  if (numCorrect && numCorrect.value > 0) {
+    const digitStr = String(numCorrect.value);
+    if (numCorrect.value < 1000) {
+      const blankParenRegex = new RegExp(`(?:_____|blank)\\s*\\(\\s*${digitStr}\\s*\\)|\\(\\s*${digitStr}\\s*\\)\\s*(?:working|calendar)?\\s*${escapeRegExp(numCorrect.unit)}`, "i");
+      if (blankParenRegex.test(currentStem)) {
+        digitLeak = numCorrect.value;
       }
     }
   }
 
-  if (leakedPhrase || leakedContentWords.length > 0) {
-    const leakTarget = leakedPhrase || leakedContentWords[0];
+  let residualLeak = false;
+
+  if (leakedPhrase || leakedTargetWords.length > 0 || digitLeak !== null) {
+    const primaryLeak = leakedPhrase || leakedTargetWords[0] || String(digitLeak);
     if (cfg.autoFixStemLeak) {
-      // Attempt auto-fix: Mask the leaked phrase or words in the stem with [______]
-      const termsToMask = leakedPhrase ? [leakedPhrase] : leakedContentWords;
       let workingStem = currentStem;
-      for (const t of termsToMask) {
-        const maskRegex = new RegExp(`\\b${escapeRegExp(t)}\\b`, "gi");
-        workingStem = workingStem.replace(maskRegex, "[______]");
+
+      // 1. Mask parenthesized digit leak e.g. "_____ (18)" -> "_____ "
+      if (digitLeak !== null) {
+        const digitStr = String(digitLeak);
+        workingStem = workingStem
+          .replace(new RegExp(`_____\\s*\\(\\s*${digitStr}\\s*\\)`, "gi"), "_____ ")
+          .replace(new RegExp(`\\(${digitStr}\\)`, "gi"), " ");
       }
 
-      if (workingStem !== currentStem) {
+      // 2. Mask whole phrase if leaked
+      if (leakedPhrase) {
+        workingStem = workingStem.replace(new RegExp(`\\b${escapeRegExp(leakedPhrase)}\\b`, "gi"), "[______]");
+      }
+
+      // 3. Mask individual leaked content words and their morphological forms
+      for (const w of leakedTargetWords) {
+        const root = stemWord(w);
+        if (root.length < 3) continue;
+        const wordRegex = new RegExp(`\\b${escapeRegExp(root)}[a-z]*\\b`, "gi");
+        workingStem = workingStem.replace(wordRegex, "[______]");
+      }
+
+      // 4. MASK LEFTOVER PARTNER WORDS (e.g. "public" in "public [______]" or "[______] interest")
+      for (const w of rawCorrectWords) {
+        const root = stemWord(w);
+        if (root.length < 3) continue;
+        const adjacentBefore = new RegExp(`\\b${escapeRegExp(root)}[a-z]*\\s+\\[______\\]`, "gi");
+        const adjacentAfter = new RegExp(`\\[______\\]\\s+\\b${escapeRegExp(root)}[a-z]*\\b`, "gi");
+        workingStem = workingStem.replace(adjacentBefore, "[______]").replace(adjacentAfter, "[______]");
+      }
+
+      // Collapse multiple consecutive blanks: "[______] [______]" -> "[______]"
+      workingStem = workingStem.replace(/(?:\[______\]\s*)+\[______\]/g, "[______]");
+      workingStem = workingStem.replace(/(?:_____\s*\[______\]|\[______\]\s*_____)/g, "[______]");
+      workingStem = workingStem.replace(/\s+/g, " ").trim();
+
+      // 5. Verify if any unshared content word still leaks after masking
+      const postWords = workingStem.toLowerCase().split(/[^\w]+/);
+      const postStems = postWords.map(stemWord);
+      const remainingLeaks = uniqueOptionWords.filter((cw) => postStems.includes(stemWord(cw)));
+
+      if (remainingLeaks.length === 0 && workingStem !== currentStem) {
         currentStem = workingStem;
         autoFixed = true;
         issues.push({
           rule: "stem-leak",
-          message: `Stem-leak detected for "${leakTarget}": automatically masked in stem with [______]`,
+          message: `Stem-leak detected for "${primaryLeak}": automatically masked in stem with [______]`,
           autoFixed: true,
           fixedStem: currentStem,
-          leakedWord: leakTarget,
+          leakedWord: primaryLeak,
         });
       } else {
+        residualLeak = true;
         issues.push({
           rule: "stem-leak",
-          message: `Stem-leak: content word "${leakTarget}" from correct option appears in question stem`,
+          message: `Residual stem-leak: content word "${remainingLeaks[0] || primaryLeak}" from correct option cannot be masked without corrupting stem`,
           autoFixed: false,
-          leakedWord: leakTarget,
+          leakedWord: remainingLeaks[0] || primaryLeak,
         });
       }
     } else {
+      residualLeak = true;
       issues.push({
         rule: "stem-leak",
-        message: `Stem-leak: content word "${leakTarget}" from correct option appears in question stem`,
+        message: `Stem-leak: content word "${primaryLeak}" from correct option appears in question stem`,
         autoFixed: false,
-        leakedWord: leakTarget,
+        leakedWord: primaryLeak,
       });
     }
   }
@@ -371,9 +561,11 @@ export function lintDistractorQuality(
   // Compile final results
   const unfixedIssues = issues.filter((iss) => !iss.autoFixed);
   const reasons = issues.map((iss) => iss.message);
+  const canShipAsMcq = !residualLeak && unfixedIssues.every((iss) => iss.rule !== "all-none-above");
 
   return {
     passed: unfixedIssues.length === 0,
+    canShipAsMcq,
     autoFixed,
     fixedStem: autoFixed ? currentStem : undefined,
     issues,
@@ -449,8 +641,44 @@ export function generateNumericDistractors(
 }
 
 /**
- * Generates sibling term distractors from the same section or adjacent sections.
- * Never inserts synthetic filler like "Provision 1" or "General Rule 2".
+ * Classifies a legal or document term into a semantic domain
+ * to ensure distractors are semantically close siblings (e.g. gifts with gifts,
+ * norms with norms, roles with roles), never mismatched entities.
+ */
+export function getTermSemanticCategory(term: string, section: string = ""): string {
+  const norm = normalizeOptionText(term);
+  const sec = section.toLowerCase();
+
+  // 1. Norms of conduct under Section 4 / Rule V
+  if (
+    sec.includes("norm") ||
+    /commitment to public interest|professionalism|justness and sincerity|political neutrality|responsiveness to the public|nationalism and patriotism|commitment to democracy|simple living/i.test(norm)
+  ) {
+    return "norm_of_conduct";
+  }
+
+  // 2. Gifts, loans, assets, financial interests (Section 3)
+  if (/gift|loan|divestment|stockholder|remuneration|interest|property|asset|liability/i.test(norm)) {
+    return "gift_finance";
+  }
+
+  // 3. Persons, officials, family, relatives (Section 3)
+  if (/public official|employee|family|relative|appointive|elective|personnel|officer/i.test(norm)) {
+    return "personnel_roles";
+  }
+
+  // 4. Government, agencies, state bodies
+  if (/government|state|agency|department|office|commission|bureau/i.test(norm)) {
+    return "government_entities";
+  }
+
+  return `sec_${normalizeOptionText(section).slice(0, 20)}`;
+}
+
+/**
+ * Generates sibling term distractors that are semantically close to the correct term
+ * (same semantic category, similar word count and length).
+ * Returns an empty array if fewer than 3 close siblings exist (never random filler).
  */
 export function generateSiblingTermDistractors(
   targetTerm: string,
@@ -458,24 +686,55 @@ export function generateSiblingTermDistractors(
   allTerms: { term: string; section: string }[]
 ): string[] {
   const normTarget = normalizeOptionText(targetTerm);
+  const targetCategory = getTermSemanticCategory(targetTerm, targetSection);
+  const targetWordCount = normTarget.split(/\s+/).length;
+  const targetLen = normTarget.length;
 
-  // 1. Same-section siblings first
-  const sameSection = allTerms
-    .filter((t) => t.section === targetSection && normalizeOptionText(t.term) !== normTarget)
+  // Filter candidates strictly belonging to the SAME semantic category
+  const candidates = allTerms
+    .filter((t) => {
+      const normCand = normalizeOptionText(t.term);
+      if (normCand === normTarget) return false;
+      const candCategory = getTermSemanticCategory(t.term, t.section);
+      return candCategory === targetCategory;
+    })
     .map((t) => t.term);
 
-  const uniqueSame = Array.from(new Set(sameSection));
-  if (uniqueSame.length >= 3) {
-    return uniqueSame.slice(0, 3);
+  const uniqueCandidates = Array.from(new Set(candidates));
+
+  // Score candidates by similarity in word count and character length
+  const scored = uniqueCandidates.map((cand) => {
+    const candNorm = normalizeOptionText(cand);
+    const candWordCount = candNorm.split(/\s+/).length;
+    const candLen = candNorm.length;
+    const wordDiff = Math.abs(candWordCount - targetWordCount);
+    const lenDiff = Math.abs(candLen - targetLen);
+    return {
+      term: cand,
+      wordDiff,
+      lenDiff,
+      score: wordDiff * 10 + lenDiff,
+    };
+  });
+
+  // Sort by closest word count and length
+  scored.sort((a, b) => a.score - b.score);
+
+  // Filter to reasonably close siblings: word count difference <= 2, length ratio <= 4.5 or length difference <= 15
+  const closeSiblings = scored.filter(
+    (item) =>
+      item.wordDiff <= 2 &&
+      (Math.max(item.term.length, targetLen) / Math.max(1, Math.min(item.term.length, targetLen)) <= 4.5 ||
+        Math.abs(item.term.length - targetLen) <= 15)
+  );
+
+  // If fewer than 3 close siblings exist in the same category, return empty array
+  // (caller will skip question or convert to recall flashcard)
+  if (closeSiblings.length < 3) {
+    return [];
   }
 
-  // 2. Cross-section siblings from the same document
-  const otherSections = allTerms
-    .filter((t) => t.section !== targetSection && normalizeOptionText(t.term) !== normTarget)
-    .map((t) => t.term);
-
-  const combined = Array.from(new Set([...uniqueSame, ...otherSections]));
-  return combined.slice(0, 3);
+  return closeSiblings.slice(0, 3).map((item) => item.term);
 }
 
 // ============================================

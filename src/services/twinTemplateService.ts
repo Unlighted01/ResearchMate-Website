@@ -20,17 +20,29 @@ interface ProblemTemplate {
   generate: () => ExamQuestion;
 }
 
-// Helper: Shuffles choices while tracking the new correct index
+// Helper: Shuffles choices while tracking the new correct index and distractor reasons
 function createShuffledQuestion(
   stem: string,
   correctChoice: string,
-  distractors: string[],
+  distractors: (string | { value: string; reason: string })[],
   explanation: string,
   topicTag: string = "Numerical Reasoning"
 ): ExamQuestion {
+  const distractorReasons: Record<string, string> = {};
+  const stringDistractors: string[] = [];
+
+  for (const d of distractors) {
+    if (typeof d === "string") {
+      stringDistractors.push(d);
+    } else {
+      stringDistractors.push(d.value);
+      distractorReasons[d.value] = d.reason;
+    }
+  }
+
   // Ensure exactly 3 unique distractors that don't match the correct choice
   const uniqueDistractors = Array.from(
-    new Set(distractors.filter((d) => d.trim() !== correctChoice.trim()))
+    new Set(stringDistractors.filter((d) => d.trim() !== correctChoice.trim()))
   ).slice(0, 3);
 
   while (uniqueDistractors.length < 3) {
@@ -54,6 +66,7 @@ function createShuffledQuestion(
     correctAnswer: correctChoice,
     explanation,
     topic: topicTag,
+    distractorReasons,
   };
 }
 
@@ -84,7 +97,11 @@ export function generateWorkRateTwin(): ExamQuestion {
   return createShuffledQuestion(
     stem,
     correct,
-    [trapArithmeticAvg, trapSum, trapMinus],
+    [
+      { value: trapArithmeticAvg, reason: "average" },
+      { value: trapSum, reason: "sum" },
+      { value: trapMinus, reason: "difference" },
+    ],
     explanation,
     "Numerical Reasoning"
   );
@@ -105,14 +122,18 @@ export function generateHarmonicSpeedTwin(): ExamQuestion {
   const correct = `${pick.ans} km/h`;
   const trapArithmeticAvg = `${(pick.v1 + pick.v2) / 2} km/h`;
   const trapDiff = `${Math.abs(pick.v2 - pick.v1)} km/h`;
-  const trapOffByOne = `${pick.ans + 4} km/h`;
+  const trapMissingTwo = `${Math.round((pick.v1 * pick.v2) / (pick.v1 + pick.v2))} km/h`;
 
   const explanation = `⚡ 30-Second Shortcut: Average round-trip speed is the Harmonic Mean: V = (2 × v₁ × v₂) / (v₁ + v₂) = (2 × ${pick.v1} × ${pick.v2}) / (${pick.v1} + ${pick.v2}) = ${2 * pick.v1 * pick.v2} / ${pick.v1 + pick.v2} = ${pick.ans} km/h. Trap alert: Never average speeds linearly (${trapArithmeticAvg}) because more time is spent at the slower speed!`;
 
   return createShuffledQuestion(
     stem,
     correct,
-    [trapArithmeticAvg, trapDiff, trapOffByOne],
+    [
+      { value: trapArithmeticAvg, reason: "average" },
+      { value: trapDiff, reason: "difference" },
+      { value: trapMissingTwo, reason: "missing_two_factor" },
+    ],
     explanation,
     "Numerical Reasoning"
   );
@@ -132,15 +153,21 @@ export function generateSuccessiveDiscountTwin(): ExamQuestion {
   const stem = `A bookstore offers successive discounts of ${pick.a}% and ${pick.b}% on a ${pick.item}. What single equivalent percentage discount is this equal to?`;
   const correct = `${pick.ans}%`;
   const trapSum = `${pick.a + pick.b}%`;
+  const trapFirst = `${pick.a}%`;
   const trapProduct = `${(pick.a * pick.b) / 10}%`;
-  const trapOff = `${pick.ans - 3}%`;
+  const trapSecond = `${pick.b}%`;
 
   const explanation = `⚡ 30-Second Shortcut: Successive Discount Formula: Equivalent = A + B - (A × B / 100) = ${pick.a} + ${pick.b} - (${pick.a} × ${pick.b} / 100) = ${pick.a + pick.b} - ${(pick.a * pick.b) / 100} = ${pick.ans}%. Trap alert: Never simply add percentages (${trapSum})!`;
 
   return createShuffledQuestion(
     stem,
     correct,
-    [trapSum, trapProduct, trapOff],
+    [
+      { value: trapSum, reason: "linear_discount" },
+      { value: trapFirst, reason: "single_discount" },
+      { value: trapProduct, reason: "product_error" },
+      { value: trapSecond, reason: "single_discount" },
+    ],
     explanation,
     "Numerical Reasoning"
   );
@@ -170,7 +197,11 @@ export function generateRatioTwin(): ExamQuestion {
   return createShuffledQuestion(
     stem,
     correct,
-    [trapShare1, trapDiff, trapHalf],
+    [
+      { value: trapShare1, reason: "opposite_share" },
+      { value: trapDiff, reason: "difference" },
+      { value: trapHalf, reason: "equal_split" },
+    ],
     explanation,
     "Numerical Reasoning"
   );
@@ -307,15 +338,34 @@ export function generateParametricTwin(question: {
   return null;
 }
 
+export interface WrongPathDistractor {
+  value: string;
+  reason:
+    | "average"
+    | "sum"
+    | "difference"
+    | "unit_slip"
+    | "linear_discount"
+    | "ratio_inversion"
+    | "opposite_share"
+    | "missing_two_factor"
+    | "product_error"
+    | "remainder_discount"
+    | "equal_split"
+    | "double_count"
+    | "half_split";
+}
+
 /**
  * Produces wrong-path distractors reflecting common student calculation errors
- * for templated math questions (work rates, harmonic speeds, discounts, ratios, series).
+ * with an explicit named reason for each option (average, sum, difference, unit slip, etc.).
+ * Unexplained offsets (e.g. +4, -3) are completely removed.
  */
-export function generateWrongPathDistractorsForMath(
+export function generateWrongPathDistractorsForMathWithReasons(
   stem: string,
   correctAnswer: string,
   templateType?: TemplateType
-): string[] {
+): WrongPathDistractor[] {
   // Extract unit from correct answer if present
   const unitMatch = correctAnswer.match(/^(?:[\$€£₱])?\s*([\d,.]+)\s*(%|[a-zA-Z\/]+)?$/);
   const numVal = unitMatch ? parseFloat(unitMatch[1].replace(/,/g, "")) : NaN;
@@ -335,46 +385,64 @@ export function generateWrongPathDistractorsForMath(
 
   // 2. Extract numbers from stem
   const stemNums = (stem.match(/\b\d+(?:\.\d+)?\b/g) || []).map(Number);
-
-  const traps: string[] = [];
+  const candidateTraps: WrongPathDistractor[] = [];
 
   if (matchedType === "work_rate" && stemNums.length >= 2) {
     const a = stemNums[0];
     const b = stemNums[1];
-    traps.push(`${prefix}${(a + b) / 2}${unitSuffix}`); // Trap 1: simple average
-    traps.push(`${prefix}${a + b}${unitSuffix}`); // Trap 2: simple sum
-    traps.push(`${prefix}${Math.abs(b - a)}${unitSuffix}`); // Trap 3: simple difference
+    candidateTraps.push({ value: `${prefix}${(a + b) / 2}${unitSuffix}`, reason: "average" });
+    candidateTraps.push({ value: `${prefix}${a + b}${unitSuffix}`, reason: "sum" });
+    candidateTraps.push({ value: `${prefix}${Math.abs(b - a)}${unitSuffix}`, reason: "difference" });
+    candidateTraps.push({ value: `${prefix}${a * b}${unitSuffix}`, reason: "product_error" });
   } else if (matchedType === "harmonic_speed" && stemNums.length >= 2) {
     const v1 = stemNums[0];
     const v2 = stemNums[1];
-    traps.push(`${prefix}${(v1 + v2) / 2}${unitSuffix}`); // Trap 1: linear average
-    traps.push(`${prefix}${Math.abs(v2 - v1)}${unitSuffix}`); // Trap 2: difference
-    traps.push(`${prefix}${Math.round(2 * v1 * v2 / (v1 + v2)) + 4}${unitSuffix}`); // Trap 3: near miss
+    candidateTraps.push({ value: `${prefix}${(v1 + v2) / 2}${unitSuffix}`, reason: "average" });
+    candidateTraps.push({ value: `${prefix}${Math.abs(v2 - v1)}${unitSuffix}`, reason: "difference" });
+    candidateTraps.push({ value: `${prefix}${Math.round((v1 * v2) / (v1 + v2))}${unitSuffix}`, reason: "missing_two_factor" });
+    candidateTraps.push({ value: `${prefix}${v1 + v2}${unitSuffix}`, reason: "sum" });
   } else if (matchedType === "successive_discount" && stemNums.length >= 2) {
     const a = stemNums[0];
     const b = stemNums[1];
-    traps.push(`${prefix}${a + b}%`); // Trap 1: linear addition
-    traps.push(`${prefix}${Math.round((a * b) / 10)}%`); // Trap 2: multiplication error
-    if (!isNaN(numVal)) traps.push(`${prefix}${Math.max(1, numVal - 3)}%`); // Trap 3: offset
+    candidateTraps.push({ value: `${prefix}${a + b}%`, reason: "linear_discount" });
+    candidateTraps.push({ value: `${prefix}${Math.round((a * b) / 10)}%`, reason: "product_error" });
+    candidateTraps.push({ value: `${prefix}${Math.abs(100 - (a + b))}%`, reason: "remainder_discount" });
+    candidateTraps.push({ value: `${prefix}${a}%`, reason: "linear_discount" });
   } else if (matchedType === "ratio_partition" && !isNaN(numVal)) {
-    traps.push(`${prefix}${Math.round(numVal * 0.6)}${unitSuffix}`); // Trap 1: other share
-    traps.push(`${prefix}${Math.round(numVal * 1.5)}${unitSuffix}`); // Trap 2: total parts mismatch
-    traps.push(`${prefix}${Math.round(numVal * 0.5)}${unitSuffix}`); // Trap 3: 50% split
+    candidateTraps.push({ value: `${prefix}${Math.round(numVal * 0.6)}${unitSuffix}`, reason: "opposite_share" });
+    candidateTraps.push({ value: `${prefix}${Math.round(numVal * 0.5)}${unitSuffix}`, reason: "equal_split" });
+    candidateTraps.push({ value: `${prefix}${Math.round(numVal * 1.5)}${unitSuffix}`, reason: "ratio_inversion" });
+    candidateTraps.push({ value: `${prefix}${Math.round(numVal * 10)}${unitSuffix}`, reason: "unit_slip" });
   } else if (!isNaN(numVal) && numVal > 0) {
-    // General numeric wrong-path generator (percentage shift, off-by-magnitude, swapped operations)
-    traps.push(`${prefix}${Math.round(numVal * 1.25 * 100) / 100}${unitSuffix}`);
-    traps.push(`${prefix}${Math.round(numVal * 0.75 * 100) / 100}${unitSuffix}`);
-    traps.push(`${prefix}${Math.round(numVal * 2 * 100) / 100}${unitSuffix}`);
+    candidateTraps.push({ value: `${prefix}${Math.round(numVal * 1.25 * 100) / 100}${unitSuffix}`, reason: "unit_slip" });
+    candidateTraps.push({ value: `${prefix}${Math.round(numVal * 0.75 * 100) / 100}${unitSuffix}`, reason: "unit_slip" });
+    candidateTraps.push({ value: `${prefix}${Math.round(numVal * 2 * 100) / 100}${unitSuffix}`, reason: "double_count" });
+    candidateTraps.push({ value: `${prefix}${Math.round((numVal / 2) * 100) / 100}${unitSuffix}`, reason: "half_split" });
   }
 
   // Filter out any that equal correct answer and deduplicate
   const cleanCorrect = correctAnswer.trim().toLowerCase();
-  const valid = Array.from(new Set(traps.filter((t) => t.trim().toLowerCase() !== cleanCorrect)));
+  const seen = new Set<string>();
+  const valid: WrongPathDistractor[] = [];
 
-  while (valid.length < 3 && !isNaN(numVal)) {
-    const fallback = `${prefix}${Math.round((numVal + valid.length + 2) * 10) / 10}${unitSuffix}`;
-    if (!valid.includes(fallback)) valid.push(fallback);
+  for (const t of candidateTraps) {
+    const valKey = t.value.trim().toLowerCase();
+    if (valKey !== cleanCorrect && !seen.has(valKey)) {
+      seen.add(valKey);
+      valid.push(t);
+    }
   }
 
   return valid.slice(0, 3);
+}
+
+/**
+ * Produces wrong-path distractors as a string array for backwards compatibility.
+ */
+export function generateWrongPathDistractorsForMath(
+  stem: string,
+  correctAnswer: string,
+  templateType?: TemplateType
+): string[] {
+  return generateWrongPathDistractorsForMathWithReasons(stem, correctAnswer, templateType).map((d) => d.value);
 }

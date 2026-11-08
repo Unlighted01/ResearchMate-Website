@@ -15,7 +15,12 @@ import {
   computeStringSimilarity,
   normalizeOptionText,
 } from "../src/services/distractorQualityService";
-import { generateWrongPathDistractorsForMath } from "../src/services/twinTemplateService";
+import {
+  generateWrongPathDistractorsForMath,
+  generateWrongPathDistractorsForMathWithReasons,
+  generateHarmonicSpeedTwin,
+  generateWorkRateTwin,
+} from "../src/services/twinTemplateService";
 import { createSeededExam } from "../src/services/examSeedService";
 import { Question } from "../src/services/examService";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -85,14 +90,14 @@ describe("Distractor Quality & Linting Service", () => {
       expect(retest.passed).toBe(true);
     });
 
-    it("handles multi-word norm-of-conduct stem-leaks (e.g. 'Commitment to public interest')", () => {
+    it("handles multi-word norm-of-conduct stem-leaks and masks leftover partner words like 'public' in 'public [______]'", () => {
       const q = {
         stem: 'Under RA 6713, which norm is defined as: "Officials shall always uphold the public interest over and above personal interest"?',
         options: [
           "Commitment to public interest",
           "Professionalism",
           "Justness and sincerity",
-          "Responsiveness to the public",
+          "Simple living",
         ],
         correctIndex: 0,
       };
@@ -100,6 +105,43 @@ describe("Distractor Quality & Linting Service", () => {
       const result = lintDistractorQuality(q, { autoFixStemLeak: true });
       expect(result.autoFixed).toBe(true);
       expect(result.fixedStem).toContain("[______]");
+      // Leftover partner word "public" must NOT be left hanging as "public [______]"
+      expect(result.fixedStem).not.toMatch(/\bpublic\s*\[______\]/i);
+      expect(result.fixedStem).not.toMatch(/\[______\]\s*interest\b/i);
+    });
+
+    it("stems content words (e.g. plurals, -ing, -ed, -ism) to detect morphological stem-leaks", () => {
+      const qPlural = {
+        stem: "Which entities exercise sovereign powers in democratic government systems?",
+        options: ["Judiciary", "Governments", "Corporations", "Private Sector"],
+        correctIndex: 1, // "Governments" stems to match "government" in stem
+      };
+      const resultPlural = lintDistractorQuality(qPlural, { autoFixStemLeak: false });
+      expect(resultPlural.passed).toBe(false);
+      expect(resultPlural.issues.some((i) => i.rule === "stem-leak")).toBe(true);
+
+      const qGerund = {
+        stem: "Under civil service regulations, receiving or accepting any valuable consideration from clients is prohibited.",
+        options: ["Lawful business", "Receiving any gift", "Standard compensation", "Travel reimbursement"],
+        correctIndex: 1, // "Receiving" stems to match "receiving" in stem
+      };
+      const resultGerund = lintDistractorQuality(qGerund, { autoFixStemLeak: true });
+      expect(resultGerund.autoFixed).toBe(true);
+      expect(resultGerund.fixedStem).toContain("[______]");
+    });
+
+    it("masks BOTH number word and parenthesized numeral so digits do not appear in number-blank stems", () => {
+      const q = {
+        stem: 'Complete the legal provision: "Officials have an obligation to submit declarations under oath of assets, liabilities including unmarried children under eighteen (18) years of age living in their households."',
+        options: ["1", "5", "10", "18"],
+        correctIndex: 3,
+      };
+
+      const result = lintDistractorQuality(q, { autoFixStemLeak: true });
+      // Verify parenthesized numeral (18) is masked
+      const finalStem = result.fixedStem || q.stem;
+      expect(finalStem).not.toContain("_____ (18)");
+      expect(finalStem).not.toContain("(18)");
     });
 
     it("does not flag legitimate words shared across distractors or common stopwords", () => {
@@ -217,15 +259,6 @@ describe("Distractor Quality & Linting Service", () => {
     });
 
     it("flags near-duplicate options based on string similarity", () => {
-      const q = {
-        stem: "What is the required response timeframe?",
-        options: ["15 working days", "15 days", "30 days", "60 days"],
-        correctIndex: 0,
-      };
-
-      const sim = computeStringSimilarity("15 working days", "15 days");
-      expect(sim).toBeGreaterThan(0.6);
-
       const qClose = {
         stem: "Select the option:",
         options: ["1,500 cubic inches", "1,500 cubic inche", "2,000 cubic inches", "3,000 cubic inches"],
@@ -233,6 +266,24 @@ describe("Distractor Quality & Linting Service", () => {
       };
       const result = lintDistractorQuality(qClose);
       expect(result.issues.some((i) => i.rule === "duplicate-option")).toBe(true);
+    });
+
+    it("compares numeric options mathematically and does NOT flag distinct numbers ('15 days' vs '25 days') as duplicates", () => {
+      const qDays = {
+        stem: "How many days are allotted for filing the initial document?",
+        options: ["15 days", "25 days", "30 days", "45 days"],
+        correctIndex: 0,
+      };
+      const resultDays = lintDistractorQuality(qDays);
+      expect(resultDays.issues.filter((i) => i.rule === "duplicate-option").length).toBe(0);
+
+      const qSpeed = {
+        stem: "A commuter travels at 60 km/h and returns at 40 km/h. What is the average speed?",
+        options: ["48 km/h", "50 km/h", "52 km/h", "55 km/h"],
+        correctIndex: 0,
+      };
+      const resultSpeed = lintDistractorQuality(qSpeed);
+      expect(resultSpeed.issues.filter((i) => i.rule === "duplicate-option").length).toBe(0);
     });
   });
 
@@ -259,14 +310,14 @@ describe("Distractor Quality & Linting Service", () => {
       expect(numbers.some((n) => n === 51 || n === 150 || Math.abs(n - 15) <= 5)).toBe(true);
     });
 
-    it("generates sibling term distractors from the same section and document without synthetic filler", () => {
+    it("generates sibling term distractors from the same semantic category without synthetic filler", () => {
       const allTerms = [
         { term: "Gift", section: "Sec. 3 (Definition of Terms)" },
         { term: "Loan", section: "Sec. 3 (Definition of Terms)" },
-        { term: "Conflict of interest", section: "Sec. 3 (Definition of Terms)" },
+        { term: "Receiving any gift", section: "Sec. 3 (Definition of Terms)" },
         { term: "Divestment", section: "Sec. 3 (Definition of Terms)" },
         { term: "Relatives", section: "Sec. 3 (Definition of Terms)" },
-        { term: "Professionalism", section: "Sec. 4 (Norms of Conduct)" },
+        { term: "Government", section: "Sec. 3 (Definition of Terms)" },
       ];
 
       const distractors = generateSiblingTermDistractors(
@@ -282,9 +333,30 @@ describe("Distractor Quality & Linting Service", () => {
         expect(d).not.toMatch(/^Provision\s+\d+$/);
         expect(d).not.toMatch(/^General Rule\s+\d+$/);
       });
-      // Sibling terms from the same section preferred
+      // Sibling terms must be semantically close (finance / gift transfers)
       expect(distractors).toContain("Loan");
-      expect(distractors).toContain("Conflict of interest");
+      expect(distractors).toContain("Divestment");
+      expect(distractors).toContain("Receiving any gift");
+      // Must NOT contain mismatched entities like "Government" or "Relatives"
+      expect(distractors).not.toContain("Government");
+      expect(distractors).not.toContain("Relatives");
+    });
+
+    it("skips term-definition questions when fewer than 3 close siblings exist", () => {
+      const isolatedTerms = [
+        { term: "Government", section: "Sec. 3 (Definition of Terms)" },
+        { term: "Loan", section: "Sec. 3 (Definition of Terms)" },
+        { term: "Simple living", section: "Sec. 4 (Norms of Conduct)" },
+      ];
+
+      const distractors = generateSiblingTermDistractors(
+        "Government",
+        "Sec. 3 (Definition of Terms)",
+        isolatedTerms
+      );
+
+      // Fewer than 3 close government entity siblings exist -> returns empty array
+      expect(distractors).toEqual([]);
     });
   });
 
@@ -326,6 +398,26 @@ describe("Distractor Quality & Linting Service", () => {
       expect(wrongPaths.length).toBe(3);
       // Linear sum trap: 20 + 10 = 30%
       expect(wrongPaths).toContain("30%");
+    });
+
+    it("attaches explicit named error reasons to math distractors and eliminates unexplained offsets", () => {
+      const stem = "A commuter drives 30 km/h and returns at 60 km/h. Average speed?";
+      const correct = "40 km/h";
+
+      const trapsWithReasons = generateWrongPathDistractorsForMathWithReasons(stem, correct, "harmonic_speed");
+      expect(trapsWithReasons.length).toBe(3);
+
+      const reasons = trapsWithReasons.map((t) => t.reason);
+      expect(reasons).toContain("average");
+      expect(reasons).toContain("difference");
+      expect(reasons).toContain("missing_two_factor");
+
+      // Verify twin question generator attaches distractorReasons map
+      const twin = generateHarmonicSpeedTwin();
+      expect(twin.distractorReasons).toBeDefined();
+      expect(Object.keys(twin.distractorReasons!).length).toBeGreaterThanOrEqual(3);
+      const twinReasons = Object.values(twin.distractorReasons!);
+      expect(twinReasons.some((r) => r === "average" || r === "difference" || r === "missing_two_factor")).toBe(true);
     });
   });
 

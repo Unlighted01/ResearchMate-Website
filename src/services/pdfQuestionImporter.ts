@@ -1713,6 +1713,28 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       stem = lintResult.fixedStem;
     }
 
+    // If an unfixable leak remains, do NOT ship as MCQ: convert to recall flashcard
+    if (!lintResult.canShipAsMcq) {
+      items.push({
+        id: generateUUID(),
+        number: qNumber++,
+        stem: `Under RA 6713, which ${isNorm ? "norm of conduct" : "term"} is defined as:\n"${rawDef}"?`,
+        options: [],
+        correctIndex: -1,
+        correctLetter: "",
+        explanation: `Recall: ${t.term}. Defined under ${t.section}: "${t.rawQuote}"`,
+        chapter: t.section,
+        pageNumber: t.pageNumber,
+        sourcePage: t.pageNumber,
+        sourceQuote: t.rawQuote,
+        questionType: "free_response",
+        reviewStatus: "verified",
+        isSuspicious: false,
+        suspiciousReasons: [],
+      });
+      continue;
+    }
+
     const suspiciousReasons: string[] = [];
     const brokenStem = checkBrokenStem(stem);
     if (brokenStem.isBroken) {
@@ -1751,30 +1773,47 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       continue;
     }
 
-    // Near values of same unit (decimal shifts, +/- 10-25%, swapped digits)
-    const { distractors: nearValDistractors } = generateNumericDistractors(nb.numeral);
-    const docUnitNumbers = Array.from(numbersByUnit.get(nb.unitCategory) || []).filter((n) => n !== nb.numeral);
-
-    const candidateNums = Array.from(
-      new Set([...docUnitNumbers, ...nearValDistractors.map((d) => parseInt(d, 10))])
-    )
-      .filter((n) => n > 0 && n !== nb.numeral)
+    // Prefer real same-unit numbers from the document first (e.g. 15/30/45/60 days)
+    const docUnitNumbers = Array.from(numbersByUnit.get(nb.unitCategory) || [])
+      .filter((n) => n !== nb.numeral)
       .sort((a, b) => Math.abs(a - nb.numeral) - Math.abs(b - nb.numeral));
 
-    if (candidateNums.length < 3) {
+    let distractorNums: number[] = docUnitNumbers.slice(0, 3);
+
+    // Use near values only to fill the remainder if fewer than 3 real numbers exist
+    if (distractorNums.length < 3) {
+      const { distractors: nearValDistractors } = generateNumericDistractors(nb.numeral);
+      const nearNums = nearValDistractors
+        .map((d) => parseInt(d, 10))
+        .filter((n) => n > 0 && n !== nb.numeral && !distractorNums.includes(n));
+      for (const n of nearNums) {
+        if (distractorNums.length >= 3) break;
+        distractorNums.push(n);
+      }
+    }
+
+    if (distractorNums.length < 3) {
       continue;
     }
 
-    const distractorNums = candidateNums.slice(0, 3);
     const options = [String(nb.numeral), ...distractorNums.map(String)].sort(
       (a, b) => parseInt(a, 10) - parseInt(b, 10)
     );
     const correctIndex = options.indexOf(String(nb.numeral));
 
-    const blankedSentence = nb.sentence.replace(
-      new RegExp(`\\b${nb.word}\\s*\\(\\s*${nb.numeral}\\s*\\)`, "i"),
-      `_____ (${nb.numeral})`
+    // Mask BOTH the word and the numeral in parentheses (closed or unclosed) completely ("_____ (18)" -> "_____ ")
+    let blankedSentence = nb.sentence.replace(
+      new RegExp(`\\b${nb.word}\\s*\\(\\s*${nb.numeral}(?:\\s*\\)|\\s+(?=[a-zA-Z]))`, "gi"),
+      "_____ "
     );
+    if (!blankedSentence.includes("_____")) {
+      blankedSentence = nb.sentence.replace(new RegExp(`\\b${nb.word}\\b`, "gi"), "_____ ");
+    }
+    blankedSentence = blankedSentence
+      .replace(new RegExp(`_____\\s*\\(\\s*${nb.numeral}\\s*\\)`, "gi"), "_____ ")
+      .replace(new RegExp(`\\(\\s*${nb.numeral}\\s*\\)`, "gi"), " ")
+      .replace(/\s+/g, " ")
+      .trim();
 
     let stem = `Complete the legal provision: "${blankedSentence}"`;
     const suspiciousReasons: string[] = [];
@@ -1785,6 +1824,18 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     const brokenStem = checkBrokenStem(stem);
     if (brokenStem.isBroken) {
       suspiciousReasons.push(brokenStem.reason || "Stem ends mid-parenthesis or with broken number");
+    }
+
+    // Verify numeral digits do not leak in stem (ignoring calendar dates like "April 30", years "1989", or citations)
+    const cleanStemForDigitCheck = stem
+      .replace(/\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+\b/gi, "")
+      .replace(/\b(?:19\d\d|20\d\d)\b/g, "")
+      .replace(/\bSec(?:tion)?\.?\s*\d+\b/gi, "")
+      .replace(/\bRule\s+[IVXLCDM\d]+\b/gi, "");
+
+    const digitMatch = cleanStemForDigitCheck.match(new RegExp(`\\b${nb.numeral}\\b`));
+    if (digitMatch) {
+      suspiciousReasons.push(`Stem leaks correct answer numeral (${nb.numeral})`);
     }
 
     const lintResult = lintDistractorQuality({
