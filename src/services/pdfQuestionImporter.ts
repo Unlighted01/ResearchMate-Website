@@ -824,6 +824,34 @@ export function splitStemAndOptions(
 }
 
 /**
+ * Detects stems that end mid-parenthesis or with broken number / currency notation.
+ * e.g. '...or a fine not exceeding Five thousand pesos (P5, 000.'
+ */
+export function checkBrokenStem(stem: string): { isBroken: boolean; reason?: string } {
+  const inner = stem.trim().replace(/^["“]|["”]$/g, "").trim();
+
+  // 1. Unclosed parenthesis
+  const openCount = (inner.match(/\(/g) || []).length;
+  const closeCount = (inner.match(/\)/g) || []).length;
+  if (openCount > closeCount) {
+    return {
+      isBroken: true,
+      reason: "Stem ends mid-parenthesis or contains unclosed parenthesis",
+    };
+  }
+
+  // 2. Broken number or currency notation at end of stem (e.g. '(P5, 000.' or '(P5, 000' or 'P5, 000.')
+  if (/(?:\([A-Za-z\$\£\€\₱P]?\s*\d+[\s,]*\d*[\.]?|\b(?:P|Php|\$)\s*\d+,\s*\d*[\.]?)\s*$/i.test(inner)) {
+    return {
+      isBroken: true,
+      reason: "Stem ends with broken number or currency syntax (e.g. (P5, 000.)",
+    };
+  }
+
+  return { isBroken: false };
+}
+
+/**
  * Evaluates whether a parsed question is suspicious and needs manual review.
  * Respects math stems (which can legitimately be concise) and unified thresholds config.
  */
@@ -849,10 +877,18 @@ export function evaluateSuspiciousItem(
   const hasMathOrEquation = /[\=\+\-\*\/\^\$\\\%×÷√∫≤≥≠≈±]|(?:\b\d+\b)/.test(stem);
   const minStemLen = hasMathOrEquation ? config.minStemLengthMath : config.minStemLengthStandard;
 
-  if (stem.length < minStemLen) {
+  const hasParsedChoices = (item.options || []).length >= (item.questionType === "free_response" ? 0 : 2);
+  const isValidShortMathStem = hasMathOrEquation && hasParsedChoices && stem.length >= 3;
+
+  if (stem.length < minStemLen && !isValidShortMathStem) {
     reasons.push(`Question stem suspiciously short (< ${minStemLen} characters)`);
   } else if (stem.length > config.maxStemLength) {
     reasons.push(`Question stem abnormally long (> ${config.maxStemLength} characters)`);
+  }
+
+  const brokenStem = checkBrokenStem(stem);
+  if (brokenStem.isBroken) {
+    reasons.push(brokenStem.reason || "Question stem ends mid-parenthesis or with broken number");
   }
 
   if (/(?:Library of Congress|Cataloging-in-Publication|ISBN\s+[\d\-X]+|All rights reserved)/i.test(stem)) {
@@ -1468,7 +1504,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   for (const page of pages) {
     const lines = page.text.split("\n");
     let lineOffset = 0;
-    const sectionCheckpoints: { index: number; section: string }[] = [];
+    const sectionCheckpoints: { index: number; heading: string }[] = [{ index: 0, heading: currentSection }];
 
     for (let l = 0; l < lines.length; l++) {
       const line = lines[l].trim();
@@ -1476,9 +1512,10 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       lineOffset += lines[l].length + 1;
       if (!line) continue;
 
-      // Detect Rule headers (e.g. "Rule IV Transparency of Transactions" or "Rule I\nCoverage")
-      const ruleMatch = line.match(/^Rule\s+([IVXLCDM\d]+)(?:[\.\s\-–—]+([^\n]+))?$/i);
+      // Detect Rule headers (e.g. "Rule XIV", "Rule XIV: Effectivity", "Rule XIV - Effectivity")
+      const ruleMatch = line.match(/^Rule\s+([IVXLCDM]+|\d+)(?:[\.\s\-–—:]+([^\n]+))?$/i);
       if (ruleMatch) {
+        let roman = ruleMatch[1].toUpperCase();
         let ruleTitle = (ruleMatch[2] || "").trim();
         if (!ruleTitle && l + 1 < lines.length) {
           const nextL = lines[l + 1].trim();
@@ -1486,43 +1523,49 @@ export function generateQuestionsFromLegalOrUnstructuredText(
             ruleTitle = nextL;
           }
         }
-        currentRule = ruleTitle ? `Rule ${ruleMatch[1]}: ${ruleTitle}` : `Rule ${ruleMatch[1]}`;
+        currentRule = ruleTitle ? `Rule ${roman} (${ruleTitle})` : `Rule ${roman}`;
+        currentSection = currentRule;
         if (!chaptersDetected.includes(currentRule)) {
           chaptersDetected.push(currentRule);
         }
+        sectionCheckpoints.push({ index: lineIndex, heading: currentRule });
+        continue;
       }
 
-      // Detect Section headers (e.g. "Section 1. Title.", "Sec. 2. Declaration of Policy.")
-      const secMatch = line.match(/^(?:Section|Sec\.)\s+(\d+)[\.\s]+([A-Za-z\s,\-–—]+?)(?:\.|\s*[-–—]|$)/i);
-      if (secMatch) {
-        const secNum = secMatch[1];
-        const secTitle = secMatch[2].trim();
-        currentSection = currentRule ? `${currentRule} - Sec. ${secNum}. ${secTitle}` : `Sec. ${secNum}. ${secTitle}`;
-        if (!chaptersDetected.includes(currentSection)) {
-          chaptersDetected.push(currentSection);
+      // Detect Section headers in the Act (before Rules) or major Section headers
+      if (!currentRule) {
+        const secMatch = line.match(/^(?:Section|Sec\.)\s+(\d+)[\.\s]+([A-Za-z\s,\-–—]+?)(?:\.|\s*[-–—]|$)/i);
+        if (secMatch) {
+          const secNum = secMatch[1];
+          const secTitle = secMatch[2].trim();
+          if (!/\b(?:shall|these rules|may|must|will)\b/i.test(secTitle)) {
+            currentSection = `Sec. ${secNum} (${secTitle})`;
+            if (!chaptersDetected.includes(currentSection)) {
+              chaptersDetected.push(currentSection);
+            }
+            sectionCheckpoints.push({ index: lineIndex, heading: currentSection });
+            sectionCards.push({
+              sectionNum: secNum,
+              title: secTitle,
+              pageNumber: page.pageNumber,
+              quote: line,
+            });
+          }
         }
-        sectionCheckpoints.push({ index: lineIndex, section: currentSection });
-        sectionCards.push({
-          sectionNum: secNum,
-          title: secTitle,
-          pageNumber: page.pageNumber,
-          quote: line,
-        });
       }
     }
 
     const getSectionAt = (idx: number): string => {
-      let activeSec = currentSection;
       for (let c = sectionCheckpoints.length - 1; c >= 0; c--) {
         if (sectionCheckpoints[c].index <= idx) {
-          return sectionCheckpoints[c].section;
+          return sectionCheckpoints[c].heading;
         }
       }
-      return activeSec;
+      return currentSection;
     };
 
-    // Match term definitions across page text
-    const termRegex = /\(([a-z])\)\s*(?:“([^”"]+)”|([A-Z][a-zA-Z\s\-–—]+?)\.\s*[-–—])\s*([\s\S]*?)(?=\n\s*\([a-z]\)|\n\s*(?:Sec\.|Section\s+\d+)|\n\s*\[Page|$)/g;
+    // Match term definitions across page text (supporting both ASCII " and Unicode curly “”)
+    const termRegex = /\(([a-z])\)\s*(?:["“]([^"”]+)["”]|([A-Z][a-zA-Z\s\-–—]+?)\.\s*[-–—])\s*([\s\S]*?)(?=\n\s*\([a-z]\)|\n\s*(?:Sec\.|Section\s+\d+)|\n\s*\[Page|$)/g;
     const tMatches = [...page.text.matchAll(termRegex)];
     for (const tm of tMatches) {
       const termName = (tm[2] || tm[3] || "").trim();
@@ -1557,10 +1600,13 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       else if (unitCategory.startsWith("peso")) unitCategory = "pesos";
       else if (unitCategory.startsWith("percent") || unitCategory === "%") unitCategory = "percent";
 
-      if (!numbersByUnit.has(unitCategory)) {
-        numbersByUnit.set(unitCategory, new Set<number>());
+      // Fix 2: Exclude mismatched numbers (e.g. "ten (100") from the distractor pool
+      if (consistency.isConsistent) {
+        if (!numbersByUnit.has(unitCategory)) {
+          numbersByUnit.set(unitCategory, new Set<number>());
+        }
+        numbersByUnit.get(unitCategory)!.add(numeral);
       }
-      numbersByUnit.get(unitCategory)!.add(numeral);
 
       const matchIndex = wnm.index || 0;
       const activeSec = getSectionAt(matchIndex);
@@ -1609,6 +1655,13 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       ? `Under RA 6713, which norm of conduct is defined as: "${stemSnippet}"?`
       : `Under RA 6713, which term is defined as: "${stemSnippet}"?`;
 
+    const brokenStem = checkBrokenStem(stem);
+    const suspiciousReasons: string[] = [];
+    if (brokenStem.isBroken) {
+      suspiciousReasons.push(brokenStem.reason || "Stem ends mid-parenthesis or with broken number");
+    }
+    const isSuspicious = suspiciousReasons.length > 0;
+
     items.push({
       id: generateUUID(),
       number: qNumber++,
@@ -1622,8 +1675,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       sourcePage: t.pageNumber,
       sourceQuote: t.rawQuote,
       questionType: "mcq",
-      reviewStatus: "verified",
-      isSuspicious: false,
+      reviewStatus: isSuspicious ? "needs_review" : "verified",
+      isSuspicious,
+      suspiciousReasons,
     });
   }
 
@@ -1656,6 +1710,14 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       suspiciousReasons.push(nb.reason || "Word-numeral mismatch");
     }
 
+    // Fix 3: Flag stems that end mid-parenthesis or with a broken number (e.g. "(P5, 000.") as needs_review
+    const brokenStem = checkBrokenStem(stem);
+    if (brokenStem.isBroken) {
+      suspiciousReasons.push(brokenStem.reason || "Stem ends mid-parenthesis or with broken number");
+    }
+
+    const isSuspicious = suspiciousReasons.length > 0;
+
     items.push({
       id: generateUUID(),
       number: qNumber++,
@@ -1669,9 +1731,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       sourcePage: nb.pageNumber,
       sourceQuote: nb.sentence,
       questionType: "mcq",
-      isSuspicious: !nb.isConsistent,
+      isSuspicious,
       suspiciousReasons,
-      reviewStatus: nb.isConsistent ? "verified" : "needs_review",
+      reviewStatus: isSuspicious ? "needs_review" : "verified",
     });
   }
 

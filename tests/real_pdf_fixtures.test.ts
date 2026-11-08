@@ -9,6 +9,7 @@ import {
   compareAnswersOrderInsensitive,
   checkWordNumeralConsistency,
   stripGluedPageNumbers,
+  evaluateSuspiciousItem,
   SAVED_PARSER_PROFILES,
 } from "../src/services/pdfQuestionImporter";
 import { PdfPageWithLayout } from "../src/services/pdfService";
@@ -151,13 +152,51 @@ describe("Real PDF Reviewer Fixtures & Regression Audit", () => {
       expect(item.options.length).toBeGreaterThanOrEqual(4);
     }
 
-    // Verify consistency check flagged Section 8(C)(2) ("ten (100") and verified "forty-five (45)"
+    // Verify consistency check flagged Section 8(C)(2) ("ten (100") and broken stems ending mid-parenthesis
     const flagged = result.items.filter((it) => it.reviewStatus === "needs_review");
-    expect(flagged.length).toBe(1);
-    const sec8Item = flagged[0];
-    expect(sec8Item.sourcePage).toBe(8);
-    expect(sec8Item.chapter).toContain("Sec. 8");
-    expect(sec8Item.suspiciousReasons?.some((r) => r.includes("unclosed parenthesis") && r.includes("disagrees with numeral (100)"))).toBe(true);
+    expect(flagged.length).toBe(3);
+
+    // Flagged 1: Sec. 8(C)(2)
+    const sec8Item = flagged.find((it) => it.sourcePage === 8);
+    expect(sec8Item).toBeDefined();
+    expect(sec8Item!.chapter).toContain("Sec. 8");
+    expect(sec8Item!.suspiciousReasons?.some((r) => r.includes("unclosed parenthesis") && r.includes("disagrees with numeral (100)"))).toBe(true);
+
+    // Test case 1: "imprisonment not exceeding five (5) years" provision must be Sec. 11 (Penalties)
+    // and flagged as needs_review because stem ends mid-parenthesis / broken number "(P5, 000."
+    const sec11Item = flagged.find((it) => it.sourcePage === 10 && it.stem.includes("(5) years"));
+    expect(sec11Item).toBeDefined();
+    expect(sec11Item!.chapter).toBe("Sec. 11 (Penalties)");
+    expect(sec11Item!.reviewStatus).toBe("needs_review");
+    expect(sec11Item!.suspiciousReasons?.some((r) => r.includes("mid-parenthesis"))).toBe(true);
+
+    // Test case 2: "These Rules shall take effect thirty (30) days" must be Rule XIV (Effectivity)
+    const rule14Item = result.items.find((it) => it.sourcePage === 31 && it.stem.includes("(30) days"));
+    expect(rule14Item).toBeDefined();
+    expect(rule14Item!.chapter).toBe("Rule XIV (Effectivity)");
+    expect(rule14Item!.reviewStatus).toBe("verified");
+
+    // Test case 3: Distractor pool excludes mismatched numbers ("100" from "ten (100")
+    const daysQuestions = result.items.filter((it) => it.stem.includes("days"));
+    for (const dq of daysQuestions) {
+      // "100" should never be used as a distractor for valid days questions
+      if (!dq.stem.includes("ten (100")) {
+        expect(dq.options).not.toContain("100");
+      }
+    }
+
+    // Test case 4: Sec. 3 definitions (Gift, Loan, Conflict of interest) are generated
+    const giftItem = result.items.find((it) => it.stem.includes("which term is defined as") && it.options.includes("Gift"));
+    expect(giftItem).toBeDefined();
+    expect(giftItem!.chapter).toBe("Sec. 3 (Definition of Terms)");
+
+    const loanItem = result.items.find((it) => it.stem.includes("which term is defined as") && it.options.includes("Loan"));
+    expect(loanItem).toBeDefined();
+    expect(loanItem!.chapter).toBe("Sec. 3 (Definition of Terms)");
+
+    const conflictItem = result.items.find((it) => it.stem.includes("which term is defined as") && it.options.includes("Conflict of interest"));
+    expect(conflictItem).toBeDefined();
+    expect(conflictItem!.chapter).toBe("Sec. 3 (Definition of Terms)");
 
     // Verify "forty-five (45)" was parsed cleanly as verified without false positive
     const fortyFiveItems = result.items.filter((it) => it.sourceQuote?.includes("forty-five") || it.sourceQuote?.includes("forty five"));
@@ -165,5 +204,36 @@ describe("Real PDF Reviewer Fixtures & Regression Audit", () => {
     for (const ff of fortyFiveItems) {
       expect(ff.reviewStatus).toBe("verified");
     }
+  });
+
+  // Test 6: Short math stem flag suppression
+  it("does not flag short math stems with digits/symbols and valid choices", () => {
+    const evaluation7Pct = evaluateSuspiciousItem({
+      stem: "7% =",
+      options: ["0.7", "0.07", "7.0", "0.007"],
+      questionType: "mcq",
+      hasIncompleteAnswer: false,
+    });
+    expect(evaluation7Pct.isSuspicious).toBe(false);
+    expect(evaluation7Pct.reviewStatus).toBe("verified");
+
+    const evaluation4Pct = evaluateSuspiciousItem({
+      stem: "4% =",
+      options: ["0.4", "0.04", "4.0", "0.004"],
+      questionType: "mcq",
+      hasIncompleteAnswer: false,
+    });
+    expect(evaluation4Pct.isSuspicious).toBe(false);
+    expect(evaluation4Pct.reviewStatus).toBe("verified");
+
+    // But a non-math short stem should still be flagged
+    const evaluationShortText = evaluateSuspiciousItem({
+      stem: "Who",
+      options: ["Alice", "Bob", "Charlie", "David"],
+      questionType: "mcq",
+      hasIncompleteAnswer: false,
+    });
+    expect(evaluationShortText.isSuspicious).toBe(true);
+    expect(evaluationShortText.reviewStatus).toBe("needs_review");
   });
 });
