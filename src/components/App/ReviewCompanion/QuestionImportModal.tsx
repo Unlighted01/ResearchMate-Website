@@ -19,6 +19,7 @@ import {
   Check,
   RotateCcw,
   SlidersHorizontal,
+  Plus,
 } from "lucide-react";
 import { Question, Flashcard, saveFlashcardDeck } from "../../../services/examService";
 import { parsePlainTextQuestions, parseCsvQuestions, ParseResult } from "../../../services/examParser";
@@ -28,7 +29,12 @@ import {
   toFlashcards,
   ParsedQaItem,
 } from "../../../services/pdfQuestionImporter";
-import { saveQuestionsToBank } from "../../../services/questionBankService";
+import {
+  importQuestionsToBank,
+  computeImportPreview,
+  sanitizeDefaultSubject,
+  RawImportQuestionItem,
+} from "../../../services/questionImportService";
 import AcademicMathView from "../../shared/AcademicMathView";
 
 interface QuestionImportModalProps {
@@ -49,6 +55,8 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
   const [activeTab, setActiveTab] = useState<"pdf" | "paste" | "csv">("pdf");
   const [pastedText, setPastedText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
+  const [subjectName, setSubjectName] = useState(() => sanitizeDefaultSubject(defaultTopic || "General Review"));
+  const [isImporting, setIsImporting] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [isExtractingPdf, setIsExtractingPdf] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
@@ -103,6 +111,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
 
   const handleReset = () => {
     setFileName(null);
+    setSubjectName(sanitizeDefaultSubject(defaultTopic || "General Review"));
     setParseResult(null);
     setParsedQaList([]);
     setPastedText("");
@@ -123,6 +132,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
 
   const handlePdfFile = async (file: File) => {
     setFileName(file.name);
+    setSubjectName(sanitizeDefaultSubject(file.name));
     setActiveTab("pdf");
     setIsExtractingPdf(true);
     setPdfProgress({ current: 0, total: 1 });
@@ -178,6 +188,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
     }
 
     setFileName(file.name);
+    setSubjectName(sanitizeDefaultSubject(file.name));
     const reader = new FileReader();
 
     reader.onload = (evt) => {
@@ -209,6 +220,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
       handlePdfFile(file);
     } else {
       setFileName(file.name);
+      setSubjectName(sanitizeDefaultSubject(file.name));
       const reader = new FileReader();
       reader.onload = (evt) => {
         const content = evt.target?.result as string;
@@ -226,17 +238,71 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
     }
   };
 
-  const handleApplyImport = (mode: "append" | "replace") => {
-    if (!parseResult || parseResult.validCount === 0) return;
-    const validQuestions = parseResult.items
-      .filter((i) => i.isValid)
-      .map((i) => i.question);
+  const rawQuestionsForImport: RawImportQuestionItem[] = useMemo(() => {
+    if (parsedQaList.length > 0) {
+      return parsedQaList.map((item) => ({
+        id: item.id,
+        stem: item.stem,
+        options: item.options,
+        correctIndex: item.correctIndex,
+        explanation: item.explanation,
+        chapter: item.chapter,
+        sourcePage: item.sourcePage,
+        questionType: item.questionType,
+        reviewStatus: item.reviewStatus,
+        suspiciousReasons: item.suspiciousReasons,
+      }));
+    }
+    if (parseResult) {
+      return parseResult.items.map((i) => ({
+        id: i.question.id,
+        stem: i.question.question,
+        options: i.question.options,
+        correctIndex: i.question.correctIndex,
+        explanation: i.question.explanation,
+        chapter: i.question.topicTag,
+      }));
+    }
+    return [];
+  }, [parsedQaList, parseResult]);
 
-    // Persist into user's local question bank (100% offline)
-    saveQuestionsToBank(validQuestions, fileName || defaultTopic || "Imported Reviewer", mode);
+  const previewSummary = useMemo(() => {
+    return computeImportPreview(
+      rawQuestionsForImport,
+      subjectName,
+      fileName || "Reviewer Document"
+    );
+  }, [rawQuestionsForImport, subjectName, fileName]);
 
-    onImport(validQuestions, mode);
-    onClose();
+  const handleApplyImportToBank = async () => {
+    if (!rawQuestionsForImport || rawQuestionsForImport.length === 0) return;
+    setIsImporting(true);
+
+    try {
+      const origin = activeTab === "pdf" ? "pdf_import" : activeTab === "csv" ? "csv" : "manual";
+      await importQuestionsToBank({
+        rawQuestions: rawQuestionsForImport,
+        subject: subjectName,
+        sourceFile: fileName || "Reviewer Document",
+        origin,
+      });
+
+      const validQuestions: Question[] = rawQuestionsForImport.map((q, idx) => ({
+        id: q.id || `q_${Date.now()}_${idx}`,
+        question: q.stem || "",
+        options: q.options || [],
+        correctIndex: q.correctIndex ?? 0,
+        explanation: q.explanation || "",
+        topicTag: q.chapter || subjectName,
+      }));
+
+      onImport(validQuestions, "append");
+      onClose();
+    } catch (err) {
+      console.error("Failed to import to question bank:", err);
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleExportFlashcards = async () => {
@@ -704,22 +770,42 @@ Answers and Explanations
         </div>
 
         {/* Modal Docked Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 bg-slate-50/50 dark:bg-slate-950/50">
-          <div className="text-xs text-slate-500 dark:text-slate-400 text-center sm:text-left">
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-col md:flex-row items-center justify-between gap-3 shrink-0 bg-slate-50/50 dark:bg-slate-950/50">
+          <div className="text-xs text-slate-500 dark:text-slate-400 text-center md:text-left min-w-0">
             {hasLoadedQuestions ? (
-              <span>
-                Ready to import <strong className="text-slate-800 dark:text-slate-200">{parseResult?.validCount} questions</strong> across {chapters.length || 1} chapter{chapters.length > 1 ? "s" : ""}.
-              </span>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 flex-wrap">
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  {previewSummary.summaryText}
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  ({chapters.length || 1} chapter{chapters.length > 1 ? "s" : ""})
+                </span>
+              </div>
             ) : (
               <span>Select or drop a file to inspect questions before importing.</span>
             )}
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+          <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+            {hasLoadedQuestions && (
+              <div className="flex items-center gap-1.5 mr-1">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0">
+                  Subject:
+                </label>
+                <input
+                  type="text"
+                  value={subjectName}
+                  onChange={(e) => setSubjectName(e.target.value)}
+                  placeholder="Subject name..."
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 w-36 sm:w-48"
+                />
+              </div>
+            )}
+
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -729,32 +815,26 @@ Answers and Explanations
               type="button"
               disabled={!hasLoadedQuestions || isSavingFlashcards}
               onClick={handleExportFlashcards}
-              className="px-3.5 py-2 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
               title="Create an active recall flashcard deck from these questions"
             >
               <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
-              <span>{isSavingFlashcards ? "Exporting..." : "Save as Flashcard Deck"}</span>
+              <span>{isSavingFlashcards ? "Exporting..." : "Save as Flashcards"}</span>
             </button>
 
-            {/* Append Option */}
+            {/* Add to Question Bank */}
             <button
               type="button"
-              disabled={!hasLoadedQuestions}
-              onClick={() => handleApplyImport("append")}
-              className="px-3.5 py-2 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold shadow-2xs transition-all disabled:opacity-40 cursor-pointer"
+              disabled={!hasLoadedQuestions || isImporting}
+              onClick={handleApplyImportToBank}
+              className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
             >
-              Append (+{parseResult?.validCount || 0})
-            </button>
-
-            {/* Replace / Create New Exam Option */}
-            <button
-              type="button"
-              disabled={!hasLoadedQuestions}
-              onClick={() => handleApplyImport("replace")}
-              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>Replace Exam ({parseResult?.validCount || 0})</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              {isImporting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5" />
+              )}
+              <span>Add to Question Bank</span>
             </button>
           </div>
         </div>

@@ -29,7 +29,7 @@ import {
   parseTwoPassQuestionsAndAnswers,
   ParsedQaItem,
 } from "../../../services/pdfQuestionImporter";
-import { saveQuestionsToBank } from "../../../services/questionBankService";
+import { importQuestionsToBank } from "../../../services/questionImportService";
 import { generateExtractiveSummary } from "../../../services/extractiveSummaryService";
 import {
   CitationMetadata,
@@ -288,22 +288,18 @@ export const DocumentStudio: React.FC<DocumentStudioProps> = ({ useToast }) => {
         return;
       }
 
-      const questions: Question[] = parsedItems.map((item) => ({
-        id: item.id || generateUUID(),
-        question: item.stem,
-        options: item.options,
-        correctIndex: item.correctIndex,
-        explanation: item.explanation,
-        topicTag: item.chapter || "General Review",
-      }));
+      const { importedCount, totalBankCount, needsReviewCount } = await importQuestionsToBank({
+        rawQuestions: parsedItems,
+        subject: documentTitle || "Reviewer Book",
+        sourceFile: documentTitle || "Reviewer Book.pdf",
+        origin: "pdf_import",
+      });
 
-      const { addedCount, totalCount } = saveQuestionsToBank(
-        questions,
-        documentTitle || "Reviewer Book",
-        "append"
+      const reviewNote = needsReviewCount > 0 ? ` (${needsReviewCount} need review)` : "";
+      showToast(
+        `Added ${importedCount} questions under subject "${documentTitle || "Reviewer Book"}" to Question Bank${reviewNote}! (Total: ${totalBankCount})`,
+        "success"
       );
-
-      showToast(`Indexed ${addedCount} practice questions from "${documentTitle}" into your Question Bank! (Total: ${totalCount})`, "success");
     } catch (err: any) {
       console.error("PDF extraction error:", err);
       showToast(`Extraction failed: ${err.message}`, "error");

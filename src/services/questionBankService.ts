@@ -3,27 +3,45 @@
 // Stores, filters, and samples exam questions extracted directly
 // from user-uploaded PDFs, CSVs, and review notes.
 // Two-stage deduplication (FNV-1a + exact equality) & review queue.
-// 100% Offline · $0 API Cost · Browser LocalStorage / IndexedDB
+// 100% Offline · $0 API Cost · Browser IndexedDB + LocalStorage fallback
 // ============================================
 
 import { Question, generateUUID } from "./examService";
+import {
+  getAllQuestionsFromDb,
+  saveQuestionsToDb,
+  deleteQuestionsByBatchFromDb,
+  getAllBatchesFromDb,
+  saveBatchToDb,
+  deleteBatchFromDb,
+  clearAllDb,
+} from "./questionBankDb";
 
 export type QuestionOrigin =
+  | "pdf_import"
   | "parsed_pdf"
   | "rule_generated"
   | "ai_generated"
   | "csv"
-  | "manual";
+  | "manual"
+  | "migrated";
 
 export type QuestionReviewStatus = "verified" | "needs_review" | "flagged";
+export type QuestionType = "mcq" | "free_response";
 
 export interface StoredQuestion extends Question {
+  subject?: string;
+  topic?: string;
   sourceDocument?: string;
   sourceFile?: string;
   sourcePage?: number;
+  importBatchId?: string;
   importedAt?: number;
   origin?: QuestionOrigin;
+  questionType?: QuestionType;
   reviewStatus?: QuestionReviewStatus;
+  suspiciousReasons?: string[];
+  sourceQuote?: string;
   normalizedTextHash?: string;
   accuracyHistory?: {
     attempts: number;
@@ -32,8 +50,21 @@ export interface StoredQuestion extends Question {
   };
 }
 
+export interface ImportBatch {
+  id: string; // e.g. "batch_1731067200000_abc12"
+  subject: string;
+  sourceFile: string;
+  timestamp: number;
+  totalQuestions: number;
+  verifiedCount: number;
+  needsReviewCount: number;
+  origin: QuestionOrigin;
+  questionTypes?: Record<string, number>;
+}
+
 export interface QuestionBankStats {
   totalQuestions: number;
+  bySubject: Record<string, number>;
   byTopic: Record<string, number>;
   sourceDocuments: string[];
   totalAttempted: number;
@@ -41,43 +72,145 @@ export interface QuestionBankStats {
   needsReviewCount: number;
   verifiedCount: number;
   flaggedCount: number;
+  batchesCount: number;
 }
 
 const STORAGE_KEY = "researchmate_user_question_bank_v1";
+const BATCHES_STORAGE_KEY = "researchmate_import_batches_v1";
 
-// In-memory cache for fast access
+// In-memory cache for synchronous instant reads
 let memoryCache: StoredQuestion[] | null = null;
+let batchesCache: ImportBatch[] | null = null;
+let isInitializedFromDb = false;
 
-function loadFromStorage(): StoredQuestion[] {
-  if (memoryCache !== null) return memoryCache;
-  if (typeof localStorage === "undefined") {
-    memoryCache = [];
-    return memoryCache;
-  }
+/**
+ * Initializes the question bank from IndexedDB, migrating from localStorage if needed.
+ */
+export async function initQuestionBank(): Promise<void> {
+  if (isInitializedFromDb && memoryCache !== null) return;
 
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      memoryCache = [];
-      return memoryCache;
+    const dbQuestions = await getAllQuestionsFromDb();
+    const dbBatches = await getAllBatchesFromDb();
+
+    if (dbQuestions.length > 0) {
+      memoryCache = dbQuestions;
+      batchesCache = dbBatches;
+      isInitializedFromDb = true;
+      return;
     }
-    memoryCache = JSON.parse(raw);
-    return memoryCache || [];
+
+    // Check localStorage fallback / initial migration
+    if (typeof localStorage !== "undefined") {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try {
+          const localQuestions: StoredQuestion[] = JSON.parse(raw);
+          if (localQuestions && localQuestions.length > 0) {
+            memoryCache = localQuestions;
+            // Backfill into IndexedDB
+            await saveQuestionsToDb(localQuestions);
+          }
+        } catch {}
+      }
+
+      const rawBatches = localStorage.getItem(BATCHES_STORAGE_KEY);
+      if (rawBatches) {
+        try {
+          const localBatches: ImportBatch[] = JSON.parse(rawBatches);
+          if (localBatches && localBatches.length > 0) {
+            batchesCache = localBatches;
+            for (const b of localBatches) {
+              await saveBatchToDb(b);
+            }
+          }
+        } catch {}
+      }
+    }
+
+    if (memoryCache === null) memoryCache = [];
+    if (batchesCache === null) batchesCache = [];
+    isInitializedFromDb = true;
   } catch (err) {
-    console.warn("Failed to load user question bank from localStorage:", err);
-    memoryCache = [];
-    return memoryCache;
+    console.warn("Failed to initialize Question Bank from IndexedDB:", err);
+    if (memoryCache === null) memoryCache = loadFromLocalStorage();
+    if (batchesCache === null) batchesCache = loadBatchesFromLocalStorage();
   }
 }
 
-function persistToStorage(questions: StoredQuestion[]): void {
-  memoryCache = questions;
-  if (typeof localStorage === "undefined") return;
+// Auto-trigger background hydration in browser
+if (typeof window !== "undefined") {
+  initQuestionBank().catch(() => {});
+}
 
+function loadFromLocalStorage(): StoredQuestion[] {
+  if (typeof localStorage === "undefined") return [];
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(questions));
-  } catch (err) {
-    console.warn("Failed to save user question bank to localStorage:", err);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) || [] : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadBatchesFromLocalStorage(): ImportBatch[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(BATCHES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) || [] : [];
+  } catch {
+    return [];
+  }
+}
+
+function getMemoryOrStorage(): StoredQuestion[] {
+  if (memoryCache !== null) return memoryCache;
+  memoryCache = loadFromLocalStorage();
+  return memoryCache;
+}
+
+function getBatchesMemoryOrStorage(): ImportBatch[] {
+  if (batchesCache !== null) return batchesCache;
+  batchesCache = loadBatchesFromLocalStorage();
+  return batchesCache;
+}
+
+function persistQuestions(questions: StoredQuestion[]): void {
+  memoryCache = questions;
+
+  // 1. Asynchronously persist to high-capacity IndexedDB
+  saveQuestionsToDb(questions).catch((err) => {
+    console.warn("Background IndexedDB persist failed:", err);
+  });
+
+  // 2. Safety copy in localStorage only if size allows (< 2MB)
+  if (typeof localStorage !== "undefined") {
+    try {
+      const serialized = JSON.stringify(questions);
+      if (serialized.length < 2_000_000) {
+        localStorage.setItem(STORAGE_KEY, serialized);
+      } else {
+        // Clear oversized bank from localStorage to prevent QuotaExceededError; IndexedDB is primary
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch {
+      // LocalStorage quota reached, safely ignore as IndexedDB is persistent
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+    }
+  }
+}
+
+function persistBatches(batches: ImportBatch[]): void {
+  batchesCache = batches;
+
+  saveBatchToDb(batches[0]).catch(() => {});
+
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(BATCHES_STORAGE_KEY, JSON.stringify(batches));
+    } catch {}
   }
 }
 
@@ -112,15 +245,23 @@ export function hashNormalizedText(text: string): string {
 
 /**
  * Hard validity rule:
- * Questions are marked "needs_review" ONLY IF choices < 2 or missing valid correctIndex.
- * 2 choices (True/False), 3 choices, or 5 choices (A-E) default to "verified".
+ * Questions are marked "needs_review" if choices < 2 (for MCQ) or missing valid correctIndex.
+ * 2 choices (True/False), 3 choices, 4 choices, 5 choices (A-E) default to "verified".
+ * Free-response items default to "verified" when an explanation/answer is present.
  */
 export function computeReviewStatus(
   options: string[] | undefined,
   correctIndex: number | undefined,
-  explicitStatus?: QuestionReviewStatus
+  explicitStatus?: QuestionReviewStatus,
+  questionType?: QuestionType
 ): QuestionReviewStatus {
   if (explicitStatus === "flagged") return "flagged";
+  if (explicitStatus === "needs_review") return "needs_review";
+
+  if (questionType === "free_response") {
+    return explicitStatus || "verified";
+  }
+
   if (
     !options ||
     options.length < 2 ||
@@ -138,19 +279,36 @@ export function computeReviewStatus(
  * Two-stage deduplication: FNV-1a hash lookup + full normalized string comparison on collision.
  */
 export function saveQuestionsToBank(
-  newQuestions: (Question & { sourcePage?: number; origin?: QuestionOrigin; reviewStatus?: QuestionReviewStatus })[],
+  newQuestions: (Question & {
+    subject?: string;
+    topic?: string;
+    sourcePage?: number;
+    sourceFile?: string;
+    importBatchId?: string;
+    origin?: QuestionOrigin;
+    questionType?: QuestionType;
+    reviewStatus?: QuestionReviewStatus;
+    suspiciousReasons?: string[];
+    sourceQuote?: string;
+  })[],
   sourceDocumentTitle: string = "User Upload",
   mode: "append" | "replace" = "append",
-  defaultOrigin: QuestionOrigin = "parsed_pdf",
-  defaultPage?: number
-): { addedCount: number; totalCount: number; needsReviewCount: number } {
+  defaultOrigin: QuestionOrigin = "pdf_import",
+  defaultPage?: number,
+  batchMetadata?: Partial<ImportBatch>
+): {
+  addedCount: number;
+  totalCount: number;
+  needsReviewCount: number;
+  duplicatesSkipped: number;
+} {
   if (!newQuestions || newQuestions.length === 0) {
-    const current = loadFromStorage();
+    const current = getMemoryOrStorage();
     const needsRev = current.filter((q) => q.reviewStatus === "needs_review").length;
-    return { addedCount: 0, totalCount: current.length, needsReviewCount: needsRev };
+    return { addedCount: 0, totalCount: current.length, needsReviewCount: needsRev, duplicatesSkipped: 0 };
   }
 
-  const existing = mode === "replace" ? [] : loadFromStorage();
+  const existing = mode === "replace" ? [] : getMemoryOrStorage();
 
   // Stage 1 & 2: Hash bucket -> normalized stem set
   const hashToStemsMap = new Map<string, Set<string>>();
@@ -165,7 +323,11 @@ export function saveQuestionsToBank(
 
   const formatted: StoredQuestion[] = [];
   let addedCount = 0;
+  let duplicatesSkipped = 0;
   let needsReviewCount = 0;
+
+  const now = Date.now();
+  const defaultSubject = batchMetadata?.subject || sourceDocumentTitle.replace(/\.[^/.]+$/, "");
 
   for (const q of newQuestions) {
     const stem = normalizeQuestionStem(q.question);
@@ -176,7 +338,7 @@ export function saveQuestionsToBank(
     // Two-stage deduplication check
     const existingBucket = hashToStemsMap.get(hash);
     if (existingBucket && existingBucket.has(stem)) {
-      // Exact duplicate collision found -> skip
+      duplicatesSkipped++;
       continue;
     }
 
@@ -186,7 +348,8 @@ export function saveQuestionsToBank(
       existingBucket.add(stem);
     }
 
-    const reviewStatus = computeReviewStatus(q.options, q.correctIndex, q.reviewStatus);
+    const qType = q.questionType || "mcq";
+    const reviewStatus = computeReviewStatus(q.options, q.correctIndex, q.reviewStatus, qType);
     if (reviewStatus === "needs_review") {
       needsReviewCount++;
     }
@@ -194,12 +357,19 @@ export function saveQuestionsToBank(
     formatted.push({
       ...q,
       id: q.id || generateUUID(),
+      subject: q.subject || defaultSubject,
+      topic: q.topic || q.topicTag || "General Review",
+      topicTag: q.topicTag || q.topic || "General Review",
       sourceDocument: sourceDocumentTitle,
-      sourceFile: sourceDocumentTitle,
-      sourcePage: q.sourcePage || defaultPage,
-      importedAt: Date.now(),
+      sourceFile: q.sourceFile || sourceDocumentTitle,
+      sourcePage: q.sourcePage ?? defaultPage,
+      importBatchId: q.importBatchId || batchMetadata?.id,
+      importedAt: now,
       origin: q.origin || defaultOrigin,
+      questionType: qType,
       reviewStatus,
+      suspiciousReasons: q.suspiciousReasons || [],
+      sourceQuote: q.sourceQuote,
       normalizedTextHash: hash,
       accuracyHistory: {
         attempts: 0,
@@ -210,26 +380,51 @@ export function saveQuestionsToBank(
   }
 
   const combined = [...existing, ...formatted];
-  persistToStorage(combined);
-  return { addedCount, totalCount: combined.length, needsReviewCount };
+  persistQuestions(combined);
+
+  // If batchMetadata or an importBatchId was specified, record the batch
+  const batchId = batchMetadata?.id || (formatted[0]?.importBatchId);
+  if (batchId) {
+    const currentBatches = getBatchesMemoryOrStorage();
+    const batchRecord: ImportBatch = {
+      id: batchId,
+      subject: defaultSubject,
+      sourceFile: sourceDocumentTitle,
+      timestamp: now,
+      totalQuestions: addedCount,
+      verifiedCount: addedCount - needsReviewCount,
+      needsReviewCount,
+      origin: defaultOrigin,
+      ...(batchMetadata || {}),
+    };
+    persistBatches([batchRecord, ...currentBatches.filter((b) => b.id !== batchId)]);
+  }
+
+  return { addedCount, totalCount: combined.length, needsReviewCount, duplicatesSkipped };
 }
 
 /**
- * Returns all stored questions in the user's bank, with optional topic filtering.
+ * Returns all stored questions in the user's bank, with multi-field filtering.
  */
 export function getUserQuestions(filter?: {
+  subject?: string;
   topic?: string;
   sourceDocument?: string;
   reviewStatus?: QuestionReviewStatus;
+  importBatchId?: string;
 }): StoredQuestion[] {
-  const all = loadFromStorage();
+  const all = getMemoryOrStorage();
   if (!filter) return all;
 
   return all.filter((q) => {
+    if (filter.subject && filter.subject !== "All Subjects" && filter.subject !== "ALL") {
+      if (q.subject !== filter.subject) return false;
+    }
     if (
       filter.topic &&
       filter.topic !== "All Topics" &&
       filter.topic !== "ALL" &&
+      q.topic !== filter.topic &&
       q.topicTag !== filter.topic
     ) {
       return false;
@@ -237,11 +432,15 @@ export function getUserQuestions(filter?: {
     if (
       filter.sourceDocument &&
       filter.sourceDocument !== "ALL" &&
-      q.sourceDocument !== filter.sourceDocument
+      q.sourceDocument !== filter.sourceDocument &&
+      q.sourceFile !== filter.sourceDocument
     ) {
       return false;
     }
     if (filter.reviewStatus && q.reviewStatus !== filter.reviewStatus) {
+      return false;
+    }
+    if (filter.importBatchId && q.importBatchId !== filter.importBatchId) {
       return false;
     }
     return true;
@@ -249,22 +448,60 @@ export function getUserQuestions(filter?: {
 }
 
 /**
- * Retrieves only questions requiring student verification (< 2 choices or missing key).
+ * Retrieves only questions requiring student verification.
  */
-export function getNeedsReviewQuestions(): StoredQuestion[] {
-  return getUserQuestions({ reviewStatus: "needs_review" });
+export function getNeedsReviewQuestions(filter?: { subject?: string }): StoredQuestion[] {
+  return getUserQuestions({ ...filter, reviewStatus: "needs_review" });
 }
 
 /**
  * Retrieves verified questions ready for mock exams and sprints.
  */
 export function getVerifiedQuestions(filter?: {
+  subject?: string;
   topic?: string;
   sourceDocument?: string;
 }): StoredQuestion[] {
   const all = getUserQuestions(filter);
-  // Default to verified items, excluding flagged and needs_review
   return all.filter((q) => q.reviewStatus === "verified" || !q.reviewStatus);
+}
+
+/**
+ * Returns all recorded import batches synchronously from memory.
+ */
+export function getImportBatchesSync(): ImportBatch[] {
+  return getBatchesMemoryOrStorage();
+}
+
+/**
+ * Returns all recorded import batches (with background DB revalidation).
+ */
+export async function getImportBatches(): Promise<ImportBatch[]> {
+  await initQuestionBank();
+  return getBatchesMemoryOrStorage();
+}
+
+/**
+ * Deletes all questions associated with an import batch, providing one-click rollback.
+ */
+export async function deleteImportBatch(batchId: string): Promise<{ deletedCount: number }> {
+  if (!batchId) return { deletedCount: 0 };
+
+  const current = getMemoryOrStorage();
+  const remaining = current.filter((q) => q.importBatchId !== batchId);
+  const deletedCount = current.length - remaining.length;
+
+  persistQuestions(remaining);
+
+  // Remove batch record
+  const currentBatches = getBatchesMemoryOrStorage();
+  persistBatches(currentBatches.filter((b) => b.id !== batchId));
+
+  // Asynchronously purge from IndexedDB
+  deleteQuestionsByBatchFromDb(batchId).catch(() => {});
+  deleteBatchFromDb(batchId).catch(() => {});
+
+  return { deletedCount };
 }
 
 /**
@@ -274,12 +511,12 @@ export function updateQuestionStatus(
   id: string,
   status: QuestionReviewStatus
 ): boolean {
-  const all = loadFromStorage();
+  const all = getMemoryOrStorage();
   const target = all.find((q) => q.id === id);
   if (!target) return false;
 
   target.reviewStatus = status;
-  persistToStorage(all);
+  persistQuestions(all);
   return true;
 }
 
@@ -290,7 +527,7 @@ export function updateQuestion(
   id: string,
   updates: Partial<StoredQuestion>
 ): boolean {
-  const all = loadFromStorage();
+  const all = getMemoryOrStorage();
   const idx = all.findIndex((q) => q.id === id);
   if (idx === -1) return false;
 
@@ -303,7 +540,8 @@ export function updateQuestion(
   const newReviewStatus = computeReviewStatus(
     updatedOptions,
     updatedCorrectIdx,
-    updates.reviewStatus || current.reviewStatus
+    updates.reviewStatus || current.reviewStatus,
+    current.questionType
   );
 
   all[idx] = {
@@ -316,19 +554,19 @@ export function updateQuestion(
     reviewStatus: newReviewStatus,
   };
 
-  persistToStorage(all);
+  persistQuestions(all);
   return true;
 }
 
 /**
- * Deletes a question from the bank.
+ * Deletes a single question from the bank.
  */
 export function deleteQuestion(id: string): boolean {
-  const all = loadFromStorage();
+  const all = getMemoryOrStorage();
   const filtered = all.filter((q) => q.id !== id);
   if (filtered.length === all.length) return false;
 
-  persistToStorage(filtered);
+  persistQuestions(filtered);
   return true;
 }
 
@@ -336,7 +574,8 @@ export function deleteQuestion(id: string): boolean {
  * Generates aggregated metrics on the user's local question library.
  */
 export function getBankStats(): QuestionBankStats {
-  const all = loadFromStorage();
+  const all = getMemoryOrStorage();
+  const bySubject: Record<string, number> = {};
   const byTopic: Record<string, number> = {};
   const docSet = new Set<string>();
   let totalAttempted = 0;
@@ -347,11 +586,14 @@ export function getBankStats(): QuestionBankStats {
   let flaggedCount = 0;
 
   for (const q of all) {
-    const topic = q.topicTag || "General";
+    const subject = q.subject || "General Review";
+    bySubject[subject] = (bySubject[subject] || 0) + 1;
+
+    const topic = q.topic || q.topicTag || "General";
     byTopic[topic] = (byTopic[topic] || 0) + 1;
 
-    if (q.sourceDocument) {
-      docSet.add(q.sourceDocument);
+    if (q.sourceFile || q.sourceDocument) {
+      docSet.add(q.sourceFile || q.sourceDocument!);
     }
 
     if (q.reviewStatus === "needs_review") needsReviewCount++;
@@ -370,6 +612,7 @@ export function getBankStats(): QuestionBankStats {
 
   return {
     totalQuestions: all.length,
+    bySubject,
     byTopic,
     sourceDocuments: Array.from(docSet),
     totalAttempted,
@@ -377,6 +620,7 @@ export function getBankStats(): QuestionBankStats {
     needsReviewCount,
     verifiedCount,
     flaggedCount,
+    batchesCount: getBatchesMemoryOrStorage().length,
   };
 }
 
@@ -387,7 +631,7 @@ export function recordQuestionResult(
   questionId: string,
   isCorrect: boolean
 ): void {
-  const all = loadFromStorage();
+  const all = getMemoryOrStorage();
   let modified = false;
 
   for (const q of all) {
@@ -403,21 +647,17 @@ export function recordQuestionResult(
   }
 
   if (modified) {
-    persistToStorage(all);
+    persistQuestions(all);
   }
 }
 
 /**
- * Intelligently samples verified questions for Daily Sprints:
- * Prioritizes:
- * 1. Previously missed questions (< 80% accuracy)
- * 2. Unattempted questions
+ * Samples verified questions for Daily Sprints.
  */
 export function sampleSprintQuestions(
   count: number = 5,
   preferredTopic?: string
 ): StoredQuestion[] {
-  // Use verified questions for daily sprints
   let pool = getVerifiedQuestions(
     preferredTopic && preferredTopic !== "All Topics"
       ? { topic: preferredTopic }
@@ -426,7 +666,6 @@ export function sampleSprintQuestions(
 
   if (pool.length === 0) return [];
 
-  // Separate missed (< 80% accuracy) from unattempted/passed
   const missed: StoredQuestion[] = [];
   const others: StoredQuestion[] = [];
 
@@ -439,18 +678,14 @@ export function sampleSprintQuestions(
     }
   }
 
-  // Shuffle array helper
   const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => Math.random() - 0.5);
-
   const selected: StoredQuestion[] = [];
 
-  // 1. Take missed questions first
   for (const m of shuffle(missed)) {
     if (selected.length >= count) break;
     selected.push(m);
   }
 
-  // 2. Fill remaining slots with unattempted/passed
   for (const o of shuffle(others)) {
     if (selected.length >= count) break;
     selected.push(o);
@@ -460,13 +695,16 @@ export function sampleSprintQuestions(
 }
 
 /**
- * Clears the user's local question bank.
+ * Clears the user's local question bank and database.
  */
 export function clearQuestionBank(): void {
   memoryCache = [];
+  batchesCache = [];
   if (typeof localStorage !== "undefined") {
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(BATCHES_STORAGE_KEY);
     } catch {}
   }
+  clearAllDb().catch(() => {});
 }
