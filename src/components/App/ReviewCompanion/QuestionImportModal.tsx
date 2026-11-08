@@ -107,6 +107,48 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
     });
   }, [parseResult, selectedChapter, searchQuery]);
 
+  // NOTE: rawQuestionsForImport and previewSummary are declared here (before the early
+  // return) so that React sees a stable hook count on every render, regardless of
+  // whether isOpen is true or false.  Moving any useMemo/useState/useEffect below the
+  // `if (!isOpen) return null` guard would violate the Rules of Hooks and trigger
+  // React error #310 ("rendered more hooks than during the previous render").
+  const rawQuestionsForImport: RawImportQuestionItem[] = useMemo(() => {
+    if (parsedQaList.length > 0) {
+      return parsedQaList.map((item) => ({
+        id: item.id,
+        stem: item.stem,
+        options: item.options,
+        correctIndex: item.correctIndex,
+        explanation: item.explanation,
+        chapter: item.chapter,
+        sourcePage: item.sourcePage,
+        questionType: item.questionType,
+        reviewStatus: item.reviewStatus,
+        suspiciousReasons: item.suspiciousReasons,
+      }));
+    }
+    if (parseResult) {
+      return parseResult.items.map((i) => ({
+        id: i.question.id,
+        stem: i.question.question,
+        options: i.question.options,
+        correctIndex: i.question.correctIndex,
+        explanation: i.question.explanation,
+        chapter: i.question.topicTag,
+      }));
+    }
+    return [];
+  }, [parsedQaList, parseResult]);
+
+  const previewSummary = useMemo(() => {
+    return computeImportPreview(
+      rawQuestionsForImport,
+      subjectName,
+      fileName || "Reviewer Document"
+    );
+  }, [rawQuestionsForImport, subjectName, fileName]);
+
+  // Early return AFTER all hooks — hook count is now identical on every render.
   if (!isOpen) return null;
 
   const handleReset = () => {
@@ -237,42 +279,6 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
       reader.readAsText(file);
     }
   };
-
-  const rawQuestionsForImport: RawImportQuestionItem[] = useMemo(() => {
-    if (parsedQaList.length > 0) {
-      return parsedQaList.map((item) => ({
-        id: item.id,
-        stem: item.stem,
-        options: item.options,
-        correctIndex: item.correctIndex,
-        explanation: item.explanation,
-        chapter: item.chapter,
-        sourcePage: item.sourcePage,
-        questionType: item.questionType,
-        reviewStatus: item.reviewStatus,
-        suspiciousReasons: item.suspiciousReasons,
-      }));
-    }
-    if (parseResult) {
-      return parseResult.items.map((i) => ({
-        id: i.question.id,
-        stem: i.question.question,
-        options: i.question.options,
-        correctIndex: i.question.correctIndex,
-        explanation: i.question.explanation,
-        chapter: i.question.topicTag,
-      }));
-    }
-    return [];
-  }, [parsedQaList, parseResult]);
-
-  const previewSummary = useMemo(() => {
-    return computeImportPreview(
-      rawQuestionsForImport,
-      subjectName,
-      fileName || "Reviewer Document"
-    );
-  }, [rawQuestionsForImport, subjectName, fileName]);
 
   const handleApplyImportToBank = async () => {
     if (!rawQuestionsForImport || rawQuestionsForImport.length === 0) return;
