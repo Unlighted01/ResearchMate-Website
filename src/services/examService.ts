@@ -10,6 +10,7 @@ import { buildSynthesisContext, chunkText } from "./ragService";
 import { findRelevantFormulary } from "./formularyService";
 import { sanitizeCurrencyAndMath } from "./examParser";
 import { StorageItem } from "./storageService";
+import { lintDistractorQuality } from "./distractorQualityService";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -22,6 +23,8 @@ export interface Question {
   correctIndex: number; // 0, 1, 2, 3
   explanation: string;
   topicTag: string;
+  reviewStatus?: "verified" | "needs_review" | "flagged";
+  suspiciousReasons?: string[];
 }
 
 export interface ExamSectionConfig {
@@ -691,8 +694,12 @@ ${dedupePrompt}
 REQUIREMENTS:
 1. Generate EXACTLY ${slice.count} high-yield, exam-quality questions based on the provided material.
 2. Every mathematical formula, equation, or variable MUST be enclosed in standard LaTeX dollar signs (e.g. $x^2 + y^2 = r^2$, $\\int_0^1 x dx$, $\\neg P \\lor Q$, $9.81\\text{ m/s}^2$).
-3. For every question, provide 4 distinct multiple-choice options (labeled A, B, C, D). Ensure distractor choices reflect common student traps.
-4. In "explanation", provide a step-by-step academic derivation or rationale.
+3. For every question, provide 4 distinct multiple-choice options (labeled A, B, C, D):
+   - Distractors MUST reflect realistic common student misconceptions or wrong-path calculation steps, NOT obvious nonsense.
+   - Match all options in grammatical style, formatting, and approximate length (do NOT make the correct answer the unique longest or shortest option).
+   - Never use "all/none of the above" or absolute qualifiers ("always", "never", "only") in distractors.
+   - Do NOT leak content words or key terms from the correct answer into the question stem.
+4. In "explanation", provide a step-by-step academic derivation AND a one-line reason why each distractor is incorrect.
 5. Provide a concise topicTag (e.g. "${slice.sectionName}").
 6. CRITICAL: Output ONLY a valid raw JSON array of objects. Do NOT include markdown introduction, reasoning text, or commentary outside the JSON array.
 
@@ -724,16 +731,35 @@ REQUIREMENTS:
         const parsed = extractJsonQuestions(rawResponse);
 
         if (Array.isArray(parsed) && parsed.length > 0) {
-          batchQuestions = parsed.map((q: any) => ({
-            id: generateUUID(),
-            question: sanitizeCurrencyAndMath(q.question || ""),
-            options: Array.isArray(q.options) && q.options.length >= 4
+          batchQuestions = parsed.map((q: any) => {
+            const rawStem = sanitizeCurrencyAndMath(q.question || "");
+            const rawOptions = Array.isArray(q.options) && q.options.length >= 4
               ? q.options.slice(0, 4).map((o: any) => sanitizeCurrencyAndMath(String(o)))
-              : ["A", "B", "C", "D"],
-            correctIndex: typeof q.correctIndex === "number" ? Math.min(Math.max(q.correctIndex, 0), 3) : 0,
-            explanation: sanitizeCurrencyAndMath(q.explanation || "Identified based on study materials."),
-            topicTag: q.topicTag || slice.sectionName,
-          }));
+              : ["A", "B", "C", "D"];
+            const correctIndex = typeof q.correctIndex === "number" ? Math.min(Math.max(q.correctIndex, 0), 3) : 0;
+
+            // Apply distractor quality lint
+            const lint = lintDistractorQuality({
+              stem: rawStem,
+              options: rawOptions,
+              correctIndex,
+              questionType: "mcq",
+            });
+
+            const finalStem = lint.autoFixed && lint.fixedStem ? lint.fixedStem : rawStem;
+            const reviewStatus = lint.passed ? "verified" : "needs_review";
+
+            return {
+              id: generateUUID(),
+              question: finalStem,
+              options: rawOptions,
+              correctIndex,
+              explanation: sanitizeCurrencyAndMath(q.explanation || "Identified based on study materials."),
+              topicTag: q.topicTag || slice.sectionName,
+              reviewStatus,
+              suspiciousReasons: lint.passed ? [] : lint.reasons,
+            };
+          });
         } else {
           throw new Error("Model response was not a valid JSON question array");
         }

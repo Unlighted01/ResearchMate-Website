@@ -30,6 +30,7 @@ import {
   Trash2,
   RefreshCw,
   ChevronDown,
+  ThumbsDown,
 } from "lucide-react";
 import { StorageItem } from "../../../services/storageService";
 import {
@@ -56,6 +57,10 @@ import {
   getExamRecordBySeed,
   ExamRecord,
 } from "../../../services/examSeedService";
+import {
+  updateQuestionStatus,
+  recordQuestionOptionPick,
+} from "../../../services/questionBankService";
 import MaterialScopeSelector, { MaterialScopeSelection } from "./MaterialScopeSelector";
 import { useNotifications } from "../../../context/NotificationContext";
 
@@ -294,13 +299,19 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   };
 
   // Seeded Exam Session Starter: Creates and stores immutable ExamRecord
+  // By default, excludes questions marked as needs_review or flagged
   const startSeededExamSession = (rawQuestions: Question[], seedToUse?: string) => {
+    const verifiedOnly = rawQuestions.filter(
+      (q) => q.reviewStatus !== "needs_review" && q.reviewStatus !== "flagged"
+    );
+    const questionsToUse = verifiedOnly.length > 0 ? verifiedOnly : rawQuestions;
+
     const seed = seedToUse?.trim() || generateSeedCode("SEED");
     const examId = generateUUID();
     const { examRecord, orderedQuestions } = createSeededExam(
-      rawQuestions,
+      questionsToUse,
       {
-        totalQuestions: rawQuestions.length,
+        totalQuestions: questionsToUse.length,
         choicesPerItem: 4,
         paperSize: "A4",
       },
@@ -318,6 +329,15 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     setActiveQuestionIdx(0);
     if (timedMode) setSecondsRemaining(orderedQuestions.length * timePerQuestion);
     return { examRecord, orderedQuestions };
+  };
+
+  // Flag low-quality or overly obvious questions
+  const handleFlagBadQuestion = (qId: string) => {
+    updateQuestionStatus(qId, "flagged");
+    setQuestions((prev) =>
+      prev.map((q) => (q.id === qId ? { ...q, reviewStatus: "flagged" } : q))
+    );
+    showToast("Marked question as 'Too easy / bad question' (flagged for review).", "info");
   };
 
   // Retake with identical seed (order & permutations preserved)
@@ -568,6 +588,15 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     });
 
     setExamHistory((prev) => [attempt, ...prev.slice(0, 9)]);
+
+    // Track option picks and item distractor statistics
+    questions.forEach((q) => {
+      const chosenOpt = userAnswers[q.id];
+      if (chosenOpt !== undefined) {
+        const isOptCorrect = chosenOpt === q.correctIndex;
+        recordQuestionOptionPick(q.id, chosenOpt, isOptCorrect);
+      }
+    });
 
     try {
       const categoryBreakdown: Record<string, { correct: number; total: number }> = {};
@@ -1152,6 +1181,21 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* Too easy / bad question button */}
+                    <button
+                      type="button"
+                      onClick={() => handleFlagBadQuestion(q.id)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-sans border transition-colors cursor-pointer ${
+                        q.reviewStatus === "flagged"
+                          ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-700"
+                          : "text-slate-400 hover:text-amber-600 border-slate-200/60 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      }`}
+                      title="Flag as too easy, defective, or poor distractor quality"
+                    >
+                      <ThumbsDown className="w-3 h-3 text-amber-500" />
+                      <span>{q.reviewStatus === "flagged" ? "Flagged: Poor Item" : "Too easy / bad question"}</span>
+                    </button>
+
                     {/* Edit Question */}
                     <button
                       type="button"

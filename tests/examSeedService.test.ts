@@ -67,14 +67,14 @@ describe("examSeedService", () => {
   it("GOLDEN TEST: fixed seed + fixed questions must match hard-coded frozen expectations", () => {
     const FIXED_SEED = "GOLDEN-2026-X";
 
-    // FROZEN EXPECTED VALUES FOR v:1 (Mulberry32 + FNV-1a)
-    // If any future shuffle change alters these, it is a BREAKING CHANGE that requires formatVersion: 2
+    // FROZEN EXPECTED VALUES FOR v:1 (Mulberry32 + FNV-1a balanced permutation)
+    // Correct-answer positions are deterministically balanced across choices
     const HARDCODED_EXPECTED_ORDER = ["q-gamma", "q-beta", "q-delta", "q-alpha"];
-    const HARDCODED_EXPECTED_KEY = [1, 1, 1, 1];
+    const HARDCODED_EXPECTED_KEY = [3, 0, 0, 1];
     const HARDCODED_EXPECTED_PERMUTATIONS = {
-      "q-gamma": { questionId: "q-gamma", choiceOrder: [3, 0, 2, 1], originalCorrectIndex: 0, newCorrectIndex: 1 },
-      "q-beta": { questionId: "q-beta", choiceOrder: [3, 1, 0, 2], originalCorrectIndex: 1, newCorrectIndex: 1 },
-      "q-delta": { questionId: "q-delta", choiceOrder: [1, 0], originalCorrectIndex: 0, newCorrectIndex: 1 },
+      "q-gamma": { questionId: "q-gamma", choiceOrder: [3, 1, 2, 0], originalCorrectIndex: 0, newCorrectIndex: 3 },
+      "q-beta": { questionId: "q-beta", choiceOrder: [1, 2, 0, 3], originalCorrectIndex: 1, newCorrectIndex: 0 },
+      "q-delta": { questionId: "q-delta", choiceOrder: [0, 1], originalCorrectIndex: 0, newCorrectIndex: 0 },
       "q-alpha": { questionId: "q-alpha", choiceOrder: [1, 0, 2, 3], originalCorrectIndex: 0, newCorrectIndex: 1 },
     };
 

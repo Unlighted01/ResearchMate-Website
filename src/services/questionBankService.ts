@@ -8,6 +8,10 @@
 
 import { Question, generateUUID } from "./examService";
 import {
+  OptionPickStats,
+  recordOptionPickAndAnalyze,
+} from "./distractorQualityService";
+import {
   getAllQuestionsFromDb,
   saveQuestionsToDb,
   deleteQuestionsByBatchFromDb,
@@ -48,6 +52,7 @@ export interface StoredQuestion extends Question {
     correct: number;
     lastAttemptAt?: number;
   };
+  optionPickStats?: OptionPickStats;
 }
 
 export interface ImportBatch {
@@ -649,6 +654,64 @@ export function recordQuestionResult(
   if (modified) {
     persistQuestions(all);
   }
+}
+
+/**
+ * Records option selection and updates distractor performance metrics.
+ * Flags distractors chosen under 5% and questions answered correctly over 95% after N attempts.
+ */
+export function recordQuestionOptionPick(
+  questionId: string,
+  chosenIndex: number,
+  isCorrect: boolean
+): OptionPickStats | null {
+  const all = getMemoryOrStorage();
+  let resultStats: OptionPickStats | null = null;
+  let modified = false;
+
+  for (const q of all) {
+    if (q.id === questionId) {
+      const totalOptions = q.options?.length || 4;
+      const updated = recordOptionPickAndAnalyze(
+        q.optionPickStats,
+        chosenIndex,
+        q.correctIndex,
+        totalOptions
+      );
+      q.optionPickStats = updated;
+
+      q.accuracyHistory = {
+        attempts: updated.attempts,
+        correct: updated.correct,
+        lastAttemptAt: updated.lastAttemptAt,
+      };
+
+      if (updated.tooEasyFlag && !q.suspiciousReasons?.some((r) => r.includes("over 95%"))) {
+        q.suspiciousReasons = [
+          ...(q.suspiciousReasons || []),
+          `Performance: answered correctly by ${Math.round((updated.correct / updated.attempts) * 100)}% of examinees (>95% threshold)`,
+        ];
+      }
+
+      resultStats = updated;
+      modified = true;
+      break;
+    }
+  }
+
+  if (modified) {
+    persistQuestions(all);
+  }
+  return resultStats;
+}
+
+/**
+ * Returns item-level option pick analytics.
+ */
+export function getItemAnalytics(questionId: string): OptionPickStats | null {
+  const all = getMemoryOrStorage();
+  const q = all.find((item) => item.id === questionId);
+  return q?.optionPickStats || null;
 }
 
 /**

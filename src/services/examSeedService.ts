@@ -143,19 +143,41 @@ export function createSeededExam(
   const answerKey: number[] = [];
   const finalQuestions: Question[] = [];
 
-  // 2. Deterministically permute choices for each question
-  for (const q of selectedQuestions) {
+  // 2. Deterministically permute choices for each question, balancing correct-answer positions
+  // Create an array of target slots evenly cycling 0, 1, ..., choiceCount - 1 across all questions
+  const targetSlots: number[] = [];
+  for (let i = 0; i < selectedQuestions.length; i++) {
+    const choicesForQ = selectedQuestions[i].options.length || 4;
+    targetSlots.push(i % choicesForQ);
+  }
+  // Deterministically shuffle the target slots using PRNG
+  const balancedSlots = seededShuffle(targetSlots, rng);
+
+  for (let qIdx = 0; qIdx < selectedQuestions.length; qIdx++) {
+    const q = selectedQuestions[qIdx];
     orderedQuestionIds.push(q.id);
 
     const choiceCount = q.options.length;
-    // Indices [0, 1, ..., choiceCount - 1]
-    const initialIndices = Array.from({ length: choiceCount }, (_, i) => i);
-    const permutedIndices = seededShuffle(initialIndices, rng);
+    const targetCorrectSlot = balancedSlots[qIdx] % choiceCount;
+
+    // Remaining distractor original indices
+    const origDistractorIndices = Array.from({ length: choiceCount }, (_, i) => i)
+      .filter((idx) => idx !== q.correctIndex);
+    const shuffledDistractors = seededShuffle(origDistractorIndices, rng);
+
+    // Assemble permutedIndices placing q.correctIndex at targetCorrectSlot
+    const permutedIndices: number[] = new Array(choiceCount);
+    permutedIndices[targetCorrectSlot] = q.correctIndex;
+    let distIdx = 0;
+    for (let slot = 0; slot < choiceCount; slot++) {
+      if (slot !== targetCorrectSlot) {
+        permutedIndices[slot] = shuffledDistractors[distIdx++];
+      }
+    }
 
     // Build permuted options
     const permutedOptions = permutedIndices.map((origIdx) => q.options[origIdx]);
-    const newCorrectIndex = permutedIndices.indexOf(q.correctIndex);
-    const validCorrectIndex = newCorrectIndex >= 0 ? newCorrectIndex : 0;
+    const validCorrectIndex = targetCorrectSlot;
 
     permutations[q.id] = {
       questionId: q.id,

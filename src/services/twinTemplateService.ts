@@ -306,3 +306,75 @@ export function generateParametricTwin(question: {
 
   return null;
 }
+
+/**
+ * Produces wrong-path distractors reflecting common student calculation errors
+ * for templated math questions (work rates, harmonic speeds, discounts, ratios, series).
+ */
+export function generateWrongPathDistractorsForMath(
+  stem: string,
+  correctAnswer: string,
+  templateType?: TemplateType
+): string[] {
+  // Extract unit from correct answer if present
+  const unitMatch = correctAnswer.match(/^(?:[\$€£₱])?\s*([\d,.]+)\s*(%|[a-zA-Z\/]+)?$/);
+  const numVal = unitMatch ? parseFloat(unitMatch[1].replace(/,/g, "")) : NaN;
+  const unitSuffix = unitMatch && unitMatch[2] ? ` ${unitMatch[2]}` : "";
+  const prefix = correctAnswer.trim().startsWith("$") ? "$" : "";
+
+  // 1. Identify template type if not provided
+  let matchedType = templateType;
+  if (!matchedType) {
+    for (const t of TEMPLATE_REGISTRY) {
+      if (t.matcher.test(stem)) {
+        matchedType = t.type;
+        break;
+      }
+    }
+  }
+
+  // 2. Extract numbers from stem
+  const stemNums = (stem.match(/\b\d+(?:\.\d+)?\b/g) || []).map(Number);
+
+  const traps: string[] = [];
+
+  if (matchedType === "work_rate" && stemNums.length >= 2) {
+    const a = stemNums[0];
+    const b = stemNums[1];
+    traps.push(`${prefix}${(a + b) / 2}${unitSuffix}`); // Trap 1: simple average
+    traps.push(`${prefix}${a + b}${unitSuffix}`); // Trap 2: simple sum
+    traps.push(`${prefix}${Math.abs(b - a)}${unitSuffix}`); // Trap 3: simple difference
+  } else if (matchedType === "harmonic_speed" && stemNums.length >= 2) {
+    const v1 = stemNums[0];
+    const v2 = stemNums[1];
+    traps.push(`${prefix}${(v1 + v2) / 2}${unitSuffix}`); // Trap 1: linear average
+    traps.push(`${prefix}${Math.abs(v2 - v1)}${unitSuffix}`); // Trap 2: difference
+    traps.push(`${prefix}${Math.round(2 * v1 * v2 / (v1 + v2)) + 4}${unitSuffix}`); // Trap 3: near miss
+  } else if (matchedType === "successive_discount" && stemNums.length >= 2) {
+    const a = stemNums[0];
+    const b = stemNums[1];
+    traps.push(`${prefix}${a + b}%`); // Trap 1: linear addition
+    traps.push(`${prefix}${Math.round((a * b) / 10)}%`); // Trap 2: multiplication error
+    if (!isNaN(numVal)) traps.push(`${prefix}${Math.max(1, numVal - 3)}%`); // Trap 3: offset
+  } else if (matchedType === "ratio_partition" && !isNaN(numVal)) {
+    traps.push(`${prefix}${Math.round(numVal * 0.6)}${unitSuffix}`); // Trap 1: other share
+    traps.push(`${prefix}${Math.round(numVal * 1.5)}${unitSuffix}`); // Trap 2: total parts mismatch
+    traps.push(`${prefix}${Math.round(numVal * 0.5)}${unitSuffix}`); // Trap 3: 50% split
+  } else if (!isNaN(numVal) && numVal > 0) {
+    // General numeric wrong-path generator (percentage shift, off-by-magnitude, swapped operations)
+    traps.push(`${prefix}${Math.round(numVal * 1.25 * 100) / 100}${unitSuffix}`);
+    traps.push(`${prefix}${Math.round(numVal * 0.75 * 100) / 100}${unitSuffix}`);
+    traps.push(`${prefix}${Math.round(numVal * 2 * 100) / 100}${unitSuffix}`);
+  }
+
+  // Filter out any that equal correct answer and deduplicate
+  const cleanCorrect = correctAnswer.trim().toLowerCase();
+  const valid = Array.from(new Set(traps.filter((t) => t.trim().toLowerCase() !== cleanCorrect)));
+
+  while (valid.length < 3 && !isNaN(numVal)) {
+    const fallback = `${prefix}${Math.round((numVal + valid.length + 2) * 10) / 10}${unitSuffix}`;
+    if (!valid.includes(fallback)) valid.push(fallback);
+  }
+
+  return valid.slice(0, 3);
+}

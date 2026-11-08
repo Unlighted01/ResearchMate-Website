@@ -152,9 +152,14 @@ describe("Real PDF Reviewer Fixtures & Regression Audit", () => {
       expect(item.options.length).toBeGreaterThanOrEqual(4);
     }
 
-    // Verify consistency check flagged Section 8(C)(2) ("ten (100") and broken stems ending mid-parenthesis
+    // Verify consistency check flagged Section 8(C)(2) ("ten (100"), broken stems ending mid-parenthesis,
+    // and distractor quality outliers (length outlier on family definition)
     const flagged = result.items.filter((it) => it.reviewStatus === "needs_review");
-    expect(flagged.length).toBe(3);
+    expect(flagged.length).toBe(5);
+
+    // Flagged distractor quality: length outlier
+    const lengthOutlier = flagged.find((it) => it.suspiciousReasons?.some((r) => r.includes("Length outlier")));
+    expect(lengthOutlier).toBeDefined();
 
     // Flagged 1: Sec. 8(C)(2)
     const sec8Item = flagged.find((it) => it.sourcePage === 8);

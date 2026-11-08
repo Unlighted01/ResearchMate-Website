@@ -10,6 +10,12 @@ import { Question, Flashcard, generateUUID } from "./examService";
 import { sanitizeCurrencyAndMath } from "./examParser";
 import { PdfLayoutItem, PdfPageWithLayout } from "./pdfService";
 import { QuestionReviewStatus, StoredQuestion } from "./questionBankService";
+import {
+  lintDistractorQuality,
+  generateNumericDistractors,
+  generateSiblingTermDistractors,
+  DistractorLintResult,
+} from "./distractorQualityService";
 
 export type AnswerKeyLocation = "inline" | "end_of_chapter" | "end_of_book" | "separate_page";
 export type ChoiceStyle = "letter_dot" | "letter_paren" | "paren_letter" | "bracket_letter" | "mixed";
@@ -859,13 +865,51 @@ export function evaluateSuspiciousItem(
   item: {
     stem: string;
     options: string[];
+    correctIndex?: number;
     questionType?: QuestionType;
     hasIncompleteAnswer?: boolean;
     explanation?: string;
   },
   config: ImporterThresholdConfig = DEFAULT_IMPORTER_CONFIG
-): { isSuspicious: boolean; reasons: string[]; reviewStatus: QuestionReviewStatus } {
+): {
+  isSuspicious: boolean;
+  reasons: string[];
+  reviewStatus: QuestionReviewStatus;
+  fixedStem?: string;
+  distractorLint?: DistractorLintResult;
+} {
   const reasons: string[] = [];
+  let currentStem = (item.stem || "").trim();
+  let fixedStem: string | undefined = undefined;
+
+  // Distractor Quality Lint (stem-leak, length-outlier, format-outlier, duplicate options)
+  let distractorLint: DistractorLintResult | undefined = undefined;
+  if (
+    item.options &&
+    item.options.length >= 2 &&
+    item.correctIndex !== undefined &&
+    item.questionType !== "free_response"
+  ) {
+    distractorLint = lintDistractorQuality({
+      stem: currentStem,
+      options: item.options,
+      correctIndex: item.correctIndex,
+      questionType: item.questionType,
+    });
+
+    if (distractorLint.autoFixed && distractorLint.fixedStem) {
+      currentStem = distractorLint.fixedStem;
+      fixedStem = distractorLint.fixedStem;
+    }
+
+    if (!distractorLint.passed) {
+      for (const issue of distractorLint.issues) {
+        if (!issue.autoFixed) {
+          reasons.push(issue.message);
+        }
+      }
+    }
+  }
 
   // Check 1: Missing answer key
   if (item.hasIncompleteAnswer) {
@@ -873,7 +917,7 @@ export function evaluateSuspiciousItem(
   }
 
   // Check 2: Question stem anomalies
-  const stem = (item.stem || "").trim();
+  const stem = currentStem;
   const hasMathOrEquation = /[\=\+\-\*\/\^\$\\\%×÷√∫≤≥≠≈±]|(?:\b\d+\b)/.test(stem);
   const minStemLen = hasMathOrEquation ? config.minStemLengthMath : config.minStemLengthStandard;
 
@@ -931,7 +975,7 @@ export function evaluateSuspiciousItem(
   const isSuspicious = reasons.length > 0;
   const reviewStatus: QuestionReviewStatus = isSuspicious ? "needs_review" : "verified";
 
-  return { isSuspicious, reasons, reviewStatus };
+  return { isSuspicious, reasons, reviewStatus, fixedStem, distractorLint };
 }
 
 /**
@@ -1381,11 +1425,12 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       explanation = "Answer key not explicitly indexed in this section.";
     }
 
-    // Evaluate if item is suspicious
+    // Evaluate if item is suspicious (including distractor quality lint)
     const evaluation = evaluateSuspiciousItem(
       {
         stem: q.stem,
         options: q.options,
+        correctIndex,
         questionType: (q as any).questionType,
         hasIncompleteAnswer,
         explanation,
@@ -1396,6 +1441,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     let isSuspicious = evaluation.isSuspicious;
     const suspiciousReasons = [...evaluation.reasons];
     let reviewStatus: QuestionReviewStatus = evaluation.reviewStatus;
+    const finalStem = evaluation.fixedStem || q.stem;
 
     if ((q as any).isUnparseableStub) {
       isSuspicious = true;
@@ -1406,7 +1452,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     items.push({
       id: generateUUID(),
       number: q.number,
-      stem: q.stem,
+      stem: finalStem,
       options: q.options,
       correctLetter,
       correctIndex,
@@ -1637,28 +1683,46 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   let qNumber = 1;
 
   // 1. Generate Term-Definition / Norms of Conduct Questions
-  const termNames = definedTerms.map((t) => t.term);
+  const termPool = definedTerms.map((t) => ({ term: t.term, section: t.section }));
   for (const t of definedTerms) {
-    const distractors = termNames.filter((tn) => tn !== t.term).slice(0, 3);
-    while (distractors.length < 3) {
-      distractors.push(`Provision ${distractors.length + 1}`);
+    const siblingDistractors = generateSiblingTermDistractors(t.term, t.section, termPool);
+    if (siblingDistractors.length < 3) {
+      continue; // Skip question if fewer than 3 sibling terms exist (never random filler)
     }
-    const options = [t.term, ...distractors].sort();
+    const options = [t.term, ...siblingDistractors].sort();
     const correctIndex = options.indexOf(t.term);
 
     const rawDef = trimStemPrefix(t.definition);
     const stemSnippet = rawDef.length > 250 ? rawDef.slice(0, 247) + "..." : rawDef;
 
-    // Fix 5: Use "Which norm of conduct..." when source heading is a norm
+    // Use "Which norm of conduct..." when source heading is a norm
     const isNorm = /norms?\b/i.test(t.section);
-    const stem = isNorm
+    let stem = isNorm
       ? `Under RA 6713, which norm of conduct is defined as: "${stemSnippet}"?`
       : `Under RA 6713, which term is defined as: "${stemSnippet}"?`;
 
-    const brokenStem = checkBrokenStem(stem);
+    // Apply distractor quality lint (detects and masks stem-leaks in definitions)
+    const lintResult = lintDistractorQuality({
+      stem,
+      options,
+      correctIndex,
+      questionType: "mcq",
+    });
+
+    if (lintResult.autoFixed && lintResult.fixedStem) {
+      stem = lintResult.fixedStem;
+    }
+
     const suspiciousReasons: string[] = [];
+    const brokenStem = checkBrokenStem(stem);
     if (brokenStem.isBroken) {
       suspiciousReasons.push(brokenStem.reason || "Stem ends mid-parenthesis or with broken number");
+    }
+
+    if (!lintResult.passed) {
+      for (const iss of lintResult.issues) {
+        if (!iss.autoFixed) suspiciousReasons.push(iss.message);
+      }
     }
     const isSuspicious = suspiciousReasons.length > 0;
 
@@ -1687,13 +1751,21 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       continue;
     }
 
-    const unitPool = Array.from(numbersByUnit.get(nb.unitCategory) || []).filter((n) => n !== nb.numeral);
-    // Fix 1: If fewer than 3 valid distractors exist of the exact same unit, skip the question!
-    if (unitPool.length < 3) {
+    // Near values of same unit (decimal shifts, +/- 10-25%, swapped digits)
+    const { distractors: nearValDistractors } = generateNumericDistractors(nb.numeral);
+    const docUnitNumbers = Array.from(numbersByUnit.get(nb.unitCategory) || []).filter((n) => n !== nb.numeral);
+
+    const candidateNums = Array.from(
+      new Set([...docUnitNumbers, ...nearValDistractors.map((d) => parseInt(d, 10))])
+    )
+      .filter((n) => n > 0 && n !== nb.numeral)
+      .sort((a, b) => Math.abs(a - nb.numeral) - Math.abs(b - nb.numeral));
+
+    if (candidateNums.length < 3) {
       continue;
     }
 
-    const distractorNums = unitPool.slice(0, 3);
+    const distractorNums = candidateNums.slice(0, 3);
     const options = [String(nb.numeral), ...distractorNums.map(String)].sort(
       (a, b) => parseInt(a, 10) - parseInt(b, 10)
     );
@@ -1704,16 +1776,32 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       `_____ (${nb.numeral})`
     );
 
-    const stem = `Complete the legal provision: "${blankedSentence}"`;
+    let stem = `Complete the legal provision: "${blankedSentence}"`;
     const suspiciousReasons: string[] = [];
     if (!nb.isConsistent) {
       suspiciousReasons.push(nb.reason || "Word-numeral mismatch");
     }
 
-    // Fix 3: Flag stems that end mid-parenthesis or with a broken number (e.g. "(P5, 000.") as needs_review
     const brokenStem = checkBrokenStem(stem);
     if (brokenStem.isBroken) {
       suspiciousReasons.push(brokenStem.reason || "Stem ends mid-parenthesis or with broken number");
+    }
+
+    const lintResult = lintDistractorQuality({
+      stem,
+      options,
+      correctIndex,
+      questionType: "mcq",
+    });
+
+    if (lintResult.autoFixed && lintResult.fixedStem) {
+      stem = lintResult.fixedStem;
+    }
+
+    if (!lintResult.passed) {
+      for (const iss of lintResult.issues) {
+        if (!iss.autoFixed) suspiciousReasons.push(iss.message);
+      }
     }
 
     const isSuspicious = suspiciousReasons.length > 0;
@@ -1740,11 +1828,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   // 3. Generate Section Cards (Flashcards)
   const allTitles = sectionCards.map((sc) => sc.title);
   for (const sc of sectionCards.slice(0, 15)) {
-    const distractorTitles = allTitles.filter((t) => t !== sc.title).slice(0, 3);
-    while (distractorTitles.length < 3) {
-      distractorTitles.push(`General Rule ${distractorTitles.length + 1}`);
-    }
-    const options = [sc.title, ...distractorTitles].sort();
+    const distractorTitles = allTitles.filter((t) => t !== sc.title);
+    if (distractorTitles.length < 3) continue; // Never filler
+    const options = [sc.title, ...distractorTitles.slice(0, 3)].sort();
     const correctIndex = options.indexOf(sc.title);
 
     items.push({
