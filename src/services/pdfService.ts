@@ -3,8 +3,8 @@
 // Uses same-origin bundled worker with canvas OCR fallback for scanned books
 // ============================================
 
-import * as pdfjsLib from "pdfjs-dist";
-import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import { runMathOcr, generateSummary } from "./geminiService";
 import { createRepresentativeSnippet } from "./ragService";
 
