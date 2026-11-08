@@ -77,6 +77,36 @@ describe("1001 Math Problems Real PDF Audit", () => {
     console.log("\nChapters detected (" + result.chaptersDetected.length + "):");
     result.chaptersDetected.forEach((ch, idx) => console.log(`  ${idx + 1}. "${ch}"`));
 
+    const poleQuestions = result.items.filter(
+      (q) =>
+        (q.stem || "").toLowerCase().includes("pole") ||
+        (q.stem || "").toLowerCase().includes("shadow") ||
+        (q.explanation || "").toLowerCase().includes("pole") ||
+        (q.explanation || "").toLowerCase().includes("shadow")
+    );
+    console.log(`\nFound ${poleQuestions.length} questions mentioning pole/shadow:`);
+    poleQuestions.forEach((q) => {
+      console.log(`\n--- Question #${q.number} ---`);
+      console.log("Stem:", q.stem);
+      console.log("Choice D:", q.options[3]);
+      console.log("All Options:", q.options);
+      console.log("Explanation (first 100):", q.explanation?.slice(0, 100));
+      console.log("Explanation (last 100):", q.explanation?.slice(-100));
+    });
+
+    const q1001 = result.items.find((q) => q.number === 1001);
+    console.log("\n================ QUESTION #1001 (POLE/SHADOW) ================");
+    if (q1001) {
+      console.log("Stem:", q1001.stem);
+      console.log("Choice D (AFTER):", JSON.stringify(q1001.options[3]));
+      console.log("All Options:", q1001.options);
+      console.log("Correct letter:", q1001.correctLetter, "Index:", q1001.correctIndex);
+      console.log("Explanation Full:\n", q1001.explanation);
+      console.log("Explanation ending (last 120 chars):", JSON.stringify(q1001.explanation.slice(-120)));
+    } else {
+      console.log("Question #1001 was NOT found!");
+    }
+
     const q990 = result.items.find((q) => q.number === 990);
     console.log("\n--- Question #990 Extracted (AFTER) ---");
     if (q990) {

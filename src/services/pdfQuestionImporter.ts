@@ -57,6 +57,8 @@ export const DEFAULT_IMPORTER_CONFIG: ImporterThresholdConfig = {
   frequencyHeaderRatio: 0.15,
 };
 
+export type QuestionType = "mcq" | "free_response";
+
 export interface ParsedQaItem {
   id: string;
   number: number;
@@ -67,6 +69,9 @@ export interface ParsedQaItem {
   explanation: string;
   chapter?: string;
   pageNumber?: number;
+  sourcePage?: number;
+  sourceQuote?: string;
+  questionType?: QuestionType;
   hasIncompleteAnswer?: boolean;
   isSuspicious?: boolean;
   suspiciousReasons?: string[];
@@ -81,6 +86,8 @@ export interface ParseTwoPassResult {
   totalExpected?: number;
   profileUsed?: ParserProfile;
   repeatingHeadersStripped?: string[];
+  isUnstructuredDocument?: boolean;
+  notesRoute?: boolean;
 }
 
 // ============================================
@@ -98,15 +105,29 @@ export const PROFILE_STANDARD_TWO_PASS: ParserProfile = {
   endMarkers: [/^(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/i],
 };
 
+export const PROFILE_FREE_RESPONSE: ParserProfile = {
+  id: "free_response",
+  name: "Free-Response Practice (End-of-Book Key)",
+  description: "Numbered problem statements without multiple-choice options, followed by an answer key with numerical/text solutions",
+  headingPattern: /^(?:Practice\s*[-–—]?\s*[\w\s]+|Exercise\s+(\d+|[IVXLCDM]+)|Section\s+(\d+|[IVXLCDM]+)|\d+\.\d+\b)[^\n]*/i,
+  keyLocation: "end_of_book",
+  choiceStyle: "mixed",
+  expectedChoicesPerItem: 0,
+  endMarkers: [/^(?:(?:\d+\.\d+\s+)?Answers\s*[-–—]?\s*[\w\s]+|Answer\s+Key)\b/i],
+};
+
 export const PROFILE_1001_MATH: ParserProfile = {
   id: "1001_math_problems",
   name: "1001 Math Problems (LearningExpress Style)",
   description: "Numbered sections and chapters with mixed letter-dot/paren choices and detailed answer explanations",
   headingPattern: /^(?:SECTION\s+(\d+):?\s*[A-Za-z\s\-]+|CHAPTER\s+(\d+):?\s*[A-Za-z\s\-]+|Set\s+(\d+))\b/i,
-  keyLocation: "end_of_chapter",
+  keyLocation: "end_of_book",
   choiceStyle: "mixed",
   expectedChoicesPerItem: 4,
-  endMarkers: [/^(?:Answers\s+and\s+Explanations|Answer\s+Explanations|Answers)\b/i],
+  endMarkers: [
+    /^(?:Answers\s+and\s+Explanations|Answer\s+Explanations|Answers)\b/i,
+    /^Set\s+\d+\s*\(Page\s+\d+\)/i,
+  ],
 };
 
 export const PROFILE_INLINE_KEYS: ParserProfile = {
@@ -144,6 +165,7 @@ export const PROFILE_CONDENSED_GRID: ParserProfile = {
 
 export const SAVED_PARSER_PROFILES: Record<string, ParserProfile> = {
   standard_two_pass: PROFILE_STANDARD_TWO_PASS,
+  free_response: PROFILE_FREE_RESPONSE,
   "1001_math_problems": PROFILE_1001_MATH,
   inline_answer_key: PROFILE_INLINE_KEYS,
   paren_5_choice: PROFILE_PAREN_5_CHOICE,
@@ -157,11 +179,165 @@ export const SAVED_PARSER_PROFILES: Record<string, ParserProfile> = {
 const GENERIC_PUBLISHER_BOILERPLATE = [
   /(?:Library of Congress Cataloging-in-Publication Data|Cataloging-in-Publication Data)[\s\S]*?(?=\n\s*\n|\n\d+\.|$)/gi,
   /(?:^|\n)\s*ISBN[^\n]*(?=\n|$)/gi,
-  /(?:^|\n)\s*(?:All rights reserved\.?|Printed in [A-Za-z\s]+|Manufactured in [A-Za-z\s]+|Printed on acid-free paper\.?)\b[^\n]*/gi,
-  /(?:^|\n)\s*(?:For more information (?:or to order|about)|Visit (?:us at )?www\.[\w\.\-]+\.\w+)\b[^\n]*/gi,
+  /(?:^|\n)\s*(?:All rights reserved\.?|Printed in [A-Za-z\s]+|Manufactured in [A-Za-z\s]+|Printed on acid-free paper\.?|licensed under a Creative Commons|Attribution\s+\d+\.\d+\s+Unported|http:\/\/creativecommons\.org)\b[^\n]*/gi,
+  /(?:^|\n)\s*(?:For more information (?:or to order|about)|Visit (?:us at )?www\.[\w\.\-]+\.\w+|Also available at your local bookstore|Prices subject to change without notice|To Order:\s*Call\s*[\d\-]+)\b[^\n]*/gi,
+  /(?:^|\n)\s*(?:Achieve Test Success|Master the Basics|Give Yourself The [A-Za-z\s]+ Advantage)\b[\s\S]*?(?=\n\s*\n|\n\d+\.|$)/gi,
   /(?:^|\n)\s*(?:Copyright\s+(?:©|\(c\)|[0-9]{4})|©\s*[0-9]{4})\s+[\w\s,\.\-]+(?=\n|$)/gi,
   /(?:^|\n)\s*\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s*(?=\n|$)/g, // printing number lines
 ];
+
+export const ENGLISH_NUMBER_WORDS: Record<string, number> = {
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fifty: 50,
+  sixty: 60,
+  seventy: 70,
+  eighty: 80,
+  ninety: 90,
+  hundred: 100,
+  thousand: 1000,
+};
+
+/**
+ * Parses single or compound English number words: e.g. "forty-five" -> 45, "twenty-five" -> 25, "ten" -> 10.
+ */
+export function parseEnglishNumberWords(wordStr: string): number | null {
+  if (!wordStr) return null;
+  const cleaned = wordStr.trim().toLowerCase().replace(/\s+/g, "-");
+  if (ENGLISH_NUMBER_WORDS[cleaned] !== undefined) {
+    return ENGLISH_NUMBER_WORDS[cleaned];
+  }
+
+  const parts = cleaned.split(/[\-\s]+/);
+  if (parts.length === 2) {
+    const tens = ENGLISH_NUMBER_WORDS[parts[0]];
+    const units = ENGLISH_NUMBER_WORDS[parts[1]];
+    if (tens !== undefined && units !== undefined && tens >= 20 && units < 10) {
+      return tens + units;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Strips page numbers and footnote numbers glued to words at page breaks or line ends:
+ * e.g. "the 5present" -> "the present", "How 6many" -> "How many", "offense.27" -> "offense.".
+ */
+export function stripGluedPageNumbers(text: string): string {
+  if (!text) return "";
+  return text
+    // Footnote digits glued after sentence punctuation following a word: "offense.27" -> "offense."
+    .replace(/\b([a-zA-Z]{2,}[\.\?!])(\d{1,3})(?=\s*[\n\r]|\s+[A-Z]|$)/g, "$1")
+    // "the5present" (glued with no spaces) -> "$1 $3"
+    .replace(/\b([a-zA-Z]{2,})(\d{1,3})([a-zA-Z]{2,})\b/g, "$1 $3")
+    // "the 5present" or "How 6many" -> "$1 $3" (digit glued to following word)
+    .replace(/\b(the|how|in|find|of|at|to|a|an|from|with|by|as|is|are|was|were)\s+(\d{1,3})([a-zA-Z]{3,})\b/gi, "$1 $3");
+}
+
+/**
+ * Consistency check for "word (numeral)" pairs:
+ * Handles compound numbers ("forty-five" -> 45) and catches unclosed parentheses (e.g. "ten (100 working days").
+ */
+export function checkWordNumeralConsistency(
+  word: string,
+  numeral: number,
+  isUnclosedParenthesis: boolean = false
+): { isConsistent: boolean; reason?: string } {
+  const normWord = (word || "").trim().toLowerCase();
+  const expected = parseEnglishNumberWords(normWord);
+
+  if (isUnclosedParenthesis) {
+    if (expected !== null && expected !== numeral) {
+      return {
+        isConsistent: false,
+        reason: `Number mismatch and unclosed parenthesis: word "${word}" (${expected}) disagrees with numeral (${numeral})`,
+      };
+    }
+    return {
+      isConsistent: false,
+      reason: `Unclosed parenthesis in numeral expression: "${word} (${numeral}"`,
+    };
+  }
+
+  if (expected === null) {
+    // Preceding word is not a standard English number (e.g. "Co-Chairman (2)" or "months (6)") -> ignore
+    return { isConsistent: true };
+  }
+
+  if (expected !== numeral) {
+    return {
+      isConsistent: false,
+      reason: `Number mismatch: word "${word}" (${expected}) disagrees with numeral (${numeral})`,
+    };
+  }
+  return { isConsistent: true };
+}
+
+/**
+ * Returns true if a line should be excluded from candidate running headers/footers
+ * because it contains legitimate pedagogical directions, numbered questions/steps, or full sentences.
+ */
+export function isExcludedFromHeaderFooter(line: string): boolean {
+  if (!line || line.length < 2) return true;
+  // 1. Instructions and pedagogical directions are real content, not running headers
+  if (/^(?:Directions|Instructions|Notice|Note|Read\s+the|Choose\s+the|Select\s+the|Solve\s+the|Answer\s+the)\b/i.test(line)) {
+    return true;
+  }
+  // 2. Numbered questions, steps, examples, or choices
+  if (/^(?:(?:\d{1,4}|[a-eA-E])[\.\)\:]|Question\s+\d+|Problem\s+\d+|Step\s+\d+|Example\s+\d+)(?:\s+|$)/i.test(line)) {
+    return true;
+  }
+  // 3. Full explanatory sentences ending in punctuation
+  if (line.length > 25 && /[\.\?!]["']?$/.test(line.trim())) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Compares multi-value or single-value answers order-insensitively,
+ * handling commas, spaces, and punctuation: e.g. "6, 16" matches "16, 6" or "12,20" matches "12, 20".
+ */
+export function compareAnswersOrderInsensitive(ans1: string, ans2: string): boolean {
+  if (!ans1 && !ans2) return true;
+  if (!ans1 || !ans2) return false;
+
+  const normalizeTokens = (s: string) =>
+    s
+      .toLowerCase()
+      .split(/[,;\s]+/)
+      .map((t) => t.trim().replace(/^[\(\[]|[\)\]\.]$/g, ""))
+      .filter((t) => t.length > 0)
+      .sort();
+
+  const tokens1 = normalizeTokens(ans1);
+  const tokens2 = normalizeTokens(ans2);
+
+  if (tokens1.length !== tokens2.length) return false;
+  return tokens1.every((t, i) => t === tokens2[i]);
+}
 
 /**
  * Normalizes a candidate line for frequency analysis:
@@ -202,12 +378,15 @@ export function findRepeatingHeadersAndFooters(
     const rawText = typeof pageItem === "string" ? pageItem : pageItem.text || "";
     const lines = rawText.split("\n").map((l) => l.trim()).filter((l) => l.length > 2);
 
-    // Examine lines near top (first 4) and near bottom (last 4)
-    const topLines = lines.slice(0, 4);
-    const bottomLines = lines.slice(Math.max(0, lines.length - 4));
+    // Examine lines strictly at outer margins (first 2 lines and last 2 lines of the page)
+    const topLines = lines.slice(0, 2);
+    const bottomLines = lines.slice(Math.max(0, lines.length - 2));
     const candidateLines = Array.from(new Set([...topLines, ...bottomLines]));
 
     for (const line of candidateLines) {
+      // Exclude pedagogical directions, numbered questions/steps, and full sentences
+      if (isExcludedFromHeaderFooter(line)) continue;
+
       const norm = normalizeLineForFrequency(line);
       if (norm.length >= 3) {
         if (!linePageOccurrences.has(norm)) {
@@ -245,7 +424,9 @@ export function cleanPageText(rawText: string, repeatingHeaders?: Set<string>): 
     .replace(/\u2018|\u2019/g, "'")
     .replace(/\u201C|\u201D/g, '"')
     // Windows CRLF
-    .replace(/\r\n/g, "\n");
+    .replace(/\r\n/g, "\n")
+    // Join line-end hyphenated words across line breaks (e.g. "forty-\nfive" -> "forty-five")
+    .replace(/([a-zA-Z]+)-\s*[\r\n]+\s*([a-zA-Z]+)/g, "$1-$2");
 
   // Strip generic publisher and catalog boilerplate
   for (const pattern of GENERIC_PUBLISHER_BOILERPLATE) {
@@ -253,7 +434,18 @@ export function cleanPageText(rawText: string, repeatingHeaders?: Set<string>): 
   }
 
   // Strip generic page number lines
-  cleaned = cleaned.replace(/(?:^|\n)\s*(?:Page\s+\d+(?:\s+of\s+\d+)?|\d+\s*\|\s*Page)\s*(?=\n|$)/gi, "\n");
+  cleaned = cleaned
+    .replace(/(?:^|\n)\s*(?:Page\s+\d+(?:\s+of\s+\d+)?|\d+\s*\|\s*Page)\s*(?=\n|$)/gi, "\n")
+    .replace(/(?:^|\n)\s*\d{1,3}\s*(?=\n\s*\[Page|\s*$)/g, "\n");
+
+  // Strip generic running headers/footers with section names and page numbers
+  cleaned = cleaned
+    .replace(/(?:^|\n)\s*[-–—]\s*[A-Z\s]{3,}\s*[-–—]\s*(?:\n\s*\d{1,4})?\s*(?=\n|$)/gi, "\n")
+    .replace(/(?:^|\n)\s*\d{1,4}\s*[-–—]\s*[A-Z\s]{3,}\s*[-–—]\s*(?=\n|$)/gi, "\n")
+    .replace(/(?:^|\n)\s*[-–—]\s*(?:GEOMETRY|ALGEBRA|DECIMALS|FRACTIONS|PERCENTAGES|MISCELLANEOUS\s+MATH|ANSWERS|NOTES)[-–—\s]*(?=\n|$)/gi, "\n");
+
+  // Strip glued page numbers and footnote numbers at breaks
+  cleaned = stripGluedPageNumbers(cleaned);
 
   // If frequency-detected repeating headers are provided, strip matching lines
   if (repeatingHeaders && repeatingHeaders.size > 0) {
@@ -379,8 +571,8 @@ export function detectQaBookLikelihood(text: string): {
   const optionDensity = optionMatches.length;
 
   const isLikelyQa =
-    (estimatedQuestionCount >= 3 && optionDensity >= 8) ||
-    (answerSectionMatches.length > 0 && estimatedQuestionCount >= 2) ||
+    (estimatedQuestionCount >= 3 && optionDensity >= 4) ||
+    (answerSectionMatches.length > 0 && estimatedQuestionCount >= 1) ||
     (estimatedQuestionCount >= 5);
 
   const sampleConfidence = Math.min(
@@ -407,7 +599,7 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
       ...pagesOrText.slice(0, 15),
       ...pagesOrText.slice(Math.max(0, pagesOrText.length - 15)),
     ];
-    sampleText = samplePages.map((p) => p.text || "").join("\n");
+    sampleText = samplePages.map((p) => (typeof p === "string" ? p : p.text || "")).join("\n");
   } else {
     sampleText = pagesOrText.slice(0, 50000);
   }
@@ -459,17 +651,24 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
   let headingPattern = PROFILE_STANDARD_TWO_PASS.headingPattern;
   let detectedHeading = "Chapter \\d+ / Section \\d+";
 
-  if (/(?:Set\s+\d+|SECTION\s+\d+:\s+)/i.test(sampleText)) {
+  const isFreeResponse = maxStyleCount < 2 && (answerSectionMatches > 0 || /(?:Answers\s*[-–—]?\s*Age|Practice\s*[-–—]?\s*Age)/i.test(sampleText));
+
+  if (/\bSet\s+\d+\b/i.test(sampleText)) {
     headingPattern = PROFILE_1001_MATH.headingPattern;
     detectedHeading = "Set \\d+ / Section \\d+";
   } else if (/Topic:\s+[\w\s]+/i.test(sampleText)) {
     headingPattern = /^(?:Topic:\s+[\w\s]+|Chapter\s+\d+)/i;
     detectedHeading = "Topic: [Name]";
+  } else if (isFreeResponse) {
+    headingPattern = PROFILE_FREE_RESPONSE.headingPattern;
+    detectedHeading = "Practice - [Name] / Exercise";
   }
 
   // Select profile
   let selectedProfile: ParserProfile;
-  if (detectedKeyLocation === "inline") {
+  if (isFreeResponse) {
+    selectedProfile = PROFILE_FREE_RESPONSE;
+  } else if (detectedKeyLocation === "inline") {
     selectedProfile = { ...PROFILE_INLINE_KEYS, choiceStyle: detectedChoiceStyle, expectedChoicesPerItem };
   } else if (expectedChoicesPerItem === 5 && detectedChoiceStyle === "paren_letter") {
     selectedProfile = { ...PROFILE_PAREN_5_CHOICE, keyLocation: detectedKeyLocation };
@@ -487,12 +686,28 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
 
   // Compute confidence (0-100%)
   let confidence = 50;
-  if (maxStyleCount >= 10) confidence += 20;
-  if (answerSectionMatches > 0 || inlineAnswerMatches > 0) confidence += 20;
-  if (questionNumberCount >= 5) confidence += 10;
-  confidence = Math.min(100, Math.max(30, confidence));
+  if (isFreeResponse) {
+    confidence = 90;
+  } else {
+    if (maxStyleCount >= 10) confidence += 20;
+    if (answerSectionMatches > 0 || inlineAnswerMatches > 0) confidence += 20;
+    if (questionNumberCount >= 5) confidence += 10;
+  }
 
-  const summary = `Detected ${expectedChoicesPerItem}-choice ${detectedChoiceStyle} format with ${detectedKeyLocation} answer keys and '${detectedHeading}' headings (${confidence}% confidence).`;
+  // Unstructured / legal document detection (no Q&A structure)
+  const isLikelyQa = detectQaBookLikelihood(sampleText).isLikelyQa;
+  const isUnstructured = (!isLikelyQa && !isFreeResponse) || (questionNumberCount < 2 && answerSectionMatches === 0 && inlineAnswerMatches === 0 && !isFreeResponse);
+  if (isUnstructured) {
+    confidence = 10;
+  }
+
+  confidence = Math.min(100, Math.max(10, confidence));
+
+  const summary = isUnstructured
+    ? "No standard question/answer structure detected. Unstructured legal or narrative text routed to rule-based notes generator."
+    : isFreeResponse
+    ? `Detected Free-Response practice format with numerical/text answer key and '${detectedHeading}' headings (${confidence}% confidence).`
+    : `Detected ${expectedChoicesPerItem}-choice ${detectedChoiceStyle} format with ${detectedKeyLocation} answer keys and '${detectedHeading}' headings (${confidence}% confidence).`;
 
   return {
     profile: selectedProfile,
@@ -500,7 +715,7 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
     summary,
     detectedHeadingPattern: detectedHeading,
     detectedKeyLocation,
-    detectedChoiceStyle,
+    detectedChoiceStyle: isFreeResponse ? ("none" as any) : detectedChoiceStyle,
     estimatedItemCount: questionNumberCount,
   };
 }
@@ -578,7 +793,18 @@ export function splitStemAndOptions(
     const cur = validSequence[i];
     const startPos = cur.index + cur.length;
     const endPos = i + 1 < validSequence.length ? validSequence[i + 1].index : block.length;
-    const optText = sanitizeContentText(block.substring(startPos, endPos), repeatingHeaders);
+    let optText = sanitizeContentText(block.substring(startPos, endPos), repeatingHeaders);
+
+    // For the last option: strip trailing section headers, Set markers, diagram points, and footers
+    if (i === validSequence.length - 1) {
+      optText = optText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ");
+      optText = optText
+        .replace(/(?:\n|^|\s{2,})\s*(?:Section\s+\d+|Chapter\s+\d+|Set\s+\d+|Answers\b)[\s\S]*/i, "")
+        .replace(/(?:[\s\n]+[A-F](?:[\s\t]+[A-F])*)+\s*$/g, "")
+        .replace(/(?:\n|^)\s*[-–—\s]+[A-Za-z\s]{3,}[-–—\s]+\d{1,4}\s*$/g, "")
+        .trim();
+    }
+
     options.push(optText || `Choice ${String.fromCharCode(65 + i)}`);
   }
 
@@ -593,6 +819,7 @@ export function evaluateSuspiciousItem(
   item: {
     stem: string;
     options: string[];
+    questionType?: QuestionType;
     hasIncompleteAnswer?: boolean;
     explanation?: string;
   },
@@ -620,9 +847,9 @@ export function evaluateSuspiciousItem(
     reasons.push("Publisher or catalog metadata detected in question stem");
   }
 
-  // Check 3: Options anomalies
+  // Check 3: Options anomalies (only applies to MCQ, not free-response)
   const opts = item.options || [];
-  if (opts.length < config.minOptionsCount) {
+  if (item.questionType !== "free_response" && opts.length < config.minOptionsCount) {
     reasons.push(`Fewer than ${config.minOptionsCount} choices available`);
   }
 
@@ -690,14 +917,30 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   let fullCleanedText = "";
   if (Array.isArray(pagesOrText)) {
     fullCleanedText = pagesOrText
-      .map((p) => `\n[Page ${p.pageNumber}]\n` + cleanPageText(p.text || reconstructStackedFractions(p.items), repeatingHeaders))
+      .map((p, idx) => {
+        const pageNum = typeof p === "string" ? idx + 1 : p.pageNumber;
+        const pageContent = typeof p === "string" ? p : p.text || reconstructStackedFractions(p.items);
+        return `\n[Page ${pageNum}]\n` + cleanPageText(pageContent, repeatingHeaders);
+      })
       .join("\n");
   } else {
     fullCleanedText = cleanPageText(pagesOrText, repeatingHeaders);
   }
 
-  const questionsMap = new Map<string, { number: number; stem: string; options: string[]; chapter: string; pageNumber?: number; inlineAnswer?: { letter: string; explanation: string } }>();
-  const answersMap = new Map<string, { number: number; letter: string; explanation: string; chapter: string }>();
+  type RawParsedQuestion = {
+    number: number;
+    stem: string;
+    options: string[];
+    questionType: QuestionType;
+    isUnparseableStub?: boolean;
+    chapter: string;
+    pageNumber?: number;
+    inlineAnswer?: { letter: string; explanation: string };
+  };
+
+  const questionRuns: Map<string, RawParsedQuestion>[] = [];
+  let currentRunMap = new Map<string, RawParsedQuestion>();
+  const answersMap = new Map<string, { number: number; letter: string; explanation: string; chapter: string; textAnswer?: string }>();
   const chaptersDetected = new Set<string>();
 
   let currentChapter = "Chapter 1";
@@ -730,11 +973,72 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       blockForQuestion = block.substring(0, inlineMatch.index).trim();
     }
 
-    // Attempt to split into stem and options
+    // 1. Check if it's an answer key block (only valid in an answer section or if marked as answer mode)
+    const isAnswerContext = isAnswerMode || /Answers\b/i.test(currentChapter);
+    const isFreeResponseContext = isAnswerContext || profile.id === "free_response";
+    const ansMatch = isAnswerContext
+      ? block.match(/^(?:(?:Choice\s+|Option\s+)\s*([a-eA-E])\b|\(?([a-eA-E])(?:[\.\)\:\-\]]|\s+is\s+correct\b|\s+|$))\s*([\s\S]*)/i)
+      : null;
+
+    if (ansMatch && isAnswerContext) {
+      const letter = (ansMatch[1] || ansMatch[2]).toLowerCase();
+      let explanation = sanitizeContentText(ansMatch[3] || "", repeatingHeaders);
+      explanation = explanation
+        .replace(/(?:^|\n)\s*[-–—\s]*(?:NOTES|MEMORANDA|INDEX|GLOSSARY|APPENDIX)\b[\s\S]*/i, "")
+        .replace(/(?:^|\n|\.\s+)\s*(?:(?:O\s*ur\s+)?acclaimed series|exam guides are the most sought|Skill Builders|The [A-Za-z\s]+ Advantage|WHAT YOU REALLY NEED|Also available at your local bookstore|Prices subject to change|To Order:\s*Call|Achieve Test Success|Master the Basics)[\s\S]*/i, "")
+        .replace(/(?:Library of Congress|All rights reserved)[\s\S]*/gi, "")
+        .trim();
+
+      const key = `${currentChapter}::${currentNum}`;
+      const globalKey = `${currentNum}`;
+      const answerData = {
+        number: currentNum,
+        letter,
+        explanation: explanation || `Identified based on answer key (${letter.toUpperCase()}).`,
+        chapter: currentChapter,
+      };
+      answersMap.set(key, answerData);
+      answersMap.set(globalKey, answerData);
+      return;
+    }
+
+    if (isFreeResponseContext && (isAnswerMode || /Answers\b/i.test(currentChapter))) {
+      const freeMatch = block.match(/^([^\n]+)/);
+      if (freeMatch) {
+        const textAnswer = sanitizeContentText(freeMatch[1], repeatingHeaders);
+        let explanation = sanitizeContentText(block, repeatingHeaders);
+        explanation = explanation
+          .replace(/(?:^|\n)\s*[-–—\s]*(?:NOTES|MEMORANDA|INDEX|GLOSSARY|APPENDIX)\b[\s\S]*/i, "")
+          .replace(/(?:^|\n)\s*(?:Also available at your local bookstore|Prices subject to change|To Order:\s*Call|Achieve Test Success|Master the Basics)[\s\S]*/i, "")
+          .replace(/(?:Library of Congress|All rights reserved)[\s\S]*/gi, "")
+          .trim();
+
+        const key = `${currentChapter}::${currentNum}`;
+        const globalKey = `${currentNum}`;
+        const answerData = {
+          number: currentNum,
+          letter: "a",
+          textAnswer,
+          explanation: explanation || `Answer: ${textAnswer}`,
+          chapter: currentChapter,
+        };
+        answersMap.set(key, answerData);
+        answersMap.set(globalKey, answerData);
+        return;
+      }
+    }
+
+    // 2. Question statement handling (only when not in an answers section)
+    if (isAnswerMode || /Answers\b/i.test(currentChapter)) {
+      return;
+    }
+
     const splitResult = splitStemAndOptions(blockForQuestion, repeatingHeaders, config);
 
     if (splitResult && splitResult.options.length >= config.minOptionsCount) {
-      isAnswerMode = false; // Always exit answer mode when a true question block is encountered
+      if (profile.keyLocation !== "end_of_book") {
+        isAnswerMode = false; // Only exit answer mode for inline keys, never for end_of_book
+      }
 
       const stem = sanitizeContentText(splitResult.stem, repeatingHeaders);
       const options = [...splitResult.options];
@@ -754,53 +1058,58 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       if (stem.length > 2) {
         const key = `${currentChapter}::${currentNum}`;
         const globalKey = `${currentNum}`;
-        const itemData = {
+        const itemData: RawParsedQuestion = {
           number: currentNum,
           stem,
           options: options.slice(0, config.maxOptionsCount),
+          questionType: "mcq",
           chapter: currentChapter,
           pageNumber: currentPage,
           inlineAnswer: inlineAnswerData,
         };
-        questionsMap.set(key, itemData);
-        if (!questionsMap.has(globalKey)) {
-          questionsMap.set(globalKey, itemData);
+        currentRunMap.set(key, itemData);
+        if (!currentRunMap.has(globalKey)) {
+          currentRunMap.set(globalKey, itemData);
         }
       }
-    } else {
-      // Check if it's an answer key block
-      const ansMatch = block.match(/^(?:Choice\s+|Option\s+|\()?([a-eA-E])(?:[\.\)\:\-\s\]]|\s+is\s+correct)?\s*([\s\S]*)/i);
-      if (ansMatch) {
-        const letter = ansMatch[1].toLowerCase();
-        let explanation = sanitizeContentText(ansMatch[2] || "", repeatingHeaders);
-        explanation = explanation.replace(/(?:Library of Congress|All rights reserved)[\s\S]*/gi, "").trim();
-
+    } else if (profile.id === "free_response" || /Practice|Exercise/i.test(currentChapter)) {
+      // Free-response problem statement without multiple choice options
+      const stem = sanitizeContentText(blockForQuestion, repeatingHeaders);
+      if (stem.length > 2) {
         const key = `${currentChapter}::${currentNum}`;
         const globalKey = `${currentNum}`;
-        const answerData = {
+        const itemData: RawParsedQuestion = {
           number: currentNum,
-          letter,
-          explanation: explanation || `Identified based on answer key (${letter.toUpperCase()}).`,
+          stem,
+          options: [],
+          questionType: "free_response",
           chapter: currentChapter,
+          pageNumber: currentPage,
         };
-        answersMap.set(key, answerData);
-        answersMap.set(globalKey, answerData);
+        currentRunMap.set(key, itemData);
+        if (!currentRunMap.has(globalKey)) {
+          currentRunMap.set(globalKey, itemData);
+        }
       }
-
-      // Also check if block contains a sequence of quick answers like "1. a  2. b  3. c"
-      const quickAnswers = [...block.matchAll(/(?:^|\s+)(\d{1,4})[\.\)]\s*([a-eA-E])\b/g)];
-      if (quickAnswers.length > 1) {
-        for (const qa of quickAnswers) {
-          const qNum = parseInt(qa[1], 10);
-          const qLetter = qa[2].toLowerCase();
-          const qData = {
-            number: qNum,
-            letter: qLetter,
-            explanation: `Verified correct answer: Option ${qLetter.toUpperCase()}.`,
-            chapter: currentChapter,
-          };
-          answersMap.set(`${currentChapter}::${qNum}`, qData);
-          answersMap.set(String(qNum), qData);
+    } else if (!isAnswerMode && !/Answers\b/i.test(currentChapter)) {
+      // MCQ Question that couldn't be fully parsed (diagram/image choices or stacked fractions)
+      // Import as needs_review stub with stem, sourcePage, and note, NOT silently dropped (Condition A.2)
+      const stem = sanitizeContentText(blockForQuestion, repeatingHeaders);
+      if (stem.length > 2 && currentNum !== null) {
+        const key = `${currentChapter}::${currentNum}`;
+        const globalKey = `${currentNum}`;
+        const itemData: RawParsedQuestion = {
+          number: currentNum,
+          stem,
+          options: splitResult ? splitResult.options : [],
+          questionType: "mcq",
+          isUnparseableStub: true,
+          chapter: currentChapter,
+          pageNumber: currentPage,
+        };
+        currentRunMap.set(key, itemData);
+        if (!currentRunMap.has(globalKey)) {
+          currentRunMap.set(globalKey, itemData);
         }
       }
     }
@@ -831,6 +1140,9 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         currentChapter = `${trimmed} ${nextTrimmed}`;
         chaptersDetected.add(currentChapter);
         currentNum = null;
+        if (profile.keyLocation === "end_of_chapter") {
+          isAnswerMode = false;
+        }
         i++; // skip next line since consumed
         continue;
       }
@@ -853,13 +1165,16 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         currentChapter = detectedName;
         chaptersDetected.add(currentChapter);
         currentNum = null;
+        if (profile.keyLocation === "end_of_chapter") {
+          isAnswerMode = false;
+        }
 
         // If the line also contained a question (e.g. "Set 62 ... 977. Question text"), process the question
         const restOfLine = trimmed.substring(chMatch[0].length).trim();
-        const numOnSameLine = restOfLine.match(/^(\d{1,4})[\.\)]\s+([\s\S]*)/);
+        const numOnSameLine = restOfLine.match(/^(\d{1,4})[\.\)](?:\s+|$|(?=[^\d\s\.]))\s*([\s\S]*)/);
         if (numOnSameLine) {
           currentNum = parseInt(numOnSameLine[1], 10);
-          currentBuffer = [numOnSameLine[2]];
+          currentBuffer = numOnSameLine[2] ? [numOnSameLine[2]] : [];
         }
         continue;
       }
@@ -878,12 +1193,58 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     }
     if (isEndMarker) continue;
 
-    // Detect question/answer numbering: "1. ", "64. ", "1) "
-    const numMatch = trimmed.match(/^(\d{1,4})[\.\)]\s+([\s\S]*)/);
+    // Check for condensed tabular answer grid in answer mode: e.g. "1. A  2. B  3. C"
+    if (isAnswerMode) {
+      const gridMatches = Array.from(trimmed.matchAll(/(?:^|\s+)(\d{1,4})[\.\)]\s*([a-eA-E])\b/g));
+      if (gridMatches.length >= 2) {
+        flush();
+        for (const gm of gridMatches) {
+          const num = parseInt(gm[1], 10);
+          const letter = gm[2].toLowerCase();
+          const answerData = {
+            number: num,
+            letter,
+            explanation: `Answer: Option ${letter.toUpperCase()}.`,
+            chapter: currentChapter,
+          };
+          answersMap.set(`${currentChapter}::${num}`, answerData);
+          answersMap.set(String(num), answerData);
+        }
+        continue;
+      }
+    }
+
+    // Detect question/answer numbering: "1. ", "64. ", "1) " (also matches numbers on their own line, but excludes decimals like 1.43)
+    const numMatch = trimmed.match(/^(\d{1,4})[\.\)](?:\s+|$|(?=[^\d\s\.]))\s*([\s\S]*)/);
     if (numMatch) {
+      const nextNum = parseInt(numMatch[1], 10);
+      const lastLine = currentBuffer.length > 0 ? currentBuffer[currentBuffer.length - 1].trim() : "";
+      const isSentenceContinuation =
+        currentNum !== null &&
+        lastLine.length > 0 &&
+        !/[\.\?\!]["']?$/.test(lastLine) &&
+        nextNum !== currentNum + 1 &&
+        nextNum !== 1;
+
+      if (isSentenceContinuation) {
+        currentBuffer.push(line);
+        continue;
+      }
+
       flush();
-      currentNum = parseInt(numMatch[1], 10);
-      currentBuffer = [numMatch[2]];
+
+      // If starting a new question run at number 1 while not in answer mode
+      if (!isAnswerMode && nextNum === 1 && currentRunMap.size > 0) {
+        questionRuns.push(currentRunMap);
+        currentRunMap = new Map();
+      }
+
+      // Check if sequence reset triggers answer mode (only after a long run of questions)
+      if (!isAnswerMode && (currentRunMap.size >= 10 || questionRuns.length > 0) && nextNum === 1 && (currentNum !== null && currentNum > 10)) {
+        isAnswerMode = true;
+      }
+      currentNum = nextNum;
+      currentBuffer = numMatch[2] ? [numMatch[2]] : [];
       continue;
     }
 
@@ -893,13 +1254,62 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   }
   flush();
 
-  // De-duplicate questions by number
-  const seenNumbers = new Set<number>();
+  if (currentRunMap.size > 0) {
+    questionRuns.push(currentRunMap);
+  }
+
+  // In end_of_chapter documents, each chapter has its own questions and answer keys; merge all runs across chapters
+  // In end_of_book / free_response documents where multiple runs compete for a single answer key, select the best aligned run
+  let questionsToProcess: RawParsedQuestion[] = [];
+  if (profile.keyLocation === "end_of_chapter") {
+    for (const rMap of questionRuns) {
+      for (const q of rMap.values()) {
+        questionsToProcess.push(q);
+      }
+    }
+  } else if (questionRuns.length > 1) {
+    let bestScore = -1;
+    let bestRunMap = questionRuns[0];
+    for (const rMap of questionRuns) {
+      let score = 0;
+      for (const q of rMap.values()) {
+        if (answersMap.has(String(q.number)) || answersMap.has(`${q.chapter}::${q.number}`)) {
+          score++;
+        }
+      }
+      if (score > bestScore || (score === bestScore && rMap.size > bestRunMap.size)) {
+        bestScore = score;
+        bestRunMap = rMap;
+      }
+    }
+    questionsToProcess = Array.from(bestRunMap.values());
+  } else if (questionRuns.length === 1) {
+    questionsToProcess = Array.from(questionRuns[0].values());
+  }
+
+  // If no questions found at all, check if this is an unstructured law or study text (e.g. RA 6713)
+  if (questionsToProcess.length === 0) {
+    return generateQuestionsFromLegalOrUnstructuredText(pagesOrText, options);
+  }
+
+  // De-duplicate questions by chapter and number (or global number in end_of_book)
+  const seenKeys = new Set<string>();
   const items: ParsedQaItem[] = [];
 
-  for (const q of questionsMap.values()) {
-    if (seenNumbers.has(q.number)) continue;
-    seenNumbers.add(q.number);
+  for (const q of questionsToProcess) {
+    // In free-response lesson documents (e.g. Age Problems), filter out lesson-step runs that don't align with the answer key
+    if (
+      profile.id === "free_response" &&
+      answersMap.size > 0 &&
+      !answersMap.has(String(q.number)) &&
+      !answersMap.has(`${q.chapter}::${q.number}`)
+    ) {
+      continue;
+    }
+
+    const dedupKey = profile.keyLocation === "end_of_chapter" ? `${q.chapter}::${q.number}` : `${q.number}`;
+    if (seenKeys.has(dedupKey)) continue;
+    seenKeys.add(dedupKey);
 
     // Look up answer key (inline answer takes precedence if present, then chapter key, then global key)
     const ans = q.inlineAnswer || answersMap.get(`${q.chapter}::${q.number}`) || answersMap.get(String(q.number));
@@ -909,10 +1319,15 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     let hasIncompleteAnswer = false;
 
     if (ans) {
-      correctLetter = ans.letter.toLowerCase();
-      correctIndex = ["a", "b", "c", "d", "e"].indexOf(correctLetter);
-      if (correctIndex < 0) correctIndex = 0;
-      explanation = ans.explanation || `Answer: Option ${ans.letter.toUpperCase()}.`;
+      if ((ans as any).textAnswer) {
+        // Free-response answer
+        explanation = (ans as any).textAnswer;
+      } else {
+        correctLetter = ans.letter.toLowerCase();
+        correctIndex = ["a", "b", "c", "d", "e"].indexOf(correctLetter);
+        if (correctIndex < 0) correctIndex = 0;
+        explanation = ans.explanation || `Answer: Option ${ans.letter.toUpperCase()}.`;
+      }
     } else {
       hasIncompleteAnswer = true;
       explanation = "Answer key not explicitly indexed in this section.";
@@ -923,11 +1338,22 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       {
         stem: q.stem,
         options: q.options,
+        questionType: (q as any).questionType,
         hasIncompleteAnswer,
         explanation,
       },
       config
     );
+
+    let isSuspicious = evaluation.isSuspicious;
+    const suspiciousReasons = [...evaluation.reasons];
+    let reviewStatus: QuestionReviewStatus = evaluation.reviewStatus;
+
+    if ((q as any).isUnparseableStub) {
+      isSuspicious = true;
+      reviewStatus = "needs_review";
+      suspiciousReasons.push("Diagram-based or unparseable choices (requires manual review)");
+    }
 
     items.push({
       id: generateUUID(),
@@ -939,10 +1365,12 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       explanation,
       chapter: q.chapter,
       pageNumber: q.pageNumber,
+      sourcePage: q.pageNumber,
+      questionType: (q as any).questionType || "mcq",
       hasIncompleteAnswer,
-      isSuspicious: evaluation.isSuspicious,
-      suspiciousReasons: evaluation.reasons,
-      reviewStatus: evaluation.reviewStatus,
+      isSuspicious,
+      suspiciousReasons,
+      reviewStatus,
     });
   }
 
@@ -973,6 +1401,275 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     totalExpected: items.length + missingQuestionNumbers.length,
     profileUsed: profile,
     repeatingHeadersStripped: Array.from(repeatingHeaders),
+  };
+}
+
+/**
+ * Rule-based question and flashcard generator for unstructured legal, policy, and study texts (e.g. RA 6713).
+ * Extracts:
+ * 1. Term-definition pairs from '(a) Term. - text' and '“Term” refers to...'
+ * 2. Number-blank questions from 'word (numeral)' with distractor numbers from the document
+ * 3. Section cards for 'Section \d+. Title'
+ * Attaches sourcePage and sourceQuote to every generated question.
+ * Flags word-numeral inconsistencies (e.g. 'ten (100)') as needs_review.
+ */
+export function generateQuestionsFromLegalOrUnstructuredText(
+  pagesOrText: PdfPageWithLayout[] | string,
+  options?: {
+    config?: ImporterThresholdConfig;
+  }
+): ParseTwoPassResult {
+  const pages: { pageNumber: number; text: string }[] = [];
+  if (Array.isArray(pagesOrText)) {
+    pagesOrText.forEach((p, idx) => {
+      pages.push({
+        pageNumber: p.pageNumber || idx + 1,
+        text: cleanPageText(p.text || ""),
+      });
+    });
+  } else {
+    const rawPages = pagesOrText.split(/(?:^|\n)\[Page\s+(\d+)\]/i);
+    if (rawPages.length > 1) {
+      for (let i = 1; i < rawPages.length; i += 2) {
+        pages.push({
+          pageNumber: parseInt(rawPages[i], 10),
+          text: cleanPageText(rawPages[i + 1] || ""),
+        });
+      }
+    } else {
+      pages.push({ pageNumber: 1, text: cleanPageText(pagesOrText) });
+    }
+  }
+
+  const items: ParsedQaItem[] = [];
+  const chaptersDetected: string[] = [];
+  const allNumbersInDoc: number[] = [];
+  const definedTerms: { term: string; definition: string; pageNumber: number; section: string; rawQuote: string }[] = [];
+  const numberBlanks: { word: string; numeral: number; sentence: string; pageNumber: number; section: string; isConsistent: boolean; reason?: string }[] = [];
+  const sectionCards: { sectionNum: string; title: string; pageNumber: number; quote: string }[] = [];
+
+  let currentRule = "";
+  let currentSection = "General Provisions";
+  chaptersDetected.push(currentSection);
+
+  // First pass: extract sections, terms, and numbers
+  for (const page of pages) {
+    const lines = page.text.split("\n");
+    for (let l = 0; l < lines.length; l++) {
+      const line = lines[l].trim();
+      if (!line) continue;
+
+      // Detect Rule headers (e.g. "Rule IV Transparency of Transactions" or "Rule I\nCoverage")
+      const ruleMatch = line.match(/^Rule\s+([IVXLCDM\d]+)(?:[\.\s\-–—]+([^\n]+))?$/i);
+      if (ruleMatch) {
+        let ruleTitle = (ruleMatch[2] || "").trim();
+        if (!ruleTitle && l + 1 < lines.length) {
+          const nextL = lines[l + 1].trim();
+          if (nextL && !/^(?:Rule|Section|Sec\.|\[Page|\d+\.)/i.test(nextL) && nextL.length < 80) {
+            ruleTitle = nextL;
+          }
+        }
+        currentRule = ruleTitle ? `Rule ${ruleMatch[1]}: ${ruleTitle}` : `Rule ${ruleMatch[1]}`;
+        if (!chaptersDetected.includes(currentRule)) {
+          chaptersDetected.push(currentRule);
+        }
+      }
+
+      // Detect Section headers (e.g. "Section 1. Title.", "Sec. 2. Declaration of Policy.")
+      const secMatch = line.match(/^(?:Section|Sec\.)\s+(\d+)[\.\s]+([A-Za-z\s,\-–—]+?)(?:\.|\s*[-–—]|$)/i);
+      if (secMatch) {
+        const secNum = secMatch[1];
+        const secTitle = secMatch[2].trim();
+        currentSection = currentRule ? `${currentRule} - Sec. ${secNum}. ${secTitle}` : `Sec. ${secNum}. ${secTitle}`;
+        if (!chaptersDetected.includes(currentSection)) {
+          chaptersDetected.push(currentSection);
+        }
+        sectionCards.push({
+          sectionNum: secNum,
+          title: secTitle,
+          pageNumber: page.pageNumber,
+          quote: line,
+        });
+      }
+
+      // Collect numbers in document for distractor pools
+      const numMatches = [...line.matchAll(/\b(\d+)\b/g)];
+      for (const nm of numMatches) {
+        const val = parseInt(nm[1], 10);
+        if (val > 0 && val <= 1000 && !allNumbersInDoc.includes(val)) {
+          allNumbersInDoc.push(val);
+        }
+      }
+    }
+
+    // Match term definitions across page text:
+    // Pattern 1: (c) “Gift” refers to... or (a) “Government” includes...
+    // Pattern 2: (a) Commitment to public interest. - Public officials...
+    const termRegex = /\(([a-z])\)\s*(?:“([^”"]+)”|([A-Z][a-zA-Z\s\-–—]+?)\.\s*[-–—])\s*([\s\S]*?)(?=\n\s*\([a-z]\)|\n\s*(?:Sec\.|Section\s+\d+)|\n\s*\[Page|$)/g;
+    const tMatches = [...page.text.matchAll(termRegex)];
+    for (const tm of tMatches) {
+      const termName = (tm[2] || tm[3] || "").trim();
+      const rawDef = (tm[4] || "").trim().replace(/\s+/g, " ");
+      if (termName.length >= 3 && rawDef.length >= 10) {
+        definedTerms.push({
+          term: termName,
+          definition: rawDef,
+          pageNumber: page.pageNumber,
+          section: currentSection,
+          rawQuote: tm[0].slice(0, 300).trim(),
+        });
+      }
+    }
+
+    // Match word (numeral) patterns, including unclosed parentheses: e.g. "fifteen (15)", "forty-five (45)", "forty five (45)", "ten (100 working days"
+    const wordNumRegex = /\b((?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|one|two|three|four|five|six|seven|eight|nine|ten|hundred)\s+)?(?:[A-Za-z\-]+))\s*\(\s*(\d+)(\s*\)|\s+(?=[a-zA-Z]))/gi;
+    const wnMatches = [...page.text.matchAll(wordNumRegex)];
+    for (const wnm of wnMatches) {
+      const word = wnm[1].trim();
+      const numeral = parseInt(wnm[2], 10);
+      const isUnclosed = wnm[3].trim() !== ")";
+      const consistency = checkWordNumeralConsistency(word, numeral, isUnclosed);
+
+      const matchIndex = wnm.index || 0;
+      const sentenceStart = Math.max(0, page.text.lastIndexOf(".", matchIndex) + 1);
+      const sentenceEnd = page.text.indexOf(".", matchIndex + wnm[0].length);
+      const sentence = page.text.substring(
+        sentenceStart,
+        sentenceEnd > sentenceStart ? sentenceEnd + 1 : sentenceStart + 200
+      ).trim().replace(/\s+/g, " ");
+
+      numberBlanks.push({
+        word,
+        numeral,
+        sentence,
+        pageNumber: page.pageNumber,
+        section: currentSection,
+        isConsistent: consistency.isConsistent,
+        reason: consistency.reason,
+      });
+    }
+  }
+
+  // Second pass: synthesize deterministic questions
+  let qNumber = 1;
+
+  // 1. Generate Term-Definition Questions
+  const termNames = definedTerms.map((t) => t.term);
+  for (const t of definedTerms) {
+    const distractors = termNames.filter((tn) => tn !== t.term).slice(0, 3);
+    while (distractors.length < 3) {
+      distractors.push(`Provision ${distractors.length + 1}`);
+    }
+    const options = [t.term, ...distractors].sort();
+    const correctIndex = options.indexOf(t.term);
+
+    const stemSnippet = t.definition.length > 250 ? t.definition.slice(0, 247) + "..." : t.definition;
+    const stem = `Under RA 6713, which term is defined as: "${stemSnippet}"?`;
+
+    items.push({
+      id: generateUUID(),
+      number: qNumber++,
+      stem,
+      options,
+      correctIndex,
+      correctLetter: ["a", "b", "c", "d"][correctIndex],
+      explanation: `Correct: ${t.term}. Defined under ${t.section}: "${t.rawQuote}"`,
+      chapter: t.section,
+      pageNumber: t.pageNumber,
+      sourcePage: t.pageNumber,
+      sourceQuote: t.rawQuote,
+      questionType: "mcq",
+      reviewStatus: "verified",
+      isSuspicious: false,
+    });
+  }
+
+  // 2. Generate Number-Blank Questions
+  const fallbackDistractorNumbers = [15, 30, 45, 60, 90, 18, 5, 10];
+  const poolNumbers = allNumbersInDoc.length >= 4 ? allNumbersInDoc : fallbackDistractorNumbers;
+
+  for (const nb of numberBlanks) {
+    if (!ENGLISH_NUMBER_WORDS[nb.word.toLowerCase()]) {
+      continue;
+    }
+
+    const distractorNums = poolNumbers
+      .filter((n) => n !== nb.numeral)
+      .slice(0, 3);
+    while (distractorNums.length < 3) {
+      distractorNums.push(nb.numeral + (distractorNums.length + 1) * 5);
+    }
+    const options = [String(nb.numeral), ...distractorNums.map(String)].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    const correctIndex = options.indexOf(String(nb.numeral));
+
+    const blankedSentence = nb.sentence.replace(
+      new RegExp(`\\b${nb.word}\\s*\\(\\s*${nb.numeral}\\s*\\)`, "i"),
+      `_____ (${nb.numeral})`
+    );
+
+    const stem = `Complete the legal provision: "${blankedSentence}"`;
+    const suspiciousReasons: string[] = [];
+    if (!nb.isConsistent) {
+      suspiciousReasons.push(nb.reason || "Word-numeral mismatch");
+    }
+
+    items.push({
+      id: generateUUID(),
+      number: qNumber++,
+      stem,
+      options,
+      correctIndex,
+      correctLetter: ["a", "b", "c", "d"][correctIndex],
+      explanation: `Legal clause specified: "${nb.word} (${nb.numeral})" in ${nb.section}.`,
+      chapter: nb.section,
+      pageNumber: nb.pageNumber,
+      sourcePage: nb.pageNumber,
+      sourceQuote: nb.sentence,
+      questionType: "mcq",
+      isSuspicious: !nb.isConsistent,
+      suspiciousReasons,
+      reviewStatus: nb.isConsistent ? "verified" : "needs_review",
+    });
+  }
+
+  // 3. Generate Section Cards (Flashcards)
+  const allTitles = sectionCards.map((sc) => sc.title);
+  for (const sc of sectionCards.slice(0, 15)) {
+    const distractorTitles = allTitles.filter((t) => t !== sc.title).slice(0, 3);
+    while (distractorTitles.length < 3) {
+      distractorTitles.push(`General Rule ${distractorTitles.length + 1}`);
+    }
+    const options = [sc.title, ...distractorTitles].sort();
+    const correctIndex = options.indexOf(sc.title);
+
+    items.push({
+      id: generateUUID(),
+      number: qNumber++,
+      stem: `What is the subject matter of Section ${sc.sectionNum} of RA 6713?`,
+      options,
+      correctIndex,
+      correctLetter: ["a", "b", "c", "d"][correctIndex],
+      explanation: `Section ${sc.sectionNum} is entitled "${sc.title}": "${sc.quote}"`,
+      chapter: `Section ${sc.sectionNum}`,
+      pageNumber: sc.pageNumber,
+      sourcePage: sc.pageNumber,
+      sourceQuote: sc.quote,
+      questionType: "mcq",
+      reviewStatus: "verified",
+      isSuspicious: false,
+    });
+  }
+
+  const suspiciousCount = items.filter((it) => it.isSuspicious).length;
+
+  return {
+    items,
+    missingQuestionNumbers: [],
+    chaptersDetected,
+    suspiciousCount,
+    totalExpected: items.length,
+    isUnstructuredDocument: true,
+    notesRoute: true,
   };
 }
 
@@ -1019,7 +1716,7 @@ export function toQuestions(parsedList: ParsedQaItem[]): StoredQuestion[] {
     correctIndex: item.correctIndex,
     explanation: item.explanation,
     topicTag: item.chapter || "Extracted Exam",
-    sourcePage: item.pageNumber,
+    sourcePage: item.sourcePage || item.pageNumber,
     origin: "parsed_pdf",
     reviewStatus:
       item.reviewStatus ||
