@@ -816,7 +816,7 @@ export interface TwinQuestionInput {
  * Generate an authentic "Twin" question testing identical logic with new numbers
  */
 export async function generateTwinQuestion(input: TwinQuestionInput): Promise<ExamQuestion> {
-  const prompt = `You are a Senior Exam Item Writer for competitive entrance and Civil Service examinations.
+  const prompt = `You are a Senior Exam Item Writer for competitive entrance, academic, and board examinations.
 Generate an authentic TWIN VARIATION of the following question. It must test the EXACT same mathematical or logical concept, but use different numbers, names, or scenario.
 
 Original Question:

@@ -485,7 +485,7 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
         {/* Timed Practice Drill & CSC Exam Pacer Settings */}
         <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
           <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-            <Target className="w-4 h-4 text-amber-500" /> Timed Practice & CSC Exam Pacer
+            <Target className="w-4 h-4 text-amber-500" /> Timed Practice & Exam Speed Pacer
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             {/* Default Target Pace */}
@@ -504,7 +504,7 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
               >
                 <option value="45">45 Seconds (Speed Drill)</option>
                 <option value="60">60 Seconds (1 Min / Question)</option>
-                <option value="67">67 Seconds (CSC 150Q / 3h Simulation)</option>
+                <option value="67">67 Seconds (Standard 150Q / 3h Simulation)</option>
                 <option value="72">72 Seconds (Standard 3h / 150Q)</option>
                 <option value="90">90 Seconds (Standard Exam)</option>
                 <option value="120">120 Seconds (Math / Analytical)</option>
@@ -528,8 +528,8 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
                 <option value="25">25 Problems (Quick Quiz)</option>
                 <option value="50">50 Problems (Half-Exam)</option>
                 <option value="100">100 Problems</option>
-                <option value="150">150 Problems (CSC Full Exam)</option>
-                <option value="170">170 Problems (CSC Professional)</option>
+                <option value="150">150 Problems (Standard Full Exam)</option>
+                <option value="170">170 Problems (Comprehensive Exam)</option>
               </select>
             </div>
 

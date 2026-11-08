@@ -7,6 +7,7 @@ import {
   getReadinessStats,
   recordExamAttempt,
   DEFAULT_SPRINT_QUESTIONS,
+  getSprintQuestions,
   ExamAttemptRecord,
 } from "../src/services/examReadinessService";
 import { generateTwinQuestion } from "../src/services/examService";
@@ -89,6 +90,22 @@ describe("Exam Readiness Scoring & Calibration", () => {
       expect(q.explanation.length).toBeGreaterThan(10);
     });
   });
+
+  it("draws 5 random questions and supports category filtering", () => {
+    const all = getSprintQuestions("All Topics", 5);
+    expect(all.length).toBe(5);
+    all.forEach((q) => {
+      expect(q.options.length).toBe(4);
+      expect(q.options).toContain(q.correctAnswer);
+    });
+
+    const numericalOnly = getSprintQuestions("Numerical Reasoning", 3);
+    expect(numericalOnly.length).toBe(3);
+    numericalOnly.forEach((q) => {
+      expect(q.category).toContain("Numerical");
+    });
+  });
+
 });
 
 describe("Twin Question Generator", () => {

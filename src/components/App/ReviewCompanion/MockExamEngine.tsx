@@ -862,7 +862,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
               {timedMode && (
                 <div className="flex items-center gap-1 overflow-x-auto py-0.5">
                   {[
-                    { s: 67, label: "67s (CSC)" },
+                    { s: 67, label: "67s (Standard 3h)" },
                     { s: 60, label: "60s" },
                     { s: 72, label: "72s" },
                     { s: 90, label: "90s" },

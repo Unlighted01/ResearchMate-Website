@@ -188,7 +188,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           <div className="space-y-3 max-w-xl">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/10 text-indigo-200 border border-white/10 font-bold">
-                Civil Service & Entrance Exam Benchmark
+                Competitive Exam & Passing Benchmark
               </span>
               <span className="text-xs font-mono text-indigo-300 flex items-center gap-1">
                 🔥 {readinessStats.streakDays}-Day Streak
@@ -246,7 +246,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                 </span>
               ) : (
                 <span className="text-indigo-200/80 text-[11px] font-mono">
-                  Benchmark: 80% on Numerical, Verbal & General Info.
+                  Benchmark: 80% passing target across key categories.
                 </span>
               )}
               <span className="text-slate-400 font-mono text-[11px]">
@@ -633,6 +633,17 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         onClose={() => data.setShowAdvancedFilters(false)}
         onApply={data.setAdvancedFilters}
         availableTags={data.allTags}
+      />
+
+      {/* Daily 5-Minute Sprint Modal */}
+      <DailySprintModal
+        isOpen={isSprintModalOpen}
+        onClose={(updatedStats) => {
+          setIsSprintModalOpen(false);
+          if (updatedStats) {
+            setReadinessStats(updatedStats);
+          }
+        }}
       />
 
 

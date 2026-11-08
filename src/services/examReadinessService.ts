@@ -39,39 +39,53 @@ const STORAGE_KEY = "researchmate_exam_readiness_v1";
 const STREAK_KEY = "researchmate_exam_streak_v1";
 const PASSING_THRESHOLD = 80;
 
-// High-Yield built-in sprint question fallback (Civil Service & Entrance Exam heuristics)
-export const DEFAULT_SPRINT_QUESTIONS = [
+export interface SprintQuestionItem {
+  id: string;
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  category: string;
+  explanation: string;
+}
+
+// Universal High-Yield 5-Question Default Set
+export const DEFAULT_SPRINT_QUESTIONS: SprintQuestionItem[] = [
   {
     id: "sprint-default-1",
     question: "Pipe A can fill a reservoir in 6 hours, while Pipe B takes 12 hours. If both pipes are opened simultaneously, how many hours will it take to fill the reservoir?",
     options: ["3 hours", "4 hours", "6 hours", "9 hours"],
     correctAnswer: "4 hours",
     category: "Numerical Reasoning",
-    explanation: "⚡ 30-Second Shortcut: T = (A × B) / (A + B) = (6 × 12) / (6 + 12) = 72 / 18 = 4 hours. Common trap: Never take the simple average (9 hrs)!",
+    explanation: "⚡ 30-Second Shortcut: T = (A × B) / (A + B) = (6 × 12) / (6 + 12) = 72 / 18 = 4 hours. Common trap: Never take the simple arithmetic average (9 hrs)!",
   },
   {
     id: "sprint-default-2",
-    question: "A motorboat travels upstream at 40 km/h and returns downstream along the same path at 60 km/h. What is the average speed of the boat for the round trip?",
+    question: "A vehicle travels to its destination at 40 km/h and returns along the same route at 60 km/h. What is the average speed for the round trip?",
     options: ["48 km/h", "50 km/h", "52 km/h", "55 km/h"],
     correctAnswer: "48 km/h",
     category: "Numerical Reasoning",
-    explanation: "⚡ 30-Second Shortcut: For equal distance round-trips, use the Harmonic Mean: V_avg = (2 × v1 × v2) / (v1 + v2) = (2 × 40 × 60) / 100 = 48 km/h. Common trap: 50 km/h is the arithmetic mean and always wrong!",
+    explanation: "⚡ 30-Second Shortcut: For equal distance round-trips, use Harmonic Mean: V_avg = (2 × v1 × v2) / (v1 + v2) = (2 × 40 × 60) / 100 = 48 km/h. Trap: 50 km/h is arithmetic mean and always wrong!",
   },
   {
     id: "sprint-default-3",
-    question: "Under RA 6713 (Code of Conduct and Ethical Standards for Public Officials and Employees), what is the maximum time allowed for a public officer to respond to public letters and requests?",
-    options: ["5 working days", "10 working days", "15 working days", "30 calendar days"],
-    correctAnswer: "15 working days",
-    category: "General Information",
-    explanation: "Section 5(a) of RA 6713 mandates that all public officials and employees must act on letters, telegrams, or other communications within 15 working days from receipt.",
+    question: "EPHEMERAL is to PERMANENT as ZENITH is to _____?",
+    options: ["Apex", "Nadir", "Horizon", "Pinnacle"],
+    correctAnswer: "Nadir",
+    category: "Verbal Ability",
+    explanation: "⚡ Analogy: 'Ephemeral' (transient) and 'Permanent' are exact antonyms. 'Zenith' is the highest culmination point; its antonym is 'Nadir' (the lowest point).",
   },
   {
     id: "sprint-default-4",
-    question: "Choose the correct word: 'Ang mga mag-aaral ay pumunta sa silid-aklatan _____ magbasa ng mga aklat.'",
-    options: ["ng", "nang", "may", "mayroon"],
-    correctAnswer: "nang",
-    category: "Verbal Ability",
-    explanation: "⚡ Filipino Grammar Rule: Gamitin ang 'nang' bilang kasingkahulugan ng 'upang' o 'para' (in order to), at kapag sumasagot sa tanong na 'paano'. Gamitin ang 'ng' kapag sinusundan ng pangngalan (noun).",
+    question: "If all squares are rectangles, and all rectangles are quadrilaterals, which conclusion MUST be true?",
+    options: [
+      "All quadrilaterals are squares",
+      "Every square is a quadrilateral",
+      "Some rectangles are not quadrilaterals",
+      "No quadrilaterals are squares"
+    ],
+    correctAnswer: "Every square is a quadrilateral",
+    category: "Analytical Reasoning",
+    explanation: "⚡ Deductive Syllogism: Transitive inclusion states Square ⊆ Rectangle ⊆ Quadrilateral. Therefore, every square is necessarily a quadrilateral.",
   },
   {
     id: "sprint-default-5",
@@ -79,9 +93,126 @@ export const DEFAULT_SPRINT_QUESTIONS = [
     options: ["125", "126", "127", "128"],
     correctAnswer: "127",
     category: "Analytical Reasoning",
-    explanation: "⚡ Pattern: Each term is (Previous × 2) + 1. 3×2+1=7; 7×2+1=15; 15×2+1=31; 31×2+1=63; 63×2+1 = 127.",
+    explanation: "⚡ Pattern: Each successive term is (Previous × 2) + 1. 3×2+1=7; 7×2+1=15; 15×2+1=31; 31×2+1=63; 63×2+1 = 127.",
   },
 ];
+
+// Expanded Universal Exam Question Pool
+export const EXTENDED_SPRINT_POOL: SprintQuestionItem[] = [
+  ...DEFAULT_SPRINT_QUESTIONS,
+  {
+    id: "sprint-ext-6",
+    question: "A store offers a 20% discount on an item, followed by an additional 10% loyalty discount on the reduced price. What is the total effective discount?",
+    options: ["28%", "30%", "32%", "26%"],
+    correctAnswer: "28%",
+    category: "Numerical Reasoning",
+    explanation: "⚡ Formula: Total Discount = A + B - (A × B / 100) = 20 + 10 - 2 = 28%. Never simply add percentages directly (20 + 10 = 30% is incorrect).",
+  },
+  {
+    id: "sprint-ext-7",
+    question: "In a class of 60 students, the ratio of boys to girls is 3:2. How many boys are in the class?",
+    options: ["24", "30", "36", "40"],
+    correctAnswer: "36",
+    category: "Numerical Reasoning",
+    explanation: "⚡ Ratio Shortcut: Total parts = 3 + 2 = 5. Value per part = 60 / 5 = 12. Boys = 3 × 12 = 36 boys.",
+  },
+  {
+    id: "sprint-ext-8",
+    question: "Which of the following sentences exhibits flawless subject-verb agreement?",
+    options: [
+      "The committee have decided to postpone the vote.",
+      "Neither the teacher nor the students were in the hall.",
+      "Each of the candidates are speaking today.",
+      "A bouquet of yellow roses were delivered."
+    ],
+    correctAnswer: "Neither the teacher nor the students were in the hall.",
+    category: "Verbal Ability",
+    explanation: "⚡ Proximity Rule: In 'neither... nor' constructions, the verb agrees with the subject closest to it. 'Students' is plural, so 'were' is correct.",
+  },
+  {
+    id: "sprint-ext-9",
+    question: "Identify the word most nearly OPPOSITE in meaning to 'PRAGMATIC':",
+    options: ["Realistic", "Visionary / Idealistic", "Utilitarian", "Expedient"],
+    correctAnswer: "Visionary / Idealistic",
+    category: "Verbal Ability",
+    explanation: "⚡ Antonym: 'Pragmatic' means dealing with things sensibly and realistically based on practical considerations; its opposite is 'Visionary / Idealistic'.",
+  },
+  {
+    id: "sprint-ext-10",
+    question: "Five colleagues (A, B, C, D, E) sit in a row. C sits in the exact middle. A sits at the far left. B sits immediately to the right of C. Where does D sit if E is to the right of B?",
+    options: ["Between A and C", "Far right", "Immediately left of C", "Between B and E"],
+    correctAnswer: "Between A and C",
+    category: "Analytical Reasoning",
+    explanation: "⚡ Deductive Order: 5 slots [1, 2, 3, 4, 5]. A is at 1 (far left), C is at 3 (middle). B is right of C (slot 4). E is right of B (slot 5). Thus D must occupy slot 2, between A and C.",
+  },
+  {
+    id: "sprint-ext-11",
+    question: "If a solution's pH changes from 6.0 to 4.0, how has its hydronium ion concentration [H+] changed?",
+    options: [
+      "Decreased by 2 times",
+      "Increased by 2 times",
+      "Increased by 100 times",
+      "Decreased by 100 times"
+    ],
+    correctAnswer: "Increased by 100 times",
+    category: "Science & Logic",
+    explanation: "⚡ Logarithmic Rule: pH = -log10[H+]. A decrease of 2 pH units represents an increase in [H+] by 10^2 = 100-fold.",
+  },
+  {
+    id: "sprint-ext-12",
+    question: "A train 150 meters long passes a telegraph post in 9 seconds. What is the speed of the train in km/h?",
+    options: ["50 km/h", "54 km/h", "60 km/h", "72 km/h"],
+    correctAnswer: "60 km/h",
+    category: "Numerical Reasoning",
+    explanation: "⚡ Shortcut: Speed in m/s = 150 / 9 = 50/3 m/s. Convert to km/h by multiplying by (18/5): (50/3) × (18/5) = 10 × 6 = 60 km/h.",
+  },
+  {
+    id: "sprint-ext-13",
+    question: "Identify the logical fallacy: 'Nobody has proven that ghosts don't exist, therefore they must exist.'",
+    options: [
+      "Ad Hominem",
+      "Argument from Ignorance (Ad Ignorantiam)",
+      "Straw Man",
+      "Post Hoc Ergo Propter Hoc"
+    ],
+    correctAnswer: "Argument from Ignorance (Ad Ignorantiam)",
+    category: "Analytical Reasoning",
+    explanation: "⚡ Fallacy: Asserting a proposition is true simply because it has not yet been proven false (or vice versa) is an Argument from Ignorance.",
+  },
+  {
+    id: "sprint-ext-14",
+    question: "Which organelle is responsible for generating the majority of cellular chemical energy in eukaryotic cells?",
+    options: ["Ribosome", "Endoplasmic Reticulum", "Mitochondria", "Golgi Apparatus"],
+    correctAnswer: "Mitochondria",
+    category: "Science & Logic",
+    explanation: "⚡ Science Fact: Mitochondria generate most of the cell's ATP through aerobic cellular respiration (oxidative phosphorylation).",
+  },
+  {
+    id: "sprint-ext-15",
+    question: "Find the odd one out: 64, 125, 216, 343, 512, 729, 1000, 1332",
+    options: ["64", "343", "729", "1332"],
+    correctAnswer: "1332",
+    category: "Analytical Reasoning",
+    explanation: "⚡ Perfect Cubes: 4^3=64, 5^3=125, 6^3=216, 7^3=343, 8^3=512, 9^3=729, 10^3=1000, but 11^3 = 1331 (not 1332).",
+  },
+];
+
+/**
+ * Get randomized questions for a sprint, optionally filtered by category
+ */
+export function getSprintQuestions(category?: string, count: number = 5): SprintQuestionItem[] {
+  let pool = EXTENDED_SPRINT_POOL;
+  if (category && category !== "All Topics") {
+    const filtered = pool.filter((q) => q.category.toLowerCase().includes(category.toLowerCase()));
+    if (filtered.length >= count) {
+      pool = filtered;
+    }
+  }
+
+  // Shuffle pool
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
 
 /**
  * Retrieve persistent attempt history

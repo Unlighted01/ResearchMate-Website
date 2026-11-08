@@ -93,7 +93,7 @@ export function computePacerMetrics(
 export const EXAM_PACER_PRESETS: PacerPreset[] = [
   {
     id: "csc_150",
-    label: "67s (CSC)",
+    label: "67s (Standard 3h)",
     paceSeconds: 67,
     questions: 150,
     description: "150 problems in 3 hours with review buffer",

@@ -1,8 +1,8 @@
 // ============================================
 // DAILY 5-MINUTE SPRINT MODAL
 // Fast, zero-setup, timed 5-question exam drill
-// Implements PracticePacer timer, 30-second shortcut breakdowns,
-// inline Twin Question generator, and persistent readiness scoring.
+// Implements PracticePacer timer, category switcher, 30-second shortcut breakdowns,
+// inline Twin Question generator, re-testing, and persistent readiness scoring.
 // ============================================
 
 import React, { useState, useEffect } from "react";
@@ -18,9 +18,11 @@ import {
   Award,
   AlertTriangle,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import {
-  DEFAULT_SPRINT_QUESTIONS,
+  getSprintQuestions,
+  SprintQuestionItem,
   recordExamAttempt,
   ExamReadinessStats,
 } from "../../../services/examReadinessService";
@@ -32,45 +34,64 @@ interface DailySprintModalProps {
   onClose: (updatedStats?: ExamReadinessStats) => void;
 }
 
-interface SprintQuestion {
-  id: string;
-  question: string;
-  options: string[];
-  correctAnswer: string;
-  category: string;
-  explanation: string;
-}
+const CATEGORIES = [
+  "All Topics",
+  "Numerical Reasoning",
+  "Verbal Ability",
+  "Analytical Reasoning",
+  "Science & Logic",
+];
 
 export const DailySprintModal: React.FC<DailySprintModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const [questions, setQuestions] = useState<SprintQuestion[]>(DEFAULT_SPRINT_QUESTIONS);
+  const [selectedCategory, setSelectedCategory] = useState("All Topics");
+  const [questions, setQuestions] = useState<SprintQuestionItem[]>(() =>
+    getSprintQuestions("All Topics", 5)
+  );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
+  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes (300 seconds)
   const [isFinished, setIsFinished] = useState(false);
   const [finalStats, setFinalStats] = useState<ExamReadinessStats | null>(null);
 
   // Twin question state: maps question index to the generated twin question & state
-  const [twinQuestions, setTwinQuestions] = useState<Record<number, {
-    loading: boolean;
-    data: ExamQuestion | null;
-    userAnswer: string | null;
-    isCorrect: boolean | null;
-  }>>({});
+  const [twinQuestions, setTwinQuestions] = useState<
+    Record<
+      number,
+      {
+        loading: boolean;
+        data: ExamQuestion | null;
+        userAnswer: string | null;
+        isCorrect: boolean | null;
+      }
+    >
+  >({});
 
-  // Reset and shuffle sprint on open
+  // Reset and draw fresh questions on modal open
+  const startFreshSprint = (category: string = selectedCategory) => {
+    const fresh = getSprintQuestions(category, 5);
+    setQuestions(fresh);
+    setCurrentIndex(0);
+    setUserAnswers({});
+    setTimeLeft(300);
+    setIsFinished(false);
+    setFinalStats(null);
+    setTwinQuestions({});
+  };
+
   useEffect(() => {
     if (isOpen) {
-      setCurrentIndex(0);
-      setUserAnswers({});
-      setTimeLeft(300);
-      setIsFinished(false);
-      setFinalStats(null);
-      setTwinQuestions({});
+      startFreshSprint(selectedCategory);
     }
   }, [isOpen]);
+
+  // Handle category tab change
+  const handleCategoryChange = (cat: string) => {
+    setSelectedCategory(cat);
+    startFreshSprint(cat);
+  };
 
   // PracticePacer countdown timer
   useEffect(() => {
@@ -133,7 +154,21 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
     setFinalStats(stats);
   };
 
-  const handleGenerateTwin = async (idx: number, original: SprintQuestion) => {
+  // Retest only the missed questions
+  const handleRetestMissed = () => {
+    const missed = questions.filter((q, i) => userAnswers[i] !== q.correctAnswer);
+    if (missed.length === 0) return;
+
+    setQuestions(missed);
+    setCurrentIndex(0);
+    setUserAnswers({});
+    setTimeLeft(missed.length * 60); // 1 minute per missed question
+    setIsFinished(false);
+    setFinalStats(null);
+    setTwinQuestions({});
+  };
+
+  const handleGenerateTwin = async (idx: number, original: SprintQuestionItem) => {
     setTwinQuestions((prev) => ({
       ...prev,
       [idx]: { loading: true, data: null, userAnswer: null, isCorrect: null },
@@ -179,9 +214,10 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
-  const activeQ = questions[currentIndex];
+  const activeQ = questions[currentIndex] || questions[0];
   const isLastQuestion = currentIndex === questions.length - 1;
   const answeredCount = Object.keys(userAnswers).length;
+  const missedCount = questions.filter((q, i) => userAnswers[i] !== q.correctAnswer).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in font-sans">
@@ -197,18 +233,22 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
                 Daily 5-Minute Exam Sprint
               </h3>
               <p className="text-[11px] text-slate-500 font-mono">
-                {isFinished ? "Performance Diagnostic" : `Question ${currentIndex + 1} of ${questions.length} • Rapid Fire`}
+                {isFinished
+                  ? "Diagnostic Breakdown & Weakness Spotter"
+                  : `Question ${currentIndex + 1} of ${questions.length} • Rapid Fire`}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             {!isFinished && (
-              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold border transition-colors ${
-                timeLeft < 60
-                  ? "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/60 dark:border-rose-900/60 animate-pulse"
-                  : "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950/60 dark:border-indigo-900/60"
-              }`}>
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold border transition-colors ${
+                  timeLeft < 60
+                    ? "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/60 dark:border-rose-900/60 animate-pulse"
+                    : "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950/60 dark:border-indigo-900/60"
+                }`}
+              >
                 <Clock className="w-3.5 h-3.5" />
                 <span>{formatTimer(timeLeft)}</span>
               </div>
@@ -222,23 +262,66 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
           </div>
         </div>
 
+        {/* Topic Selector Filter (When active) */}
+        {!isFinished && (
+          <div className="px-5 py-2.5 bg-slate-100/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800/80 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => handleCategoryChange(cat)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap ${
+                  selectedCategory === cat
+                    ? "bg-indigo-600 text-white shadow-xs font-semibold"
+                    : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/60 hover:border-slate-300"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Sprint Body */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6">
           {!isFinished ? (
             /* ACTIVE EXAM QUESTION */
             <div className="space-y-5 animate-fade-in">
-              {/* Category tag */}
+              {/* Question Navigation Pills */}
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono uppercase tracking-wider font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700">
-                  {activeQ.category}
-                </span>
-                <span className="text-xs text-slate-400 font-mono">
-                  {answeredCount}/{questions.length} answered
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {questions.map((_, qIdx) => {
+                    const isAnswered = userAnswers[qIdx] !== undefined;
+                    const isCurrent = currentIndex === qIdx;
+                    return (
+                      <button
+                        key={qIdx}
+                        onClick={() => setCurrentIndex(qIdx)}
+                        className={`w-6 h-6 rounded-lg text-xs font-mono font-bold transition-all ${
+                          isCurrent
+                            ? "bg-indigo-600 text-white ring-2 ring-indigo-500/20"
+                            : isAnswered
+                            ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
+                        {qIdx + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700">
+                    {activeQ.category}
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {answeredCount}/{questions.length} answered
+                  </span>
+                </div>
               </div>
 
               {/* Question Text */}
-              <div className="text-sm sm:text-base font-medium text-slate-900 dark:text-slate-100 leading-relaxed">
+              <div className="text-sm sm:text-base font-medium text-slate-900 dark:text-slate-100 leading-relaxed pt-1">
                 <LatexRenderer content={activeQ.question} />
               </div>
 
@@ -257,11 +340,13 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
                           : "bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40"
                       }`}
                     >
-                      <span className={`w-6 h-6 rounded-lg text-xs font-mono font-bold flex items-center justify-center shrink-0 border transition-colors ${
-                        isSelected
-                          ? "bg-indigo-600 text-white border-indigo-600"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"
-                      }`}>
+                      <span
+                        className={`w-6 h-6 rounded-lg text-xs font-mono font-bold flex items-center justify-center shrink-0 border transition-colors ${
+                          isSelected
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
                         {letter}
                       </span>
                       <span className="flex-1">
@@ -277,22 +362,56 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
             <div className="space-y-6 animate-fade-in">
               {/* Score Header */}
               {finalStats && (
-                <div className={`p-5 rounded-2xl border text-center ${
-                  finalStats.isPassing
-                    ? "bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-950 dark:text-emerald-200"
-                    : "bg-amber-50/80 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/60 text-amber-950 dark:text-amber-200"
-                }`}>
+                <div
+                  className={`p-5 rounded-2xl border text-center ${
+                    finalStats.isPassing
+                      ? "bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-950 dark:text-emerald-200"
+                      : "bg-amber-50/80 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/60 text-amber-950 dark:text-amber-200"
+                  }`}
+                >
                   <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white dark:bg-slate-900 shadow-xs mb-3">
-                    <Award className={`w-6 h-6 ${finalStats.isPassing ? "text-emerald-500" : "text-amber-500"}`} />
+                    <Award
+                      className={`w-6 h-6 ${
+                        finalStats.isPassing ? "text-emerald-500" : "text-amber-500"
+                      }`}
+                    />
                   </div>
                   <h4 className="text-xl font-bold font-title">
-                    Sprint Score: {questions.filter((q, i) => userAnswers[i] === q.correctAnswer).length}/{questions.length} ({Math.round((questions.filter((q, i) => userAnswers[i] === q.correctAnswer).length / questions.length) * 100)}%)
+                    Sprint Score:{" "}
+                    {questions.filter((q, i) => userAnswers[i] === q.correctAnswer).length}/
+                    {questions.length} (
+                    {Math.round(
+                      (questions.filter((q, i) => userAnswers[i] === q.correctAnswer).length /
+                        questions.length) *
+                        100
+                    )}
+                    %)
                   </h4>
                   <p className="text-xs font-mono mt-1 opacity-80">
                     {finalStats.isPassing
-                      ? `🟢 Above the 80% passing threshold! Updated Readiness: ${finalStats.score}%`
-                      : `🔴 Below the 80% threshold. Practice the 30-sec shortcuts below to boost your Readiness score (${finalStats.score}%).`}
+                      ? `🟢 Above the 80% passing threshold! Rolling Readiness Score: ${finalStats.score}%`
+                      : `🔴 Below the 80% passing target. Review the 30-sec shortcuts below to boost your Readiness score (${finalStats.score}%).`}
                   </p>
+
+                  {/* Actions inside score card */}
+                  <div className="flex items-center justify-center gap-2 mt-4 pt-3 border-t border-slate-200/50 dark:border-slate-800/50">
+                    {missedCount > 0 && (
+                      <button
+                        onClick={handleRetestMissed}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Retest Missed ({missedCount})</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => startFreshSprint(selectedCategory)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Start Fresh 5-Min Sprint</span>
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -309,7 +428,7 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
 
                   return (
                     <div
-                      key={q.id}
+                      key={q.id || idx}
                       className={`p-4 rounded-2xl border text-xs space-y-2.5 transition-all ${
                         isCorrect
                           ? "bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-900/40"
@@ -327,11 +446,13 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
                             Question {idx + 1} • {q.category}
                           </span>
                         </div>
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
-                          isCorrect
-                            ? "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300"
-                            : "bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300"
-                        }`}>
+                        <span
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+                            isCorrect
+                              ? "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300"
+                              : "bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300"
+                          }`}
+                        >
                           {isCorrect ? "Correct (+1)" : "Missed"}
                         </span>
                       </div>
@@ -341,9 +462,25 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
                       </p>
 
                       <div className="flex flex-col sm:flex-row gap-2 sm:items-center text-[11px] font-mono pt-1">
-                        <span className="text-slate-500">Your choice: <strong className={isCorrect ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>{userAnswer || "None"}</strong></span>
+                        <span className="text-slate-500">
+                          Your choice:{" "}
+                          <strong
+                            className={
+                              isCorrect
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-rose-600 dark:text-rose-400"
+                            }
+                          >
+                            {userAnswer || "None"}
+                          </strong>
+                        </span>
                         <span className="hidden sm:inline text-slate-300">•</span>
-                        <span className="text-slate-500">Correct: <strong className="text-emerald-600 dark:text-emerald-400">{q.correctAnswer}</strong></span>
+                        <span className="text-slate-500">
+                          Correct:{" "}
+                          <strong className="text-emerald-600 dark:text-emerald-400">
+                            {q.correctAnswer}
+                          </strong>
+                        </span>
                       </div>
 
                       {/* Explanation / Shortcut */}
@@ -367,18 +504,20 @@ export const DailySprintModal: React.FC<DailySprintModalProps> = ({
                           ) : twinState.loading ? (
                             <div className="flex items-center gap-2 p-3 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200/50 text-indigo-600 text-xs font-mono">
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              <span>Synthesizing identical question with new numbers...</span>
+                              <span>Synthesizing identical problem with new numbers...</span>
                             </div>
                           ) : twinState.data ? (
                             <div className="p-3.5 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 space-y-2.5 animate-fade-in">
                               <div className="flex items-center justify-between">
                                 <span className="text-[10px] font-mono font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
-                                  Twin Practice Question
+                                  Twin Practice Problem
                                 </span>
                                 {twinState.isCorrect !== null && (
-                                  <span className={`text-[10px] font-mono font-bold ${
-                                    twinState.isCorrect ? "text-emerald-600" : "text-rose-600"
-                                  }`}>
+                                  <span
+                                    className={`text-[10px] font-mono font-bold ${
+                                      twinState.isCorrect ? "text-emerald-600" : "text-rose-600"
+                                    }`}
+                                  >
                                     {twinState.isCorrect ? "✓ Mastered!" : "Review shortcut formula"}
                                   </span>
                                 )}
