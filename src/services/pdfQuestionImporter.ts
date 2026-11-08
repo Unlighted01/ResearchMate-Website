@@ -257,6 +257,18 @@ export function stripGluedPageNumbers(text: string): string {
 }
 
 /**
+ * Trims stray leading list markers, bullets, and letter prefixes: e.g. "(g) ", "- ", "• ", "1. ", "(2) "
+ */
+export function trimStemPrefix(text: string): string {
+  if (!text) return "";
+  let res = text.trim();
+  while (/^(?:[-–—•\*]|\([a-zA-Z0-9]+\)|\b[a-zA-Z0-9]+[\.\)])\s+/.test(res)) {
+    res = res.replace(/^(?:[-–—•\*]|\([a-zA-Z0-9]+\)|\b[a-zA-Z0-9]+[\.\)])\s+/, "").trim();
+  }
+  return res;
+}
+
+/**
  * Consistency check for "word (numeral)" pairs:
  * Handles compound numbers ("forty-five" -> 45) and catches unclosed parentheses (e.g. "ten (100 working days").
  */
@@ -1443,9 +1455,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
 
   const items: ParsedQaItem[] = [];
   const chaptersDetected: string[] = [];
-  const allNumbersInDoc: number[] = [];
+  const numbersByUnit = new Map<string, Set<number>>();
   const definedTerms: { term: string; definition: string; pageNumber: number; section: string; rawQuote: string }[] = [];
-  const numberBlanks: { word: string; numeral: number; sentence: string; pageNumber: number; section: string; isConsistent: boolean; reason?: string }[] = [];
+  const numberBlanks: { word: string; numeral: number; unitCategory: string; sentence: string; pageNumber: number; section: string; isConsistent: boolean; reason?: string }[] = [];
   const sectionCards: { sectionNum: string; title: string; pageNumber: number; quote: string }[] = [];
 
   let currentRule = "";
@@ -1455,8 +1467,13 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   // First pass: extract sections, terms, and numbers
   for (const page of pages) {
     const lines = page.text.split("\n");
+    let lineOffset = 0;
+    const sectionCheckpoints: { index: number; section: string }[] = [];
+
     for (let l = 0; l < lines.length; l++) {
       const line = lines[l].trim();
+      const lineIndex = lineOffset;
+      lineOffset += lines[l].length + 1;
       if (!line) continue;
 
       // Detect Rule headers (e.g. "Rule IV Transparency of Transactions" or "Rule I\nCoverage")
@@ -1484,6 +1501,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
         if (!chaptersDetected.includes(currentSection)) {
           chaptersDetected.push(currentSection);
         }
+        sectionCheckpoints.push({ index: lineIndex, section: currentSection });
         sectionCards.push({
           sectionNum: secNum,
           title: secTitle,
@@ -1491,38 +1509,40 @@ export function generateQuestionsFromLegalOrUnstructuredText(
           quote: line,
         });
       }
-
-      // Collect numbers in document for distractor pools
-      const numMatches = [...line.matchAll(/\b(\d+)\b/g)];
-      for (const nm of numMatches) {
-        const val = parseInt(nm[1], 10);
-        if (val > 0 && val <= 1000 && !allNumbersInDoc.includes(val)) {
-          allNumbersInDoc.push(val);
-        }
-      }
     }
 
-    // Match term definitions across page text:
-    // Pattern 1: (c) “Gift” refers to... or (a) “Government” includes...
-    // Pattern 2: (a) Commitment to public interest. - Public officials...
+    const getSectionAt = (idx: number): string => {
+      let activeSec = currentSection;
+      for (let c = sectionCheckpoints.length - 1; c >= 0; c--) {
+        if (sectionCheckpoints[c].index <= idx) {
+          return sectionCheckpoints[c].section;
+        }
+      }
+      return activeSec;
+    };
+
+    // Match term definitions across page text
     const termRegex = /\(([a-z])\)\s*(?:“([^”"]+)”|([A-Z][a-zA-Z\s\-–—]+?)\.\s*[-–—])\s*([\s\S]*?)(?=\n\s*\([a-z]\)|\n\s*(?:Sec\.|Section\s+\d+)|\n\s*\[Page|$)/g;
     const tMatches = [...page.text.matchAll(termRegex)];
     for (const tm of tMatches) {
       const termName = (tm[2] || tm[3] || "").trim();
       const rawDef = (tm[4] || "").trim().replace(/\s+/g, " ");
       if (termName.length >= 3 && rawDef.length >= 10) {
+        const matchIdx = tm.index || 0;
+        const activeSec = getSectionAt(matchIdx);
         definedTerms.push({
           term: termName,
           definition: rawDef,
           pageNumber: page.pageNumber,
-          section: currentSection,
+          section: activeSec,
           rawQuote: tm[0].slice(0, 300).trim(),
         });
       }
     }
 
-    // Match word (numeral) patterns, including unclosed parentheses: e.g. "fifteen (15)", "forty-five (45)", "forty five (45)", "ten (100 working days"
-    const wordNumRegex = /\b((?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|one|two|three|four|five|six|seven|eight|nine|ten|hundred)\s+)?(?:[A-Za-z\-]+))\s*\(\s*(\d+)(\s*\)|\s+(?=[a-zA-Z]))/gi;
+    // Match word (numeral) patterns strictly requiring temporal/currency/percentage units:
+    // e.g. "fifteen (15) working days", "forty-five (45) days", "one (1) year", "eighteen (18) years of age", "ten (100 working days"
+    const wordNumRegex = /\b((?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|one|two|three|four|five|six|seven|eight|nine|ten|hundred)\s+)?(?:[A-Za-z\-]+))\s*\(\s*(\d+)(\s*\)|\s+(?=[a-zA-Z]))\s*(?:(?:working|calendar)\s+)?(days?|years?(?:\s+of\s+age)?|months?|pesos?|percent|%)\b/gi;
     const wnMatches = [...page.text.matchAll(wordNumRegex)];
     for (const wnm of wnMatches) {
       const word = wnm[1].trim();
@@ -1530,20 +1550,37 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       const isUnclosed = wnm[3].trim() !== ")";
       const consistency = checkWordNumeralConsistency(word, numeral, isUnclosed);
 
+      let unitCategory = wnm[4].toLowerCase().trim();
+      if (unitCategory.startsWith("day")) unitCategory = "days";
+      else if (unitCategory.startsWith("year")) unitCategory = "years";
+      else if (unitCategory.startsWith("month")) unitCategory = "months";
+      else if (unitCategory.startsWith("peso")) unitCategory = "pesos";
+      else if (unitCategory.startsWith("percent") || unitCategory === "%") unitCategory = "percent";
+
+      if (!numbersByUnit.has(unitCategory)) {
+        numbersByUnit.set(unitCategory, new Set<number>());
+      }
+      numbersByUnit.get(unitCategory)!.add(numeral);
+
       const matchIndex = wnm.index || 0;
+      const activeSec = getSectionAt(matchIndex);
+
       const sentenceStart = Math.max(0, page.text.lastIndexOf(".", matchIndex) + 1);
       const sentenceEnd = page.text.indexOf(".", matchIndex + wnm[0].length);
-      const sentence = page.text.substring(
+      const rawSentence = page.text.substring(
         sentenceStart,
         sentenceEnd > sentenceStart ? sentenceEnd + 1 : sentenceStart + 200
       ).trim().replace(/\s+/g, " ");
 
+      const sentence = trimStemPrefix(rawSentence);
+
       numberBlanks.push({
         word,
         numeral,
+        unitCategory,
         sentence,
         pageNumber: page.pageNumber,
-        section: currentSection,
+        section: activeSec,
         isConsistent: consistency.isConsistent,
         reason: consistency.reason,
       });
@@ -1553,7 +1590,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   // Second pass: synthesize deterministic questions
   let qNumber = 1;
 
-  // 1. Generate Term-Definition Questions
+  // 1. Generate Term-Definition / Norms of Conduct Questions
   const termNames = definedTerms.map((t) => t.term);
   for (const t of definedTerms) {
     const distractors = termNames.filter((tn) => tn !== t.term).slice(0, 3);
@@ -1563,8 +1600,14 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     const options = [t.term, ...distractors].sort();
     const correctIndex = options.indexOf(t.term);
 
-    const stemSnippet = t.definition.length > 250 ? t.definition.slice(0, 247) + "..." : t.definition;
-    const stem = `Under RA 6713, which term is defined as: "${stemSnippet}"?`;
+    const rawDef = trimStemPrefix(t.definition);
+    const stemSnippet = rawDef.length > 250 ? rawDef.slice(0, 247) + "..." : rawDef;
+
+    // Fix 5: Use "Which norm of conduct..." when source heading is a norm
+    const isNorm = /norms?\b/i.test(t.section);
+    const stem = isNorm
+      ? `Under RA 6713, which norm of conduct is defined as: "${stemSnippet}"?`
+      : `Under RA 6713, which term is defined as: "${stemSnippet}"?`;
 
     items.push({
       id: generateUUID(),
@@ -1584,22 +1627,22 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     });
   }
 
-  // 2. Generate Number-Blank Questions
-  const fallbackDistractorNumbers = [15, 30, 45, 60, 90, 18, 5, 10];
-  const poolNumbers = allNumbersInDoc.length >= 4 ? allNumbersInDoc : fallbackDistractorNumbers;
-
+  // 2. Generate Number-Blank Questions (Fix 1 & 2: strict same unit distractors, skip bare counts)
   for (const nb of numberBlanks) {
     if (!ENGLISH_NUMBER_WORDS[nb.word.toLowerCase()]) {
       continue;
     }
 
-    const distractorNums = poolNumbers
-      .filter((n) => n !== nb.numeral)
-      .slice(0, 3);
-    while (distractorNums.length < 3) {
-      distractorNums.push(nb.numeral + (distractorNums.length + 1) * 5);
+    const unitPool = Array.from(numbersByUnit.get(nb.unitCategory) || []).filter((n) => n !== nb.numeral);
+    // Fix 1: If fewer than 3 valid distractors exist of the exact same unit, skip the question!
+    if (unitPool.length < 3) {
+      continue;
     }
-    const options = [String(nb.numeral), ...distractorNums.map(String)].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+    const distractorNums = unitPool.slice(0, 3);
+    const options = [String(nb.numeral), ...distractorNums.map(String)].sort(
+      (a, b) => parseInt(a, 10) - parseInt(b, 10)
+    );
     const correctIndex = options.indexOf(String(nb.numeral));
 
     const blankedSentence = nb.sentence.replace(
