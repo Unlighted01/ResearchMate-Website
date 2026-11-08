@@ -8,7 +8,11 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../services/supabaseClient";
+import {
+  supabase,
+  isSessionKnownInvalid,
+  isAuthenticated,
+} from "../../services/supabaseClient";
 import HeroSection from "./HeroSection";
 import FeaturesSection from "./FeaturesSection";
 import ProductsSection from "./ProductsSection";
@@ -26,14 +30,13 @@ const MarketingHome: React.FC = () => {
     let mounted = true;
     const checkAuth = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session && mounted) {
+        if (isSessionKnownInvalid()) return;
+        const authenticated = await isAuthenticated();
+        if (authenticated && mounted) {
           navigate("/app/dashboard", { replace: true });
         }
       } catch (error) {
-        console.error("Auth check error:", error);
+        console.warn("Auth check error:", error);
       }
     };
     checkAuth();

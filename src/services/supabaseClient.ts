@@ -19,16 +19,9 @@ import {
  * Matches extension's configuration for seamless data sharing
  * In production, these should be environment variables
  */
-const SUPABASE_URL: string = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY: string = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!SUPABASE_URL) {
-  throw new Error("Missing VITE_SUPABASE_URL environment variable");
-}
-
-if (!SUPABASE_ANON_KEY) {
-  throw new Error("Missing VITE_SUPABASE_ANON_KEY environment variable");
-}
+const env = (typeof import.meta !== "undefined" && (import.meta as any).env) || (typeof process !== "undefined" && process.env) || {};
+const SUPABASE_URL: string = env.VITE_SUPABASE_URL || "https://placeholder.supabase.co";
+const SUPABASE_ANON_KEY: string = env.VITE_SUPABASE_ANON_KEY || "placeholder-anon-key";
 
 /**
  * Auth Configuration - Website specific settings
@@ -61,6 +54,13 @@ export type AuthEventCallback = (
   session: Session | null
 ) => void;
 
+export type SyncState = "synced" | "syncing" | "signed_out" | "error";
+
+export interface SyncStatus {
+  state: SyncState;
+  label: string;
+}
+
 // ============================================
 // PART 4: SUPABASE CLIENT INITIALIZATION
 // ============================================
@@ -78,8 +78,135 @@ export const supabase: SupabaseClient = createClient(
 );
 
 // Log initialization in development (without exposing URL)
-if (import.meta.env.DEV) {
+if (import.meta.env?.DEV) {
   console.log("🔧 Supabase client initialized");
+}
+
+// ============================================
+// PART 4B: SYNC STATUS & AUTH ERROR RECOVERY
+// ============================================
+
+let currentSyncStatus: SyncStatus = {
+  state: "signed_out",
+  label: "Signed out, working locally",
+};
+
+const syncListeners = new Set<(status: SyncStatus) => void>();
+
+export function getSyncStatus(): SyncStatus {
+  return currentSyncStatus;
+}
+
+export function setSyncStatus(status: SyncStatus): void {
+  currentSyncStatus = status;
+  for (const listener of syncListeners) {
+    try {
+      listener(status);
+    } catch (e) {
+      console.warn("Error in sync listener:", e);
+    }
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("researchmate:sync_status_changed", { detail: status })
+    );
+  }
+}
+
+export function subscribeToSyncStatus(
+  callback: (status: SyncStatus) => void
+): () => void {
+  syncListeners.add(callback);
+  callback(currentSyncStatus);
+  return () => {
+    syncListeners.delete(callback);
+  };
+}
+
+let isRefreshing = false;
+let sessionKnownInvalid = false;
+
+export function isSessionKnownInvalid(): boolean {
+  return sessionKnownInvalid;
+}
+
+export function resetSessionInvalidFlag(): void {
+  sessionKnownInvalid = false;
+}
+
+/**
+ * Checks if an error is a JWT expiration or auth failure (401, 403, PGRST303).
+ */
+export function isAuthError(error: any): boolean {
+  if (!error) return false;
+  const code = error.code || error.status;
+  const msg = (error.message || "").toLowerCase();
+  return (
+    code === "PGRST303" ||
+    code === 401 ||
+    code === 403 ||
+    code === "401" ||
+    code === "403" ||
+    msg.includes("jwt expired") ||
+    msg.includes("token is expired") ||
+    msg.includes("invalid claim")
+  );
+}
+
+/**
+ * Handles auth errors by attempting ONE session refresh.
+ * If refresh fails or token is dead: signs out cleanly, clears Supabase auth tokens,
+ * and leaves the app running in local-first offline mode.
+ * Never touches the local Question Bank, exams, or decks.
+ */
+export async function handleAuthError(error?: any): Promise<boolean> {
+  if (sessionKnownInvalid) return false;
+  if (isRefreshing) return false;
+
+  isRefreshing = true;
+  try {
+    console.warn("🔒 Auth error detected. Attempting single session refresh...");
+    const { data, error: refreshErr } = await supabase.auth.refreshSession();
+    if (!refreshErr && data?.session) {
+      console.log("✅ Session successfully refreshed.");
+      sessionKnownInvalid = false;
+      setSyncStatus({ state: "synced", label: "SYNCED" });
+      return true;
+    }
+  } catch (e) {
+    console.warn("Session refresh attempt failed:", e);
+  } finally {
+    isRefreshing = false;
+  }
+
+  // Refresh failed: session is irrevocably invalid
+  console.warn("⚠️ Session refresh failed. Switching to local-only mode.");
+  sessionKnownInvalid = true;
+
+  try {
+    await supabase.auth.signOut({ scope: "local" });
+  } catch {
+    // Ignore network errors on sign out
+  }
+
+  // Clear ONLY Supabase auth keys from localStorage (never touch Question Bank, exams, or decks!)
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem("researchmate-auth");
+    localStorage.removeItem("supabase.auth.token");
+    localStorage.setItem("rm_guest_mode", "true");
+  }
+
+  setSyncStatus({ state: "signed_out", label: "Signed out, working locally" });
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("researchmate:auth_state_changed", {
+        detail: { state: "signed_out", label: "Signed out, working locally" },
+      })
+    );
+  }
+
+  return false;
 }
 
 // ============================================
@@ -91,6 +218,7 @@ if (import.meta.env.DEV) {
  * @returns Promise<User | null>
  */
 export async function getCurrentUser(): Promise<User | null> {
+  if (sessionKnownInvalid) return null;
   try {
     const {
       data: { user },
@@ -98,13 +226,18 @@ export async function getCurrentUser(): Promise<User | null> {
     } = await supabase.auth.getUser();
 
     if (error) {
-      console.error("❌ Get user error:", error.message);
+      if (isAuthError(error)) {
+        await handleAuthError(error);
+      }
       return null;
     }
 
+    setSyncStatus({ state: "synced", label: "SYNCED" });
     return user;
   } catch (error) {
-    console.error("❌ Get user exception:", error);
+    if (isAuthError(error)) {
+      await handleAuthError(error);
+    }
     return null;
   }
 }
@@ -114,6 +247,7 @@ export async function getCurrentUser(): Promise<User | null> {
  * @returns Promise<SessionResult>
  */
 export async function getSession(): Promise<SessionResult> {
+  if (sessionKnownInvalid) return { session: null, error: null };
   try {
     const {
       data: { session },
@@ -121,13 +255,21 @@ export async function getSession(): Promise<SessionResult> {
     } = await supabase.auth.getSession();
 
     if (error) {
-      console.error("❌ Get session error:", error.message);
+      if (isAuthError(error)) {
+        await handleAuthError(error);
+      }
       return { session: null, error };
+    }
+
+    if (session?.expires_at && session.expires_at * 1000 < Date.now()) {
+      const refreshed = await handleAuthError({ code: "PGRST303", message: "JWT expired" });
+      if (!refreshed) {
+        return { session: null, error: null };
+      }
     }
 
     return { session, error: null };
   } catch (error) {
-    console.error("❌ Get session exception:", error);
     return { session: null, error: error as Error };
   }
 }
@@ -137,11 +279,16 @@ export async function getSession(): Promise<SessionResult> {
  * @returns Promise<boolean>
  */
 export async function isAuthenticated(): Promise<boolean> {
+  if (sessionKnownInvalid) return false;
   try {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    return !!session;
+    if (!session) return false;
+    if (session.expires_at && session.expires_at * 1000 < Date.now()) {
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }
@@ -162,7 +309,7 @@ export async function signInWithEmail(
   password: string
 ): Promise<AuthResult> {
   try {
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.log("🔑 Sign in attempt");
     }
 
@@ -176,7 +323,10 @@ export async function signInWithEmail(
       return { user: null, error };
     }
 
-    if (import.meta.env.DEV) {
+    sessionKnownInvalid = false;
+    setSyncStatus({ state: "synced", label: "SYNCED" });
+
+    if (import.meta.env?.DEV) {
       console.log("✅ Signed in successfully");
     }
     return { user: data.user, error: null };
@@ -197,7 +347,7 @@ export async function signUpWithEmail(
   password: string
 ): Promise<AuthResult> {
   try {
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.log("📝 Sign up attempt");
     }
 
@@ -205,7 +355,6 @@ export async function signUpWithEmail(
       email: email.trim(),
       password: password,
       options: {
-        // Redirect to website after email confirmation
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
@@ -215,7 +364,7 @@ export async function signUpWithEmail(
       return { user: null, error };
     }
 
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.log("✅ Sign up successful");
     }
     return { user: data.user, error: null };
@@ -235,7 +384,7 @@ export async function signUpWithEmail(
  */
 export async function signInWithGoogle(): Promise<{ error: Error | null }> {
   try {
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.log("🔑 Starting Google OAuth");
     }
 
@@ -268,7 +417,7 @@ export async function signInWithGoogle(): Promise<{ error: Error | null }> {
  */
 export async function signInWithGitHub(): Promise<{ error: Error | null }> {
   try {
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.log("🔑 Starting GitHub OAuth");
     }
 
@@ -296,24 +445,34 @@ export async function signInWithGitHub(): Promise<{ error: Error | null }> {
 // ============================================
 
 /**
- * Sign out the current user
+ * Sign out the current user cleanly.
+ * Clears only Supabase auth keys; leaves local question banks, exams, and decks intact.
  * @returns Promise<{ error: Error | null }>
  */
 export async function signOut(): Promise<{ error: Error | null }> {
   try {
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.log("🚪 Signing out");
     }
 
-    const { error } = await supabase.auth.signOut();
+    sessionKnownInvalid = true;
 
-    if (error) {
-      console.error("❌ Sign out error:", error.message);
-      return { error };
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // Ignore network errors
     }
 
-    if (import.meta.env.DEV) {
-      console.log("✅ Signed out successfully");
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("researchmate-auth");
+      localStorage.removeItem("supabase.auth.token");
+      localStorage.setItem("rm_guest_mode", "true");
+    }
+
+    setSyncStatus({ state: "signed_out", label: "Signed out, working locally" });
+
+    if (import.meta.env?.DEV) {
+      console.log("✅ Signed out successfully (local mode active)");
     }
     return { error: null };
   } catch (error) {
@@ -335,8 +494,15 @@ export function onAuthStateChange(callback: AuthEventCallback) {
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((event, session) => {
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.log("🔄 Auth state changed:", event);
+    }
+    if (event === "SIGNED_IN" && session) {
+      sessionKnownInvalid = false;
+      setSyncStatus({ state: "synced", label: "SYNCED" });
+    } else if (event === "SIGNED_OUT") {
+      sessionKnownInvalid = true;
+      setSyncStatus({ state: "signed_out", label: "Signed out, working locally" });
     }
     callback(event, session);
   });
@@ -357,7 +523,7 @@ export async function resetPassword(
   email: string
 ): Promise<{ error: Error | null }> {
   try {
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.log("📧 Sending password reset email");
     }
 
@@ -370,7 +536,7 @@ export async function resetPassword(
       return { error };
     }
 
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.log("✅ Password reset email sent");
     }
     return { error: null };
@@ -423,4 +589,10 @@ export default {
   onAuthStateChange,
   resetPassword,
   updatePassword,
+  handleAuthError,
+  isAuthError,
+  isSessionKnownInvalid,
+  getSyncStatus,
+  setSyncStatus,
+  subscribeToSyncStatus,
 };

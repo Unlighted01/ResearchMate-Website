@@ -7,7 +7,12 @@
 // ============================================
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { supabase } from "../../../services/supabaseClient";
+import {
+  supabase,
+  isSessionKnownInvalid,
+  handleAuthError,
+  isAuthError,
+} from "../../../services/supabaseClient";
 import {
   getAllItems,
   subscribeToItems,
@@ -183,12 +188,11 @@ export function useDashboardData(
       setHasMore(data.length === PAGE_SIZE);
       setLastSyncTime(new Date());
     } catch (error) {
-      console.error("Failed to fetch items:", error);
-      showToast("Failed to load items", "error");
+      console.warn("Failed to fetch items, using local items:", error);
     } finally {
       setLoading(false);
     }
-  }, [showToast, PAGE_SIZE]);
+  }, [PAGE_SIZE]);
 
   const loadMoreItems = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -199,11 +203,11 @@ export function useDashboardData(
       setFetchOffset((prev) => prev + PAGE_SIZE);
       setHasMore(data.length === PAGE_SIZE);
     } catch (error) {
-      showToast("Failed to load more items", "error");
+      console.warn("Failed to load more items:", error);
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, fetchOffset, PAGE_SIZE, showToast]);
+  }, [loadingMore, hasMore, fetchOffset, PAGE_SIZE]);
 
   useEffect(() => {
     fetchItems();
@@ -211,31 +215,50 @@ export function useDashboardData(
     let unsubscribe: (() => void) | null = null;
 
     const setupRealTime = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        unsubscribe = subscribeToItems(user.id, (payload) => {
-          const syncTime = new Date();
+      if (isSessionKnownInvalid()) {
+        setIsRealTimeConnected(false);
+        return;
+      }
 
-          if (payload.eventType === "INSERT" && payload.new) {
-            setItems((prev) => [payload.new!, ...prev]);
-            setLastSyncTime(syncTime);
-          } else if (payload.eventType === "UPDATE" && payload.new) {
-            setItems((prev) =>
-              prev.map((item) =>
-                item.id === payload.new!.id ? payload.new! : item,
-              ),
-            );
-            setLastSyncTime(syncTime);
-          } else if (payload.eventType === "DELETE" && payload.old) {
-            setItems((prev) =>
-              prev.filter((item) => item.id !== payload.old!.id),
-            );
-            setLastSyncTime(syncTime);
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
+
+        if (error) {
+          if (isAuthError(error)) {
+            await handleAuthError(error);
           }
-        });
-        setIsRealTimeConnected(true);
+          setIsRealTimeConnected(false);
+          return;
+        }
+
+        if (user) {
+          unsubscribe = subscribeToItems(user.id, (payload) => {
+            const syncTime = new Date();
+
+            if (payload.eventType === "INSERT" && payload.new) {
+              setItems((prev) => [payload.new!, ...prev]);
+              setLastSyncTime(syncTime);
+            } else if (payload.eventType === "UPDATE" && payload.new) {
+              setItems((prev) =>
+                prev.map((item) =>
+                  item.id === payload.new!.id ? payload.new! : item,
+                ),
+              );
+              setLastSyncTime(syncTime);
+            } else if (payload.eventType === "DELETE" && payload.old) {
+              setItems((prev) =>
+                prev.filter((item) => item.id !== payload.old!.id),
+              );
+              setLastSyncTime(syncTime);
+            }
+          });
+          setIsRealTimeConnected(true);
+        }
+      } catch {
+        setIsRealTimeConnected(false);
       }
     };
 
@@ -247,7 +270,7 @@ export function useDashboardData(
         setIsRealTimeConnected(false);
       }
     };
-  }, [fetchItems, showToast]);
+  }, [fetchItems]);
 
   const fetchCollections = useCallback(async () => {
     try {

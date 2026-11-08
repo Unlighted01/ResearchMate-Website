@@ -2,7 +2,14 @@
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
 
-import { supabase, isAuthenticated } from "./supabaseClient";
+import {
+  supabase,
+  isAuthenticated,
+  isSessionKnownInvalid,
+  handleAuthError,
+  isAuthError,
+  setSyncStatus,
+} from "./supabaseClient";
 import { ResearchItem, DeviceSource } from "../types";
 
 // ============================================
@@ -233,7 +240,7 @@ export async function getAllItems(
   limit: number = 100,
   offset: number = 0,
 ): Promise<StorageItem[]> {
-  const authenticated = await isAuthenticated();
+  const authenticated = !isSessionKnownInvalid() && (await isAuthenticated());
 
   // If logged in, get from cloud
   if (authenticated) {
@@ -244,7 +251,24 @@ export async function getAllItems(
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
 
-      if (error) throw error;
+      if (error) {
+        if (isAuthError(error)) {
+          const refreshed = await handleAuthError(error);
+          if (refreshed) {
+            const retryRes = await supabase
+              .from("items")
+              .select("*")
+              .order("created_at", { ascending: false })
+              .range(offset, offset + limit - 1);
+            if (!retryRes.error && retryRes.data) {
+              setSyncStatus({ state: "synced", label: "SYNCED" });
+              return retryRes.data.map(transformDatabaseItem);
+            }
+          }
+        }
+        throw error;
+      }
+      setSyncStatus({ state: "synced", label: "SYNCED" });
 
       const cloudItems = (data || []).map(transformDatabaseItem);
       // Merge any pending local items that haven't synced yet
@@ -259,7 +283,10 @@ export async function getAllItems(
 
       return cloudItems;
     } catch (error) {
-      console.error("☁️ Cloud fetch failed, using local:", error);
+      console.warn("☁️ Cloud fetch failed, using local:", error);
+      if (isAuthError(error)) {
+        await handleAuthError(error);
+      }
       return getLocalItems();
     }
   }
@@ -274,7 +301,7 @@ export async function getAllItems(
  * Saves to cloud if authenticated, otherwise to local storage
  */
 export async function addItem(item: AddItemInput): Promise<StorageItem> {
-  const authenticated = await isAuthenticated();
+  const authenticated = !isSessionKnownInvalid() && (await isAuthenticated());
 
   // If logged in, save to cloud
   if (authenticated) {
@@ -290,7 +317,24 @@ export async function addItem(item: AddItemInput): Promise<StorageItem> {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (isAuthError(error)) {
+          const refreshed = await handleAuthError(error);
+          if (refreshed) {
+            const retryRes = await supabase
+              .from("items")
+              .insert([transformToDatabase(item, user.id)])
+              .select()
+              .single();
+            if (!retryRes.error && retryRes.data) {
+              setSyncStatus({ state: "synced", label: "SYNCED" });
+              return transformDatabaseItem(retryRes.data);
+            }
+          }
+        }
+        throw error;
+      }
+      setSyncStatus({ state: "synced", label: "SYNCED" });
 
       return transformDatabaseItem(data);
     } catch (error) {
@@ -345,7 +389,7 @@ export async function updateItem(
   }
 
   // Cloud item
-  const authenticated = await isAuthenticated();
+  const authenticated = !isSessionKnownInvalid() && (await isAuthenticated());
   if (authenticated) {
     const updateData: Record<string, any> = {
       updated_at: new Date().toISOString(),
@@ -468,7 +512,7 @@ export async function getItemById(id: string): Promise<StorageItem | null> {
  * Search items by text content
  */
 export async function searchItems(query: string): Promise<StorageItem[]> {
-  const authenticated = await isAuthenticated();
+  const authenticated = !isSessionKnownInvalid() && (await isAuthenticated());
   const searchTerm = query.toLowerCase().trim();
 
   if (!searchTerm) {
@@ -486,7 +530,26 @@ export async function searchItems(query: string): Promise<StorageItem[]> {
         )
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        if (isAuthError(error)) {
+          const refreshed = await handleAuthError(error);
+          if (refreshed) {
+            const retryRes = await supabase
+              .from("items")
+              .select("*")
+              .or(
+                `text.ilike.%${searchTerm}%,source_title.ilike.%${searchTerm}%,note.ilike.%${searchTerm}%`,
+              )
+              .order("created_at", { ascending: false });
+            if (!retryRes.error && retryRes.data) {
+              setSyncStatus({ state: "synced", label: "SYNCED" });
+              return retryRes.data.map(transformDatabaseItem);
+            }
+          }
+        }
+        throw error;
+      }
+      setSyncStatus({ state: "synced", label: "SYNCED" });
 
       return (data || []).map(transformDatabaseItem);
     } catch (error) {
@@ -513,7 +576,7 @@ export async function filterByTags(tags: string[]): Promise<StorageItem[]> {
     return getAllItems();
   }
 
-  const authenticated = await isAuthenticated();
+  const authenticated = !isSessionKnownInvalid() && (await isAuthenticated());
 
   if (authenticated) {
     try {
@@ -523,7 +586,24 @@ export async function filterByTags(tags: string[]): Promise<StorageItem[]> {
         .contains("tags", tags)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        if (isAuthError(error)) {
+          const refreshed = await handleAuthError(error);
+          if (refreshed) {
+            const retryRes = await supabase
+              .from("items")
+              .select("*")
+              .contains("tags", tags)
+              .order("created_at", { ascending: false });
+            if (!retryRes.error && retryRes.data) {
+              setSyncStatus({ state: "synced", label: "SYNCED" });
+              return retryRes.data.map(transformDatabaseItem);
+            }
+          }
+        }
+        throw error;
+      }
+      setSyncStatus({ state: "synced", label: "SYNCED" });
 
       return (data || []).map(transformDatabaseItem);
     } catch (error) {
@@ -542,7 +622,7 @@ export async function filterByTags(tags: string[]): Promise<StorageItem[]> {
 export async function getItemsByCollection(
   collectionId: string,
 ): Promise<StorageItem[]> {
-  const authenticated = await isAuthenticated();
+  const authenticated = !isSessionKnownInvalid() && (await isAuthenticated());
 
   if (authenticated) {
     try {
@@ -552,7 +632,24 @@ export async function getItemsByCollection(
         .eq("collection_id", collectionId)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        if (isAuthError(error)) {
+          const refreshed = await handleAuthError(error);
+          if (refreshed) {
+            const retryRes = await supabase
+              .from("items")
+              .select("*")
+              .eq("collection_id", collectionId)
+              .order("created_at", { ascending: false });
+            if (!retryRes.error && retryRes.data) {
+              setSyncStatus({ state: "synced", label: "SYNCED" });
+              return retryRes.data.map(transformDatabaseItem);
+            }
+          }
+        }
+        throw error;
+      }
+      setSyncStatus({ state: "synced", label: "SYNCED" });
 
       return (data || []).map(transformDatabaseItem);
     } catch (error) {
@@ -575,7 +672,7 @@ export async function getItemsByCollection(
  */
 export async function migrateLocalToCloud(): Promise<MigrationResult> {
   const localItems = getLocalItems();
-  const authenticated = await isAuthenticated();
+  const authenticated = !isSessionKnownInvalid() && (await isAuthenticated());
 
   if (!authenticated) {
     throw new Error("Must be signed in to migrate");

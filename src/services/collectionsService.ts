@@ -2,7 +2,13 @@
 // PART 1: IMPORTS & DEPENDENCIES
 // ============================================
 
-import { supabase, isAuthenticated } from "./supabaseClient";
+import {
+  supabase,
+  isAuthenticated,
+  isSessionKnownInvalid,
+  handleAuthError,
+  isAuthError,
+} from "./supabaseClient";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -73,7 +79,10 @@ function transformCollection(row: any): Collection {
  * Get all collections for the current user
  */
 export async function getAllCollections(): Promise<Collection[]> {
-  const authenticated = await isAuthenticated();
+  if (isSessionKnownInvalid()) {
+    return [];
+  }
+  const authenticated = !isSessionKnownInvalid() && (await isAuthenticated());
 
   if (!authenticated) {
     console.log("Not authenticated, returning empty collections");
@@ -112,7 +121,10 @@ export async function getAllCollections(): Promise<Collection[]> {
       itemCount: counts[row.id] || 0,
     }));
   } catch (error) {
-    console.error("❌ Failed to fetch collections:", error);
+    console.warn("Failed to fetch collections:", error);
+    if (isAuthError(error)) {
+      await handleAuthError(error);
+    }
     return [];
   }
 }

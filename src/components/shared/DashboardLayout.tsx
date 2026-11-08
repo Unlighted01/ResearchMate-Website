@@ -8,7 +8,16 @@
 
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { supabase } from "../../services/supabaseClient";
+import {
+  supabase,
+  getSyncStatus,
+  subscribeToSyncStatus,
+  SyncStatus,
+  isSessionKnownInvalid,
+  handleAuthError,
+  isAuthError,
+  signOut,
+} from "../../services/supabaseClient";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import CommandPalette from "./CommandPalette";
@@ -128,6 +137,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [searchFocused, setSearchFocused] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => getSyncStatus());
+
+  useEffect(() => {
+    return subscribeToSyncStatus((status) => {
+      setSyncStatus(status);
+    });
+  }, []);
   const {
     notifications: activities,
     unreadCount,
@@ -158,11 +174,25 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   // Load user and sidebar state
   useEffect(() => {
-    const isGuest = localStorage.getItem("rm_guest_mode") === "true";
-    
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user && !isGuest) {
-        navigate("/");
+    if (isSessionKnownInvalid()) {
+      setUser(null);
+      return;
+    }
+
+    supabase.auth.getUser().then(async ({ data, error }) => {
+      if (error || !data.user) {
+        if (error && isAuthError(error)) {
+          const refreshed = await handleAuthError(error);
+          if (refreshed) {
+            const { data: refreshedData } = await supabase.auth.getUser();
+            if (refreshedData?.user) {
+              setUser(refreshedData.user);
+              return;
+            }
+          }
+        }
+        // Do NOT call navigate("/")! Retain local-only mode.
+        setUser(null);
       } else {
         setUser(data.user);
       }
@@ -172,7 +202,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     if (savedState === "true") {
       setSidebarCollapsed(true);
     }
-  }, [navigate]);
+  }, []);
 
   // Global Realtime Activity Notifications Listener
   useEffect(() => {
@@ -287,8 +317,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // ---------- PART 4B: HANDLERS ----------
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem("rm_guest_mode");
+    await signOut();
     navigate("/");
   };
 
@@ -667,9 +696,34 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             {/* Right: Actions */}
             <div className="flex items-center gap-3">
               {/* Real-time Sync activity badge */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/25 text-emerald-700 dark:text-emerald-400 text-xs font-mono font-medium select-none">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className="hidden sm:inline">SYNCED</span>
+              <div
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium select-none border transition-colors ${
+                  syncStatus.state === "synced"
+                    ? "bg-emerald-500/10 dark:bg-emerald-500/15 border-emerald-500/25 text-emerald-700 dark:text-emerald-400"
+                    : syncStatus.state === "syncing"
+                    ? "bg-sky-500/10 dark:bg-sky-500/15 border-sky-500/25 text-sky-700 dark:text-sky-400"
+                    : syncStatus.state === "signed_out"
+                    ? "bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/25 text-amber-700 dark:text-amber-400"
+                    : "bg-rose-500/10 dark:bg-rose-500/15 border-rose-500/25 text-rose-700 dark:text-rose-400"
+                }`}
+                title={
+                  syncStatus.state === "signed_out"
+                    ? "Operating in local-first offline mode. All exams and question banks save locally."
+                    : syncStatus.label
+                }
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    syncStatus.state === "synced"
+                      ? "bg-emerald-500"
+                      : syncStatus.state === "syncing"
+                      ? "bg-sky-500 animate-pulse"
+                      : syncStatus.state === "signed_out"
+                      ? "bg-amber-500"
+                      : "bg-rose-500"
+                  }`}
+                />
+                <span className="hidden sm:inline">{syncStatus.label}</span>
               </div>
 
               {/* Local-First Architecture Badge */}

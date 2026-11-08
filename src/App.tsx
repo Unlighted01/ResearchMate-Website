@@ -10,7 +10,11 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { supabase } from "./services/supabaseClient";
+import {
+  supabase,
+  isSessionKnownInvalid,
+  handleAuthError,
+} from "./services/supabaseClient";
 
 // Context
 import { ThemeProvider } from "./context/ThemeContext";
@@ -231,11 +235,36 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
     let mounted = true;
     const initSession = async () => {
       try {
+        if (isSessionKnownInvalid()) {
+          if (mounted) {
+            setSession(null);
+            setLoading(false);
+          }
+          return;
+        }
+
         const {
           data: { session: currentSession },
         } = await supabase.auth.getSession();
 
         if (currentSession) {
+          const isExpired = currentSession.expires_at
+            ? currentSession.expires_at * 1000 < Date.now()
+            : false;
+          if (isExpired) {
+            const refreshed = await handleAuthError({
+              code: "PGRST303",
+              message: "JWT expired",
+            });
+            if (!refreshed) {
+              if (mounted) {
+                setSession(null);
+                setLoading(false);
+              }
+              return;
+            }
+          }
+
           const shouldRemember = localStorage.getItem("researchmate_remember");
           const sessionActive = sessionStorage.getItem(
             "researchmate_session_active",
@@ -273,6 +302,9 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
         setSession(newSession);
         if (event === "SIGNED_IN" && newSession)
           sessionStorage.setItem("researchmate_session_active", "true");
+        if (event === "SIGNED_OUT") {
+          localStorage.setItem("rm_guest_mode", "true");
+        }
         setLoading(false);
       }
     });
@@ -380,6 +412,7 @@ const OAuthPopupHandler: React.FC = () => {
 
 export default function App() {
   const { showToast, ToastComponent } = useToast();
+  const toastProp = useCallback(() => ({ showToast, ToastComponent }), [showToast, ToastComponent]);
 
   return (
     <ErrorBoundary>
@@ -411,14 +444,14 @@ export default function App() {
               <Route
                 path="/login"
                 element={
-                  <LoginPage useToast={() => ({ showToast, ToastComponent })} />
+                  <LoginPage useToast={toastProp} />
                 }
               />
               <Route
                 path="/signup"
                 element={
                   <SignupPage
-                    useToast={() => ({ showToast, ToastComponent })}
+                    useToast={toastProp}
                   />
                 }
               />
@@ -430,14 +463,14 @@ export default function App() {
                 path="/app/*"
                 element={
                   <RequireAuth>
-                    <DashboardLayout useToast={() => ({ showToast, ToastComponent })}>
+                    <DashboardLayout useToast={toastProp}>
                       <Routes>
                         {/* 1. Dashboard (All Ingested Items / Library) */}
                         <Route
                           path="dashboard"
                           element={
                             <Dashboard
-                              useToast={() => ({ showToast, ToastComponent })}
+                              useToast={toastProp}
                             />
                           }
                         />
@@ -447,7 +480,7 @@ export default function App() {
                           path="review"
                           element={
                             <ReviewCompanionPage
-                              useToast={() => ({ showToast, ToastComponent })}
+                              useToast={toastProp}
                             />
                           }
                         />
@@ -457,7 +490,7 @@ export default function App() {
                           path="assistant"
                           element={
                             <AIAssistant
-                              useToast={() => ({ showToast, ToastComponent })}
+                              useToast={toastProp}
                             />
                           }
                         />
@@ -466,11 +499,11 @@ export default function App() {
                         {/* Document Studio & PDF Canvas */}
                         <Route
                           path="studio"
-                          element={<DocumentStudio useToast={() => ({ showToast, ToastComponent })} />}
+                          element={<DocumentStudio useToast={toastProp} />}
                         />
                         <Route
                           path="reader"
-                          element={<DocumentStudio useToast={() => ({ showToast, ToastComponent })} />}
+                          element={<DocumentStudio useToast={toastProp} />}
                         />
 
                         {/* 5. Settings */}
