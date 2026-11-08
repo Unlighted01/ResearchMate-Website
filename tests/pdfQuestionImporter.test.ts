@@ -4,6 +4,9 @@ import {
   reconstructStackedFractions,
   detectQaBookLikelihood,
   parseTwoPassQuestionsAndAnswers,
+  parseTwoPassQuestionsAndAnswersDetailed,
+  splitStemAndOptions,
+  evaluateSuspiciousItem,
   toQuestions,
   toFlashcards,
 } from "../src/services/pdfQuestionImporter";
@@ -225,5 +228,246 @@ Answers
     expect(parsed[1].correctLetter).toBe("c");
     expect(parsed[1].correctIndex).toBe(2);
     expect(parsed[1].hasIncompleteAnswer).toBe(false);
+  });
+
+  it("strips repeated page headers leaking into choices and stems (1001 Math Problems pattern)", () => {
+    const rawWithLeakedHeaders = `
+Chapter 1: Arithmetic
+
+1. If a commuter travels 45 miles each way to work for 5 days,
+14   1001 MATH PROBLEMS
+what is the total distance traveled during the work week?
+a. 225 miles
+b. 350 miles
+1001 MATH PROBLEMS   15
+c. 450 miles
+d. 900 miles
+
+Answers and Explanations
+1. c. Daily round-trip is 45 * 2 = 90 miles. For 5 days, 90 * 5 = 450 miles.
+    `;
+
+    const parsed = parseTwoPassQuestionsAndAnswers(rawWithLeakedHeaders);
+    expect(parsed.length).toBe(1);
+
+    const q = parsed[0];
+    expect(q.number).toBe(1);
+    expect(q.stem).not.toContain("1001 MATH PROBLEMS");
+    expect(q.stem).toContain("what is the total distance traveled during the work week?");
+    expect(q.options[1]).toBe("350 miles");
+    expect(q.options[2]).toBe("450 miles");
+    expect(q.options[2]).not.toContain("1001 MATH PROBLEMS");
+    expect(q.correctLetter).toBe("c");
+    expect(q.correctIndex).toBe(2);
+    expect(q.isSuspicious).toBe(false);
+    expect(q.reviewStatus).toBe("verified");
+  });
+
+  it("strips catalog, publisher, and copyright boilerplate from explanations", () => {
+    const rawWithCatalog = `
+Chapter 1
+
+1. What is 25% of 80?
+a. 15  b. 20  c. 25  d. 30
+
+Answers and Explanations
+1. b. 0.25 * 80 = 20.
+Library of Congress Cataloging-in-Publication Data
+ISBN 1-57685-519-6
+All rights reserved. Printed in the United States of America.
+LearningExpress 1001 Math Problems
+    `;
+
+    const parsed = parseTwoPassQuestionsAndAnswers(rawWithCatalog);
+    expect(parsed.length).toBe(1);
+
+    const q = parsed[0];
+    expect(q.explanation).toBe("0.25 * 80 = 20.");
+    expect(q.explanation).not.toContain("Library of Congress");
+    expect(q.explanation).not.toContain("ISBN");
+    expect(q.explanation).not.toContain("All rights reserved");
+    expect(q.isSuspicious).toBe(false);
+    expect(q.reviewStatus).toBe("verified");
+  });
+
+  it("ignores fake chapter names from Table of Contents dot leaders and running heads", () => {
+    const rawWithTOC = `
+TABLE OF CONTENTS
+Chapter 1: Miscellaneous Math .................... 1
+Chapter 2: Fractions ............................. 25
+Chapter 3: Decimals .............................. 49
+
+Chapter 1: Miscellaneous Math
+
+1. Solve for x: 3x - 5 = 10.
+a. 3  b. 4  c. 5  d. 6
+
+Answers and Explanations
+1. c. 3x = 15, so x = 5.
+    `;
+
+    const detailed = parseTwoPassQuestionsAndAnswersDetailed(rawWithTOC);
+    expect(detailed.items.length).toBe(1);
+    expect(detailed.chaptersDetected).not.toContain("TABLE OF CONTENTS");
+    expect(detailed.items[0].chapter).toBe("Chapter 1: Miscellaneous Math");
+  });
+
+  it("preserves answer mode across chapter titles inside the answers section", () => {
+    const rawMultiChapterAnswers = `
+Chapter 1: Algebra
+
+1. Solve x + 2 = 7.
+a. 3  b. 4  c. 5  d. 6
+
+Chapter 2: Geometry
+
+2. How many sides does a hexagon have?
+a. 5  b. 6  c. 7  d. 8
+
+Answers and Explanations
+Chapter 1: Algebra
+1. c. x = 7 - 2 = 5.
+
+Chapter 2: Geometry
+2. b. A hexagon is a polygon with 6 sides.
+    `;
+
+    const parsed = parseTwoPassQuestionsAndAnswers(rawMultiChapterAnswers);
+    expect(parsed.length).toBe(2);
+
+    expect(parsed[0].number).toBe(1);
+    expect(parsed[0].correctLetter).toBe("c");
+    expect(parsed[0].hasIncompleteAnswer).toBe(false);
+
+    expect(parsed[1].number).toBe(2);
+    expect(parsed[1].correctLetter).toBe("b");
+    expect(parsed[1].explanation).toContain("hexagon is a polygon with 6 sides");
+    expect(parsed[1].hasIncompleteAnswer).toBe(false);
+  });
+
+  it("prevents wrong stems and option bleeding when stem mentions '(a)' or variable 'a' in formulas", () => {
+    const mathFormulaSample = `
+1. If a function f(a) is defined as f(a) = 2a + 3, what is the value of f(4)?
+a. 8
+b. 11
+c. 14
+d. 15
+
+Answers and Explanations
+1. b. Substitute 4 for a: f(4) = 2(4) + 3 = 11.
+    `;
+
+    const parsed = parseTwoPassQuestionsAndAnswers(mathFormulaSample);
+    expect(parsed.length).toBe(1);
+
+    const q = parsed[0];
+    expect(q.stem).toContain("f(a) is defined as f(a) = 2a + 3");
+    expect(q.options).toEqual(["8", "11", "14", "15"]);
+    expect(q.correctLetter).toBe("b");
+    expect(q.correctIndex).toBe(1);
+  });
+
+  it("reports missing question numbers in sequence when gaps exist in the extracted book", () => {
+    const gappedContent = `
+Chapter 1
+
+1. Question one text here.
+a. 1  b. 2  c. 3  d. 4
+
+2. Question two text here.
+a. 1  b. 2  c. 3  d. 4
+
+4. Question four text here.
+a. 1  b. 2  c. 3  d. 4
+
+5. Question five text here.
+a. 1  b. 2  c. 3  d. 4
+
+8. Question eight text here.
+a. 1  b. 2  c. 3  d. 4
+
+Answers and Explanations
+1. a. Expl 1
+2. b. Expl 2
+4. c. Expl 4
+5. d. Expl 5
+8. a. Expl 8
+    `;
+
+    const detailed = parseTwoPassQuestionsAndAnswersDetailed(gappedContent);
+    expect(detailed.items.length).toBe(5);
+    // Sequence is 1, 2, 4, 5, 8 -> missing 3, 6, 7
+    expect(detailed.missingQuestionNumbers).toEqual([3, 6, 7]);
+    expect(detailed.totalExpected).toBe(8);
+
+    // Also verify backward compatibility property on standard array return
+    const arrayReturn = parseTwoPassQuestionsAndAnswers(gappedContent);
+    expect(arrayReturn.missingQuestionNumbers).toEqual([3, 6, 7]);
+  });
+
+  it("auto-flags suspicious questions as needs_review and marks clean ones as verified", () => {
+    const mixedQuality = `
+Chapter 1
+
+1. Valid clean question with full stem and distinct choices?
+a. Choice Alpha
+b. Choice Beta
+c. Choice Gamma
+d. Choice Delta
+
+2. Too short
+a. A  b. B  c. C  d. D
+
+3. Question with missing answer key statement here?
+a. Opt 1  b. Opt 2  c. Opt 3  d. Opt 4
+
+4. Question with duplicate choices in multiple positions?
+a. Same Option
+b. Same Option
+c. Unique Option
+d. Fourth Option
+
+Answers and Explanations
+1. b. Valid explanation for clean item.
+2. a. Expl 2
+4. d. Expl 4
+    `;
+
+    const detailed = parseTwoPassQuestionsAndAnswersDetailed(mixedQuality);
+    expect(detailed.items.length).toBe(4);
+
+    // Question 1: clean -> verified
+    expect(detailed.items[0].number).toBe(1);
+    expect(detailed.items[0].isSuspicious).toBe(false);
+    expect(detailed.items[0].reviewStatus).toBe("verified");
+
+    // Question 2: stem too short -> needs_review
+    expect(detailed.items[1].number).toBe(2);
+    expect(detailed.items[1].isSuspicious).toBe(true);
+    expect(detailed.items[1].reviewStatus).toBe("needs_review");
+    expect(detailed.items[1].suspiciousReasons).toContain("Question stem suspiciously short (< 15 characters)");
+
+    // Question 3: missing answer key -> needs_review
+    expect(detailed.items[2].number).toBe(3);
+    expect(detailed.items[2].hasIncompleteAnswer).toBe(true);
+    expect(detailed.items[2].isSuspicious).toBe(true);
+    expect(detailed.items[2].reviewStatus).toBe("needs_review");
+    expect(detailed.items[2].suspiciousReasons).toContain("Answer key not found in section or key index");
+
+    // Question 4: duplicate options -> needs_review
+    expect(detailed.items[3].number).toBe(4);
+    expect(detailed.items[3].isSuspicious).toBe(true);
+    expect(detailed.items[3].reviewStatus).toBe("needs_review");
+    expect(detailed.items[3].suspiciousReasons).toContain("Duplicate choices detected");
+
+    expect(detailed.suspiciousCount).toBe(3);
+
+    // Verify toQuestions maps reviewStatus and origin
+    const questions = toQuestions(detailed.items);
+    expect(questions[0].reviewStatus).toBe("verified");
+    expect(questions[0].origin).toBe("parsed_pdf");
+    expect(questions[1].reviewStatus).toBe("needs_review");
+    expect(questions[2].reviewStatus).toBe("needs_review");
+    expect(questions[3].reviewStatus).toBe("needs_review");
   });
 });
