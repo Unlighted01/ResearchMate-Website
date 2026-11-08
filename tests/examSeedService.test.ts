@@ -64,47 +64,44 @@ describe("examSeedService", () => {
     expect(seq1[0]).toBeLessThan(1);
   });
 
-  it("GOLDEN TEST: fixed seed + fixed questions always produces identical order and permutations", () => {
+  it("GOLDEN TEST: fixed seed + fixed questions must match hard-coded frozen expectations", () => {
     const FIXED_SEED = "GOLDEN-2026-X";
 
-    const runA = createSeededExam(
+    // FROZEN EXPECTED VALUES FOR v:1 (Mulberry32 + FNV-1a)
+    // If any future shuffle change alters these, it is a BREAKING CHANGE that requires formatVersion: 2
+    const HARDCODED_EXPECTED_ORDER = ["q-gamma", "q-beta", "q-delta", "q-alpha"];
+    const HARDCODED_EXPECTED_KEY = [1, 1, 1, 1];
+    const HARDCODED_EXPECTED_PERMUTATIONS = {
+      "q-gamma": { questionId: "q-gamma", choiceOrder: [3, 0, 2, 1], originalCorrectIndex: 0, newCorrectIndex: 1 },
+      "q-beta": { questionId: "q-beta", choiceOrder: [3, 1, 0, 2], originalCorrectIndex: 1, newCorrectIndex: 1 },
+      "q-delta": { questionId: "q-delta", choiceOrder: [1, 0], originalCorrectIndex: 0, newCorrectIndex: 1 },
+      "q-alpha": { questionId: "q-alpha", choiceOrder: [1, 0, 2, 3], originalCorrectIndex: 0, newCorrectIndex: 1 },
+    };
+
+    const run = createSeededExam(
       fixedQuestions,
       { totalQuestions: 4, choicesPerItem: 4 },
       FIXED_SEED,
       "exam-fixed-001"
     );
 
-    const runB = createSeededExam(
-      fixedQuestions,
-      { totalQuestions: 4, choicesPerItem: 4 },
-      FIXED_SEED,
-      "exam-fixed-002"
-    );
+    // 1. Question order must match hard-coded frozen constant
+    expect(run.examRecord.orderedQuestionIds).toEqual(HARDCODED_EXPECTED_ORDER);
+    expect(run.orderedQuestions.map((q) => q.id)).toEqual(HARDCODED_EXPECTED_ORDER);
 
-    // 1. Question order must be strictly identical
-    expect(runA.examRecord.orderedQuestionIds).toEqual(runB.examRecord.orderedQuestionIds);
-    expect(runA.orderedQuestions.map((q) => q.id)).toEqual(runB.orderedQuestions.map((q) => q.id));
+    // 2. Choice permutations must match hard-coded frozen constant
+    expect(run.examRecord.permutations).toEqual(HARDCODED_EXPECTED_PERMUTATIONS);
 
-    // 2. Choice permutations must be strictly identical
-    for (const qId of runA.examRecord.orderedQuestionIds) {
-      expect(runA.examRecord.permutations[qId].choiceOrder).toEqual(
-        runB.examRecord.permutations[qId].choiceOrder
-      );
-      expect(runA.examRecord.permutations[qId].newCorrectIndex).toEqual(
-        runB.examRecord.permutations[qId].newCorrectIndex
-      );
-    }
+    // 3. Answer key must match hard-coded frozen constant
+    expect(run.examRecord.answerKey).toEqual(HARDCODED_EXPECTED_KEY);
 
-    // 3. Answer keys must be strictly identical
-    expect(runA.examRecord.answerKey).toEqual(runB.examRecord.answerKey);
-
-    // 4. Correct answers remain logically true after choice shuffle
-    runA.orderedQuestions.forEach((q, idx) => {
+    // 4. Content verification: correct answers remain logically true after choice shuffle
+    run.orderedQuestions.forEach((q, idx) => {
       const orig = fixedQuestions.find((fq) => fq.id === q.id)!;
       const expectedAnswerText = orig.options[orig.correctIndex];
       const actualAnswerText = q.options[q.correctIndex];
       expect(actualAnswerText).toBe(expectedAnswerText);
-      expect(runA.examRecord.answerKey[idx]).toBe(q.correctIndex);
+      expect(run.examRecord.answerKey[idx]).toBe(q.correctIndex);
     });
   });
 

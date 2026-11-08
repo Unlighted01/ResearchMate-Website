@@ -49,6 +49,13 @@ import { recordExamAttempt } from "../../../services/examReadinessService";
 import AcademicMathView from "../../shared/AcademicMathView";
 import QuestionEditorModal from "./QuestionEditorModal";
 import QuestionImportModal from "./QuestionImportModal";
+import {
+  createSeededExam,
+  generateSeedCode,
+  getExamRecord,
+  getExamRecordBySeed,
+  ExamRecord,
+} from "../../../services/examSeedService";
 import MaterialScopeSelector, { MaterialScopeSelection } from "./MaterialScopeSelector";
 import { useNotifications } from "../../../context/NotificationContext";
 
@@ -195,6 +202,9 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
   const [examHistory, setExamHistory] = useState<ExamAttemptRecord[]>([]);
   const [activeExamId, setActiveExamId] = useState<string>(() => generateUUID());
+  const [activeSeed, setActiveSeed] = useState<string>(() => generateSeedCode("SEED"));
+  const [inputSeed, setInputSeed] = useState<string>("");
+  const [currentExamRecord, setCurrentExamRecord] = useState<ExamRecord | null>(null);
 
   // Generation abort controller ref
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -283,16 +293,70 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     ];
   };
 
+  // Seeded Exam Session Starter: Creates and stores immutable ExamRecord
+  const startSeededExamSession = (rawQuestions: Question[], seedToUse?: string) => {
+    const seed = seedToUse?.trim() || generateSeedCode("SEED");
+    const examId = generateUUID();
+    const { examRecord, orderedQuestions } = createSeededExam(
+      rawQuestions,
+      {
+        totalQuestions: rawQuestions.length,
+        choicesPerItem: 4,
+        paperSize: "A4",
+      },
+      seed,
+      examId
+    );
+
+    setCurrentExamRecord(examRecord);
+    setActiveSeed(seed);
+    setActiveExamId(examId);
+    setQuestions(orderedQuestions);
+    setIsSubmitted(false);
+    setUserAnswers({});
+    setFlaggedIds(new Set());
+    setActiveQuestionIdx(0);
+    if (timedMode) setSecondsRemaining(orderedQuestions.length * timePerQuestion);
+    return { examRecord, orderedQuestions };
+  };
+
+  // Retake with identical seed (order & permutations preserved)
+  const handleRetakeWithSameSeed = () => {
+    if (questions.length === 0) return;
+    startSeededExamSession(questions, activeSeed);
+    showToast(`Restarted exam session with Seed: ${activeSeed}`, "info");
+  };
+
+  // Load or generate exam by user-provided seed code
+  const handleLoadSeed = () => {
+    const clean = inputSeed.trim();
+    if (!clean) return;
+
+    const existing = getExamRecordBySeed(clean);
+    if (existing) {
+      setCurrentExamRecord(existing);
+      setActiveSeed(existing.seed);
+      setActiveExamId(existing.examId);
+      if (questions.length > 0) {
+        startSeededExamSession(questions, existing.seed);
+        showToast(`Loaded exam variant for Seed: ${existing.seed}`, "success");
+        return;
+      }
+    }
+
+    if (questions.length > 0) {
+      startSeededExamSession(questions, clean);
+      showToast(`Generated deterministic exam for Seed: ${clean}`, "success");
+    } else {
+      showToast(`No questions loaded to apply Seed: ${clean}. Generate or import questions first.`, "info");
+    }
+  };
+
   // Handle Multi-Batch Exam Generation
   const handleGenerateExam = async (customQuestionList?: Question[]) => {
     if (customQuestionList && customQuestionList.length > 0) {
-      setQuestions(customQuestionList);
-      setIsSubmitted(false);
-      setUserAnswers({});
-      setFlaggedIds(new Set());
-      setActiveQuestionIdx(0);
-      if (timedMode) setSecondsRemaining(customQuestionList.length * timePerQuestion);
-      showToast(`Started targeted review on ${customQuestionList.length} questions!`, "info");
+      startSeededExamSession(customQuestionList);
+      showToast(`Started targeted review on ${customQuestionList.length} questions! (Seed: ${activeSeed})`, "info");
       return;
     }
 
@@ -330,9 +394,8 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       );
 
       if (generated.length > 0) {
-        setQuestions(generated);
-        if (timedMode) setSecondsRemaining(generated.length * timePerQuestion);
-        showToast(`Successfully assembled ${generated.length}-question simulation!`, "success");
+        startSeededExamSession(generated);
+        showToast(`Successfully assembled ${generated.length}-question simulation! (Seed: ${activeSeed})`, "success");
       }
     } catch (err: any) {
       if (err.message?.includes("aborted")) {
@@ -441,15 +504,11 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   // CRUD: Batch Import questions
   const handleImportQuestions = (imported: Question[], mode: "append" | "replace") => {
     if (mode === "replace") {
-      setQuestions(imported);
-      setUserAnswers({});
-      setFlaggedIds(new Set());
-      setActiveQuestionIdx(0);
-      setActiveExamId(generateUUID());
-      setIsSubmitted(false);
-      showToast(`Replaced exam with ${imported.length} imported questions!`, "success");
+      startSeededExamSession(imported);
+      showToast(`Assembled ${imported.length} imported questions into seeded exam! (Seed: ${activeSeed})`, "success");
     } else {
-      setQuestions((prev) => [...prev, ...imported]);
+      const combined = [...questions, ...imported];
+      startSeededExamSession(combined);
       showToast(`Appended ${imported.length} questions to active exam!`, "success");
     }
   };
@@ -703,6 +762,36 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
           </div>
         )}
 
+        {/* Seeded Exam Bar */}
+        <div className="flex items-center justify-between gap-3 pt-2 pb-1 border-t border-slate-100 dark:border-slate-800/60 flex-wrap text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono text-slate-500 flex items-center gap-1.5">
+              🌱 Active Seed:
+              <strong className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80">
+                {activeSeed}
+              </strong>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              placeholder="Enter Seed (e.g. SEED-4821)..."
+              value={inputSeed}
+              onChange={(e) => setInputSeed(e.target.value)}
+              className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-mono w-44 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            <button
+              type="button"
+              onClick={handleLoadSeed}
+              disabled={!inputSeed.trim()}
+              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-40 transition-colors"
+            >
+              Load Seed
+            </button>
+          </div>
+        </div>
+
         {/* Smart Q&A Review Book Detection Callout */}
         {targetScopeItems.some((item) => /problem|exam|review|math|csc|test|question/i.test(item.title || item.sourceTitle || "")) && (
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-indigo-50/90 to-purple-50/70 dark:from-indigo-950/40 dark:to-purple-950/30 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl text-xs">
@@ -954,6 +1043,9 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
               <div className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">
                 ({Object.keys(userAnswers).length} answered)
               </div>
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 font-bold">
+                🌱 Seed: {activeSeed}
+              </span>
             </div>
 
             {/* Center & Right Controls: Timer, Flagging, ViewMode */}
@@ -1263,6 +1355,15 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                         <span>Retake Missed Only ({calculateScore().missed.length})</span>
                       </button>
                     )}
+
+                    <button
+                      onClick={handleRetakeWithSameSeed}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                      title="Retake the exact same question order and choice permutations"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Re-take with Same Seed ({activeSeed})</span>
+                    </button>
 
                     <button
                       onClick={handlePrintExam}
