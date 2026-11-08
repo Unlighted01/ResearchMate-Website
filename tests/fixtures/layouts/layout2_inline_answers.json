@@ -1,0 +1,5 @@
+{
+  "name": "Layout 2: Inline Answer Keys and Explanations",
+  "expectedProfile": "inline_answer_key",
+  "text": "Topic: Cell Biology and Genetics\n\n1. Which organelle is commonly referred to as the powerhouse of the eukaryotic cell?\na. Nucleus\nb. Ribosome\nc. Mitochondria\nd. Endoplasmic reticulum\nAnswer: c. Mitochondria generate most of the cell's ATP via oxidative phosphorylation.\n\n2. Which nitrogenous base replaces thymine in ribonucleic acid (RNA)?\na. Adenine\nb. Cytosine\nc. Guanine\nd. Uracil\nAnswer: d. RNA utilizes Uracil instead of Thymine.\n\n3. What phase of mitosis involves chromosomes aligning along the equatorial plane?\na. Prophase\nb. Metaphase\nc. Anaphase\nd. Telophase\nAnswer: b. Chromosomes line up at the metaphase plate during metaphase."
+}

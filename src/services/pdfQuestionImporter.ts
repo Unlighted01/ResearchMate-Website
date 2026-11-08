@@ -2,6 +2,7 @@
 // PDF QUESTION IMPORTER - Zero-Cost Rule-Based Q&A Extractor
 // Extracts full exam questions and answer keys directly from test-prep PDFs
 // (e.g. 1001 Math Problems, 501 Math Word Problems, GRE/SAT review books, board exams)
+// Supports ParserProfiles, frequency-based header/footer detection, and diagnostic audit
 // $0 AI Cost · Instant Processing · 100% Deterministic Fidelity
 // ============================================
 
@@ -9,6 +10,52 @@ import { Question, Flashcard, generateUUID } from "./examService";
 import { sanitizeCurrencyAndMath } from "./examParser";
 import { PdfLayoutItem, PdfPageWithLayout } from "./pdfService";
 import { QuestionReviewStatus, StoredQuestion } from "./questionBankService";
+
+export type AnswerKeyLocation = "inline" | "end_of_chapter" | "end_of_book" | "separate_page";
+export type ChoiceStyle = "letter_dot" | "letter_paren" | "paren_letter" | "bracket_letter" | "mixed";
+
+export interface ParserProfile {
+  id: string;
+  name: string;
+  description: string;
+  headingPattern: RegExp;
+  keyLocation: AnswerKeyLocation;
+  choiceStyle: ChoiceStyle;
+  expectedChoicesPerItem?: number;
+  endMarkers: RegExp[];
+}
+
+export interface ProfileDetectionResult {
+  profile: ParserProfile;
+  confidence: number; // 0 - 100
+  summary: string;
+  detectedHeadingPattern?: string;
+  detectedKeyLocation: AnswerKeyLocation;
+  detectedChoiceStyle: ChoiceStyle;
+  estimatedItemCount: number;
+}
+
+export interface ImporterThresholdConfig {
+  minStemLengthStandard: number;
+  minStemLengthMath: number;
+  maxStemLength: number;
+  minOptionsCount: number;
+  maxOptionsCount: number;
+  maxOptionLength: number;
+  frequencyHeaderMinPages: number;
+  frequencyHeaderRatio: number;
+}
+
+export const DEFAULT_IMPORTER_CONFIG: ImporterThresholdConfig = {
+  minStemLengthStandard: 15,
+  minStemLengthMath: 5,
+  maxStemLength: 3000,
+  minOptionsCount: 2,
+  maxOptionsCount: 5,
+  maxOptionLength: 500,
+  frequencyHeaderMinPages: 3,
+  frequencyHeaderRatio: 0.15,
+};
 
 export interface ParsedQaItem {
   id: string;
@@ -32,40 +79,159 @@ export interface ParseTwoPassResult {
   chaptersDetected: string[];
   suspiciousCount: number;
   totalExpected?: number;
+  profileUsed?: ParserProfile;
+  repeatingHeadersStripped?: string[];
+}
+
+// ============================================
+// PREDEFINED PARSER PROFILES
+// ============================================
+
+export const PROFILE_STANDARD_TWO_PASS: ParserProfile = {
+  id: "standard_two_pass",
+  name: "Standard Chapter Q&A (Two-Pass)",
+  description: "Numbered chapters or sections with questions followed by chapter-end or section-end answers",
+  headingPattern: /^(?:Chapter\s+(\d+|[IVXLCDM]+)|SECTION\s+(\d+|[IVXLCDM]+)|PART\s+(\d+|[IVXLCDM]+))\b[^\n]*/i,
+  keyLocation: "end_of_chapter",
+  choiceStyle: "letter_dot",
+  expectedChoicesPerItem: 4,
+  endMarkers: [/^(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/i],
+};
+
+export const PROFILE_1001_MATH: ParserProfile = {
+  id: "1001_math_problems",
+  name: "1001 Math Problems (LearningExpress Style)",
+  description: "Numbered sections and chapters with mixed letter-dot/paren choices and detailed answer explanations",
+  headingPattern: /^(?:SECTION\s+(\d+):?\s*[A-Za-z\s\-]+|CHAPTER\s+(\d+):?\s*[A-Za-z\s\-]+|Set\s+(\d+))\b/i,
+  keyLocation: "end_of_chapter",
+  choiceStyle: "mixed",
+  expectedChoicesPerItem: 4,
+  endMarkers: [/^(?:Answers\s+and\s+Explanations|Answer\s+Explanations|Answers)\b/i],
+};
+
+export const PROFILE_INLINE_KEYS: ParserProfile = {
+  id: "inline_answer_key",
+  name: "Inline Answer Keys",
+  description: "Each question statement and choices are immediately followed by an inline Answer key and Explanation",
+  headingPattern: /^(?:Chapter\s+(\d+|[IVXLCDM]+)|SECTION\s+(\d+|[IVXLCDM]+)|Topic:\s+[\w\s]+)\b[^\n]*/i,
+  keyLocation: "inline",
+  choiceStyle: "letter_dot",
+  expectedChoicesPerItem: 4,
+  endMarkers: [],
+};
+
+export const PROFILE_PAREN_5_CHOICE: ParserProfile = {
+  id: "paren_5_choice",
+  name: "5-Choice Parenthesized (A-E)",
+  description: "Items with choices (A) through (E) and condensed end-of-book answer grid",
+  headingPattern: /^(?:Test\s+(\d+)|Section\s+(\d+)|Part\s+([A-Z]))\b[^\n]*/i,
+  keyLocation: "end_of_book",
+  choiceStyle: "paren_letter",
+  expectedChoicesPerItem: 5,
+  endMarkers: [/^(?:Answer\s+Key|Answers)\b/i],
+};
+
+export const PROFILE_CONDENSED_GRID: ParserProfile = {
+  id: "condensed_grid",
+  name: "Condensed Answer Grid (1. A  2. B  3. C)",
+  description: "Standard questions with tabular or rapid sequence answer key",
+  headingPattern: /^(?:Exam|Practice\s+Test|Chapter\s+(\d+))\b[^\n]*/i,
+  keyLocation: "end_of_book",
+  choiceStyle: "letter_dot",
+  expectedChoicesPerItem: 4,
+  endMarkers: [/^(?:Answers|Answer\s+Key)\b/i],
+};
+
+export const SAVED_PARSER_PROFILES: Record<string, ParserProfile> = {
+  standard_two_pass: PROFILE_STANDARD_TWO_PASS,
+  "1001_math_problems": PROFILE_1001_MATH,
+  inline_answer_key: PROFILE_INLINE_KEYS,
+  paren_5_choice: PROFILE_PAREN_5_CHOICE,
+  condensed_grid: PROFILE_CONDENSED_GRID,
+};
+
+// ============================================
+// GENERIC PUBLISHER BOILERPLATE PATTERNS
+// (Generic regex - no specific publisher names hardcoded)
+// ============================================
+const GENERIC_PUBLISHER_BOILERPLATE = [
+  /(?:Library of Congress Cataloging-in-Publication Data|Cataloging-in-Publication Data)[\s\S]*?(?=\n\s*\n|\n\d+\.|$)/gi,
+  /(?:^|\n)\s*ISBN[^\n]*(?=\n|$)/gi,
+  /(?:^|\n)\s*(?:All rights reserved\.?|Printed in [A-Za-z\s]+|Manufactured in [A-Za-z\s]+|Printed on acid-free paper\.?)\b[^\n]*/gi,
+  /(?:^|\n)\s*(?:For more information (?:or to order|about)|Visit (?:us at )?www\.[\w\.\-]+\.\w+)\b[^\n]*/gi,
+  /(?:^|\n)\s*(?:Copyright\s+(?:©|\(c\)|[0-9]{4})|©\s*[0-9]{4})\s+[\w\s,\.\-]+(?=\n|$)/gi,
+  /(?:^|\n)\s*\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s*(?=\n|$)/g, // printing number lines
+];
+
+/**
+ * Normalizes a candidate line for frequency analysis:
+ * Strips margin page numbers, en-dashes, and collapses whitespace.
+ */
+export function normalizeLineForFrequency(line: string): string {
+  if (!line) return "";
+  return line
+    .replace(/^\s*\d{1,4}\s*[-–—|:]*\s*/, "") // strip leading page number
+    .replace(/\s*[-–—|:]*\s*\d{1,4}\s*$/, "") // strip trailing page number
+    .replace(/^[-–—\s]+|[-–—\s]+$/g, "") // strip leading/trailing dashes
+    .trim()
+    .toLowerCase();
 }
 
 /**
- * Publisher catalog, copyright, and distributor boilerplate patterns
- * commonly found in review books (e.g. LearningExpress, McGraw-Hill, Barron's).
+ * Frequency-based detection of repeating running headers and footers.
+ * Analyzes lines across pages and identifies any line that repeats on >= N pages
+ * or >= frequencyHeaderRatio of the document, completely independent of text content.
  */
-const CATALOG_BOILERPLATE_PATTERNS = [
-  /Library of Congress Cataloging-in-Publication Data[\s\S]*?(?:ISBN[\s\d\-X]+|\d{4}|\n\n)/gi,
-  /(?:^|\n)\s*(?:ISBN(?:-1[03])?:?\s*[\d\-X]+|ISBN\s+[\d\-X]+)\s*(?=\n|$)/gi,
-  /(?:^|\n)\s*(?:All rights reserved\.?|Printed in the United States of America\.?|Manufactured in the United States\.?|Printed on acid-free paper\.?)\b[^\n]*/gi,
-  /(?:^|\n)\s*(?:For more information (?:or to order|about)|Visit (?:us at )?www\.[\w\.\-]+\.\w+)\b[^\n]*/gi,
-  /(?:^|\n)\s*(?:Copyright\s+(?:©|\(c\)|[0-9]{4})|©\s*[0-9]{4})\s+[\w\s,\.\-]+(?=\n|$)/gi,
-  /(?:^|\n)\s*(?:LearningExpress\s+(?:1001|501|Review|Team|LLC)|Learning\s*Express,\s*LLC)\b[^\n]*/gi,
-  /(?:^|\n)\s*\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s*(?=\n|$)/g, // printing number lines like 9 8 7 6 5 4 3 2 1
-];
+export function findRepeatingHeadersAndFooters(
+  pages: PdfPageWithLayout[] | string[],
+  config: ImporterThresholdConfig = DEFAULT_IMPORTER_CONFIG
+): Set<string> {
+  const repeatingSet = new Set<string>();
+  const pageCount = pages.length;
+  if (pageCount < 2) return repeatingSet;
 
-/**
- * Common running header and footer patterns that repeat on every page
- * (e.g. "12   1001 MATH PROBLEMS", "501 Math Word Problems   13", "Page 14 of 250").
- */
-const RUNNING_HEADER_PATTERNS = [
-  // Page number lines
-  /(?:^|\n)\s*(?:Page\s+\d+(?:\s+of\s+\d+)?|\d+\s*\|\s*Page)\s*(?=\n|$)/gi,
-  // Book titles with or without page margins (e.g. "1001 Math Problems", "501 Math Word Problems", "GRE Review")
-  /(?:^|\n)\s*(?:\d{1,4}\s+)?(?:1001|501|GMAT|GRE|SAT|CSC|MCAT|ACT|NCLEX|LSAT|GED)\s+[A-Za-z\s\-]+(?:\s+\d{1,4})?\s*(?=\n|$)/gi,
-  // Margin numbers flanking headers: e.g. "42   SECTION 1" or "SECTION 1   43"
-  /(?:^|\n)\s*\d{1,4}\s+(?:CHAPTER|SECTION|PART|PRACTICE\s+TEST)\s+[\w\s\-]+\s*(?=\n|$)/gi,
-  /(?:^|\n)\s*(?:CHAPTER|SECTION|PART|PRACTICE\s+TEST)\s+[\w\s\-]+\s+\d{1,4}\s*(?=\n|$)/gi,
-];
+  const minPagesThreshold = Math.max(
+    config.frequencyHeaderMinPages,
+    Math.ceil(pageCount * config.frequencyHeaderRatio)
+  );
+
+  const linePageOccurrences = new Map<string, Set<number>>();
+
+  for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {
+    const pageItem = pages[pageIdx];
+    const rawText = typeof pageItem === "string" ? pageItem : pageItem.text || "";
+    const lines = rawText.split("\n").map((l) => l.trim()).filter((l) => l.length > 2);
+
+    // Examine lines near top (first 4) and near bottom (last 4)
+    const topLines = lines.slice(0, 4);
+    const bottomLines = lines.slice(Math.max(0, lines.length - 4));
+    const candidateLines = Array.from(new Set([...topLines, ...bottomLines]));
+
+    for (const line of candidateLines) {
+      const norm = normalizeLineForFrequency(line);
+      if (norm.length >= 3) {
+        if (!linePageOccurrences.has(norm)) {
+          linePageOccurrences.set(norm, new Set<number>());
+        }
+        linePageOccurrences.get(norm)!.add(pageIdx);
+      }
+    }
+  }
+
+  for (const [normLine, pageSet] of linePageOccurrences.entries()) {
+    if (pageSet.size >= minPagesThreshold) {
+      repeatingSet.add(normLine);
+    }
+  }
+
+  return repeatingSet;
+}
 
 /**
  * Normalizes unicode ligatures, running headers, catalog text, and currency symbols.
+ * Accepts an optional Set of frequency-detected repeating header strings.
  */
-export function cleanPageText(rawText: string): string {
+export function cleanPageText(rawText: string, repeatingHeaders?: Set<string>): string {
   if (!rawText) return "";
 
   let cleaned = rawText
@@ -81,14 +247,22 @@ export function cleanPageText(rawText: string): string {
     // Windows CRLF
     .replace(/\r\n/g, "\n");
 
-  // Strip publisher and catalog boilerplate
-  for (const pattern of CATALOG_BOILERPLATE_PATTERNS) {
+  // Strip generic publisher and catalog boilerplate
+  for (const pattern of GENERIC_PUBLISHER_BOILERPLATE) {
     cleaned = cleaned.replace(pattern, "\n");
   }
 
-  // Strip running headers and footers
-  for (const pattern of RUNNING_HEADER_PATTERNS) {
-    cleaned = cleaned.replace(pattern, "\n");
+  // Strip generic page number lines
+  cleaned = cleaned.replace(/(?:^|\n)\s*(?:Page\s+\d+(?:\s+of\s+\d+)?|\d+\s*\|\s*Page)\s*(?=\n|$)/gi, "\n");
+
+  // If frequency-detected repeating headers are provided, strip matching lines
+  if (repeatingHeaders && repeatingHeaders.size > 0) {
+    const lines = cleaned.split("\n");
+    const filteredLines = lines.filter((line) => {
+      const norm = normalizeLineForFrequency(line);
+      return !repeatingHeaders.has(norm);
+    });
+    cleaned = filteredLines.join("\n");
   }
 
   // Sanitize dollar signs to prevent KaTeX math collision
@@ -98,16 +272,24 @@ export function cleanPageText(rawText: string): string {
 /**
  * Strips residual catalog or running header artifacts from an individual string.
  */
-export function sanitizeContentText(text: string): string {
+export function sanitizeContentText(text: string, repeatingHeaders?: Set<string>): string {
   if (!text) return "";
   let res = text
     .replace(/\[Page\s+\d+\]/gi, "")
-    .replace(/(?:^|\n)\s*(?:\d{1,4}\s+)?(?:1001|501|GMAT|GRE|SAT|CSC)\s+[A-Za-z\s\-]+(?:\s+\d{1,4})?\s*(?=\n|$)/gi, "\n")
     .replace(/Library of Congress[\s\S]*/gi, "")
     .replace(/ISBN(?:-1[03])?:?\s*[\d\-X]+/gi, "")
     .replace(/All rights reserved[\s\S]*/gi, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+
+  if (repeatingHeaders && repeatingHeaders.size > 0) {
+    const lines = res.split("\n");
+    res = lines
+      .filter((l) => !repeatingHeaders.has(normalizeLineForFrequency(l)))
+      .join("\n")
+      .trim();
+  }
+
   return res;
 }
 
@@ -133,9 +315,7 @@ export function reconstructStackedFractions(items: PdfLayoutItem[]): string {
     const current = sorted[i];
     const curStr = (current.str || "").trim();
 
-    // Check if item is a lone digit or small number that could be a numerator
     if (/^\d{1,3}$/.test(curStr) && i + 1 < sorted.length) {
-      // Look for a denominator directly below current item with overlapping X
       let foundDenominator = false;
       for (let j = i + 1; j < Math.min(i + 8, sorted.length); j++) {
         if (processed.has(j)) continue;
@@ -161,7 +341,6 @@ export function reconstructStackedFractions(items: PdfLayoutItem[]): string {
     result += current.str + (current.hasEOL ? "\n" : " ");
   }
 
-  // Replace unicode fractions as well
   return result
     .replace(/½/g, "$\\frac{1}{2}$")
     .replace(/⅓/g, "$\\frac{1}{3}$")
@@ -192,11 +371,8 @@ export function detectQaBookLikelihood(text: string): {
     return { isLikelyQa: false, estimatedQuestionCount: 0, sampleConfidence: 0 };
   }
 
-  // Count question markers: e.g. "1. ", "2. ", "3. " at start of lines
   const questionMatches = text.match(/(?:^|\n)\s*(\d{1,4})[\.\)]\s+[A-Z]/g) || [];
-  // Count option markers: e.g. "a. ", "b. ", "c. ", "d. "
-  const optionMatches = text.match(/(?:^|\n)\s*[a-dA-D][\.\)]\s+/g) || [];
-  // Count answer key markers: e.g. "Answers", "1. b.", "2. c."
+  const optionMatches = text.match(/(?:^|\n)\s*[a-eA-E][\.\)]\s+/g) || [];
   const answerSectionMatches = text.match(/(?:Answers|Answer Explanations|Solutions|Answer Key)/gi) || [];
 
   const estimatedQuestionCount = questionMatches.length;
@@ -209,7 +385,7 @@ export function detectQaBookLikelihood(text: string): {
 
   const sampleConfidence = Math.min(
     100,
-    Math.round((estimatedQuestionCount * 2 + optionDensity * 1 + answerSectionMatches.length * 15))
+    Math.round(estimatedQuestionCount * 2 + optionDensity * 1 + answerSectionMatches.length * 15)
   );
 
   return {
@@ -220,15 +396,128 @@ export function detectQaBookLikelihood(text: string): {
 }
 
 /**
+ * Auto-detects the optimal ParserProfile for a document by sampling question styles,
+ * answer key placements, and section heading formats.
+ */
+export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): ProfileDetectionResult {
+  let sampleText = "";
+  if (Array.isArray(pagesOrText)) {
+    // Sample first 15 pages and last 15 pages
+    const samplePages = [
+      ...pagesOrText.slice(0, 15),
+      ...pagesOrText.slice(Math.max(0, pagesOrText.length - 15)),
+    ];
+    sampleText = samplePages.map((p) => p.text || "").join("\n");
+  } else {
+    sampleText = pagesOrText.slice(0, 50000);
+  }
+
+  // 1. Detect Choice Style
+  const letterDotCount = (sampleText.match(/(?:^|\n|\s{2,})[a-eA-E]\.\s+/g) || []).length;
+  const parenLetterCount = (sampleText.match(/(?:^|\n|\s{2,})\([a-eA-E]\)\s+/g) || []).length;
+  const letterParenCount = (sampleText.match(/(?:^|\n|\s{2,})[a-eA-E]\)\s+/g) || []).length;
+  const bracketLetterCount = (sampleText.match(/(?:^|\n|\s{2,})\[[a-eA-E]\]\s+/g) || []).length;
+
+  let detectedChoiceStyle: ChoiceStyle = "letter_dot";
+  let maxStyleCount = letterDotCount;
+
+  if (parenLetterCount > maxStyleCount) {
+    detectedChoiceStyle = "paren_letter";
+    maxStyleCount = parenLetterCount;
+  }
+  if (letterParenCount > maxStyleCount) {
+    detectedChoiceStyle = "letter_paren";
+    maxStyleCount = letterParenCount;
+  }
+  if (bracketLetterCount > maxStyleCount) {
+    detectedChoiceStyle = "bracket_letter";
+    maxStyleCount = bracketLetterCount;
+  }
+  if (letterDotCount > 5 && letterParenCount > 5) {
+    detectedChoiceStyle = "mixed";
+  }
+
+  // 2. Detect 5-choice prevalence
+  const eChoiceCount = (sampleText.match(/(?:^|\n|\s+)(?:\([eE]\)|[eE][\.\)\]])\s+/g) || []).length;
+  const questionNumberCount = (sampleText.match(/(?:^|\n)\s*\d{1,4}[\.\)]\s+/g) || []).length;
+  const expectedChoicesPerItem = (eChoiceCount >= 2 || (eChoiceCount > 0 && eChoiceCount >= questionNumberCount * 0.3)) ? 5 : 4;
+
+  // 3. Detect Answer Key Location
+  const inlineAnswerMatches = (sampleText.match(/(?:^|\n)\s*(?:Answer|Ans|Correct Answer)\s*:\s*[a-eA-E]\b/gi) || []).length;
+  const answerSectionMatches = (sampleText.match(/^(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/gim) || []).length;
+
+  let detectedKeyLocation: AnswerKeyLocation = "end_of_chapter";
+  if (inlineAnswerMatches >= 4) {
+    detectedKeyLocation = "inline";
+  } else if (answerSectionMatches === 1) {
+    detectedKeyLocation = "end_of_book";
+  } else if (answerSectionMatches > 1) {
+    detectedKeyLocation = "end_of_chapter";
+  }
+
+  // 4. Detect Heading Pattern
+  let headingPattern = PROFILE_STANDARD_TWO_PASS.headingPattern;
+  let detectedHeading = "Chapter \\d+ / Section \\d+";
+
+  if (/(?:Set\s+\d+|SECTION\s+\d+:\s+)/i.test(sampleText)) {
+    headingPattern = PROFILE_1001_MATH.headingPattern;
+    detectedHeading = "Set \\d+ / Section \\d+";
+  } else if (/Topic:\s+[\w\s]+/i.test(sampleText)) {
+    headingPattern = /^(?:Topic:\s+[\w\s]+|Chapter\s+\d+)/i;
+    detectedHeading = "Topic: [Name]";
+  }
+
+  // Select profile
+  let selectedProfile: ParserProfile;
+  if (detectedKeyLocation === "inline") {
+    selectedProfile = { ...PROFILE_INLINE_KEYS, choiceStyle: detectedChoiceStyle, expectedChoicesPerItem };
+  } else if (expectedChoicesPerItem === 5 && detectedChoiceStyle === "paren_letter") {
+    selectedProfile = { ...PROFILE_PAREN_5_CHOICE, keyLocation: detectedKeyLocation };
+  } else if (detectedHeading.includes("Set")) {
+    selectedProfile = { ...PROFILE_1001_MATH, choiceStyle: detectedChoiceStyle };
+  } else {
+    selectedProfile = {
+      ...PROFILE_STANDARD_TWO_PASS,
+      choiceStyle: detectedChoiceStyle,
+      keyLocation: detectedKeyLocation,
+      expectedChoicesPerItem,
+      headingPattern,
+    };
+  }
+
+  // Compute confidence (0-100%)
+  let confidence = 50;
+  if (maxStyleCount >= 10) confidence += 20;
+  if (answerSectionMatches > 0 || inlineAnswerMatches > 0) confidence += 20;
+  if (questionNumberCount >= 5) confidence += 10;
+  confidence = Math.min(100, Math.max(30, confidence));
+
+  const summary = `Detected ${expectedChoicesPerItem}-choice ${detectedChoiceStyle} format with ${detectedKeyLocation} answer keys and '${detectedHeading}' headings (${confidence}% confidence).`;
+
+  return {
+    profile: selectedProfile,
+    confidence,
+    summary,
+    detectedHeadingPattern: detectedHeading,
+    detectedKeyLocation,
+    detectedChoiceStyle,
+    estimatedItemCount: questionNumberCount,
+  };
+}
+
+/**
  * Splits a question block into a stem and an ordered list of options.
- * Validates canonical sequence (A -> B -> C -> D) to prevent option bleeding,
+ * Validates canonical sequence (A -> B -> C -> D or True / False) to prevent option bleeding,
  * mid-sentence premature splits (e.g. "(a) as defined"), or formula truncation.
  */
-export function splitStemAndOptions(block: string): { stem: string; options: string[] } | null {
+export function splitStemAndOptions(
+  block: string,
+  repeatingHeaders?: Set<string>,
+  config: ImporterThresholdConfig = DEFAULT_IMPORTER_CONFIG
+): { stem: string; options: string[] } | null {
   if (!block || block.length < 5) return null;
 
   // Regex to match option tokens in sequence: A/a, B/b, C/c, D/d, E/e
-  // Matches tokens either at start of line, or preceded by whitespace / punctuation.
   const optionTokenRegex = /(?:^|\n|\s{2,}|\s+(?=[a-eA-E][\.\)\]]|\([a-eA-E]\)))(?:\(?([a-eA-E])[\.\)\]]|\b([a-eA-E])[\.\)])\s+/g;
 
   const matches: { index: number; letter: string; length: number }[] = [];
@@ -243,10 +532,7 @@ export function splitStemAndOptions(block: string): { stem: string; options: str
     });
   }
 
-  if (matches.length < 2) return null;
-
   // Look for a valid continuous sequence starting at 'a'
-  let startIdx = -1;
   let validSequence: typeof matches = [];
 
   for (let i = 0; i < matches.length; i++) {
@@ -258,45 +544,42 @@ export function splitStemAndOptions(block: string): { stem: string; options: str
         if (matches[j].letter.charCodeAt(0) === expectedCharCode) {
           currentSeq.push(matches[j]);
           expectedCharCode++;
-          if (currentSeq.length >= 5) break; // max A-E
+          if (currentSeq.length >= config.maxOptionsCount) break;
         }
       }
 
-      // Valid if it has at least A, B, and C (or A, B, C, D)
-      if (currentSeq.length >= 3 && currentSeq.length > validSequence.length) {
+      // Valid if it has at least minOptionsCount (e.g. 2 for True/False, or 3 for multiple choice)
+      if (currentSeq.length >= config.minOptionsCount && currentSeq.length > validSequence.length) {
         validSequence = currentSeq;
-        startIdx = i;
       }
     }
   }
 
-  if (validSequence.length < 2) {
-    // Fallback: check simple regex split if strict sequence wasn't found
+  if (validSequence.length < config.minOptionsCount) {
+    // Fallback: check simple regex split
     const simpleSplit = block.split(/(?:^|\n|\s{2,}|\s+(?=[b-eB-E][\.\)]|\([b-eB-E]\)))(?=[a-eA-E][\.\)]|\([a-eA-E]\))/);
-    if (simpleSplit.length >= 3) {
-      const stem = sanitizeContentText(simpleSplit[0]);
+    if (simpleSplit.length >= config.minOptionsCount + 1) {
+      const stem = sanitizeContentText(simpleSplit[0], repeatingHeaders);
       const rawOpts = simpleSplit.slice(1);
       const options = rawOpts
-        .map((opt) => sanitizeContentText(opt.replace(/^[a-eA-E][\.\)\]]\s*|^\([a-eA-E]\)\s*/, "")))
+        .map((opt) => sanitizeContentText(opt.replace(/^[a-eA-E][\.\)\]]\s*|^\([a-eA-E]\)\s*/, ""), repeatingHeaders))
         .filter((opt) => opt.length > 0);
       return { stem, options };
     }
     return null;
   }
 
-  // We have a verified sequence of option tokens
+  // Valid sequence verified
   const firstToken = validSequence[0];
-  const stem = sanitizeContentText(block.substring(0, firstToken.index));
+  const stem = sanitizeContentText(block.substring(0, firstToken.index), repeatingHeaders);
 
   const options: string[] = [];
   for (let i = 0; i < validSequence.length; i++) {
     const cur = validSequence[i];
     const startPos = cur.index + cur.length;
     const endPos = i + 1 < validSequence.length ? validSequence[i + 1].index : block.length;
-    const optText = sanitizeContentText(block.substring(startPos, endPos));
-    if (optText) {
-      options.push(optText);
-    }
+    const optText = sanitizeContentText(block.substring(startPos, endPos), repeatingHeaders);
+    options.push(optText || `Choice ${String.fromCharCode(65 + i)}`);
   }
 
   return { stem, options };
@@ -304,6 +587,7 @@ export function splitStemAndOptions(block: string): { stem: string; options: str
 
 /**
  * Evaluates whether a parsed question is suspicious and needs manual review.
+ * Respects math stems (which can legitimately be concise) and unified thresholds config.
  */
 export function evaluateSuspiciousItem(
   item: {
@@ -311,7 +595,8 @@ export function evaluateSuspiciousItem(
     options: string[];
     hasIncompleteAnswer?: boolean;
     explanation?: string;
-  }
+  },
+  config: ImporterThresholdConfig = DEFAULT_IMPORTER_CONFIG
 ): { isSuspicious: boolean; reasons: string[]; reviewStatus: QuestionReviewStatus } {
   const reasons: string[] = [];
 
@@ -321,25 +606,24 @@ export function evaluateSuspiciousItem(
   }
 
   // Check 2: Question stem anomalies
-  const stem = item.stem || "";
-  if (stem.length < 15) {
-    reasons.push("Question stem suspiciously short (< 15 characters)");
-  } else if (stem.length > 2500) {
-    reasons.push("Question stem abnormally long (> 2500 characters)");
+  const stem = (item.stem || "").trim();
+  const hasMathOrEquation = /[\=\+\-\*\/\^\$\\\%×÷√∫≤≥≠≈±]|(?:\b\d+\b)/.test(stem);
+  const minStemLen = hasMathOrEquation ? config.minStemLengthMath : config.minStemLengthStandard;
+
+  if (stem.length < minStemLen) {
+    reasons.push(`Question stem suspiciously short (< ${minStemLen} characters)`);
+  } else if (stem.length > config.maxStemLength) {
+    reasons.push(`Question stem abnormally long (> ${config.maxStemLength} characters)`);
   }
 
   if (/(?:Library of Congress|Cataloging-in-Publication|ISBN\s+[\d\-X]+|All rights reserved)/i.test(stem)) {
     reasons.push("Publisher or catalog metadata detected in question stem");
   }
 
-  if (/(?:1001|501)\s+Math\s+Problems/i.test(stem)) {
-    reasons.push("Running book header leaked into question stem");
-  }
-
   // Check 3: Options anomalies
   const opts = item.options || [];
-  if (opts.length < 2) {
-    reasons.push("Fewer than 2 choices available");
+  if (opts.length < config.minOptionsCount) {
+    reasons.push(`Fewer than ${config.minOptionsCount} choices available`);
   }
 
   const seenOpts = new Set<string>();
@@ -351,8 +635,8 @@ export function evaluateSuspiciousItem(
     }
     seenOpts.add(lower);
 
-    if (opt.length > 500) {
-      reasons.push("Option text abnormally long (> 500 characters)");
+    if (opt.length > config.maxOptionLength) {
+      reasons.push(`Option text abnormally long (> ${config.maxOptionLength} characters)`);
     }
     if (/(?:Library of Congress|Cataloging-in-Publication|ISBN)/i.test(opt)) {
       reasons.push("Publisher metadata detected in option text");
@@ -381,19 +665,38 @@ export function evaluateSuspiciousItem(
  * Automatically flags suspicious items and reports missing question numbers.
  */
 export function parseTwoPassQuestionsAndAnswersDetailed(
-  pagesOrText: PdfPageWithLayout[] | string
+  pagesOrText: PdfPageWithLayout[] | string,
+  options?: {
+    profile?: ParserProfile;
+    config?: ImporterThresholdConfig;
+  }
 ): ParseTwoPassResult {
-  let fullCleanedText = "";
+  const config = options?.config || DEFAULT_IMPORTER_CONFIG;
+  const profile = options?.profile || detectParserProfile(pagesOrText).profile;
 
+  // Step 1: Detect repeating running headers/footers by frequency
+  let repeatingHeaders = new Set<string>();
   if (Array.isArray(pagesOrText)) {
-    fullCleanedText = pagesOrText
-      .map((p) => `\n[Page ${p.pageNumber}]\n` + cleanPageText(p.text || reconstructStackedFractions(p.items)))
-      .join("\n");
+    repeatingHeaders = findRepeatingHeadersAndFooters(pagesOrText, config);
   } else {
-    fullCleanedText = cleanPageText(pagesOrText);
+    // If string has [Page \d+] markers, slice into pages for frequency analysis
+    const pageChunks = pagesOrText.split(/(?:^|\n)\[Page\s+\d+\]/i).filter((c) => c.trim().length > 0);
+    if (pageChunks.length >= 2) {
+      repeatingHeaders = findRepeatingHeadersAndFooters(pageChunks, config);
+    }
   }
 
-  const questionsMap = new Map<string, { number: number; stem: string; options: string[]; chapter: string; pageNumber?: number }>();
+  // Step 2: Clean full text
+  let fullCleanedText = "";
+  if (Array.isArray(pagesOrText)) {
+    fullCleanedText = pagesOrText
+      .map((p) => `\n[Page ${p.pageNumber}]\n` + cleanPageText(p.text || reconstructStackedFractions(p.items), repeatingHeaders))
+      .join("\n");
+  } else {
+    fullCleanedText = cleanPageText(pagesOrText, repeatingHeaders);
+  }
+
+  const questionsMap = new Map<string, { number: number; stem: string; options: string[]; chapter: string; pageNumber?: number; inlineAnswer?: { letter: string; explanation: string } }>();
   const answersMap = new Map<string, { number: number; letter: string; explanation: string; chapter: string }>();
   const chaptersDetected = new Set<string>();
 
@@ -411,29 +714,53 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     const block = currentBuffer.join("\n").trim();
     currentBuffer = [];
 
-    // Attempt to split into stem and options
-    const splitResult = splitStemAndOptions(block);
+    // Check for inline answer keys if profile or block uses inline key (e.g. "Answer: B\nExplanation: ...")
+    const inlineMatch = block.match(/(?:^|\n)\s*(?:Answer|Ans|Correct Answer)\s*:\s*([a-eA-E])\b\s*(?:[\.\)\:\-\s\]]|\s+is\s+correct)?\s*([\s\S]*)/i);
+    let blockForQuestion = block;
+    let inlineAnswerData: { letter: string; explanation: string } | undefined;
 
-    // If it has multiple-choice choices, IT IS DEFINITIVELY A QUESTION, even if isAnswerMode was on!
-    if (splitResult && splitResult.options.length >= 2) {
+    if (inlineMatch) {
+      const letter = inlineMatch[1].toLowerCase();
+      const expl = sanitizeContentText(inlineMatch[2] || "", repeatingHeaders);
+      inlineAnswerData = {
+        letter,
+        explanation: expl || `Verified correct answer: Option ${letter.toUpperCase()}.`,
+      };
+      // Strip the inline answer from the question block
+      blockForQuestion = block.substring(0, inlineMatch.index).trim();
+    }
+
+    // Attempt to split into stem and options
+    const splitResult = splitStemAndOptions(blockForQuestion, repeatingHeaders, config);
+
+    if (splitResult && splitResult.options.length >= config.minOptionsCount) {
       isAnswerMode = false; // Always exit answer mode when a true question block is encountered
 
-      const stem = sanitizeContentText(splitResult.stem);
+      const stem = sanitizeContentText(splitResult.stem, repeatingHeaders);
       const options = [...splitResult.options];
 
-      while (options.length < 4) {
-        options.push(`Choice ${String.fromCharCode(65 + options.length)}`);
+      // Only pad if not a recognized binary-choice item (e.g. True/False or Yes/No)
+      const isBinaryChoice = options.length === 2 && (
+        /^(?:true|false|yes|no)$/i.test(options[0].trim()) ||
+        /^(?:true|false|yes|no)$/i.test(options[1].trim())
+      );
+
+      if (!isBinaryChoice) {
+        while (options.length < (profile.expectedChoicesPerItem || 4)) {
+          options.push(`Choice ${String.fromCharCode(65 + options.length)}`);
+        }
       }
 
-      if (stem.length > 3) {
+      if (stem.length > 2) {
         const key = `${currentChapter}::${currentNum}`;
         const globalKey = `${currentNum}`;
         const itemData = {
           number: currentNum,
           stem,
-          options: options.slice(0, 5),
+          options: options.slice(0, config.maxOptionsCount),
           chapter: currentChapter,
           pageNumber: currentPage,
+          inlineAnswer: inlineAnswerData,
         };
         questionsMap.set(key, itemData);
         if (!questionsMap.has(globalKey)) {
@@ -441,13 +768,12 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         }
       }
     } else {
-      // Check if it's an answer key: e.g. "d. Work backwards to find..." or "[d] ..." or "d) ..."
+      // Check if it's an answer key block
       const ansMatch = block.match(/^(?:Choice\s+|Option\s+|\()?([a-eA-E])(?:[\.\)\:\-\s\]]|\s+is\s+correct)?\s*([\s\S]*)/i);
       if (ansMatch) {
         const letter = ansMatch[1].toLowerCase();
-        let explanation = sanitizeContentText(ansMatch[2] || "");
-        // Clean out any trailing catalog text at the end of explanations
-        explanation = explanation.replace(/(?:LearningExpress|Library of Congress|All rights reserved)[\s\S]*/gi, "").trim();
+        let explanation = sanitizeContentText(ansMatch[2] || "", repeatingHeaders);
+        explanation = explanation.replace(/(?:Library of Congress|All rights reserved)[\s\S]*/gi, "").trim();
 
         const key = `${currentChapter}::${currentNum}`;
         const globalKey = `${currentNum}`;
@@ -504,34 +830,53 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         flush();
         currentChapter = `${trimmed} ${nextTrimmed}`;
         chaptersDetected.add(currentChapter);
-        // If we were in answer mode, entering a new chapter under answers continues answer mode
         currentNum = null;
         i++; // skip next line since consumed
         continue;
       }
     }
 
-    // Detect chapter headings: Chapter 1 / SECTION 1 / Miscellaneous Math / Fractions / etc.
-    const chMatch = trimmed.match(/^(?:Chapter\s+(\d+)?|SECTION\s+(\d+)?|PART\s+(\d+)?|\b(\d+)\s+(?:Miscellaneous|Fractions|Decimals|Percentages?|Percents|Algebra|Geometry|Word Problems|Practice Test|Set\s+\d+))\b[^\n]*/i);
+    // Detect chapter headings using profile.headingPattern
+    // e.g. "Section 6: Geometry" or "Set 62"
+    const chMatch = trimmed.match(profile.headingPattern);
     if (chMatch) {
       flush();
-      const detectedName = chMatch[0].trim();
+      let detectedName = chMatch[0].replace(/\s*\([^\)]*\)/g, "").trim();
+      // If question marker was consumed on same line (e.g. "Set 62 ... 977. Lara"), strip it
+      const inlineNumMatch = detectedName.match(/^([\s\S]*?)(?=\s+\d{1,4}[\.\)]\s+)/);
+      if (inlineNumMatch) {
+        detectedName = inlineNumMatch[1].trim();
+      }
+
       // Ensure it's not a running head with trailing margin number
-      if (!/\s+\d{1,4}$/.test(detectedName)) {
+      if (!/\s+\d{1,4}$/.test(detectedName) && detectedName.length > 2) {
         currentChapter = detectedName;
         chaptersDetected.add(currentChapter);
         currentNum = null;
+
+        // If the line also contained a question (e.g. "Set 62 ... 977. Question text"), process the question
+        const restOfLine = trimmed.substring(chMatch[0].length).trim();
+        const numOnSameLine = restOfLine.match(/^(\d{1,4})[\.\)]\s+([\s\S]*)/);
+        if (numOnSameLine) {
+          currentNum = parseInt(numOnSameLine[1], 10);
+          currentBuffer = [numOnSameLine[2]];
+        }
         continue;
       }
     }
 
-    // Detect Answers section headers
-    if (/^(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/i.test(trimmed)) {
-      flush();
-      isAnswerMode = true;
-      currentNum = null;
-      continue;
+    // Detect Answers section headers from profile.endMarkers
+    let isEndMarker = false;
+    for (const marker of profile.endMarkers) {
+      if (marker.test(trimmed)) {
+        flush();
+        isAnswerMode = true;
+        currentNum = null;
+        isEndMarker = true;
+        break;
+      }
     }
+    if (isEndMarker) continue;
 
     // Detect question/answer numbering: "1. ", "64. ", "1) "
     const numMatch = trimmed.match(/^(\d{1,4})[\.\)]\s+([\s\S]*)/);
@@ -551,15 +896,13 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   // De-duplicate questions by number
   const seenNumbers = new Set<number>();
   const items: ParsedQaItem[] = [];
-  const numbersList: number[] = [];
 
   for (const q of questionsMap.values()) {
     if (seenNumbers.has(q.number)) continue;
     seenNumbers.add(q.number);
-    numbersList.push(q.number);
 
-    // Look up answer key
-    const ans = answersMap.get(`${q.chapter}::${q.number}`) || answersMap.get(String(q.number));
+    // Look up answer key (inline answer takes precedence if present, then chapter key, then global key)
+    const ans = q.inlineAnswer || answersMap.get(`${q.chapter}::${q.number}`) || answersMap.get(String(q.number));
     let correctLetter = "a";
     let correctIndex = 0;
     let explanation = "Identified based on study materials.";
@@ -576,12 +919,15 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     }
 
     // Evaluate if item is suspicious
-    const evaluation = evaluateSuspiciousItem({
-      stem: q.stem,
-      options: q.options,
-      hasIncompleteAnswer,
-      explanation,
-    });
+    const evaluation = evaluateSuspiciousItem(
+      {
+        stem: q.stem,
+        options: q.options,
+        hasIncompleteAnswer,
+        explanation,
+      },
+      config
+    );
 
     items.push({
       id: generateUUID(),
@@ -625,26 +971,39 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     chaptersDetected: Array.from(chaptersDetected),
     suspiciousCount,
     totalExpected: items.length + missingQuestionNumbers.length,
+    profileUsed: profile,
+    repeatingHeadersStripped: Array.from(repeatingHeaders),
   };
 }
 
 /**
  * Standard array-returning wrapper for parseTwoPassQuestionsAndAnswersDetailed.
- * Attaches missingQuestionNumbers, chaptersDetected, and suspiciousCount to the array
- * for seamless backward compatibility with existing components and tests.
+ * Attaches diagnostics (missingQuestionNumbers, chaptersDetected, suspiciousCount, profileUsed)
+ * for seamless backward compatibility.
  */
 export function parseTwoPassQuestionsAndAnswers(
-  pagesOrText: PdfPageWithLayout[] | string
-): ParsedQaItem[] & { missingQuestionNumbers?: number[]; chaptersDetected?: string[]; suspiciousCount?: number } {
-  const result = parseTwoPassQuestionsAndAnswersDetailed(pagesOrText);
+  pagesOrText: PdfPageWithLayout[] | string,
+  options?: {
+    profile?: ParserProfile;
+    config?: ImporterThresholdConfig;
+  }
+): ParsedQaItem[] & {
+  missingQuestionNumbers?: number[];
+  chaptersDetected?: string[];
+  suspiciousCount?: number;
+  profileUsed?: ParserProfile;
+} {
+  const result = parseTwoPassQuestionsAndAnswersDetailed(pagesOrText, options);
   const arr = [...result.items] as ParsedQaItem[] & {
     missingQuestionNumbers?: number[];
     chaptersDetected?: string[];
     suspiciousCount?: number;
+    profileUsed?: ParserProfile;
   };
   arr.missingQuestionNumbers = result.missingQuestionNumbers;
   arr.chaptersDetected = result.chaptersDetected;
   arr.suspiciousCount = result.suspiciousCount;
+  arr.profileUsed = result.profileUsed;
   return arr;
 }
 
@@ -656,13 +1015,15 @@ export function toQuestions(parsedList: ParsedQaItem[]): StoredQuestion[] {
   return parsedList.map((item) => ({
     id: item.id || generateUUID(),
     question: item.stem,
-    options: item.options.length >= 4 ? item.options.slice(0, 5) : item.options,
+    options: item.options.length >= 2 ? item.options : ["True", "False"],
     correctIndex: item.correctIndex,
     explanation: item.explanation,
     topicTag: item.chapter || "Extracted Exam",
     sourcePage: item.pageNumber,
     origin: "parsed_pdf",
-    reviewStatus: item.reviewStatus || (item.isSuspicious ? "needs_review" : (item.hasIncompleteAnswer ? "needs_review" : "verified")),
+    reviewStatus:
+      item.reviewStatus ||
+      (item.isSuspicious ? "needs_review" : item.hasIncompleteAnswer ? "needs_review" : "verified"),
   }));
 }
 

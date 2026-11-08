@@ -1,0 +1,5 @@
+{
+  "name": "Layout 3: Parenthesized Choices with End-of-Book Grid",
+  "expectedProfile": "standard_two_pass",
+  "text": "Section 1: General Science\n\n1. What is the chemical formula for table salt?\n(A) NaCl\n(B) KCl\n(C) CaCl2\n(D) MgSO4\n\n2. Which planet has the largest planetary ring system in the solar system?\n(A) Jupiter\n(B) Saturn\n(C) Uranus\n(D) Neptune\n\n3. What is the fundamental unit of electrical resistance?\n(A) Ampere\n(B) Volt\n(C) Ohm\n(D) Watt\n\nAnswer Key\n1. A  2. B  3. C"
+}

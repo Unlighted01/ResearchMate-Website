@@ -1,0 +1,5 @@
+{
+  "name": "Layout 4: 5-Choices (A-E), Short Math Stems & 2-Choice True/False",
+  "expectedProfile": "paren_5_choice",
+  "text": "Section 1: Advanced Mathematics and Logic\n\n1. Solve $2x = 8$.\n(a) 1\n(b) 2\n(c) 3\n(d) 4\n(e) 5\n\n2. Evaluate $\\sqrt{49}$.\n(a) 5\n(b) 6\n(c) 7\n(d) 8\n(e) 9\n\n3. An isosceles triangle always possesses at least two sides of equal length.\na. True\nb. False\n\nAnswers and Explanations\n1. d. Dividing both sides by 2 gives x = 4.\n2. c. 7 * 7 = 49.\n3. a. By definition, an isosceles triangle has at least two equal sides."
+}

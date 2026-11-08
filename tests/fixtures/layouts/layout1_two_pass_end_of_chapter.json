@@ -1,0 +1,5 @@
+{
+  "name": "Layout 1: Two-Pass End-of-Chapter Answers",
+  "expectedProfile": "standard_two_pass",
+  "text": "[Page 1]\nChapter 1: Arithmetic Operations\n\n1. What is the sum of 45 and 55?\na. 90\nb. 100\nc. 110\nd. 120\n\n2. A store sells notebooks for $2.50 each. How much do 4 notebooks cost?\na. $8.00\nb. $9.00\nc. $10.00\nd. $12.00\n\nAnswers and Explanations\n1. b. Adding 45 + 55 gives 100.\n2. c. Multiply $2.50 by 4 = $10.00.\n\n[Page 2]\nChapter 2: Fractions and Ratios\n\n3. Reduce 12/16 to its lowest terms.\na. 2/3\nb. 3/4\nc. 4/5\nd. 5/6\n\n4. If 2 out of 5 students are girls in a class of 30, how many girls are there?\na. 10\nb. 12\nc. 15\nd. 18\n\nAnswers and Explanations\n3. b. Divide numerator and denominator by 4: 12/16 = 3/4.\n4. b. (2/5) * 30 = 12 girls."
+}

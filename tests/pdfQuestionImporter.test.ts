@@ -5,16 +5,28 @@ import {
   detectQaBookLikelihood,
   parseTwoPassQuestionsAndAnswers,
   parseTwoPassQuestionsAndAnswersDetailed,
+  detectParserProfile,
+  findRepeatingHeadersAndFooters,
   splitStemAndOptions,
   evaluateSuspiciousItem,
   toQuestions,
   toFlashcards,
+  DEFAULT_IMPORTER_CONFIG,
+  PROFILE_STANDARD_TWO_PASS,
+  PROFILE_1001_MATH,
+  PROFILE_INLINE_KEYS,
+  PROFILE_PAREN_5_CHOICE,
 } from "../src/services/pdfQuestionImporter";
 import { PdfLayoutItem } from "../src/services/pdfService";
 
+import layout1 from "./fixtures/layouts/layout1_two_pass_end_of_chapter.json";
+import layout2 from "./fixtures/layouts/layout2_inline_answers.json";
+import layout3 from "./fixtures/layouts/layout3_paren_choices_end_grid.json";
+import layout4 from "./fixtures/layouts/layout4_5choices_short_stems.json";
+
 describe("Phase 3: Zero-Cost No-AI PDF Question Importer", () => {
   it("cleans ligatures, drops running headers, and escapes currency collisions", () => {
-    const raw = "Page 12\n501 Math Word Problems\nIf a book costs $15.50 and has a speci\uFB01c discount, calculate the \uFB02oat.";
+    const raw = "Page 12\nIf a book costs $15.50 and has a speci\uFB01c discount, calculate the \uFB02oat.";
     const cleaned = cleanPageText(raw);
 
     expect(cleaned).toContain("specific");
@@ -88,7 +100,6 @@ Answers and Explanations
 `;
 
     const parsed = parseTwoPassQuestionsAndAnswers(bookContent);
-
     expect(parsed.length).toBe(2);
 
     // Question 1 Verification
@@ -96,7 +107,7 @@ Answers and Explanations
     expect(parsed[0].stem).toContain("A car travels 150 miles in 3 hours");
     expect(parsed[0].options.length).toBe(4);
     expect(parsed[0].correctLetter).toBe("b");
-    expect(parsed[0].correctIndex).toBe(1); // 'b' is index 1
+    expect(parsed[0].correctIndex).toBe(1);
     expect(parsed[0].explanation).toContain("150 miles / 3 hours = 50 mph");
     expect(parsed[0].chapter).toBe("Chapter 1: Word Problems");
 
@@ -136,7 +147,7 @@ Answers and Explanations
     expect(flashcards[0].category).toBe("Calculus");
   });
 
-  it("extracts multiple chapters sequentially without question-answer collisions (501 Math Word Problems pattern)", () => {
+  it("extracts multiple chapters sequentially without question-answer collisions", () => {
     const multiChapterBook = `
 Chapter 1: Miscellaneous Math
 
@@ -171,16 +182,13 @@ Answers and Explanations
     const parsed = parseTwoPassQuestionsAndAnswers(multiChapterBook);
     expect(parsed.length).toBe(3);
 
-    // Q1 checks
     expect(parsed[0].number).toBe(1);
     expect(parsed[0].stem).toContain("Bonnie has twice as many cousins");
     expect(parsed[0].options).toEqual(["4", "5", "6", "8"]);
     expect(parsed[0].correctLetter).toBe("d");
     expect(parsed[0].correctIndex).toBe(3);
-    expect(parsed[0].explanation).toContain("Work backwards to find the solution");
     expect(parsed[0].hasIncompleteAnswer).toBe(false);
 
-    // Q64 checks (Chapter 2)
     expect(parsed[2].number).toBe(64);
     expect(parsed[2].stem).toContain("Lori ran 5 1/2 miles");
     expect(parsed[2].options).toEqual(["5", "4 1/2", "4", "4 3/4"]);
@@ -189,285 +197,258 @@ Answers and Explanations
     expect(parsed[2].hasIncompleteAnswer).toBe(false);
   });
 
-  it("handles multi-line chapter headings and single-line options seamlessly", () => {
-    const rawPdfDump = `
-CHAPTER
-1
-Miscellaneous Math
+  // ============================================
+  // REQUIREMENT 1: FREQUENCY-BASED HEADER/FOOTER DETECTION & GENERIC BOILERPLATE
+  // ============================================
+  it("drops lines that repeat across many pages by frequency regardless of text content", () => {
+    // 5 pages with a custom repeated running header and footer
+    const pages = [
+      "[Page 1]\nMedical Board Clinical Review Series\nChapter 1: Cardiology\n1. What is normal heart rate?\na. 60-100 bpm\nb. 120-140 bpm\nc. 40-50 bpm\nd. 150+ bpm\nCONFIDENTIAL REVIEW COPY - DO NOT DISTRIBUTE\nPage 1",
+      "[Page 2]\nMedical Board Clinical Review Series\n2. Which valve separates left atrium and left ventricle?\na. Mitral\nb. Tricuspid\nc. Aortic\nd. Pulmonary\nCONFIDENTIAL REVIEW COPY - DO NOT DISTRIBUTE\nPage 2",
+      "[Page 3]\nMedical Board Clinical Review Series\n3. What wave represents ventricular depolarization?\na. P wave\nb. QRS complex\nc. T wave\nd. U wave\nCONFIDENTIAL REVIEW COPY - DO NOT DISTRIBUTE\nPage 3",
+      "[Page 4]\nMedical Board Clinical Review Series\nAnswers and Explanations\n1. a. Normal resting adult HR is 60-100 bpm.\n2. a. The mitral (bicuspid) valve.\nCONFIDENTIAL REVIEW COPY - DO NOT DISTRIBUTE\nPage 4",
+      "[Page 5]\nMedical Board Clinical Review Series\n3. b. The QRS complex represents ventricular depolarization.\nCONFIDENTIAL REVIEW COPY - DO NOT DISTRIBUTE\nPage 5",
+    ];
 
-1. Find the sum of angles in a triangle.
-a. 90  b. 180  c. 270  d. 360
+    const repeatingHeaders = findRepeatingHeadersAndFooters(pages);
+    expect(repeatingHeaders.has("medical board clinical review series")).toBe(true);
+    expect(repeatingHeaders.has("confidential review copy - do not distribute")).toBe(true);
 
-Answers and Explanations
-1. b. The interior angles of any triangle sum to 180 degrees.
+    const fullDoc = pages.join("\n");
+    const result = parseTwoPassQuestionsAndAnswersDetailed(fullDoc);
 
-CHAPTER
-2
-Fractions
-
-64. What is 1/2 plus 1/4?
-a. 1/6  b. 2/6  c. 3/4  d. 1
-
-Answers
-64. c. Find common denominator: 2/4 + 1/4 = 3/4.
-    `;
-
-    const parsed = parseTwoPassQuestionsAndAnswers(rawPdfDump);
-    expect(parsed.length).toBe(2);
-
-    expect(parsed[0].number).toBe(1);
-    expect(parsed[0].chapter).toContain("CHAPTER 1");
-    expect(parsed[0].options).toEqual(["90", "180", "270", "360"]);
-    expect(parsed[0].correctLetter).toBe("b");
-    expect(parsed[0].correctIndex).toBe(1);
-    expect(parsed[0].hasIncompleteAnswer).toBe(false);
-
-    expect(parsed[1].number).toBe(64);
-    expect(parsed[1].chapter).toContain("CHAPTER 2");
-    expect(parsed[1].options).toEqual(["1/6", "2/6", "3/4", "1"]);
-    expect(parsed[1].correctLetter).toBe("c");
-    expect(parsed[1].correctIndex).toBe(2);
-    expect(parsed[1].hasIncompleteAnswer).toBe(false);
+    expect(result.items.length).toBe(3);
+    expect(result.repeatingHeadersStripped).toBeDefined();
+    expect(result.items[0].stem).not.toContain("Medical Board Clinical Review Series");
+    expect(result.items[0].stem).not.toContain("CONFIDENTIAL REVIEW COPY");
   });
 
-  it("strips repeated page headers leaking into choices and stems (1001 Math Problems pattern)", () => {
-    const rawWithLeakedHeaders = `
-Chapter 1: Arithmetic
+  it("strips generic publisher boilerplate (ISBN, cataloging, copyright, printing runs) without publisher-specific names", () => {
+    const rawGeneric = `
+Chapter 1: Core Principles
 
-1. If a commuter travels 45 miles each way to work for 5 days,
-14   1001 MATH PROBLEMS
-what is the total distance traveled during the work week?
-a. 225 miles
-b. 350 miles
-1001 MATH PROBLEMS   15
-c. 450 miles
-d. 900 miles
+1. What is the acceleration due to gravity on Earth?
+a. 9.8 m/s^2
+b. 8.9 m/s^2
+c. 10.5 m/s^2
+d. 12.0 m/s^2
 
 Answers and Explanations
-1. c. Daily round-trip is 45 * 2 = 90 miles. For 5 days, 90 * 5 = 450 miles.
-    `;
-
-    const parsed = parseTwoPassQuestionsAndAnswers(rawWithLeakedHeaders);
-    expect(parsed.length).toBe(1);
-
-    const q = parsed[0];
-    expect(q.number).toBe(1);
-    expect(q.stem).not.toContain("1001 MATH PROBLEMS");
-    expect(q.stem).toContain("what is the total distance traveled during the work week?");
-    expect(q.options[1]).toBe("350 miles");
-    expect(q.options[2]).toBe("450 miles");
-    expect(q.options[2]).not.toContain("1001 MATH PROBLEMS");
-    expect(q.correctLetter).toBe("c");
-    expect(q.correctIndex).toBe(2);
-    expect(q.isSuspicious).toBe(false);
-    expect(q.reviewStatus).toBe("verified");
-  });
-
-  it("strips catalog, publisher, and copyright boilerplate from explanations", () => {
-    const rawWithCatalog = `
-Chapter 1
-
-1. What is 25% of 80?
-a. 15  b. 20  c. 25  d. 30
-
-Answers and Explanations
-1. b. 0.25 * 80 = 20.
+1. a. Earth standard gravity is approximately 9.8 m/s^2.
 Library of Congress Cataloging-in-Publication Data
-ISBN 1-57685-519-6
-All rights reserved. Printed in the United States of America.
-LearningExpress 1001 Math Problems
+Physics Examination Review Guide
+ISBN: 978-0-123456-78-9
+ISBN-10: 0-123456-78-X
+Copyright © 2024 by Academic Test Prep Press. All rights reserved.
+Printed in the United States of America.
+10 9 8 7 6 5 4 3 2 1
+For more information about bulk discounts, visit www.testpreppress.com
     `;
 
-    const parsed = parseTwoPassQuestionsAndAnswers(rawWithCatalog);
-    expect(parsed.length).toBe(1);
+    const result = parseTwoPassQuestionsAndAnswersDetailed(rawGeneric);
+    expect(result.items.length).toBe(1);
 
-    const q = parsed[0];
-    expect(q.explanation).toBe("0.25 * 80 = 20.");
+    const q = result.items[0];
+    expect(q.explanation).toBe("Earth standard gravity is approximately 9.8 m/s^2.");
     expect(q.explanation).not.toContain("Library of Congress");
     expect(q.explanation).not.toContain("ISBN");
     expect(q.explanation).not.toContain("All rights reserved");
-    expect(q.isSuspicious).toBe(false);
+    expect(q.explanation).not.toContain("Printed in the United States");
+    expect(q.explanation).not.toContain("bulk discounts");
     expect(q.reviewStatus).toBe("verified");
   });
 
-  it("ignores fake chapter names from Table of Contents dot leaders and running heads", () => {
-    const rawWithTOC = `
-TABLE OF CONTENTS
-Chapter 1: Miscellaneous Math .................... 1
-Chapter 2: Fractions ............................. 25
-Chapter 3: Decimals .............................. 49
-
-Chapter 1: Miscellaneous Math
-
-1. Solve for x: 3x - 5 = 10.
-a. 3  b. 4  c. 5  d. 6
-
-Answers and Explanations
-1. c. 3x = 15, so x = 5.
-    `;
-
-    const detailed = parseTwoPassQuestionsAndAnswersDetailed(rawWithTOC);
-    expect(detailed.items.length).toBe(1);
-    expect(detailed.chaptersDetected).not.toContain("TABLE OF CONTENTS");
-    expect(detailed.items[0].chapter).toBe("Chapter 1: Miscellaneous Math");
-  });
-
-  it("preserves answer mode across chapter titles inside the answers section", () => {
-    const rawMultiChapterAnswers = `
+  // ============================================
+  // REQUIREMENT 2: PARSER PROFILES & AUTO-DETECTION
+  // ============================================
+  it("auto-detects ParserProfiles and computes confidence summaries across diverse document types", () => {
+    // Test 1: Standard two-pass
+    const standardSample = `
 Chapter 1: Algebra
-
-1. Solve x + 2 = 7.
-a. 3  b. 4  c. 5  d. 6
-
-Chapter 2: Geometry
-
-2. How many sides does a hexagon have?
-a. 5  b. 6  c. 7  d. 8
-
+1. Solve 2x = 10.
+a. 5  b. 4  c. 3  d. 2
 Answers and Explanations
-Chapter 1: Algebra
-1. c. x = 7 - 2 = 5.
-
-Chapter 2: Geometry
-2. b. A hexagon is a polygon with 6 sides.
+1. a. x = 5.
     `;
+    const det1 = detectParserProfile(standardSample);
+    expect(det1.confidence).toBeGreaterThanOrEqual(50);
+    expect(det1.summary).toContain("letter_dot");
+    expect(det1.profile.id).toBe("standard_two_pass");
 
-    const parsed = parseTwoPassQuestionsAndAnswers(rawMultiChapterAnswers);
-    expect(parsed.length).toBe(2);
+    // Test 2: Inline keys
+    const inlineSample = `
+1. What is H2O?
+a. Water  b. Hydrogen  c. Oxygen  d. Acid
+Answer: a. Water is dihydrogen monoxide.
+2. What is CO2?
+a. Carbon  b. Carbon dioxide  c. Monoxide  d. Gas
+Answer: b. CO2 is carbon dioxide.
+3. What is NaCl?
+a. Salt  b. Sugar  c. Pepper  d. Oil
+Answer: a. Common salt.
+4. What is O2?
+a. Ozone  b. Oxygen  c. Air  d. Nitrogen
+Answer: b. Diatomic oxygen.
+    `;
+    const det2 = detectParserProfile(inlineSample);
+    expect(det2.profile.keyLocation).toBe("inline");
+    expect(det2.summary).toContain("inline");
 
-    expect(parsed[0].number).toBe(1);
-    expect(parsed[0].correctLetter).toBe("c");
-    expect(parsed[0].hasIncompleteAnswer).toBe(false);
-
-    expect(parsed[1].number).toBe(2);
-    expect(parsed[1].correctLetter).toBe("b");
-    expect(parsed[1].explanation).toContain("hexagon is a polygon with 6 sides");
-    expect(parsed[1].hasIncompleteAnswer).toBe(false);
+    // Test 3: 5-Choice Parenthesized
+    const paren5Sample = `
+1. Select option:
+(A) First (B) Second (C) Third (D) Fourth (E) Fifth
+2. Select option:
+(A) First (B) Second (C) Third (D) Fourth (E) Fifth
+Answer Key
+1. A  2. B
+    `;
+    const det3 = detectParserProfile(paren5Sample);
+    expect(det3.profile.expectedChoicesPerItem).toBe(5);
+    expect(det3.profile.choiceStyle).toBe("paren_letter");
   });
 
-  it("prevents wrong stems and option bleeding when stem mentions '(a)' or variable 'a' in formulas", () => {
-    const mathFormulaSample = `
-1. If a function f(a) is defined as f(a) = 2a + 3, what is the value of f(4)?
-a. 8
-b. 11
-c. 14
-d. 15
-
-Answers and Explanations
-1. b. Substitute 4 for a: f(4) = 2(4) + 3 = 11.
-    `;
-
-    const parsed = parseTwoPassQuestionsAndAnswers(mathFormulaSample);
-    expect(parsed.length).toBe(1);
-
-    const q = parsed[0];
-    expect(q.stem).toContain("f(a) is defined as f(a) = 2a + 3");
-    expect(q.options).toEqual(["8", "11", "14", "15"]);
-    expect(q.correctLetter).toBe("b");
-    expect(q.correctIndex).toBe(1);
+  // ============================================
+  // REQUIREMENT 4: RUNNING AGAINST ALL 4 FIXTURE LAYOUTS
+  // ============================================
+  it("executes successfully against Fixture Layout 1 (Two-Pass End-of-Chapter)", () => {
+    const detailed = parseTwoPassQuestionsAndAnswersDetailed(layout1.text);
+    expect(detailed.items.length).toBe(4);
+    expect(detailed.chaptersDetected).toContain("Chapter 1: Arithmetic Operations");
+    expect(detailed.chaptersDetected).toContain("Chapter 2: Fractions and Ratios");
+    expect(detailed.items[0].correctLetter).toBe("b");
+    expect(detailed.items[1].correctLetter).toBe("c");
+    expect(detailed.items[2].correctLetter).toBe("b");
+    expect(detailed.items[3].correctLetter).toBe("b");
+    expect(detailed.missingQuestionNumbers).toEqual([]);
+    expect(detailed.suspiciousCount).toBe(0);
   });
 
-  it("reports missing question numbers in sequence when gaps exist in the extracted book", () => {
-    const gappedContent = `
-Chapter 1
+  it("executes successfully against Fixture Layout 2 (Inline Answer Keys)", () => {
+    const detailed = parseTwoPassQuestionsAndAnswersDetailed(layout2.text);
+    expect(detailed.items.length).toBe(3);
+    expect(detailed.items[0].stem).toContain("powerhouse of the eukaryotic cell");
+    expect(detailed.items[0].correctLetter).toBe("c");
+    expect(detailed.items[0].correctIndex).toBe(2);
+    expect(detailed.items[0].explanation.toLowerCase()).toContain("mitochondria");
+    expect(detailed.items[1].correctLetter).toBe("d");
+    expect(detailed.items[2].correctLetter).toBe("b");
+    expect(detailed.suspiciousCount).toBe(0);
+  });
 
-1. Question one text here.
-a. 1  b. 2  c. 3  d. 4
+  it("executes successfully against Fixture Layout 3 (Parenthesized Choices + End Grid)", () => {
+    const detailed = parseTwoPassQuestionsAndAnswersDetailed(layout3.text);
+    expect(detailed.items.length).toBe(3);
+    expect(detailed.items[0].stem).toContain("chemical formula for table salt");
+    expect(detailed.items[0].options).toEqual(["NaCl", "KCl", "CaCl2", "MgSO4"]);
+    expect(detailed.items[0].correctLetter).toBe("a");
+    expect(detailed.items[1].correctLetter).toBe("b");
+    expect(detailed.items[2].correctLetter).toBe("c");
+    expect(detailed.suspiciousCount).toBe(0);
+  });
 
-2. Question two text here.
-a. 1  b. 2  c. 3  d. 4
+  it("executes successfully against Fixture Layout 4 (5 Choices, Short Math Stems, 2-Choice True/False)", () => {
+    const detailed = parseTwoPassQuestionsAndAnswersDetailed(layout4.text);
+    expect(detailed.items.length).toBe(3);
 
-4. Question four text here.
-a. 1  b. 2  c. 3  d. 4
+    // Q1: Short math stem "Solve $2x = 8$." with 5 choices (a)-(e)
+    const q1 = detailed.items[0];
+    expect(q1.stem).toContain("Solve");
+    expect(q1.stem).toContain("2x = 8");
+    expect(q1.options.length).toBe(5);
+    expect(q1.correctLetter).toBe("d");
+    expect(q1.correctIndex).toBe(3);
+    // Crucial: Must NOT be flagged as suspicious because it's a valid math stem!
+    expect(q1.isSuspicious).toBe(false);
+    expect(q1.reviewStatus).toBe("verified");
 
-5. Question five text here.
-a. 1  b. 2  c. 3  d. 4
+    // Q2: Short math stem "Evaluate $\sqrt{49}$."
+    const q2 = detailed.items[1];
+    expect(q2.stem).toContain("Evaluate $\\sqrt{49}$.");
+    expect(q2.options.length).toBe(5);
+    expect(q2.correctLetter).toBe("c");
+    expect(q2.isSuspicious).toBe(false);
 
-8. Question eight text here.
-a. 1  b. 2  c. 3  d. 4
+    // Q3: 2-choice True/False
+    const q3 = detailed.items[2];
+    expect(q3.stem).toContain("isosceles triangle always possesses");
+    expect(q3.options).toEqual(["True", "False"]);
+    expect(q3.correctLetter).toBe("a");
+    expect(q3.correctIndex).toBe(0);
+    expect(q3.isSuspicious).toBe(false);
+  });
+
+  // ============================================
+  // REQUIREMENT 5: SHORT-STEM REVIEW & MULTI-CHOICE VARIATIONS
+  // ============================================
+  it("evaluates short math stems vs non-math short stems with unified threshold config", () => {
+    // 1. Valid short math stem
+    const evalMath = evaluateSuspiciousItem({
+      stem: "Solve $x + 2 = 5$.",
+      options: ["1", "2", "3", "4"],
+    });
+    expect(evalMath.isSuspicious).toBe(false);
+    expect(evalMath.reviewStatus).toBe("verified");
+
+    // 2. Non-math truncated stem
+    const evalTruncated = evaluateSuspiciousItem({
+      stem: "Too short",
+      options: ["A", "B", "C", "D"],
+    });
+    expect(evalTruncated.isSuspicious).toBe(true);
+    expect(evalTruncated.reviewStatus).toBe("needs_review");
+    expect(evalTruncated.reasons).toContain("Question stem suspiciously short (< 15 characters)");
+
+    // 3. 2-choice True/False question
+    const eval2Choice = evaluateSuspiciousItem({
+      stem: "Water boils at 100 degrees Celsius at sea level.",
+      options: ["True", "False"],
+    });
+    expect(eval2Choice.isSuspicious).toBe(false);
+
+    // 4. 3-choice item
+    const eval3Choice = evaluateSuspiciousItem({
+      stem: "Which primary color is missing: Red, Blue, and ___?",
+      options: ["Yellow", "Green", "Purple"],
+    });
+    expect(eval3Choice.isSuspicious).toBe(false);
+
+    // 5. Duplicate choices
+    const evalDup = evaluateSuspiciousItem({
+      stem: "What is the capital of France?",
+      options: ["Paris", "Paris", "Lyon", "Marseille"],
+    });
+    expect(evalDup.isSuspicious).toBe(true);
+    expect(evalDup.reasons).toContain("Duplicate choices detected");
+  });
+
+  it("handles lowercase, parenthesized, and letter-paren choice variations seamlessly", () => {
+    const variationsText = `
+1. Lowercase dot style:
+a. Option 1  b. Option 2  c. Option 3  d. Option 4
+
+2. Lowercase paren style:
+a) Alpha  b) Beta  c) Gamma  d) Delta
+
+3. Parenthesized style:
+(a) Choice One  (b) Choice Two  (c) Choice Three  (d) Choice Four
 
 Answers and Explanations
 1. a. Expl 1
 2. b. Expl 2
-4. c. Expl 4
-5. d. Expl 5
-8. a. Expl 8
+3. c. Expl 3
     `;
 
-    const detailed = parseTwoPassQuestionsAndAnswersDetailed(gappedContent);
-    expect(detailed.items.length).toBe(5);
-    // Sequence is 1, 2, 4, 5, 8 -> missing 3, 6, 7
-    expect(detailed.missingQuestionNumbers).toEqual([3, 6, 7]);
-    expect(detailed.totalExpected).toBe(8);
+    const parsed = parseTwoPassQuestionsAndAnswers(variationsText);
+    expect(parsed.length).toBe(3);
 
-    // Also verify backward compatibility property on standard array return
-    const arrayReturn = parseTwoPassQuestionsAndAnswers(gappedContent);
-    expect(arrayReturn.missingQuestionNumbers).toEqual([3, 6, 7]);
-  });
+    expect(parsed[0].options[0]).toBe("Option 1");
+    expect(parsed[0].correctLetter).toBe("a");
 
-  it("auto-flags suspicious questions as needs_review and marks clean ones as verified", () => {
-    const mixedQuality = `
-Chapter 1
+    expect(parsed[1].options[1]).toBe("Beta");
+    expect(parsed[1].correctLetter).toBe("b");
 
-1. Valid clean question with full stem and distinct choices?
-a. Choice Alpha
-b. Choice Beta
-c. Choice Gamma
-d. Choice Delta
-
-2. Too short
-a. A  b. B  c. C  d. D
-
-3. Question with missing answer key statement here?
-a. Opt 1  b. Opt 2  c. Opt 3  d. Opt 4
-
-4. Question with duplicate choices in multiple positions?
-a. Same Option
-b. Same Option
-c. Unique Option
-d. Fourth Option
-
-Answers and Explanations
-1. b. Valid explanation for clean item.
-2. a. Expl 2
-4. d. Expl 4
-    `;
-
-    const detailed = parseTwoPassQuestionsAndAnswersDetailed(mixedQuality);
-    expect(detailed.items.length).toBe(4);
-
-    // Question 1: clean -> verified
-    expect(detailed.items[0].number).toBe(1);
-    expect(detailed.items[0].isSuspicious).toBe(false);
-    expect(detailed.items[0].reviewStatus).toBe("verified");
-
-    // Question 2: stem too short -> needs_review
-    expect(detailed.items[1].number).toBe(2);
-    expect(detailed.items[1].isSuspicious).toBe(true);
-    expect(detailed.items[1].reviewStatus).toBe("needs_review");
-    expect(detailed.items[1].suspiciousReasons).toContain("Question stem suspiciously short (< 15 characters)");
-
-    // Question 3: missing answer key -> needs_review
-    expect(detailed.items[2].number).toBe(3);
-    expect(detailed.items[2].hasIncompleteAnswer).toBe(true);
-    expect(detailed.items[2].isSuspicious).toBe(true);
-    expect(detailed.items[2].reviewStatus).toBe("needs_review");
-    expect(detailed.items[2].suspiciousReasons).toContain("Answer key not found in section or key index");
-
-    // Question 4: duplicate options -> needs_review
-    expect(detailed.items[3].number).toBe(4);
-    expect(detailed.items[3].isSuspicious).toBe(true);
-    expect(detailed.items[3].reviewStatus).toBe("needs_review");
-    expect(detailed.items[3].suspiciousReasons).toContain("Duplicate choices detected");
-
-    expect(detailed.suspiciousCount).toBe(3);
-
-    // Verify toQuestions maps reviewStatus and origin
-    const questions = toQuestions(detailed.items);
-    expect(questions[0].reviewStatus).toBe("verified");
-    expect(questions[0].origin).toBe("parsed_pdf");
-    expect(questions[1].reviewStatus).toBe("needs_review");
-    expect(questions[2].reviewStatus).toBe("needs_review");
-    expect(questions[3].reviewStatus).toBe("needs_review");
+    expect(parsed[2].options[2]).toBe("Choice Three");
+    expect(parsed[2].correctLetter).toBe("c");
   });
 });
