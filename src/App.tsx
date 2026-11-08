@@ -305,6 +305,7 @@ import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import AIAssistant from "./components/App/AIAssistant";
 import PdfReader from "./components/App/PdfReader/PdfReader";
+import DocumentStudio from "./components/App/PdfStudio/DocumentStudio";
 import ReviewCompanionPage from "./components/App/ReviewCompanion/ReviewCompanionPage";
 import SupportPage from "./components/marketing/SupportPage";
 
@@ -461,10 +462,15 @@ export default function App() {
                           }
                         />
 
-                        {/* 4. Dedicated Reviewer PDF Reader */}
+                        
+                        {/* Document Studio & PDF Canvas */}
+                        <Route
+                          path="studio"
+                          element={<DocumentStudio useToast={() => ({ showToast, ToastComponent })} />}
+                        />
                         <Route
                           path="reader"
-                          element={<PdfReader />}
+                          element={<DocumentStudio useToast={() => ({ showToast, ToastComponent })} />}
                         />
 
                         {/* 5. Settings */}
@@ -474,10 +480,10 @@ export default function App() {
                         />
 
                         {/* Backward Compatibility Redirects */}
-                        <Route path="research" element={<Navigate to="/app/dashboard" replace />} />
+                        <Route path="research" element={<Navigate to="/app/studio" replace />} />
                         <Route path="literature-matrix" element={<Navigate to="/app/dashboard" replace />} />
-                        <Route path="editor" element={<Navigate to="/app/dashboard" replace />} />
-                        <Route path="citations" element={<Navigate to="/app/dashboard" replace />} />
+                        <Route path="editor" element={<Navigate to="/app/studio" replace />} />
+                        <Route path="citations" element={<Navigate to="/app/studio" replace />} />
                         <Route path="pdf-reader" element={<Navigate to="/app/reader" replace />} />
                         <Route path="smart-pen" element={<Navigate to="/app/review?tab=materials" replace />} />
                         <Route path="pair-pen" element={<Navigate to="/app/review?tab=materials" replace />} />

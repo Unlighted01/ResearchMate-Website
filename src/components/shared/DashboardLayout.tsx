@@ -63,7 +63,7 @@ const NAV_GROUPS: {
     label: "Main Navigation",
     items: [
       { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
-      { icon: FileText, label: "Document Studio", path: "/app/research" },
+      { icon: FileText, label: "Document Studio", path: "/app/studio" },
       { icon: BrainCircuit, label: "Study & Review", path: "/app/review", badge: "AI" },
       { icon: MessageSquare, label: "AI Assistant", path: "/app/assistant" },
     ],

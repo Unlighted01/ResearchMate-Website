@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 // ============================================
 // ITEM DETAIL MODAL - Full research item workspace slide-out
 // ============================================
@@ -677,6 +678,15 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       <span>{copiedField === "markdown" ? "Copied!" : "MD"}</span>
                     </button>
                     
+                    <Link
+                      to={`/app/studio?id=${item.id}`}
+                      className="flex items-center gap-1 px-2 sm:px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors shadow-2xs"
+                      title="Open in Document Studio & Citation Workspace"
+                    >
+                      <FileText className="w-3 h-3" />
+                      <span className="hidden sm:inline">Open Studio</span>
+                    </Link>
+
                     <button
                       onClick={() => handleCopyFeedback("text", () => onCopyText(displayText))}
                       className="hidden xs:flex items-center gap-1 px-2 sm:px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"

@@ -11,6 +11,7 @@ import {
   WifiOff,
   GraduationCap,
   BrainCircuit,
+  FileText,
 } from "lucide-react";
 
 interface DashboardHeaderProps {
@@ -70,11 +71,11 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           <span><span className="hidden md:inline">Mock </span>Simulator</span>
         </Link>
         <Link
-          to="/app/reader"
+          to="/app/studio"
           className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-2xs"
         >
-          <GraduationCap className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-          <span><span className="hidden md:inline">Reviewer </span>Reader</span>
+          <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+          <span><span className="hidden md:inline">Document </span>Studio</span>
         </Link>
 
         {/* Shortcuts button hidden on touch phones */}

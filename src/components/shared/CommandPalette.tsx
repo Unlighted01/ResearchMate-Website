@@ -49,10 +49,10 @@ const navigationActions = [
     path: "/app/ai-assistant",
   },
   {
-    id: "reader",
-    label: "Go to Reviewer Reader",
-    icon: BookOpen,
-    path: "/app/reader",
+    id: "studio",
+    label: "Go to Document Studio",
+    icon: FileText,
+    path: "/app/studio",
   },
   {
     id: "smart-pen",
