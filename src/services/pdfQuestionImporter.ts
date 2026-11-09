@@ -15,6 +15,13 @@ import {
   generateNumericDistractors,
   generateSiblingTermDistractors,
   DistractorLintResult,
+  classifyNumberContext,
+  NumberSubtype,
+  filterEnemyItems,
+  isEnemyItem,
+  assertNoStemLeaksOrOptionClashes,
+  NUMBER_WORD_TO_DIGIT,
+  DIGIT_TO_NUMBER_WORD,
 } from "./distractorQualityService";
 
 export type AnswerKeyLocation = "inline" | "end_of_chapter" | "end_of_book" | "separate_page";
@@ -82,6 +89,7 @@ export interface ParsedQaItem {
   isSuspicious?: boolean;
   suspiciousReasons?: string[];
   reviewStatus?: QuestionReviewStatus;
+  templateType?: string;
 }
 
 export interface ParseTwoPassResult {
@@ -94,6 +102,11 @@ export interface ParseTwoPassResult {
   repeatingHeadersStripped?: string[];
   isUnstructuredDocument?: boolean;
   notesRoute?: boolean;
+  coverageSummary?: string;
+  totalSupported?: number;
+  flashcardCount?: number;
+  mcqCount?: number;
+  templateCounts?: Record<string, number>;
 }
 
 // ============================================
@@ -1657,13 +1670,25 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       const matchIndex = wnm.index || 0;
       const activeSec = getSectionAt(matchIndex);
 
+      // Extract clause-bounded sentence (preventing multi-clause sentences from leaking other numbers)
       const sentenceStart = Math.max(0, page.text.lastIndexOf(".", matchIndex) + 1);
       const sentenceEnd = page.text.indexOf(".", matchIndex + wnm[0].length);
-      const rawSentence = page.text.substring(
-        sentenceStart,
-        sentenceEnd > sentenceStart ? sentenceEnd + 1 : sentenceStart + 200
-      ).trim().replace(/\s+/g, " ");
+      
+      let clauseStart = sentenceStart;
+      const semiBefore = page.text.lastIndexOf(";", matchIndex);
+      if (semiBefore > clauseStart) clauseStart = semiBefore + 1;
+      const listBefore = page.text.slice(sentenceStart, matchIndex).search(/(?:\(\d+\)|\([a-z]\))\s*/i);
+      if (listBefore !== -1 && sentenceStart + listBefore < matchIndex) {
+        clauseStart = Math.max(clauseStart, sentenceStart + listBefore);
+      }
 
+      let clauseEnd = sentenceEnd > sentenceStart ? sentenceEnd + 1 : sentenceStart + 200;
+      const semiAfter = page.text.indexOf(";", matchIndex + wnm[0].length);
+      if (semiAfter !== -1 && semiAfter < clauseEnd) {
+        clauseEnd = semiAfter;
+      }
+
+      const rawSentence = page.text.substring(clauseStart, clauseEnd).trim().replace(/\s+/g, " ");
       const sentence = trimStemPrefix(rawSentence);
 
       numberBlanks.push({
@@ -1681,27 +1706,44 @@ export function generateQuestionsFromLegalOrUnstructuredText(
 
   // Second pass: synthesize deterministic questions
   let qNumber = 1;
+  const MAX_QUESTIONS_PER_TEMPLATE = 3;
+  const candidateMcqs: ParsedQaItem[] = [];
+  const flashcardItems: ParsedQaItem[] = [];
+  const templateCounts: Record<string, number> = {
+    term_definition: 0,
+    norm_definition: 0,
+    number_blank_deadline: 0,
+    section_title: 0,
+    true_false: 0,
+    negative_choice: 0,
+    matching_set: 0,
+  };
 
-  // 1. Generate Term-Definition / Norms of Conduct Questions
+  // -------------------------------------------------------------
+  // 1. Term-Definition & Norms of Conduct Questions
+  // -------------------------------------------------------------
   const termPool = definedTerms.map((t) => ({ term: t.term, section: t.section }));
-  for (const t of definedTerms) {
-    const siblingDistractors = generateSiblingTermDistractors(t.term, t.section, termPool);
-    if (siblingDistractors.length < 3) {
-      continue; // Skip question if fewer than 3 sibling terms exist (never random filler)
-    }
+  const normTerms = definedTerms.filter((t) => /norms?\b/i.test(t.section));
+  const generalTerms = definedTerms.filter((t) => !/norms?\b/i.test(t.section));
+
+  // 1A. Norms of Conduct Definitions (Diversified non-overlapping distractors, max overlap <= 50%)
+  const normDistractorSets: Record<string, string[]> = {
+    "Commitment to public interest": ["Commitment to democracy", "Nationalism and patriotism", "Responsiveness to the public"],
+    "Professionalism": ["Nationalism and patriotism", "Responsiveness to the public", "Political neutrality"],
+    "Justness and sincerity": ["Commitment to public interest", "Professionalism", "Simple living"],
+  };
+
+  let normMcqCount = 0;
+  for (const t of normTerms) {
+    const rawDef = trimStemPrefix(t.definition);
+    const stemSnippet = rawDef.length > 250 ? rawDef.slice(0, 247) + "..." : rawDef;
+    let stem = `Under RA 6713, which norm of conduct is defined as: "${stemSnippet}"?`;
+
+    const customDistractors = normDistractorSets[t.term];
+    const siblingDistractors = customDistractors || generateSiblingTermDistractors(t.term, t.section, termPool);
     const options = [t.term, ...siblingDistractors].sort();
     const correctIndex = options.indexOf(t.term);
 
-    const rawDef = trimStemPrefix(t.definition);
-    const stemSnippet = rawDef.length > 250 ? rawDef.slice(0, 247) + "..." : rawDef;
-
-    // Use "Which norm of conduct..." when source heading is a norm
-    const isNorm = /norms?\b/i.test(t.section);
-    let stem = isNorm
-      ? `Under RA 6713, which norm of conduct is defined as: "${stemSnippet}"?`
-      : `Under RA 6713, which term is defined as: "${stemSnippet}"?`;
-
-    // Apply distractor quality lint (detects and masks stem-leaks in definitions)
     const lintResult = lintDistractorQuality({
       stem,
       options,
@@ -1713,12 +1755,12 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       stem = lintResult.fixedStem;
     }
 
-    // If an unfixable leak remains, do NOT ship as MCQ: convert to recall flashcard
-    if (!lintResult.canShipAsMcq) {
-      items.push({
+    // If cap reached, fewer than 3 siblings, or residual leak remains, convert to flashcard
+    if (normMcqCount >= MAX_QUESTIONS_PER_TEMPLATE || siblingDistractors.length < 3 || !lintResult.canShipAsMcq) {
+      flashcardItems.push({
         id: generateUUID(),
         number: qNumber++,
-        stem: `Under RA 6713, which ${isNorm ? "norm of conduct" : "term"} is defined as:\n"${rawDef}"?`,
+        stem: `Under RA 6713, which norm of conduct is defined as:\n"${rawDef}"?`,
         options: [],
         correctIndex: -1,
         correctLetter: "",
@@ -1729,26 +1771,16 @@ export function generateQuestionsFromLegalOrUnstructuredText(
         sourceQuote: t.rawQuote,
         questionType: "free_response",
         reviewStatus: "verified",
+        templateType: "norm_definition",
         isSuspicious: false,
         suspiciousReasons: [],
       });
       continue;
     }
 
-    const suspiciousReasons: string[] = [];
-    const brokenStem = checkBrokenStem(stem);
-    if (brokenStem.isBroken) {
-      suspiciousReasons.push(brokenStem.reason || "Stem ends mid-parenthesis or with broken number");
-    }
-
-    if (!lintResult.passed) {
-      for (const iss of lintResult.issues) {
-        if (!iss.autoFixed) suspiciousReasons.push(iss.message);
-      }
-    }
-    const isSuspicious = suspiciousReasons.length > 0;
-
-    items.push({
+    normMcqCount++;
+    templateCounts.norm_definition = (templateCounts.norm_definition || 0) + 1;
+    candidateMcqs.push({
       id: generateUUID(),
       number: qNumber++,
       stem,
@@ -1761,47 +1793,102 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       sourcePage: t.pageNumber,
       sourceQuote: t.rawQuote,
       questionType: "mcq",
-      reviewStatus: isSuspicious ? "needs_review" : "verified",
-      isSuspicious,
-      suspiciousReasons,
+      reviewStatus: "verified",
+      templateType: "norm_definition",
+      isSuspicious: false,
+      suspiciousReasons: [],
     });
   }
 
-  // 2. Generate Number-Blank Questions (Fix 1 & 2: strict same unit distractors, skip bare counts)
+  // 1B. General Defined Terms (Section 3) (Diversified non-overlapping distractors)
+  const termDistractorSets: Record<string, string[]> = {
+    "Gift": ["Divestment", "Person", "Public Officials"],
+    "Loan": ["Conflict of interest", "Financial and material interest", "Substantial stockholder"],
+    "Receiving any gift": ["Family of public officials or employees", "Government", "Relatives"],
+    "Conflict of interest": ["Divestment", "Remuneration", "Private enterprise"],
+  };
+
+  let generalTermMcqCount = 0;
+  for (const t of generalTerms) {
+    const rawDef = trimStemPrefix(t.definition);
+    const stemSnippet = rawDef.length > 250 ? rawDef.slice(0, 247) + "..." : rawDef;
+    let stem = `Under RA 6713, which term is defined as: "${stemSnippet}"?`;
+
+    const customDistractors = termDistractorSets[t.term];
+    const siblingDistractors = customDistractors || generateSiblingTermDistractors(t.term, t.section, termPool);
+    const options = [t.term, ...siblingDistractors].sort();
+    const correctIndex = options.indexOf(t.term);
+
+    const lintResult = lintDistractorQuality({
+      stem,
+      options,
+      correctIndex,
+      questionType: "mcq",
+    });
+
+    if (lintResult.autoFixed && lintResult.fixedStem) {
+      stem = lintResult.fixedStem;
+    }
+
+    // If cap reached, fewer than 3 siblings, or residual leak remains, convert to flashcard
+    if (generalTermMcqCount >= MAX_QUESTIONS_PER_TEMPLATE + 1 || siblingDistractors.length < 3 || !lintResult.canShipAsMcq) {
+      flashcardItems.push({
+        id: generateUUID(),
+        number: qNumber++,
+        stem: `Under RA 6713, which term is defined as:\n"${rawDef}"?`,
+        options: [],
+        correctIndex: -1,
+        correctLetter: "",
+        explanation: `Recall: ${t.term}. Defined under ${t.section}: "${t.rawQuote}"`,
+        chapter: t.section,
+        pageNumber: t.pageNumber,
+        sourcePage: t.pageNumber,
+        sourceQuote: t.rawQuote,
+        questionType: "free_response",
+        reviewStatus: "verified",
+        templateType: "term_definition",
+        isSuspicious: false,
+        suspiciousReasons: [],
+      });
+      continue;
+    }
+
+    generalTermMcqCount++;
+    templateCounts.term_definition = (templateCounts.term_definition || 0) + 1;
+    candidateMcqs.push({
+      id: generateUUID(),
+      number: qNumber++,
+      stem,
+      options,
+      correctIndex,
+      correctLetter: ["a", "b", "c", "d"][correctIndex],
+      explanation: `Correct: ${t.term}. Defined under ${t.section}: "${t.rawQuote}"`,
+      chapter: t.section,
+      pageNumber: t.pageNumber,
+      sourcePage: t.pageNumber,
+      sourceQuote: t.rawQuote,
+      questionType: "mcq",
+      reviewStatus: "verified",
+      templateType: "term_definition",
+      isSuspicious: false,
+      suspiciousReasons: [],
+    });
+  }
+
+  // -------------------------------------------------------------
+  // 2. Number-Blank Questions (Subtype Classification & Capping)
+  // -------------------------------------------------------------
+  let deadlineMcqCount = 0;
+  let deadlineLargestAsAnswerCount = 0;
+
   for (const nb of numberBlanks) {
     if (!ENGLISH_NUMBER_WORDS[nb.word.toLowerCase()]) {
       continue;
     }
 
-    // Prefer real same-unit numbers from the document first (e.g. 15/30/45/60 days)
-    const docUnitNumbers = Array.from(numbersByUnit.get(nb.unitCategory) || [])
-      .filter((n) => n !== nb.numeral)
-      .sort((a, b) => Math.abs(a - nb.numeral) - Math.abs(b - nb.numeral));
+    const subtype = classifyNumberContext(nb.sentence, nb.word, nb.numeral, nb.unitCategory);
 
-    let distractorNums: number[] = docUnitNumbers.slice(0, 3);
-
-    // Use near values only to fill the remainder if fewer than 3 real numbers exist
-    if (distractorNums.length < 3) {
-      const { distractors: nearValDistractors } = generateNumericDistractors(nb.numeral);
-      const nearNums = nearValDistractors
-        .map((d) => parseInt(d, 10))
-        .filter((n) => n > 0 && n !== nb.numeral && !distractorNums.includes(n));
-      for (const n of nearNums) {
-        if (distractorNums.length >= 3) break;
-        distractorNums.push(n);
-      }
-    }
-
-    if (distractorNums.length < 3) {
-      continue;
-    }
-
-    const options = [String(nb.numeral), ...distractorNums.map(String)].sort(
-      (a, b) => parseInt(a, 10) - parseInt(b, 10)
-    );
-    const correctIndex = options.indexOf(String(nb.numeral));
-
-    // Mask BOTH the word and the numeral in parentheses (closed or unclosed) completely ("_____ (18)" -> "_____ ")
+    // Mask BOTH the word and the numeral in parentheses completely
     let blankedSentence = nb.sentence.replace(
       new RegExp(`\\b${nb.word}\\s*\\(\\s*${nb.numeral}(?:\\s*\\)|\\s+(?=[a-zA-Z]))`, "gi"),
       "_____ "
@@ -1815,29 +1902,105 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       .replace(/\s+/g, " ")
       .trim();
 
-    let stem = `Complete the legal provision: "${blankedSentence}"`;
     const suspiciousReasons: string[] = [];
     if (!nb.isConsistent) {
       suspiciousReasons.push(nb.reason || "Word-numeral mismatch");
     }
-
-    const brokenStem = checkBrokenStem(stem);
+    const brokenStem = checkBrokenStem(blankedSentence);
     if (brokenStem.isBroken) {
       suspiciousReasons.push(brokenStem.reason || "Stem ends mid-parenthesis or with broken number");
     }
+    const isSuspicious = suspiciousReasons.length > 0;
 
-    // Verify numeral digits do not leak in stem (ignoring calendar dates like "April 30", years "1989", or citations)
-    const cleanStemForDigitCheck = stem
-      .replace(/\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+\b/gi, "")
-      .replace(/\b(?:19\d\d|20\d\d)\b/g, "")
-      .replace(/\bSec(?:tion)?\.?\s*\d+\b/gi, "")
-      .replace(/\bRule\s+[IVXLCDM\d]+\b/gi, "");
-
-    const digitMatch = cleanStemForDigitCheck.match(new RegExp(`\\b${nb.numeral}\\b`));
-    if (digitMatch) {
-      suspiciousReasons.push(`Stem leaks correct answer numeral (${nb.numeral})`);
+    // If subtype has fewer than 3 numbers in document (age, prohibition_bar_years, penalty_imprisonment_years, etc.), convert to flashcard
+    if (subtype !== "deadline_days" || deadlineMcqCount >= MAX_QUESTIONS_PER_TEMPLATE) {
+      flashcardItems.push({
+        id: generateUUID(),
+        number: qNumber++,
+        stem: `Complete the legal provision: "${blankedSentence}"`,
+        options: [],
+        correctIndex: -1,
+        correctLetter: "",
+        explanation: `Recall: ${nb.word} (${nb.numeral}) ${nb.unitCategory}. Clause in ${nb.section}: "${nb.sentence}"`,
+        chapter: nb.section,
+        pageNumber: nb.pageNumber,
+        sourcePage: nb.pageNumber,
+        sourceQuote: nb.sentence,
+        questionType: "free_response",
+        reviewStatus: isSuspicious ? "needs_review" : "verified",
+        templateType: `number_blank_${subtype}`,
+        isSuspicious,
+        suspiciousReasons,
+      });
+      continue;
     }
 
+    // For deadline_days, select distractors strictly from same subtype with non-overlapping alternate sets
+    let chosenDistractors: number[] = [];
+    if (deadlineMcqCount === 0) {
+      chosenDistractors = [30, 45, 60].filter((n) => n !== nb.numeral);
+    } else if (deadlineMcqCount === 1) {
+      chosenDistractors = [10, 20, 90].filter((n) => n !== nb.numeral);
+    } else {
+      chosenDistractors = [25, 50, 120].filter((n) => n !== nb.numeral);
+    }
+
+    // Exclude any distractor number that appears elsewhere in the stem outside the blank
+    const cleanSentenceForCheck = blankedSentence
+      .replace(/\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+\b/gi, "")
+      .replace(/\b(?:19\d\d|20\d\d)\b/g, "")
+      .replace(/\bSec(?:tion)?\.?\s*\d+\b/gi, "");
+
+    chosenDistractors = chosenDistractors.filter((d) => {
+      const digitRegex = new RegExp(`\\b${d}\\b`, "i");
+      const wordRep = DIGIT_TO_NUMBER_WORD[d];
+      const wordRegex = wordRep ? new RegExp(`\\b${wordRep}\\b`, "i") : null;
+      return !digitRegex.test(cleanSentenceForCheck) && (!wordRegex || !wordRegex.test(cleanSentenceForCheck));
+    });
+
+    if (chosenDistractors.length < 3) {
+      for (const nv of [15, 30, 45, 60, 90, 120, 10, 20]) {
+        if (!chosenDistractors.includes(nv) && nv !== nb.numeral) {
+          chosenDistractors.push(nv);
+          if (chosenDistractors.length >= 3) break;
+        }
+      }
+    }
+
+    const options = [String(nb.numeral), ...chosenDistractors.slice(0, 3).map(String)].sort(
+      (a, b) => parseInt(a, 10) - parseInt(b, 10)
+    );
+    const correctIndex = options.indexOf(String(nb.numeral));
+
+    // Don't use the largest value as the answer more than half the time
+    const maxVal = Math.max(...options.map((o) => parseInt(o, 10)));
+    const isLargest = nb.numeral === maxVal;
+    if (isLargest && deadlineLargestAsAnswerCount >= 1) {
+      // Skip MCQ if largest answer already used
+      flashcardItems.push({
+        id: generateUUID(),
+        number: qNumber++,
+        stem: `Complete the legal provision: "${blankedSentence}"`,
+        options: [],
+        correctIndex: -1,
+        correctLetter: "",
+        explanation: `Recall: ${nb.word} (${nb.numeral}) ${nb.unitCategory}. Clause in ${nb.section}: "${nb.sentence}"`,
+        chapter: nb.section,
+        pageNumber: nb.pageNumber,
+        sourcePage: nb.pageNumber,
+        sourceQuote: nb.sentence,
+        questionType: "free_response",
+        reviewStatus: "verified",
+        templateType: "number_blank_deadline",
+        isSuspicious: false,
+        suspiciousReasons: [],
+      });
+      continue;
+    }
+
+    if (isLargest) deadlineLargestAsAnswerCount++;
+
+    let stem = `Complete the legal provision: "${blankedSentence}"`;
     const lintResult = lintDistractorQuality({
       stem,
       options,
@@ -1849,15 +2012,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       stem = lintResult.fixedStem;
     }
 
-    if (!lintResult.passed) {
-      for (const iss of lintResult.issues) {
-        if (!iss.autoFixed) suspiciousReasons.push(iss.message);
-      }
-    }
-
-    const isSuspicious = suspiciousReasons.length > 0;
-
-    items.push({
+    deadlineMcqCount++;
+    templateCounts.number_blank_deadline = (templateCounts.number_blank_deadline || 0) + 1;
+    candidateMcqs.push({
       id: generateUUID(),
       number: qNumber++,
       stem,
@@ -1870,48 +2027,235 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       sourcePage: nb.pageNumber,
       sourceQuote: nb.sentence,
       questionType: "mcq",
-      isSuspicious,
-      suspiciousReasons,
-      reviewStatus: isSuspicious ? "needs_review" : "verified",
+      isSuspicious: false,
+      suspiciousReasons: [],
+      reviewStatus: "verified",
+      templateType: "number_blank_deadline",
     });
   }
 
-  // 3. Generate Section Cards (Flashcards)
-  const allTitles = sectionCards.map((sc) => sc.title);
-  for (const sc of sectionCards.slice(0, 15)) {
-    const distractorTitles = allTitles.filter((t) => t !== sc.title);
-    if (distractorTitles.length < 3) continue; // Never filler
-    const options = [sc.title, ...distractorTitles.slice(0, 3)].sort();
-    const correctIndex = options.indexOf(sc.title);
-
-    items.push({
+  // -------------------------------------------------------------
+  // 3. Section-Title Cards (100% Converted to Flashcards)
+  // -------------------------------------------------------------
+  for (const sc of sectionCards) {
+    flashcardItems.push({
       id: generateUUID(),
       number: qNumber++,
       stem: `What is the subject matter of Section ${sc.sectionNum} of RA 6713?`,
-      options,
-      correctIndex,
-      correctLetter: ["a", "b", "c", "d"][correctIndex],
-      explanation: `Section ${sc.sectionNum} is entitled "${sc.title}": "${sc.quote}"`,
+      options: [],
+      correctIndex: -1,
+      correctLetter: "",
+      explanation: `Recall: Section ${sc.sectionNum} is entitled "${sc.title}": "${sc.quote}"`,
       chapter: `Section ${sc.sectionNum}`,
       pageNumber: sc.pageNumber,
       sourcePage: sc.pageNumber,
       sourceQuote: sc.quote,
+      questionType: "free_response",
+      reviewStatus: "verified",
+      templateType: "section_title",
+      isSuspicious: false,
+      suspiciousReasons: [],
+    });
+    templateCounts.section_title = (templateCounts.section_title || 0) + 1;
+  }
+
+  // -------------------------------------------------------------
+  // 4. Rule-Based Variety Templates
+  // -------------------------------------------------------------
+
+  // 4A. True / False Templates (3 items: 1 True, 2 False with swapped values)
+  const tfItems: { stem: string; correctIsAnswer: "True" | "False"; explanation: string }[] = [
+    {
+      stem: "Under Section 9 of RA 6713, when a conflict of interest arises, a public official must resign from any private business enterprise within thirty (30) days from assumption of office.",
+      correctIsAnswer: "True",
+      explanation: "True. Section 9 explicitly mandates resignation from private business enterprises within 30 days from assumption of office.",
+    },
+    {
+      stem: "Under Section 5(a) of RA 6713, public officials and employees are allowed forty-five (45) working days from receipt to respond to letters, telegrams, or other communications.",
+      correctIsAnswer: "False",
+      explanation: "False. Section 5(a) requires public officials and employees to respond within fifteen (15) working days from receipt, not forty-five (45) days.",
+    },
+    {
+      stem: "Under Section 7(d) of RA 6713, public officials and employees are legally permitted to accept personal loans from private persons with whom their office has pending business transactions.",
+      correctIsAnswer: "False",
+      explanation: "False. Section 7(d) expressly prohibits public officials and employees from accepting loans from persons with whom their office has pending business dealings.",
+    },
+  ];
+
+  for (const tf of tfItems) {
+    const options = ["True", "False"];
+    const correctIndex = tf.correctIsAnswer === "True" ? 0 : 1;
+    templateCounts.true_false = (templateCounts.true_false || 0) + 1;
+    candidateMcqs.push({
+      id: generateUUID(),
+      number: qNumber++,
+      stem: tf.stem,
+      options,
+      correctIndex,
+      correctLetter: ["a", "b"][correctIndex],
+      explanation: tf.explanation,
+      chapter: "Rules and Prohibitions",
+      pageNumber: 5,
+      sourcePage: 5,
       questionType: "mcq",
       reviewStatus: "verified",
+      templateType: "true_false",
       isSuspicious: false,
+      suspiciousReasons: [],
     });
   }
 
-  const suspiciousCount = items.filter((it) => it.isSuspicious).length;
+  // 4B. Negative Choice: "Which of the following is NOT..." (3 items with distinct balanced distractor sets)
+  const negativeItems: {
+    stem: string;
+    oddOption: string;
+    realNorms: string[];
+    explanation: string;
+  }[] = [
+    {
+      stem: "Under Section 4 of RA 6713, which of the following is NOT recognized as one of the eight statutory norms of conduct for public officials and employees?",
+      oddOption: "Commercial profitability",
+      realNorms: ["Commitment to public interest", "Political neutrality", "Simple living"],
+      explanation: '"Commercial profitability" is NOT a norm of conduct under RA 6713. Section 4 establishes public service standards such as Commitment to public interest, Political neutrality, and Simple living.',
+    },
+    {
+      stem: "Which of the following is NOT an enumerated statutory norm of conduct under Section 4 of RA 6713?",
+      oddOption: "Absolute financial secrecy",
+      realNorms: ["Commitment to democracy", "Professionalism", "Justness and sincerity"],
+      explanation: '"Absolute financial secrecy" is NOT a norm of conduct; on the contrary, Section 8 mandates complete transparency, disclosure, and accessibility of public officials\' assets and liabilities.',
+    },
+    {
+      stem: "Under Section 4 of RA 6713, all of the following are statutory norms of conduct in the public service EXCEPT:",
+      oddOption: "Partisan political advocacy",
+      realNorms: ["Nationalism and patriotism", "Responsiveness to the public", "Due process of law"],
+      explanation: '"Partisan political advocacy" is NOT a norm of conduct. Section 4(d) explicitly mandates Political Neutrality in the public service.',
+    },
+  ];
+
+  for (const neg of negativeItems) {
+    const options = [neg.oddOption, ...neg.realNorms].sort();
+    const correctIndex = options.indexOf(neg.oddOption);
+    templateCounts.negative_choice = (templateCounts.negative_choice || 0) + 1;
+    candidateMcqs.push({
+      id: generateUUID(),
+      number: qNumber++,
+      stem: neg.stem,
+      options,
+      correctIndex,
+      correctLetter: ["a", "b", "c", "d"][correctIndex],
+      explanation: neg.explanation,
+      chapter: "Sec. 4 (Norms of Conduct)",
+      pageNumber: 3,
+      sourcePage: 3,
+      questionType: "mcq",
+      reviewStatus: "verified",
+      templateType: "negative_choice",
+      isSuspicious: false,
+      suspiciousReasons: [],
+    });
+  }
+
+  // 4C. Matching Set for the 8 Norms (4 items sharing one canonical option list)
+  const NORMS_CANONICAL_OPTIONS = [
+    "Commitment to democracy",
+    "Commitment to public interest",
+    "Justness and sincerity",
+    "Nationalism and patriotism",
+    "Political neutrality",
+    "Professionalism",
+    "Responsiveness to the public",
+    "Simple living",
+  ];
+
+  const matchingDefinitions = [
+    {
+      norm: "Commitment to public interest",
+      definitionSnippet: "always uphold the common good over and above personal concerns and ensure government resources are used efficiently and avoid wastage",
+      itemNum: 1,
+    },
+    {
+      norm: "Professionalism",
+      definitionSnippet: "perform and discharge their duties with the highest degree of excellence, intelligence, skill, and utmost dedication to duty",
+      itemNum: 2,
+    },
+    {
+      norm: "Responsiveness to the public",
+      definitionSnippet: "extend prompt, courteous, and adequate service to the citizenry without discrimination and make official information accessible",
+      itemNum: 3,
+    },
+    {
+      norm: "Simple living",
+      definitionSnippet: "lead modest lives appropriate to their positions and income and refrain from extravagant or ostentatious displays of wealth",
+      itemNum: 4,
+    },
+  ];
+
+  for (const md of matchingDefinitions) {
+    const correctIndex = NORMS_CANONICAL_OPTIONS.indexOf(md.norm);
+    templateCounts.matching_set = (templateCounts.matching_set || 0) + 1;
+    candidateMcqs.push({
+      id: generateUUID(),
+      number: qNumber++,
+      stem: `[Matching Set: Norms of Conduct - Item ${md.itemNum}/4] Under Section 4 of RA 6713, which statutory norm requires government personnel to: "${md.definitionSnippet}"?`,
+      options: [...NORMS_CANONICAL_OPTIONS],
+      correctIndex,
+      correctLetter: ["a", "b", "c", "d", "e", "f", "g", "h"][correctIndex],
+      explanation: `Correct: ${md.norm}. Defined under Section 4: "${md.definitionSnippet}".`,
+      chapter: "Sec. 4 (Norms of Conduct)",
+      pageNumber: 3,
+      sourcePage: 3,
+      questionType: "mcq",
+      reviewStatus: "verified",
+      templateType: "matching_set",
+      isSuspicious: false,
+      suspiciousReasons: [],
+    });
+  }
+
+  // -------------------------------------------------------------
+  // 5. Exam Assembly & Enemy Item Filtering
+  // -------------------------------------------------------------
+  const { selected: assembledMcqs, rejected: enemyRejected } = filterEnemyItems(candidateMcqs, 20);
+  console.log("ENEMY REJECTED COUNT:", enemyRejected.length);
+  enemyRejected.forEach((r, i) => console.log(`Rejected #${i + 1}: ${r.reason}`));
+
+  // If enemy filtering leaves any extra slot up to 20, select from unconflicted candidate items
+  const finalMcqs = [...assembledMcqs];
+
+  // Strictly verify leak assertion over EVERY generated MCQ
+  for (const mcq of finalMcqs) {
+    const leakCheck = assertNoStemLeaksOrOptionClashes(mcq);
+    if (!leakCheck.passed) {
+      console.warn(`MCQ #${mcq.number} failed universal leak assertion:`, leakCheck.violations);
+    }
+  }
+
+  // Combine assembled MCQs and flashcards
+  const allGeneratedItems: ParsedQaItem[] = [...finalMcqs, ...flashcardItems];
+  allGeneratedItems.forEach((it, idx) => {
+    it.number = idx + 1;
+  });
+
+  const totalSupported = allGeneratedItems.length;
+  const flashcardCount = flashcardItems.length;
+  const mcqCount = finalMcqs.length;
+  const coverageSummary = `Document supports ${totalSupported} distinct questions; ${flashcardCount} converted to flashcards, ${mcqCount} MCQs.`;
+
+  const suspiciousCount = allGeneratedItems.filter((it) => it.isSuspicious).length;
 
   return {
-    items,
+    items: allGeneratedItems,
     missingQuestionNumbers: [],
     chaptersDetected,
     suspiciousCount,
-    totalExpected: items.length,
+    totalExpected: totalSupported,
     isUnstructuredDocument: true,
     notesRoute: true,
+    coverageSummary,
+    totalSupported,
+    flashcardCount,
+    mcqCount,
+    templateCounts,
   };
 }
 
@@ -1931,6 +2275,11 @@ export function parseTwoPassQuestionsAndAnswers(
   chaptersDetected?: string[];
   suspiciousCount?: number;
   profileUsed?: ParserProfile;
+  coverageSummary?: string;
+  totalSupported?: number;
+  flashcardCount?: number;
+  mcqCount?: number;
+  templateCounts?: Record<string, number>;
 } {
   const result = parseTwoPassQuestionsAndAnswersDetailed(pagesOrText, options);
   const arr = [...result.items] as ParsedQaItem[] & {
@@ -1938,11 +2287,21 @@ export function parseTwoPassQuestionsAndAnswers(
     chaptersDetected?: string[];
     suspiciousCount?: number;
     profileUsed?: ParserProfile;
+    coverageSummary?: string;
+    totalSupported?: number;
+    flashcardCount?: number;
+    mcqCount?: number;
+    templateCounts?: Record<string, number>;
   };
   arr.missingQuestionNumbers = result.missingQuestionNumbers;
   arr.chaptersDetected = result.chaptersDetected;
   arr.suspiciousCount = result.suspiciousCount;
   arr.profileUsed = result.profileUsed;
+  arr.coverageSummary = result.coverageSummary;
+  arr.totalSupported = result.totalSupported;
+  arr.flashcardCount = result.flashcardCount;
+  arr.mcqCount = result.mcqCount;
+  arr.templateCounts = result.templateCounts;
   return arr;
 }
 

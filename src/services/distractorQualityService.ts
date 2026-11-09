@@ -51,6 +51,20 @@ export const STOPWORDS = new Set([
   "refers", "means", "shall", "order"
 ]);
 
+export const NUMBER_WORD_TO_DIGIT: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+  twenty: 20, thirty: 30, "forty-five": 45, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+  hundred: 100, thousand: 1000,
+};
+
+export const DIGIT_TO_NUMBER_WORD: Record<number, string> = {
+  0: "zero", 1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
+  11: "eleven", 12: "twelve", 13: "thirteen", 14: "fourteen", 15: "fifteen", 16: "sixteen", 17: "seventeen", 18: "eighteen", 19: "nineteen",
+  20: "twenty", 30: "thirty", 45: "forty-five", 50: "fifty", 60: "sixty", 70: "seventy", 80: "eighty", 90: "ninety",
+  100: "hundred", 1000: "thousand", 5000: "five thousand", 25000: "twenty-five thousand",
+};
+
 export const ABSOLUTE_WORDS = ["always", "never", "only", "exclusively", "solely", "impossible"];
 
 export type DistractorRuleType =
@@ -183,7 +197,12 @@ export function stemWord(word: string): string {
     s = s.slice(0, -2);
   }
 
-  // Common derivational suffixes: -tional, -tion, -sion, -ity, -ism, -ness, -ment, -al, -ly
+  // Common derivational suffixes: -tional, -tion, -sion, -ity, -ism, -ness, -ment, -al, -ly, -cratic, -cracy, -ic
+  if (s.endsWith("cratic") && s.length > 7) {
+    s = s.slice(0, -2); // democratic -> democrat
+  } else if (s.endsWith("cracy") && s.length > 6) {
+    s = s.slice(0, -1) + "t"; // democracy -> democrat
+  }
   if (s.endsWith("tional") && s.length > 7) {
     s = s.slice(0, -4);
   }
@@ -201,6 +220,8 @@ export function stemWord(word: string): string {
   } else if (s.endsWith("ly") && s.length > 4) {
     s = s.slice(0, -2);
   } else if (s.endsWith("al") && s.length > 5 && !s.endsWith("cial") && !s.endsWith("tial")) {
+    s = s.slice(0, -2);
+  } else if (s.endsWith("ic") && s.length > 5) {
     s = s.slice(0, -2);
   }
 
@@ -327,38 +348,36 @@ export function lintDistractorQuality(
   // -------------------------------------------------------------
   // 2. STEM-LEAK CHECK & AUTO-FIX
   // Content words of the correct option (stemmed) appearing in the stem
-  // but NOT shared by the distractors.
+  // but NOT shared across distractors as common units/formatting.
   // -------------------------------------------------------------
   const rawCorrectWords = normalizeOptionText(correctOpt)
     .split(/\s+/)
-    .filter((w) => w.length >= 3 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
-
-  // Collect all stemmed words from distractors
-  const distractorStemsSet = new Set<string>();
-  for (const d of distractorOpts) {
-    const dWords = normalizeOptionText(d)
-      .split(/\s+/)
-      .filter((w) => w.length >= 3 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
-    for (const dw of dWords) {
-      distractorStemsSet.add(stemWord(dw));
-    }
-  }
-
-  // Find all words in correct option whose stem is UNLIKELY to be shared by any distractor
-  const uniqueOptionWords = rawCorrectWords.filter((w) => !distractorStemsSet.has(stemWord(w)));
+    .filter((w) => /[a-z]/i.test(w) && w.length >= 3 && !STOPWORDS.has(w) && !/^\d+([.,]\d+)?%?$/.test(w));
 
   // Extract all words from the stem
-  const stemWords = currentStem.toLowerCase().split(/[^\w]+/);
-  const stemStems = stemWords.map(stemWord);
+  const stemWords = currentStem.toLowerCase().split(/[^a-z0-9]+/);
+  const stemStems = stemWords.map(stemWord).filter((w) => w.length >= 2);
 
-  // Identify any leaked words
-  const leakedTargetWords: string[] = [];
-  for (const cw of uniqueOptionWords) {
+  // Identify any leaked content words from the correct answer
+  const candidateLeakedWords: string[] = [];
+  for (const cw of rawCorrectWords) {
     const sTarget = stemWord(cw);
+    if (sTarget.length < 2) continue;
     if (stemStems.includes(sTarget) || stemWords.includes(cw.toLowerCase())) {
-      leakedTargetWords.push(cw);
+      candidateLeakedWords.push(cw);
     }
   }
+
+  // A word is a leak ONLY if it is not a shared unit/format suffix present across distractors
+  const leakedTargetWords = candidateLeakedWords.filter((cw) => {
+    const sTarget = stemWord(cw);
+    const inDistractorCount = distractorOpts.filter((d) => {
+      const dRoots = normalizeOptionText(d).split(/\s+/).map(stemWord);
+      return dRoots.includes(sTarget);
+    }).length;
+    // If 2 or more distractors (or all distractors) have this word, it's a shared unit (e.g. "loaves", "miles"), not a leak
+    return inDistractorCount < Math.max(2, distractorOpts.length);
+  });
 
   // Check whole phrase leak (e.g. "Commitment to public interest")
   const normCorrect = normalizeOptionText(correctOpt);
@@ -367,14 +386,25 @@ export function lintDistractorQuality(
   if (normCorrect.length >= 5 && !STOPWORDS.has(normCorrect)) {
     const phraseRegex = new RegExp(`\\b${escapeRegExp(normCorrect)}\\b`, "i");
     if (phraseRegex.test(normStem)) {
-      const inDistractor = distractorOpts.some((d) => normalizeOptionText(d).includes(normCorrect));
-      if (!inDistractor) {
+      const inAllDistractors = distractorOpts.every((d) => normalizeOptionText(d).includes(normCorrect));
+      if (!inAllDistractors) {
         leakedPhrase = normCorrect;
       }
     }
   }
 
-  // Also check digit leak if correct option is numeric (e.g. 18 or "18 years")
+  // Also check digit or number word leaks from correct option or any distractor appearing in fill-in-the-blank stems
+  const isFillInTheBlank = /_{2,}|\[_+\]|complete the|fill in/i.test(currentStem);
+  const optionNumbersToMask: number[] = [];
+  if (isFillInTheBlank) {
+    for (const opt of item.options) {
+      const parsedNum = parseNumericOption(opt);
+      if (parsedNum && parsedNum.value > 0 && parsedNum.value < 100000) {
+        optionNumbersToMask.push(parsedNum.value);
+      }
+    }
+  }
+
   const numCorrect = parseNumericOption(correctOpt);
   let digitLeak: number | null = null;
   if (numCorrect && numCorrect.value > 0) {
@@ -389,8 +419,8 @@ export function lintDistractorQuality(
 
   let residualLeak = false;
 
-  if (leakedPhrase || leakedTargetWords.length > 0 || digitLeak !== null) {
-    const primaryLeak = leakedPhrase || leakedTargetWords[0] || String(digitLeak);
+  if (leakedPhrase || leakedTargetWords.length > 0 || digitLeak !== null || optionNumbersToMask.length > 0) {
+    const primaryLeak = leakedPhrase || leakedTargetWords[0] || (digitLeak !== null ? String(digitLeak) : "");
     if (cfg.autoFixStemLeak) {
       let workingStem = currentStem;
 
@@ -424,15 +454,30 @@ export function lintDistractorQuality(
         workingStem = workingStem.replace(adjacentBefore, "[______]").replace(adjacentAfter, "[______]");
       }
 
+      // 5. Mask option numbers appearing outside the blank (e.g. "within thirty (30) days" -> "within [______] days")
+      for (const numVal of optionNumbersToMask) {
+        const numStr = String(numVal);
+        // Mask parenthesized numeral "(30)"
+        workingStem = workingStem.replace(new RegExp(`\\(\\s*${numStr}\\s*\\)`, "gi"), " ");
+        // Mask word form "thirty" or "one-year"
+        const wordRep = DIGIT_TO_NUMBER_WORD[numVal];
+        if (wordRep) {
+          workingStem = workingStem.replace(new RegExp(`\\b${escapeRegExp(wordRep)}(?:-year|-day|\\s+year|\\s+day)?\\b`, "gi"), "[______]");
+        }
+        // Mask standalone digits outside section citations
+        const optDigitRegex = new RegExp(`(?<!(?:Sec(?:tion)?\\.?\\s*|Rule\\s+|19|20))\\b${numStr}\\b(?!\\s*%)`, "gi");
+        workingStem = workingStem.replace(optDigitRegex, "[______]");
+      }
+
       // Collapse multiple consecutive blanks: "[______] [______]" -> "[______]"
       workingStem = workingStem.replace(/(?:\[______\]\s*)+\[______\]/g, "[______]");
       workingStem = workingStem.replace(/(?:_____\s*\[______\]|\[______\]\s*_____)/g, "[______]");
       workingStem = workingStem.replace(/\s+/g, " ").trim();
 
-      // 5. Verify if any unshared content word still leaks after masking
+      // 6. Verify if any content word or option number still leaks after masking
       const postWords = workingStem.toLowerCase().split(/[^\w]+/);
       const postStems = postWords.map(stemWord);
-      const remainingLeaks = uniqueOptionWords.filter((cw) => postStems.includes(stemWord(cw)));
+      const remainingLeaks = rawCorrectWords.filter((cw) => postStems.includes(stemWord(cw)));
 
       if (remainingLeaks.length === 0 && workingStem !== currentStem) {
         currentStem = workingStem;
@@ -444,7 +489,7 @@ export function lintDistractorQuality(
           fixedStem: currentStem,
           leakedWord: primaryLeak,
         });
-      } else {
+      } else if (remainingLeaks.length > 0) {
         residualLeak = true;
         issues.push({
           rule: "stem-leak",
@@ -796,4 +841,253 @@ export function recordOptionPickAndAnalyze(
   }
 
   return stats;
+}
+
+// ============================================
+// NUMBER CONTEXT SUBTYPES
+// ============================================
+
+export type NumberSubtype =
+  | "age"
+  | "deadline_days"
+  | "deadline_months"
+  | "penalty_imprisonment_years"
+  | "penalty_fine_amount"
+  | "prohibition_bar_years"
+  | "general_count";
+
+/**
+ * Classifies a number in legal text by its semantic context:
+ * age, deadline in days, penalty term, fine amount, or prohibition bar.
+ */
+export function classifyNumberContext(
+  sentence: string,
+  word: string,
+  numeral: number,
+  unit: string
+): NumberSubtype {
+  const norm = (sentence || "").toLowerCase();
+  const u = (unit || "").toLowerCase();
+
+  // 1. Age: "years of age", "unmarried children under eighteen"
+  if (/age\b|years?\s+of\s+age|children\s+under|spouses\s+and\s+unmarried/i.test(norm)) {
+    return "age";
+  }
+
+  // 2. Deadlines in days
+  if (u.startsWith("day")) {
+    return "deadline_days";
+  }
+
+  // 3. Deadlines in months
+  if (u.startsWith("month") && !/imprisonment|sentence|penal/i.test(norm)) {
+    return "deadline_months";
+  }
+
+  // 4. Penalty imprisonment
+  if (/imprisonment|prison|jail|sentence|punishable\s+with/i.test(norm) && (u.startsWith("year") || u.startsWith("month"))) {
+    return "penalty_imprisonment_years";
+  }
+
+  // 5. Prohibition bar after resignation
+  if (/prohibition|continue\s+to\s+apply|after\s+resignation|revolving\s+door/i.test(norm) && u.startsWith("year")) {
+    return "prohibition_bar_years";
+  }
+
+  // 6. Fine amounts
+  if (u.startsWith("peso") || /fine|penalty|amount\s+not\s+to\s+exceed/i.test(norm)) {
+    return "penalty_fine_amount";
+  }
+
+  return "general_count";
+}
+
+// ============================================
+// EXAM-ASSEMBLY ENEMY ITEM CHECK
+// ============================================
+
+export interface EnemyItemCheckResult {
+  isEnemy: boolean;
+  reason?: string;
+  conflictingQuestionId?: string;
+}
+
+/**
+ * Rejects an exam question if:
+ * 1. Its option set overlaps another selected question's set by more than 50% (unless explicitly part of a matching set).
+ * 2. Its stem contains another selected question's answer term (e.g. Q4 defines "substantial stockholder" which appears in Q5 stem).
+ * 3. Another selected question's stem contains the candidate's answer term.
+ */
+export function isEnemyItem(
+  candidate: { id?: string; stem: string; options: string[]; correctIndex: number; templateType?: string },
+  selectedSet: { id?: string; stem: string; options: string[]; correctIndex: number; templateType?: string }[]
+): EnemyItemCheckResult {
+  if (!selectedSet || selectedSet.length === 0) {
+    return { isEnemy: false };
+  }
+
+  const isMatchingSet = candidate.templateType === "matching_set";
+  const isCandidateTf = candidate.templateType === "true_false";
+
+  const candNormOptions = (candidate.options || []).map(normalizeOptionText).filter(Boolean);
+  const candCorrectOpt = candidate.options[candidate.correctIndex] || "";
+  const candCorrectNorm = normalizeOptionText(candCorrectOpt);
+  const candStemLower = (candidate.stem || "").toLowerCase();
+
+  for (const existing of selectedSet) {
+    const isExistingTf = existing.templateType === "true_false";
+    // 1. Option Set Overlap Check (> 50%)
+    // Exclude matching sets (which share an 8-item option list) and true/false sets (which share ["True", "False"])
+    if (!isMatchingSet && existing.templateType !== "matching_set" && !(isCandidateTf && isExistingTf)) {
+      const existNormOptions = (existing.options || []).map(normalizeOptionText).filter(Boolean);
+      if (candNormOptions.length >= 2 && existNormOptions.length >= 2) {
+        const existSet = new Set(existNormOptions);
+        let intersection = 0;
+        for (const opt of candNormOptions) {
+          if (existSet.has(opt)) intersection++;
+        }
+        const minLen = Math.min(candNormOptions.length, existNormOptions.length);
+        const overlapRatio = intersection / minLen;
+        if (overlapRatio > 0.5) {
+          return {
+            isEnemy: true,
+            reason: `Option set overlaps by ${Math.round(overlapRatio * 100)}% (> 50%) with selected question "${existing.stem.slice(0, 50)}..."`,
+            conflictingQuestionId: existing.id,
+          };
+        }
+      }
+    }
+
+    // 2. Answer clue leakage check:
+    // Does candidate stem contain existing question's answer term?
+    const existCorrectOpt = existing.options[existing.correctIndex] || "";
+    const existCorrectNorm = normalizeOptionText(existCorrectOpt);
+    const isExistTfLabel = existCorrectNorm === "true" || existCorrectNorm === "false";
+    const isCandTfLabel = candCorrectNorm === "true" || candCorrectNorm === "false";
+
+    if (!isExistTfLabel && existCorrectNorm.length >= 4 && !STOPWORDS.has(existCorrectNorm)) {
+      const wholePhraseRegex = new RegExp(`\\b${escapeRegExp(existCorrectNorm)}\\b`, "i");
+      if (wholePhraseRegex.test(candStemLower)) {
+        return {
+          isEnemy: true,
+          reason: `Candidate stem contains the answer term "${existCorrectOpt}" of previously selected question "${existing.stem.slice(0, 50)}..."`,
+          conflictingQuestionId: existing.id,
+        };
+      }
+    }
+
+    // Does existing question's stem contain candidate's answer term?
+    if (!isCandTfLabel && candCorrectNorm.length >= 4 && !STOPWORDS.has(candCorrectNorm)) {
+      const wholePhraseRegex = new RegExp(`\\b${escapeRegExp(candCorrectNorm)}\\b`, "i");
+      if (wholePhraseRegex.test((existing.stem || "").toLowerCase())) {
+        return {
+          isEnemy: true,
+          reason: `Selected question "${existing.stem.slice(0, 50)}..." stem contains candidate's answer term "${candCorrectOpt}"`,
+          conflictingQuestionId: existing.id,
+        };
+      }
+    }
+  }
+
+  return { isEnemy: false };
+}
+
+/**
+ * Filters a pool of candidate questions for exam assembly, dropping enemy items.
+ */
+export function filterEnemyItems<T extends { id?: string; stem: string; options: string[]; correctIndex: number; templateType?: string }>(
+  pool: T[],
+  targetCount: number = pool.length
+): { selected: T[]; rejected: { item: T; reason: string }[] } {
+  const selected: T[] = [];
+  const rejected: { item: T; reason: string }[] = [];
+
+  for (const item of pool) {
+    if (selected.length >= targetCount) break;
+    const enemyCheck = isEnemyItem(item, selected);
+    if (enemyCheck.isEnemy) {
+      rejected.push({ item, reason: enemyCheck.reason || "Enemy item conflict" });
+    } else {
+      selected.push(item);
+    }
+  }
+
+  return { selected, rejected };
+}
+
+// ============================================
+// UNIVERSAL LEAK & OPTION CLASH ASSERTION
+// ============================================
+
+export interface ItemLeakCheckResult {
+  passed: boolean;
+  violations: string[];
+}
+
+/**
+ * Strictly verifies that for an MCQ:
+ * 1. No stemmed content word of the correct answer appears in the stem.
+ * 2. No number equal to an option appears elsewhere in the stem outside masked blanks.
+ */
+export function assertNoStemLeaksOrOptionClashes(item: {
+  stem: string;
+  options: string[];
+  correctIndex: number;
+  questionType?: string;
+}): ItemLeakCheckResult {
+  const violations: string[] = [];
+  if (item.questionType === "free_response" || !item.options || item.options.length < 2) {
+    return { passed: true, violations: [] };
+  }
+
+  const correctOpt = item.options[item.correctIndex] || "";
+  const stem = (item.stem || "").trim();
+
+  // Strip masked blanks from stem so [______] or _____ aren't evaluated as words
+  const cleanStem = stem
+    .replace(/\[_+\]/g, " ")
+    .replace(/_{2,}/g, " ")
+    .replace(/[^\w\s]/g, " ")
+    .toLowerCase();
+
+  const stemWords = cleanStem.split(/\s+/).filter(Boolean);
+  const stemRoots = stemWords.map(stemWord);
+
+  // 1. Check content words of correct answer
+  const correctNorm = normalizeOptionText(correctOpt);
+  const correctWords = correctNorm.split(/\s+/).filter((w) => w.length >= 3 && !STOPWORDS.has(w));
+
+  for (const cw of correctWords) {
+    const root = stemWord(cw);
+    if (root.length < 3) continue;
+    if (stemRoots.includes(root) || stemWords.includes(cw)) {
+      violations.push(`Stem leaks content root "${root}" from correct answer "${correctOpt}"`);
+    }
+  }
+
+  // 2. Check if any option number appears elsewhere in the stem
+  for (const opt of item.options) {
+    const parsedNum = parseNumericOption(opt);
+    if (parsedNum && parsedNum.value > 0) {
+      const numStr = String(parsedNum.value);
+      // Look for standalone digits in stem outside the blank (ignoring calendar years 1989 and section references)
+      const digitRegex = new RegExp(`(?<!(?:sec(?:tion)?\\.?\\s*|rule\\s+|19|20))\\b${numStr}\\b(?!\\s*%)`, "i");
+      if (digitRegex.test(cleanStem)) {
+        violations.push(`Stem contains option number "${numStr}" (from option "${opt}")`);
+      }
+      // Also check word representation (e.g. "thirty" or "one")
+      const wordRep = DIGIT_TO_NUMBER_WORD[parsedNum.value];
+      if (wordRep && wordRep.length >= 3) {
+        const wordRegex = new RegExp(`\\b${wordRep}\\b`, "i");
+        if (wordRegex.test(cleanStem)) {
+          violations.push(`Stem contains word representation "${wordRep}" of option "${opt}"`);
+        }
+      }
+    }
+  }
+
+  return {
+    passed: violations.length === 0,
+    violations,
+  };
 }
