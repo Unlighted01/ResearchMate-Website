@@ -7,13 +7,14 @@
 
 import { Question, generateUUID } from "./examService";
 
-export const EXAM_FORMAT_VERSION = 1;
+export const EXAM_FORMAT_VERSION = 2;
 
 export interface ExamRecordConfig {
   totalQuestions: number;
   choicesPerItem?: number; // 4 (A-D) or 5 (A-E)
   sections?: { name: string; questionCount: number }[];
   paperSize?: "A4" | "Letter" | "Legal";
+  formatVersion?: number;
 }
 
 export interface QuestionPermutationRecord {
@@ -197,7 +198,7 @@ export function createSeededExam(
 
   const examRecord: ExamRecord = {
     examId,
-    formatVersion: EXAM_FORMAT_VERSION,
+    formatVersion: config.formatVersion || EXAM_FORMAT_VERSION,
     seed,
     createdAt: Date.now(),
     config: {

@@ -1880,6 +1880,8 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   // -------------------------------------------------------------
   let deadlineMcqCount = 0;
   let deadlineLargestAsAnswerCount = 0;
+  const REAL_DOCUMENT_DEADLINES = [15, 30, 45, 60];
+  const seenDeadlineAnswers = new Set<number>();
 
   for (const nb of numberBlanks) {
     if (!ENGLISH_NUMBER_WORDS[nb.word.toLowerCase()]) {
@@ -1912,8 +1914,11 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     }
     const isSuspicious = suspiciousReasons.length > 0;
 
-    // If subtype has fewer than 3 numbers in document (age, prohibition_bar_years, penalty_imprisonment_years, etc.), convert to flashcard
-    if (subtype !== "deadline_days" || deadlineMcqCount >= MAX_QUESTIONS_PER_TEMPLATE) {
+    // Only convert to MCQ if it is a real deadline (15, 30, 45, 60), we haven't tested this answer yet, and under cap
+    const isStatutoryDeadline = subtype === "deadline_days" && REAL_DOCUMENT_DEADLINES.includes(nb.numeral);
+    const isDuplicateDeadline = seenDeadlineAnswers.has(nb.numeral);
+
+    if (!isStatutoryDeadline || isDuplicateDeadline || deadlineMcqCount >= MAX_QUESTIONS_PER_TEMPLATE) {
       flashcardItems.push({
         id: generateUUID(),
         number: qNumber++,
@@ -1935,39 +1940,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       continue;
     }
 
-    // For deadline_days, select distractors strictly from same subtype with non-overlapping alternate sets
-    let chosenDistractors: number[] = [];
-    if (deadlineMcqCount === 0) {
-      chosenDistractors = [30, 45, 60].filter((n) => n !== nb.numeral);
-    } else if (deadlineMcqCount === 1) {
-      chosenDistractors = [10, 20, 90].filter((n) => n !== nb.numeral);
-    } else {
-      chosenDistractors = [25, 50, 120].filter((n) => n !== nb.numeral);
-    }
-
-    // Exclude any distractor number that appears elsewhere in the stem outside the blank
-    const cleanSentenceForCheck = blankedSentence
-      .replace(/\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+\b/gi, "")
-      .replace(/\b(?:19\d\d|20\d\d)\b/g, "")
-      .replace(/\bSec(?:tion)?\.?\s*\d+\b/gi, "");
-
-    chosenDistractors = chosenDistractors.filter((d) => {
-      const digitRegex = new RegExp(`\\b${d}\\b`, "i");
-      const wordRep = DIGIT_TO_NUMBER_WORD[d];
-      const wordRegex = wordRep ? new RegExp(`\\b${wordRep}\\b`, "i") : null;
-      return !digitRegex.test(cleanSentenceForCheck) && (!wordRegex || !wordRegex.test(cleanSentenceForCheck));
-    });
-
-    if (chosenDistractors.length < 3) {
-      for (const nv of [15, 30, 45, 60, 90, 120, 10, 20]) {
-        if (!chosenDistractors.includes(nv) && nv !== nb.numeral) {
-          chosenDistractors.push(nv);
-          if (chosenDistractors.length >= 3) break;
-        }
-      }
-    }
-
-    const options = [String(nb.numeral), ...chosenDistractors.slice(0, 3).map(String)].sort(
+    // Distractors are drawn strictly from the real document deadlines [15, 30, 45, 60]
+    const chosenDistractors = REAL_DOCUMENT_DEADLINES.filter((n) => n !== nb.numeral);
+    const options = [String(nb.numeral), ...chosenDistractors.map(String)].sort(
       (a, b) => parseInt(a, 10) - parseInt(b, 10)
     );
     const correctIndex = options.indexOf(String(nb.numeral));
@@ -1976,7 +1951,6 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     const maxVal = Math.max(...options.map((o) => parseInt(o, 10)));
     const isLargest = nb.numeral === maxVal;
     if (isLargest && deadlineLargestAsAnswerCount >= 1) {
-      // Skip MCQ if largest answer already used
       flashcardItems.push({
         id: generateUUID(),
         number: qNumber++,
@@ -1999,8 +1973,18 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     }
 
     if (isLargest) deadlineLargestAsAnswerCount++;
+    seenDeadlineAnswers.add(nb.numeral);
 
+    // Build fully contextualized, grounded stem with exact statutory quotes
     let stem = `Complete the legal provision: "${blankedSentence}"`;
+    if (nb.numeral === 15) {
+      stem = 'Complete the legal provision under Section 5(a) of RA 6713: "All public officials and employees shall, within _____ working days from receipt thereof, respond to letters telegrams or other means of communications sent by the public."';
+    } else if (nb.numeral === 30) {
+      stem = 'Complete the legal provision under Section 8(a) of RA 6713: Statements of Assets, Liabilities and Net Worth (SALN) and financial disclosures must be filed "within _____ days after assumption of office".';
+    } else if (nb.numeral === 60) {
+      stem = 'Complete the legal provision under Section 9 of RA 6713: When a conflict of interest arises, a public official must divest himself of his shareholdings or interest "within _____ days from such assumption".';
+    }
+
     const lintResult = lintDistractorQuality({
       stem,
       options,
@@ -2021,7 +2005,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       options,
       correctIndex,
       correctLetter: ["a", "b", "c", "d"][correctIndex],
-      explanation: `Legal clause specified: "${nb.word} (${nb.numeral})" in ${nb.section}.`,
+      explanation: `Legal clause specified: "${nb.word} (${nb.numeral})" in ${nb.section}: "${nb.sentence}"`,
       chapter: nb.section,
       pageNumber: nb.pageNumber,
       sourcePage: nb.pageNumber,
@@ -2034,7 +2018,6 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     });
   }
 
-  // -------------------------------------------------------------
   // 3. Section-Title Cards (100% Converted to Flashcards)
   // -------------------------------------------------------------
   for (const sc of sectionCards) {
@@ -2105,30 +2088,38 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     });
   }
 
-  // 4B. Negative Choice: "Which of the following is NOT..." (3 items with distinct balanced distractor sets)
+  // 4B. Negative Choice: "Which of the following is NOT..." (3 items with real statutory concepts)
   const negativeItems: {
     stem: string;
     oddOption: string;
     realNorms: string[];
     explanation: string;
+    sourcePage: number;
+    sourceQuote: string;
   }[] = [
     {
       stem: "Under Section 4 of RA 6713, which of the following is NOT recognized as one of the eight statutory norms of conduct for public officials and employees?",
-      oddOption: "Commercial profitability",
+      oddOption: "Divestment of shareholdings",
       realNorms: ["Commitment to public interest", "Political neutrality", "Simple living"],
-      explanation: '"Commercial profitability" is NOT a norm of conduct under RA 6713. Section 4 establishes public service standards such as Commitment to public interest, Political neutrality, and Simple living.',
+      explanation: '"Divestment of shareholdings" is governed by Section 9 (Divestment) of RA 6713 rather than Section 4. Section 4 enumerates the eight statutory norms of conduct: Commitment to public interest, Professionalism, Justness and sincerity, Political neutrality, Responsiveness to the public, Nationalism and patriotism, Commitment to democracy, and Simple living.',
+      sourcePage: 3,
+      sourceQuote: "Sec. 4. Norms of Conduct of Public Officials and Employees.",
     },
     {
       stem: "Which of the following is NOT an enumerated statutory norm of conduct under Section 4 of RA 6713?",
-      oddOption: "Absolute financial secrecy",
+      oddOption: "System of incentives and rewards",
       realNorms: ["Commitment to democracy", "Professionalism", "Justness and sincerity"],
-      explanation: '"Absolute financial secrecy" is NOT a norm of conduct; on the contrary, Section 8 mandates complete transparency, disclosure, and accessibility of public officials\' assets and liabilities.',
+      explanation: '"System of incentives and rewards" is established under Section 6 of RA 6713 to encourage excellence and integrity, not as an individual norm of conduct under Section 4.',
+      sourcePage: 3,
+      sourceQuote: "Sec. 4. Norms of Conduct of Public Officials and Employees.",
     },
     {
       stem: "Under Section 4 of RA 6713, all of the following are statutory norms of conduct in the public service EXCEPT:",
-      oddOption: "Partisan political advocacy",
-      realNorms: ["Nationalism and patriotism", "Responsiveness to the public", "Due process of law"],
-      explanation: '"Partisan political advocacy" is NOT a norm of conduct. Section 4(d) explicitly mandates Political Neutrality in the public service.',
+      oddOption: "Private practice of profession",
+      realNorms: ["Nationalism and patriotism", "Responsiveness to the public", "Simple living"],
+      explanation: '"Private practice of profession" is a prohibited conflict of interest regulated under Section 7(b) of RA 6713, not a norm of conduct under Section 4.',
+      sourcePage: 3,
+      sourceQuote: "Sec. 4. Norms of Conduct of Public Officials and Employees.",
     },
   ];
 
@@ -2145,8 +2136,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       correctLetter: ["a", "b", "c", "d"][correctIndex],
       explanation: neg.explanation,
       chapter: "Sec. 4 (Norms of Conduct)",
-      pageNumber: 3,
-      sourcePage: 3,
+      pageNumber: neg.sourcePage,
+      sourcePage: neg.sourcePage,
+      sourceQuote: neg.sourceQuote,
       questionType: "mcq",
       reviewStatus: "verified",
       templateType: "negative_choice",
@@ -2155,7 +2147,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     });
   }
 
-  // 4C. Matching Set for the 8 Norms (4 items sharing one canonical option list)
+  // 4C. Matching Set for the 8 Norms (4 items sharing one canonical option list, exact source clauses)
   const NORMS_CANONICAL_OPTIONS = [
     "Commitment to democracy",
     "Commitment to public interest",
@@ -2170,23 +2162,31 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   const matchingDefinitions = [
     {
       norm: "Commitment to public interest",
-      definitionSnippet: "always uphold the common good over and above personal concerns and ensure government resources are used efficiently and avoid wastage",
+      clause: "shall always uphold the [______] over and above personal [______]. All government resources and powers of their respective offices must be employed and used efficiently, effectively, honestly and economically, particularly to avoid wastage in [______] funds and revenues",
+      rawQuote: "(a) Commitment to public interest. - Public officials and employees shall always uphold the public interest over and above personal interest. All government resources and powers of their respective offices must be employed and used efficiently, effectively, honestly and economically, particularly to avoid wastage in public funds and revenues.",
       itemNum: 1,
+      sourcePage: 3,
     },
     {
       norm: "Professionalism",
-      definitionSnippet: "perform and discharge their duties with the highest degree of excellence, intelligence, skill, and utmost dedication to duty",
+      clause: "shall perform and discharge their duties with the highest degree of excellence, [______], intelligence and skill. They shall enter public service with utmost devotion and dedication to duty. They shall endeavor to discourage wrong perceptions of their roles as dispensers or peddlers of undue patronage",
+      rawQuote: "(b) Professionalism. - Public officials and employees shall perform and discharge their duties with the highest degree of excellence, professionalism, intelligence and skill. They shall enter public service with utmost devotion and dedication to duty. They shall endeavor to discourage wrong perceptions of their roles as dispensers or peddlers of undue patronage.",
       itemNum: 2,
+      sourcePage: 3,
     },
     {
       norm: "Responsiveness to the public",
-      definitionSnippet: "extend prompt, courteous, and adequate service to the citizenry without discrimination and make official information accessible",
+      clause: "shall extend prompt, courteous, and adequate service to the [______]. Unless otherwise provided by law or when required by the [______], [______] officials and employees shall provide information on their policies and procedures in clear and understandable language, ensure openness of information",
+      rawQuote: "(e) Responsiveness to the public. - Public officials and employees shall extend prompt, courteous, and adequate service to the public. Unless otherwise provided by law or when required by the public interest, public officials and employees shall provide information on their policies and procedures in clear and understandable language, ensure openness of information",
       itemNum: 3,
+      sourcePage: 3,
     },
     {
       norm: "Simple living",
-      definitionSnippet: "lead modest lives appropriate to their positions and income and refrain from extravagant or ostentatious displays of wealth",
+      clause: "and their families shall lead modest lives appropriate to their positions and income. They shall not indulge in extravagant or ostentatious display of wealth in any form",
+      rawQuote: "(h) Simple living. - Public officials and employees and their families shall lead modest lives appropriate to their positions and income. They shall not indulge in extravagant or ostentatious display of wealth in any form.",
       itemNum: 4,
+      sourcePage: 4,
     },
   ];
 
@@ -2196,14 +2196,15 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     candidateMcqs.push({
       id: generateUUID(),
       number: qNumber++,
-      stem: `[Matching Set: Norms of Conduct - Item ${md.itemNum}/4] Under Section 4 of RA 6713, which statutory norm requires government personnel to: "${md.definitionSnippet}"?`,
+      stem: `[Matching Set: Norms of Conduct - Item ${md.itemNum}/4] Under Section 4 of RA 6713, which statutory norm requires government officials and employees to: "${md.clause}"?`,
       options: [...NORMS_CANONICAL_OPTIONS],
       correctIndex,
       correctLetter: ["a", "b", "c", "d", "e", "f", "g", "h"][correctIndex],
-      explanation: `Correct: ${md.norm}. Defined under Section 4: "${md.definitionSnippet}".`,
+      explanation: `Correct: ${md.norm}. Defined under Section 4: "${md.rawQuote}".`,
       chapter: "Sec. 4 (Norms of Conduct)",
-      pageNumber: 3,
-      sourcePage: 3,
+      pageNumber: md.sourcePage || 3,
+      sourcePage: md.sourcePage || 3,
+      sourceQuote: md.rawQuote,
       questionType: "mcq",
       reviewStatus: "verified",
       templateType: "matching_set",

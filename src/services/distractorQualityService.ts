@@ -843,6 +843,33 @@ export function recordOptionPickAndAnalyze(
   return stats;
 }
 
+/**
+ * Records an option pick resolving the displayed slot back to the ORIGINAL choice index
+ * via the choice permutation (choiceOrder[newIndex] = originalIndex).
+ * Ensures longitudinal distractor telemetry tracks the underlying option across permuted exams.
+ */
+export function recordOptionPickWithPermutation(
+  currentStats: OptionPickStats | undefined,
+  chosenDisplayIndex: number,
+  choiceOrder: number[] | undefined,
+  originalCorrectIndex: number,
+  totalOptions: number,
+  config: Partial<DistractorQualityConfig> = {}
+): OptionPickStats {
+  const origChosenIndex =
+    choiceOrder && choiceOrder[chosenDisplayIndex] !== undefined
+      ? choiceOrder[chosenDisplayIndex]
+      : chosenDisplayIndex;
+
+  return recordOptionPickAndAnalyze(
+    currentStats,
+    origChosenIndex,
+    originalCorrectIndex,
+    totalOptions,
+    config
+  );
+}
+
 // ============================================
 // NUMBER CONTEXT SUBTYPES
 // ============================================
@@ -938,7 +965,9 @@ export function isEnemyItem(
     const isExistingTf = existing.templateType === "true_false";
     // 1. Option Set Overlap Check (> 50%)
     // Exclude matching sets (which share an 8-item option list) and true/false sets (which share ["True", "False"])
-    if (!isMatchingSet && existing.templateType !== "matching_set" && !(isCandidateTf && isExistingTf)) {
+    const isCandNb = candidate.templateType === "number_blank_deadline";
+    const isExistNb = existing.templateType === "number_blank_deadline";
+    if (!isMatchingSet && existing.templateType !== "matching_set" && !(isCandidateTf && isExistingTf) && !(isCandNb && isExistNb)) {
       const existNormOptions = (existing.options || []).map(normalizeOptionText).filter(Boolean);
       if (candNormOptions.length >= 2 && existNormOptions.length >= 2) {
         const existSet = new Set(existNormOptions);
@@ -1048,39 +1077,85 @@ export function assertNoStemLeaksOrOptionClashes(item: {
     .replace(/\[_+\]/g, " ")
     .replace(/_{2,}/g, " ")
     .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
     .toLowerCase();
 
   const stemWords = cleanStem.split(/\s+/).filter(Boolean);
   const stemRoots = stemWords.map(stemWord);
 
-  // 1. Check content words of correct answer
-  const correctNorm = normalizeOptionText(correctOpt);
+  const correctNorm = normalizeOptionText(correctOpt).toLowerCase().trim();
+
+  // 1. Check whole answer phrase
+  if (correctNorm.length >= 4 && !STOPWORDS.has(correctNorm)) {
+    const wholePhraseRegex = new RegExp(`\\b${escapeRegExp(correctNorm)}\\b`, "i");
+    if (wholePhraseRegex.test(cleanStem)) {
+      violations.push(`Stem contains whole answer phrase "${correctNorm}" from correct answer "${correctOpt}"`);
+    }
+  }
+
+  // 2. Check multi-word sub-phrases from the answer (e.g. "public interest", "any gift")
+  const optWords = correctOpt.toLowerCase().split(/\s+/).filter(Boolean);
+  if (optWords.length >= 2) {
+    for (let len = optWords.length - 1; len >= 2; len--) {
+      for (let start = 0; start <= optWords.length - len; start++) {
+        const subSlice = optWords.slice(start, start + len);
+        const hasContentWord = subSlice.some((w) => w.length >= 3 && !STOPWORDS.has(w));
+        if (!hasContentWord) continue;
+        const subPhrase = subSlice.join(" ");
+        if (subPhrase.length >= 4 && !STOPWORDS.has(subPhrase)) {
+          const subPhraseRegex = new RegExp(`\\b${escapeRegExp(subPhrase)}\\b`, "i");
+          if (subPhraseRegex.test(cleanStem)) {
+            const inAllDistractors = item.options.every((o) => o.toLowerCase().includes(subPhrase));
+            if (!inAllDistractors) {
+              violations.push(`Stem contains answer phrase "${subPhrase}" from correct answer "${correctOpt}"`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Check individual content words of correct answer
   const correctWords = correctNorm.split(/\s+/).filter((w) => w.length >= 3 && !STOPWORDS.has(w));
+  const distractorOpts = item.options.filter((_, idx) => idx !== item.correctIndex);
 
   for (const cw of correctWords) {
     const root = stemWord(cw);
     if (root.length < 3) continue;
+
+    // If all distractors share this root (e.g., common unit/context), it's not an answer leak
+    const inDistractorCount = distractorOpts.filter((d) => {
+      const dRoots = normalizeOptionText(d).split(/\s+/).map(stemWord);
+      return dRoots.includes(root);
+    }).length;
+    if (inDistractorCount >= Math.max(2, distractorOpts.length)) {
+      continue;
+    }
+
     if (stemRoots.includes(root) || stemWords.includes(cw)) {
       violations.push(`Stem leaks content root "${root}" from correct answer "${correctOpt}"`);
     }
   }
 
-  // 2. Check if any option number appears elsewhere in the stem
-  for (const opt of item.options) {
-    const parsedNum = parseNumericOption(opt);
-    if (parsedNum && parsedNum.value > 0) {
-      const numStr = String(parsedNum.value);
-      // Look for standalone digits in stem outside the blank (ignoring calendar years 1989 and section references)
-      const digitRegex = new RegExp(`(?<!(?:sec(?:tion)?\\.?\\s*|rule\\s+|19|20))\\b${numStr}\\b(?!\\s*%)`, "i");
-      if (digitRegex.test(cleanStem)) {
-        violations.push(`Stem contains option number "${numStr}" (from option "${opt}")`);
-      }
-      // Also check word representation (e.g. "thirty" or "one")
-      const wordRep = DIGIT_TO_NUMBER_WORD[parsedNum.value];
-      if (wordRep && wordRep.length >= 3) {
-        const wordRegex = new RegExp(`\\b${wordRep}\\b`, "i");
-        if (wordRegex.test(cleanStem)) {
-          violations.push(`Stem contains word representation "${wordRep}" of option "${opt}"`);
+  // 4. Check if any option number appears elsewhere in fill-in-the-blank stems
+  const isFillBlank = /_{2,}|\[_+\]|complete the|fill in/i.test(stem);
+  if (isFillBlank) {
+    for (const opt of item.options) {
+      const parsedNum = parseNumericOption(opt);
+      if (parsedNum && parsedNum.value > 0) {
+        const numStr = String(parsedNum.value);
+        // Standalone digits outside section citations and calendar years
+        const digitRegex = new RegExp(`(?<!(?:sec(?:tion)?\\.?\\s*|rule\\s+|19|20))\\b${numStr}\\b(?!\\s*%)`, "i");
+        if (digitRegex.test(cleanStem)) {
+          violations.push(`Stem contains option number "${numStr}" (from option "${opt}")`);
+        }
+        // Word representation (e.g. "thirty" or "one")
+        const wordRep = DIGIT_TO_NUMBER_WORD[parsedNum.value];
+        if (wordRep && wordRep.length >= 3) {
+          const wordRegex = new RegExp(`\\b${wordRep}\\b`, "i");
+          if (wordRegex.test(cleanStem)) {
+            violations.push(`Stem contains word representation "${wordRep}" of option "${opt}"`);
+          }
         }
       }
     }
@@ -1089,5 +1164,71 @@ export function assertNoStemLeaksOrOptionClashes(item: {
   return {
     passed: violations.length === 0,
     violations,
+  };
+}
+
+// ============================================
+// SOURCE GROUNDING VERIFICATION
+// ============================================
+
+export interface SourceGroundingResult {
+  grounded: boolean;
+  missingFragments: string[];
+}
+
+/**
+ * Strictly verifies that after removing masks ([______] or _____),
+ * every quoted stem fragment of length >= 10 is an exact substring of the source page text.
+ */
+export function assertStemGroundedInSourcePage(
+  item: { stem: string; sourcePage?: number; pageNumber?: number; templateType?: string },
+  sourcePageText: string
+): SourceGroundingResult {
+  if (!sourcePageText) {
+    return { grounded: false, missingFragments: ["Source page text missing"] };
+  }
+
+  // Extract the quoted content inside "..."
+  const quoteMatch = item.stem.match(/"([^"]+)"/);
+  if (!quoteMatch) {
+    // If stem has no quotes (e.g. true/false statement), consider grounded
+    return { grounded: true, missingFragments: [] };
+  }
+
+  const rawQuote = quoteMatch[1];
+  // Replace masks [______] or _____ with a delimiter
+  const unmasked = rawQuote
+    .replace(/\[_+\]/g, "|||MASK|||")
+    .replace(/_{2,}/g, "|||MASK|||");
+
+  // Split into fragments by MASK
+  const fragments = unmasked
+    .split("|||MASK|||")
+    .map((f) =>
+      f
+        .replace(/\.{2,}/g, " ")
+        .replace(/[^\w\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+    )
+    .filter((f) => f.length >= 10);
+
+  const normPage = sourcePageText
+    .replace(/\r\n/g, "\n")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+  const missingFragments: string[] = [];
+  for (const frag of fragments) {
+    const normFrag = frag.toLowerCase();
+    if (!normPage.includes(normFrag)) {
+      missingFragments.push(frag);
+    }
+  }
+
+  return {
+    grounded: missingFragments.length === 0,
+    missingFragments,
   };
 }

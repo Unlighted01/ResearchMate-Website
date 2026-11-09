@@ -747,7 +747,11 @@ REQUIREMENTS:
             });
 
             const finalStem = lint.autoFixed && lint.fixedStem ? lint.fixedStem : rawStem;
-            const reviewStatus = lint.passed ? "verified" : "needs_review";
+            // AI-generated questions stay needs_review by default until verified
+            const reviewStatus: "needs_review" = "needs_review";
+            const suspiciousReasons = !lint.passed
+              ? lint.reasons
+              : ["AI-generated question: pending user review and verification"];
 
             return {
               id: generateUUID(),
@@ -757,7 +761,7 @@ REQUIREMENTS:
               explanation: sanitizeCurrencyAndMath(q.explanation || "Identified based on study materials."),
               topicTag: q.topicTag || slice.sectionName,
               reviewStatus,
-              suspiciousReasons: lint.passed ? [] : lint.reasons,
+              suspiciousReasons,
             };
           });
         } else {

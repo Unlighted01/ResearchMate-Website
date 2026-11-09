@@ -122,6 +122,20 @@ describe("examSeedService", () => {
     expect(retrieved?.answerKey.length).toBe(3);
   });
 
+  it("preserves backward compatibility and reproducibility for formatVersion 1", () => {
+    const v1Exam = createSeededExam(
+      fixedQuestions,
+      { totalQuestions: 3, formatVersion: 1 },
+      "SEED-V1-COMPAT",
+      "exam-v1-target"
+    );
+    expect(v1Exam.examRecord.formatVersion).toBe(1);
+
+    const reloaded = getExamRecord("exam-v1-target");
+    expect(reloaded?.formatVersion).toBe(1);
+    expect(reloaded?.seed).toBe("SEED-V1-COMPAT");
+  });
+
   it("retrieves ExamRecord by seed for retaking tests", () => {
     createSeededExam(
       fixedQuestions,

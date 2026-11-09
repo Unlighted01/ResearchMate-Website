@@ -12,6 +12,7 @@ import {
   generateNumericDistractors,
   generateSiblingTermDistractors,
   recordOptionPickAndAnalyze,
+  recordOptionPickWithPermutation,
   computeStringSimilarity,
   normalizeOptionText,
 } from "../src/services/distractorQualityService";
@@ -448,6 +449,26 @@ describe("Distractor Quality & Linting Service", () => {
       expect(stats!.lowPickDistractors).toContain(3);
       // Option 0 picked 10% >= 5% -> not in low picks
       expect(stats!.lowPickDistractors).not.toContain(0);
+    });
+
+    it("records pick stats against the ORIGINAL option index via choice permutation", () => {
+      // Original options: [0, 1, 2, 3], correct: 0
+      // Shuffled choiceOrder: [2, 0, 3, 1] (meaning display slot 0 is orig 2, display slot 1 is orig 0)
+      const choiceOrder = [2, 0, 3, 1];
+      const originalCorrect = 0;
+      let stats = undefined;
+
+      // User selects displayed choice at index 0 (which maps to original index 2)
+      stats = recordOptionPickWithPermutation(stats, 0, choiceOrder, originalCorrect, 4);
+      expect(stats.pickCounts[2]).toBe(1);
+      expect(stats.pickCounts[0]).toBeUndefined();
+      expect(stats.correct).toBe(0);
+
+      // User selects displayed choice at index 1 (which maps to original index 0, the correct answer)
+      stats = recordOptionPickWithPermutation(stats, 1, choiceOrder, originalCorrect, 4);
+      expect(stats.pickCounts[0]).toBe(1);
+      expect(stats.pickCounts[2]).toBe(1);
+      expect(stats.correct).toBe(1);
     });
 
     it("flags question as too easy if answered correctly > 95% after N attempts", () => {
