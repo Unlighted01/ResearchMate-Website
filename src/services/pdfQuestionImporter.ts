@@ -2047,21 +2047,42 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   // -------------------------------------------------------------
 
   // 4A. True / False Templates (3 items: 1 True, 2 False with swapped values)
-  const tfItems: { stem: string; correctIsAnswer: "True" | "False"; explanation: string }[] = [
+  // ALL stems are derived from real PDF sentences; false items swap exactly one number.
+  const tfItems: {
+    stem: string;
+    correctIsAnswer: "True" | "False";
+    explanation: string;
+    sourcePage: number;
+    sourceQuote: string;
+  }[] = [
     {
-      stem: "Under Section 9 of RA 6713, when a conflict of interest arises, a public official must resign from any private business enterprise within thirty (30) days from assumption of office.",
+      // TRUE — Sec. 9: covers both conditions (resign 30d AND/OR divest 60d)
+      stem: "Under Section 9 of RA 6713, when a conflict of interest arises, a public official shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption.",
       correctIsAnswer: "True",
-      explanation: "True. Section 9 explicitly mandates resignation from private business enterprises within 30 days from assumption of office.",
+      explanation:
+        'True. Section 9 of RA 6713 states: "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption."',
+      sourcePage: 9,
+      sourceQuote:
+        "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption.",
     },
     {
-      stem: "Under Section 5(a) of RA 6713, public officials and employees are allowed forty-five (45) working days from receipt to respond to letters, telegrams, or other communications.",
+      // FALSE — Sec. 5(a): real sentence says fifteen (15); we swap to forty-five (45)
+      stem: "Under Section 5(a) of RA 6713, all public officials and employees shall, within forty-five (45) working days from receipt thereof, respond to letters telegrams or other means of communications sent by the public.",
       correctIsAnswer: "False",
-      explanation: "False. Section 5(a) requires public officials and employees to respond within fifteen (15) working days from receipt, not forty-five (45) days.",
+      explanation:
+        'False. Section 5(a) of RA 6713 requires a response "within fifteen (15) working days from receipt thereof", not forty-five (45) working days.',
+      sourcePage: 4,
+      sourceQuote:
+        "within fifteen (15) working days from receipt thereof, respond to letters telegrams or other means of communications sent by the public.",
     },
     {
-      stem: "Under Section 7(d) of RA 6713, public officials and employees are legally permitted to accept personal loans from private persons with whom their office has pending business transactions.",
+      // FALSE — Sec. 8(A): real sentence says thirty (30) days after assumption; we swap to sixty (60)
+      stem: "Under Section 8 of RA 6713, the Statement of Assets, Liabilities and Net Worth must be filed within sixty (60) days after assumption of office.",
       correctIsAnswer: "False",
-      explanation: "False. Section 7(d) expressly prohibits public officials and employees from accepting loans from persons with whom their office has pending business dealings.",
+      explanation:
+        'False. Section 8 of RA 6713 requires the SALN to be filed "(a) within thirty (30) days after assumption of office", not sixty (60) days.',
+      sourcePage: 7,
+      sourceQuote: "(a) within thirty (30) days after assumption of office;",
     },
   ];
 
@@ -2078,8 +2099,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       correctLetter: ["a", "b"][correctIndex],
       explanation: tf.explanation,
       chapter: "Rules and Prohibitions",
-      pageNumber: 5,
-      sourcePage: 5,
+      pageNumber: tf.sourcePage,
+      sourcePage: tf.sourcePage,
+      sourceQuote: tf.sourceQuote,
       questionType: "mcq",
       reviewStatus: "verified",
       templateType: "true_false",
@@ -2101,25 +2123,31 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       stem: "Under Section 4 of RA 6713, which of the following is NOT recognized as one of the eight statutory norms of conduct for public officials and employees?",
       oddOption: "Divestment of shareholdings",
       realNorms: ["Commitment to public interest", "Political neutrality", "Simple living"],
-      explanation: '"Divestment of shareholdings" is governed by Section 9 (Divestment) of RA 6713 rather than Section 4. Section 4 enumerates the eight statutory norms of conduct: Commitment to public interest, Professionalism, Justness and sincerity, Political neutrality, Responsiveness to the public, Nationalism and patriotism, Commitment to democracy, and Simple living.',
-      sourcePage: 3,
-      sourceQuote: "Sec. 4. Norms of Conduct of Public Officials and Employees.",
+      explanation:
+        '"Divestment of shareholdings" is governed by Section 9 (Divestment) of RA 6713 rather than Section 4. Section 9 provides: "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption." Section 4 enumerates the eight statutory norms of conduct.',
+      sourcePage: 9,
+      sourceQuote:
+        "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption.",
     },
     {
       stem: "Which of the following is NOT an enumerated statutory norm of conduct under Section 4 of RA 6713?",
       oddOption: "System of incentives and rewards",
       realNorms: ["Commitment to democracy", "Professionalism", "Justness and sincerity"],
-      explanation: '"System of incentives and rewards" is established under Section 6 of RA 6713 to encourage excellence and integrity, not as an individual norm of conduct under Section 4.',
-      sourcePage: 3,
-      sourceQuote: "Sec. 4. Norms of Conduct of Public Officials and Employees.",
+      explanation:
+        '"System of incentives and rewards" is established under Section 6 of RA 6713, which states: "A system of annual incentives and rewards is hereby established in order to motivate and inspire public servants to uphold the highest standards of ethics." It is not one of the eight norms of conduct under Section 4.',
+      sourcePage: 5,
+      sourceQuote:
+        "A system of annual incentives and rewards is hereby established in order to motivate and inspire public servants to uphold the highest standards of ethics.",
     },
     {
       stem: "Under Section 4 of RA 6713, all of the following are statutory norms of conduct in the public service EXCEPT:",
       oddOption: "Private practice of profession",
       realNorms: ["Nationalism and patriotism", "Responsiveness to the public", "Simple living"],
-      explanation: '"Private practice of profession" is a prohibited conflict of interest regulated under Section 7(b) of RA 6713, not a norm of conduct under Section 4.',
-      sourcePage: 3,
-      sourceQuote: "Sec. 4. Norms of Conduct of Public Officials and Employees.",
+      explanation:
+        '"Private practice of profession" is a prohibited conflict of interest regulated under Section 7(b) of RA 6713, which states: "Engage in the private practice of their profession unless authorized by the Constitution or law, provided that such practice will not conflict or tend to conflict with their official functions." It is not a norm of conduct under Section 4.',
+      sourcePage: 5,
+      sourceQuote:
+        "Engage in the private practice of their profession unless authorized by the Constitution or law, provided that such practice will not conflict or tend to conflict with their official functions.",
     },
   ];
 
@@ -2161,9 +2189,12 @@ export function generateQuestionsFromLegalOrUnstructuredText(
 
   const matchingDefinitions = [
     {
-      norm: "Commitment to public interest",
-      clause: "shall always uphold the [______] over and above personal [______]. All government resources and powers of their respective offices must be employed and used efficiently, effectively, honestly and economically, particularly to avoid wastage in [______] funds and revenues",
-      rawQuote: "(a) Commitment to public interest. - Public officials and employees shall always uphold the public interest over and above personal interest. All government resources and powers of their respective offices must be employed and used efficiently, effectively, honestly and economically, particularly to avoid wastage in public funds and revenues.",
+      // Changed from "Commitment to public interest" (covered by norm_definition MCQs)
+      // to "Nationalism and patriotism" to avoid cross-template enemy duplication.
+      norm: "Nationalism and patriotism",
+      clause: "shall at all times be loyal to the Republic and to the Filipino people, promote the use of locally-produced goods, resources and technology and encourage appreciation and pride of the country and people. They shall endeavor to maintain and defend [______] sovereignty against foreign intrusion",
+      rawQuote:
+        "(f) Nationalism and patriotism. - Public officials and employees shall at all times be loyal to the Republic and to the Filipino people, promote the use of locally-produced goods, resources and technology and encourage appreciation and pride of the country and people. They shall endeavor to maintain and defend Philippine sovereignty against foreign intrusion.",
       itemNum: 1,
       sourcePage: 3,
     },
@@ -2240,7 +2271,17 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   const totalSupported = allGeneratedItems.length;
   const flashcardCount = flashcardItems.length;
   const mcqCount = finalMcqs.length;
-  const coverageSummary = `Document supports ${totalSupported} distinct questions; ${flashcardCount} converted to flashcards, ${mcqCount} MCQs.`;
+
+  // Count distinct source facts (unique sourceQuote strings, truncated to 100 chars as key)
+  const distinctSourceQuotes = new Set<string>();
+  allGeneratedItems.forEach((it) => {
+    if (it.sourceQuote) {
+      distinctSourceQuotes.add(it.sourceQuote.trim().slice(0, 100));
+    }
+  });
+  const distinctFactsTested = distinctSourceQuotes.size;
+
+  const coverageSummary = `Document supports ${totalSupported} distinct questions; ${flashcardCount} converted to flashcards, ${mcqCount} MCQs, ${distinctFactsTested} distinct source facts tested.`;
 
   const suspiciousCount = allGeneratedItems.filter((it) => it.isSuspicious).length;
 

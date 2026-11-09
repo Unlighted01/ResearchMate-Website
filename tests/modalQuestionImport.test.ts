@@ -35,7 +35,7 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
     expect(parsedQaList.totalSupported).toBe(85);
     expect(parsedQaList.mcqCount).toBe(20);
     expect(parsedQaList.flashcardCount).toBe(65);
-    expect(parsedQaList.coverageSummary).toContain("Document supports 85 distinct questions; 65 converted to flashcards, 20 MCQs.");
+    expect(parsedQaList.coverageSummary).toMatch(/Document supports 85 distinct questions; 65 converted to flashcards, 20 MCQs, \d+ distinct source facts tested\./);
 
     const mcqs = parsedQaList.filter((q) => q.questionType === "mcq");
     expect(mcqs.length).toBe(20);
@@ -113,15 +113,25 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
     expect(groundFail3.missingFragments.some((f) => f.includes("arbitrary authorization by the board"))).toBe(true);
 
     // B. Show it PASSING over every generated MCQ in the real output against its source page text
+    // This now also checks true/false and negative_choice items via their sourceQuote field.
     for (const mcq of mcqs) {
       const pageNum = mcq.sourcePage || mcq.pageNumber || 1;
       const pageText = pageTextMap.get(pageNum) || "";
       const groundResult = assertStemGroundedInSourcePage(mcq, pageText);
       if (!groundResult.grounded) {
-        console.error(`Grounding failure in MCQ #${mcq.number}:`, groundResult.missingFragments);
+        console.error(`Grounding failure in MCQ #${mcq.number} (${mcq.templateType}):`, groundResult.missingFragments);
       }
       expect(groundResult.grounded).toBe(true);
       expect(groundResult.missingFragments).toEqual([]);
+    }
+
+    // Every MCQ must have a non-empty sourceQuote (including true/false items)
+    for (const mcq of mcqs) {
+      if (!mcq.sourceQuote) {
+        console.error(`Missing sourceQuote on MCQ #${mcq.number} (${mcq.templateType}): "${mcq.stem.slice(0, 60)}"`);
+      }
+      expect(mcq.sourceQuote).toBeTruthy();
+      expect(mcq.sourceQuote!.length).toBeGreaterThanOrEqual(10);
     }
 
     // -------------------------------------------------------------
@@ -172,6 +182,10 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
       expect(neg.options).not.toContain("Absolute financial secrecy");
       expect(neg.options).not.toContain("Due process of law");
       expect(neg.explanation).toMatch(/Section\s+\d+/);
+      // sourceQuote must be a real source sentence (not the section heading)
+      expect(neg.sourceQuote).toBeTruthy();
+      expect(neg.sourceQuote).not.toBe("Sec. 4. Norms of Conduct of Public Officials and Employees.");
+      expect(neg.sourceQuote!.length).toBeGreaterThan(30);
     }
 
     // -------------------------------------------------------------
@@ -184,7 +198,11 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
       expect(m.sourceQuote).toBeDefined();
       expect(m.sourceQuote!.length).toBeGreaterThan(30);
       expect(m.stem).toContain('[Matching Set: Norms of Conduct');
-          }
+    }
+    // Matching set must NOT duplicate the norm_definition MCQ answers (cross-template enemy check)
+    // "Commitment to public interest" is covered by norm_definition MCQs; matching set item 1 must not use it
+    const matchingAnswers = matchingItems.map((m) => m.options[m.correctIndex]);
+    expect(matchingAnswers).not.toContain("Commitment to public interest");
 
     // -------------------------------------------------------------
     // 7. TRUE / FALSE VARIETY TEMPLATES
@@ -193,6 +211,27 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
     expect(tfItems.length).toBe(3);
     expect(tfItems.filter((q) => q.options[q.correctIndex] === "True").length).toBe(1);
     expect(tfItems.filter((q) => q.options[q.correctIndex] === "False").length).toBe(2);
+
+    // Every T/F item must have a sourceQuote from the real PDF
+    for (const tf of tfItems) {
+      expect(tf.sourceQuote).toBeTruthy();
+      expect(tf.sourceQuote!.length).toBeGreaterThanOrEqual(10);
+      // Page must be valid (Sec. 9=pg9, Sec. 5(a)=pg4, Sec. 8=pg7)
+      expect(tf.sourcePage).toBeGreaterThanOrEqual(4);
+    }
+    // The TRUE item must be from Sec. 9 (page 9) and cover both conditions (30d AND/OR 60d)
+    const trueItem = tfItems.find((q) => q.options[q.correctIndex] === "True");
+    expect(trueItem).toBeDefined();
+    expect(trueItem!.stem).toContain("thirty (30) days");
+    expect(trueItem!.stem).toContain("sixty (60) days");
+    expect(trueItem!.stem).toContain("and/or");
+    // The FALSE items must NOT use an invented scenario (old Q13 was invented loan statement)
+    const falseItems = tfItems.filter((q) => q.options[q.correctIndex] === "False");
+    for (const fi of falseItems) {
+      expect(fi.sourceQuote).toBeTruthy();
+      // Invented loan item would mention "personal loans from private persons"
+      expect(fi.stem).not.toContain("personally permitted to accept personal loans");
+    }
 
     // -------------------------------------------------------------
     // 8. IMPORT TO QUESTION BANK

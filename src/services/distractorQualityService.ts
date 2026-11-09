@@ -1177,22 +1177,44 @@ export interface SourceGroundingResult {
 }
 
 /**
- * Strictly verifies that after removing masks ([______] or _____),
- * every quoted stem fragment of length >= 10 is an exact substring of the source page text.
+ * Strictly verifies that:
+ * 1. Every quoted stem fragment of length >= 10 (after removing masks) is an exact substring of the source page text.
+ * 2. For true/false and negative_choice items (which have no inline quotes), verifies that
+ *    the item's sourceQuote (if provided) is a substring of the source page text.
  */
 export function assertStemGroundedInSourcePage(
-  item: { stem: string; sourcePage?: number; pageNumber?: number; templateType?: string },
+  item: { stem: string; sourcePage?: number; pageNumber?: number; templateType?: string; sourceQuote?: string },
   sourcePageText: string
 ): SourceGroundingResult {
   if (!sourcePageText) {
     return { grounded: false, missingFragments: ["Source page text missing"] };
   }
 
+  const normPage = sourcePageText
+    .replace(/\r\n/g, "\n")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+  const missingFragments: string[] = [];
+
   // Extract the quoted content inside "..."
   const quoteMatch = item.stem.match(/"([^"]+)"/);
   if (!quoteMatch) {
-    // If stem has no quotes (e.g. true/false statement), consider grounded
-    return { grounded: true, missingFragments: [] };
+    // No inline quotes (e.g. true/false, negative_choice, plain MCQ).
+    // Validate via sourceQuote if provided.
+    if (item.sourceQuote && item.sourceQuote.length >= 10) {
+      const normQuote = item.sourceQuote
+        .replace(/\r\n/g, "\n")
+        .replace(/[^\w\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+      if (!normPage.includes(normQuote)) {
+        missingFragments.push(item.sourceQuote.slice(0, 80));
+      }
+    }
+    return { grounded: missingFragments.length === 0, missingFragments };
   }
 
   const rawQuote = quoteMatch[1];
@@ -1213,13 +1235,6 @@ export function assertStemGroundedInSourcePage(
     )
     .filter((f) => f.length >= 10);
 
-  const normPage = sourcePageText
-    .replace(/\r\n/g, "\n")
-    .replace(/[^\w\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .toLowerCase();
-
-  const missingFragments: string[] = [];
   for (const frag of fragments) {
     const normFrag = frag.toLowerCase();
     if (!normPage.includes(normFrag)) {
