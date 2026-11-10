@@ -14,6 +14,10 @@ import {
   getSyncStatus,
   setSyncStatus,
   executeWithBackoff,
+  isTransientError,
+  isAuthError,
+  resetSessionInvalidFlag,
+  supabase,
 } from "../src/services/supabaseClient";
 import { createSeededExam } from "../src/services/examSeedService";
 import { filterEnemyItems } from "../src/services/distractorQualityService";
@@ -120,14 +124,15 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
       expect(deck.id).toMatch(UUID_REGEX);
     });
 
-    it("executeWithBackoff retries up to maxRetries on failure without tight loops", async () => {
+    it("executeWithBackoff only retries transient errors (network failure, 5xx, 429) up to maxRetries", async () => {
       let attempts = 0;
       const startTime = Date.now();
 
+      // Test 1: Transient network outage
       const result = await executeWithBackoff(
         async () => {
           attempts++;
-          throw new Error("Simulated network outage / table missing");
+          throw new Error("fetch failed: network outage");
         },
         { maxRetries: 3, initialDelayMs: 20, maxDelayMs: 80 }
       );
@@ -135,9 +140,167 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
       const duration = Date.now() - startTime;
       expect(result.success).toBe(false);
       expect(attempts).toBe(3);
-      expect(result.error.message).toContain("Simulated network outage");
-      // Must take at least initialDelayMs * (1 + 2) = 60ms, confirming exponential backoff delays
+      expect(result.error.message).toContain("network outage");
       expect(duration).toBeGreaterThanOrEqual(40);
+
+      // Test 2: HTTP 503 Service Unavailable retries
+      let retry503Attempts = 0;
+      const result503 = await executeWithBackoff(
+        async () => {
+          retry503Attempts++;
+          throw { status: 503, message: "Service Unavailable" };
+        },
+        { maxRetries: 3, initialDelayMs: 10, maxDelayMs: 40 }
+      );
+      expect(result503.success).toBe(false);
+      expect(retry503Attempts).toBe(3);
+
+      // Test 3: HTTP 429 Rate Limit retries
+      let retry429Attempts = 0;
+      const result429 = await executeWithBackoff(
+        async () => {
+          retry429Attempts++;
+          throw { status: 429, message: "Too many requests" };
+        },
+        { maxRetries: 3, initialDelayMs: 10, maxDelayMs: 40 }
+      );
+      expect(result429.success).toBe(false);
+      expect(retry429Attempts).toBe(3);
+    });
+
+    it("executeWithBackoff does not retry 400, 403, 404, or PostgREST schema errors: fails immediately on attempt 1", async () => {
+      // 400 Bad Request
+      let attempts400 = 0;
+      const res400 = await executeWithBackoff(
+        async () => {
+          attempts400++;
+          throw { status: 400, message: "Bad Request: invalid uuid syntax" };
+        },
+        { maxRetries: 3, initialDelayMs: 10 }
+      );
+      expect(res400.success).toBe(false);
+      expect(attempts400).toBe(1);
+      expect(res400.error.status).toBe(400);
+
+      // 404 Not Found
+      let attempts404 = 0;
+      const res404 = await executeWithBackoff(
+        async () => {
+          attempts404++;
+          throw { status: 404, message: "Not Found" };
+        },
+        { maxRetries: 3, initialDelayMs: 10 }
+      );
+      expect(res404.success).toBe(false);
+      expect(attempts404).toBe(1);
+
+      // 403 Forbidden
+      let attempts403 = 0;
+      const res403 = await executeWithBackoff(
+        async () => {
+          attempts403++;
+          throw { status: 403, message: "Forbidden: RLS violation" };
+        },
+        { maxRetries: 3, initialDelayMs: 10 }
+      );
+      expect(res403.success).toBe(false);
+      expect(attempts403).toBe(1);
+
+      // PostgREST missing table in schema cache error
+      let attemptsSchema = 0;
+      const resSchema = await executeWithBackoff(
+        async () => {
+          attemptsSchema++;
+          throw {
+            code: "PGRST205",
+            message: "Could not find the table 'public.exams' in the schema cache",
+          };
+        },
+        { maxRetries: 3, initialDelayMs: 10 }
+      );
+      expect(resSchema.success).toBe(false);
+      expect(attemptsSchema).toBe(1);
+      expect(resSchema.error.message).toContain("schema cache");
+    });
+
+    it("executeWithBackoff on 401 / JWT expired tries refreshSession once, failing immediately to local-only mode if refresh fails", async () => {
+      resetSessionInvalidFlag();
+      let actionAttempts = 0;
+
+      // Mock refreshSession failure
+      const refreshSpy = vi.spyOn(supabase.auth, "refreshSession").mockResolvedValueOnce({
+        data: { session: null, user: null },
+        error: new Error("Invalid refresh token") as any,
+      });
+
+      const res401 = await executeWithBackoff(
+        async () => {
+          actionAttempts++;
+          throw { status: 401, code: "PGRST303", message: "JWT expired" };
+        },
+        { maxRetries: 3, initialDelayMs: 10 }
+      );
+
+      expect(res401.success).toBe(false);
+      // Exactly 1 action attempt, followed by 1 refresh attempt
+      expect(actionAttempts).toBe(1);
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+
+      // Switched cleanly to local-only mode (signed_out) without loops
+      const syncStatus = getSyncStatus();
+      expect(syncStatus.state).toBe("signed_out");
+      expect(syncStatus.label).toBe("Signed out, working locally");
+
+      refreshSpy.mockRestore();
+    });
+
+    it("executeWithBackoff on 401 / JWT expired retries action once and succeeds if refreshSession succeeds", async () => {
+      resetSessionInvalidFlag();
+      let actionAttempts = 0;
+
+      // Mock refreshSession success
+      const refreshSpy = vi.spyOn(supabase.auth, "refreshSession").mockResolvedValueOnce({
+        data: {
+          session: { access_token: "new-valid-jwt", expires_at: Date.now() + 3600000 } as any,
+          user: { id: "user-123" } as any,
+        },
+        error: null,
+      });
+
+      const res401Success = await executeWithBackoff(
+        async () => {
+          actionAttempts++;
+          if (actionAttempts === 1) {
+            throw { status: 401, code: "PGRST303", message: "JWT expired" };
+          }
+          return { data: "success_after_refresh" };
+        },
+        { maxRetries: 3, initialDelayMs: 10 }
+      );
+
+      expect(res401Success.success).toBe(true);
+      expect(res401Success.data).toEqual({ data: "success_after_refresh" });
+      expect(actionAttempts).toBe(2); // 1 initial fail, 1 retry after refresh
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+
+      refreshSpy.mockRestore();
+    });
+
+    it("isTransientError correctly classifies error statuses, codes, and messages", () => {
+      expect(isTransientError({ status: 500 })).toBe(true);
+      expect(isTransientError({ status: 503 })).toBe(true);
+      expect(isTransientError({ status: 429 })).toBe(true);
+      expect(isTransientError(new TypeError("Failed to fetch"))).toBe(true);
+      expect(isTransientError({ message: "network error ECONNRESET" })).toBe(true);
+
+      // Non-transient errors
+      expect(isTransientError({ status: 400 })).toBe(false);
+      expect(isTransientError({ status: 401 })).toBe(false);
+      expect(isTransientError({ status: 403 })).toBe(false);
+      expect(isTransientError({ status: 404 })).toBe(false);
+      expect(isTransientError({ message: "Could not find the table 'public.exams' in the schema cache" })).toBe(false);
+      expect(isTransientError({ code: "42P01", message: "relation exams does not exist" })).toBe(false);
+      expect(isTransientError({ code: "23503", message: "foreign key violation" })).toBe(false);
     });
   });
 

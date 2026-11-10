@@ -118,8 +118,80 @@ export function setSyncStatus(status: SyncStatus): void {
 }
 
 /**
+ * Classifies whether an error is transient (network failure, 5xx, 429) and safe to retry.
+ * Non-transient errors (400, 401, 403, 404, PostgREST schema errors, constraint violations)
+ * must never be retried with exponential backoff.
+ */
+export function isTransientError(error: any): boolean {
+  if (!error) return false;
+
+  const rawStatus = error.status ?? error.statusCode ?? error.status_code;
+  const status = rawStatus !== undefined && rawStatus !== null ? Number(rawStatus) : NaN;
+  const code = String(error.code || "");
+  const msg = String(error.message || "").toLowerCase();
+
+  // 1. Explicit non-transient status codes: 400, 401, 403, 404
+  if (status === 400 || status === 401 || status === 403 || status === 404) {
+    return false;
+  }
+
+  // 2. PostgREST / Postgres non-transient schema & constraint errors:
+  if (
+    msg.includes("schema cache") ||
+    msg.includes("could not find the table") ||
+    msg.includes("does not exist") ||
+    msg.includes("column") ||
+    msg.includes("relation") ||
+    msg.includes("syntax error") ||
+    code.startsWith("42") || // PostgreSQL Class 42 — Syntax Error or Access Rule Violation (42P01 undefined table, 42703 undefined column)
+    code.startsWith("23") || // PostgreSQL Class 23 — Integrity Constraint Violation (23505 unique, 23503 foreign key)
+    code === "PGRST200" ||
+    code === "PGRST204" ||
+    code === "PGRST205" ||
+    code === "PGRST301" ||
+    code === "PGRST303"
+  ) {
+    return false;
+  }
+
+  // 3. HTTP 429 Rate Limit is transient
+  if (status === 429 || code === "429" || msg.includes("rate limit") || msg.includes("too many requests")) {
+    return true;
+  }
+
+  // 4. HTTP 5xx Server Errors are transient (500, 502, 503, 504, etc.)
+  if (!Number.isNaN(status) && status >= 500 && status <= 599) {
+    return true;
+  }
+
+  // 5. Network / connection failures are transient
+  if (
+    status === 0 ||
+    error.name === "TypeError" ||
+    msg.includes("fetch failed") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("network error") ||
+    msg.includes("networkerror") ||
+    msg.includes("network failure") ||
+    msg.includes("network outage") ||
+    msg.includes("econnreset") ||
+    msg.includes("etimedout") ||
+    msg.includes("enotfound") ||
+    msg.includes("err_network") ||
+    msg.includes("aborterror") ||
+    msg.includes("timeout")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Executes a sync action with limited exponential backoff (no tight loops).
- * Maximum 3 retries, doubling delay (1000ms -> 2000ms -> 4000ms).
+ * Only retries transient errors (network failure, 5xx, 429).
+ * Fails immediately on 400, 401, 403, 404, or PostgREST schema errors.
+ * On 401 / JWT expired, attempts session refresh ONCE via handleAuthError, then fails immediately if refresh fails.
  */
 export async function executeWithBackoff<T>(
   action: () => Promise<T>,
@@ -136,6 +208,7 @@ export async function executeWithBackoff<T>(
 
   let delay = initialDelay;
   let lastError: any = null;
+  let hasAttemptedAuthRefresh = false;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -146,6 +219,48 @@ export async function executeWithBackoff<T>(
       if (options.onAttempt) {
         options.onAttempt(attempt, delay);
       }
+
+      const rawStatus = err?.status ?? err?.statusCode ?? err?.status_code;
+      const status = rawStatus !== undefined && rawStatus !== null ? Number(rawStatus) : NaN;
+      const code = String(err?.code || "");
+      const msg = String(err?.message || "").toLowerCase();
+
+      // 1. On 401 / JWT expired: try supabase.auth.refreshSession() once via handleAuthError, then fail
+      const is401OrJwtExpired =
+        code === "PGRST303" ||
+        status === 401 ||
+        code === "401" ||
+        msg.includes("jwt expired") ||
+        msg.includes("token is expired") ||
+        msg.includes("invalid claim");
+
+      if (is401OrJwtExpired) {
+        if (!hasAttemptedAuthRefresh && !isSessionKnownInvalid()) {
+          hasAttemptedAuthRefresh = true;
+          const refreshed = await handleAuthError(err);
+          if (refreshed) {
+            // Refreshed successfully: retry the action ONCE immediately
+            try {
+              const retryResult = await action();
+              return { success: true, data: retryResult };
+            } catch (retryErr: any) {
+              lastError = retryErr;
+              return { success: false, error: retryErr };
+            }
+          }
+        }
+        // If refresh failed, already attempted, or session known invalid -> fail immediately
+        return { success: false, error: lastError };
+      }
+
+      // 2. Non-transient errors (400, 403, 404, PostgREST schema errors):
+      // Do not retry: fail immediately with the error detail.
+      if (!isTransientError(err)) {
+        return { success: false, error: lastError };
+      }
+
+      // 3. Transient errors (network failure, 5xx, 429):
+      // Retry with exponential backoff up to maxRetries.
       if (attempt < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, delay));
         delay = Math.min(delay * 2, maxDelay);
@@ -182,10 +297,14 @@ export function resetSessionInvalidFlag(): void {
  */
 export function isAuthError(error: any): boolean {
   if (!error) return false;
-  const code = error.code || error.status;
+  const rawStatus = error.status ?? error.statusCode ?? error.status_code;
+  const status = rawStatus !== undefined && rawStatus !== null ? Number(rawStatus) : NaN;
+  const code = error.code;
   const msg = (error.message || "").toLowerCase();
   return (
     code === "PGRST303" ||
+    status === 401 ||
+    status === 403 ||
     code === 401 ||
     code === 403 ||
     code === "401" ||
@@ -634,6 +753,7 @@ export default {
   updatePassword,
   handleAuthError,
   isAuthError,
+  isTransientError,
   isSessionKnownInvalid,
   getSyncStatus,
   setSyncStatus,

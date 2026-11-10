@@ -68,9 +68,22 @@ const tablesToProbe = {
   items: [
     "id",
     "user_id",
-    "source_title",
     "text",
-    "created_at"
+    "tags",
+    "note",
+    "source_url",
+    "source_title",
+    "ai_summary",
+    "preferred_view",
+    "device_source",
+    "collection_id",
+    "citation",
+    "citation_format",
+    "image_url",
+    "ocr_text",
+    "ocr_confidence",
+    "created_at",
+    "updated_at"
   ],
   question_bank: [
     "id",
