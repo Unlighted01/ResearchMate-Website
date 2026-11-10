@@ -63,33 +63,8 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const hcaptchaRef = useRef<HCaptcha>(null);
 
-  const { visualTheme } = useTheme();
-  const authBackgroundClass =
-    visualTheme === "glass"
-      ? "bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 dark:from-[#020617] dark:via-[#0f172a] dark:to-[#111827]"
-      : "bg-[#F5F5F7] dark:bg-black";
-
   const { showToast } = useToast();
   const navigate = useNavigate();
-
-  // Force light mode for auth pages
-  useEffect(() => {
-    const root = document.documentElement;
-    // Remove dark mode for auth pages
-    root.classList.remove("dark");
-
-    // Restore dark mode when leaving auth pages (if it was set)
-    return () => {
-      const savedTheme = localStorage.getItem("theme");
-      if (
-        savedTheme === "dark" ||
-        (savedTheme === "system" &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches)
-      ) {
-        root.classList.add("dark");
-      }
-    };
-  }, []);
 
   // Password validation
   const passwordChecks = [
@@ -227,38 +202,37 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
   };
 
   return (
-    <div className="theme-page min-h-screen flex items-center justify-center px-4 py-12 relative">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 relative">
       {/* OAuth Loading Overlay */}
       {oauthLoading && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
-          <div className="theme-surface bg-white dark:bg-[#1C1C1E] rounded-2xl p-8 shadow-2xl text-center max-w-sm mx-4">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 shadow-2xl text-center max-w-sm w-full border border-slate-200 dark:border-slate-800">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
               {oauthLoading === "google" ? <GoogleIcon /> : <GitHubIcon />}
             </div>
-            <div className="w-8 h-8 border-3 border-[#007AFF] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Signing up with {oauthLoading === "google" ? "Google" : "GitHub"}
-              ...
+            <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2 font-sans">
+              Signing up with {oauthLoading === "google" ? "Google" : "GitHub"}...
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
               Complete sign-up in the popup window
             </p>
             <button
               onClick={() => setOauthLoading(null)}
-              className="text-sm text-[#007AFF] hover:text-[#0066DD] font-medium"
+              className="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 font-medium cursor-pointer"
             >
               Cancel
             </button>
           </div>
         </div>
       )}
-      <div className={`fixed inset-0 z-0 ${authBackgroundClass}`} />
-      <div className="w-full max-w-sm">
+
+      <div className="relative z-10 w-full max-w-sm">
         {/* Back Link */}
         <div className="mb-4 text-left">
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#007AFF] transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Home</span>
@@ -269,52 +243,48 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
           <Link to="/" className="inline-block mb-4 group">
             <ResearchMateLogo size={64} />
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 font-sans">
             Create your account
           </h1>
-          <p className="text-gray-500 dark:text-gray-400">
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
             Start organizing your research today
           </p>
         </div>
 
         {/* Card */}
-        <div className="theme-surface bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-7 shadow-xl shadow-slate-200/50 dark:shadow-black/50 border border-slate-200/80 dark:border-slate-800">
           {/* OAuth Buttons */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             <button
               onClick={() => handleOAuthSignup("google")}
               disabled={loading}
-              className="theme-btn theme-btn-secondary flex items-center justify-center gap-2 py-3 bg-gray-100 dark:bg-[#2C2C2E] hover:bg-gray-200 dark:hover:bg-[#3A3A3C] rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-all border border-slate-200/60 dark:border-slate-700/60 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
             >
               <GoogleIcon />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Google
-              </span>
+              <span className="text-sm font-medium">Google</span>
             </button>
             <button
               onClick={() => handleOAuthSignup("github")}
               disabled={loading}
-              className="theme-btn theme-btn-secondary flex items-center justify-center gap-2 py-3 bg-gray-100 dark:bg-[#2C2C2E] hover:bg-gray-200 dark:hover:bg-[#3A3A3C] rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-all border border-slate-200/60 dark:border-slate-700/60 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
             >
               <GitHubIcon />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                GitHub
-              </span>
+              <span className="text-sm font-medium">GitHub</span>
             </button>
           </div>
 
           {/* Divider */}
           <div className="relative flex items-center my-6">
-            <div className="flex-grow h-px bg-gray-200 dark:bg-gray-700" />
-            <span className="flex-shrink mx-4 text-xs text-gray-400 uppercase">
+            <div className="flex-grow h-px bg-slate-200 dark:bg-slate-800" />
+            <span className="flex-shrink mx-4 text-xs text-slate-400 uppercase tracking-wider font-medium">
               or
             </span>
-            <div className="flex-grow h-px bg-gray-200 dark:bg-gray-700" />
+            <div className="flex-grow h-px bg-slate-200 dark:bg-slate-800" />
           </div>
 
           {/* Form */}
           <div className="mb-4">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
               Or sign up with Email
             </h3>
             <form onSubmit={handleSignup} className="space-y-4">
@@ -493,13 +463,13 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
             </label>
 
             {/* Terms */}
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               By creating an account, you agree to our{" "}
-              <a href="#" className="text-[#007AFF] hover:underline">
+              <a href="#" className="text-indigo-600 dark:text-indigo-400 hover:underline">
                 Terms of Service
               </a>{" "}
               and{" "}
-              <a href="#" className="text-[#007AFF] hover:underline">
+              <a href="#" className="text-indigo-600 dark:text-indigo-400 hover:underline">
                 Privacy Policy
               </a>
             </p>
@@ -520,7 +490,7 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
             <button
               type="submit"
               disabled={loading || !captchaToken}
-              className="theme-btn theme-btn-primary w-full py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center"
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-medium rounded-xl transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center cursor-pointer"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -532,30 +502,30 @@ const SignupPage: React.FC<SignupProps> = ({ useToast }) => {
         </div>
 
           {/* Guest Mode */}
-          <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
+          <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
             <button
               onClick={() => {
                 localStorage.setItem("rm_guest_mode", "true");
                 showToast("Entering Guest Mode...", "info");
                 navigate("/app/dashboard");
               }}
-              className="w-full py-3 px-4 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 font-medium rounded-xl transition-all border border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-4 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium text-xs rounded-xl transition-all border border-slate-200/80 dark:border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Continue as Guest</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
-            <p className="text-center mt-3 text-[10px] text-gray-400 uppercase tracking-widest">
+            <p className="text-center mt-2.5 text-[10px] text-slate-400 uppercase tracking-widest">
               No account required
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <p className="text-center mt-6 text-sm text-gray-500">
+        <p className="text-center mt-6 text-sm text-slate-500">
           Already have an account?{" "}
           <Link
             to="/login"
-            className="text-[#007AFF] hover:text-[#0066DD] font-medium transition-colors"
+            className="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 font-medium transition-colors"
           >
             Sign in
           </Link>

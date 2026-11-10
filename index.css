@@ -299,7 +299,8 @@ html.dark[data-ui-theme="minimalist"] {
   --ui-glass-blur: 0px;
 }
 
-html[data-ui-theme="minimalist"] body {
+html[data-ui-theme="minimalist"] body:has(.theme-dashboard),
+html[data-ui-theme="minimalist"] .theme-dashboard {
   background:
     radial-gradient(at 0% 0%, rgba(240, 240, 240, 0.5) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(225, 225, 225, 0.3) 0px, transparent 50%),
@@ -310,7 +311,8 @@ html[data-ui-theme="minimalist"] body {
   animation: minimalist-grid-drift 40s linear infinite;
 }
 
-html.dark[data-ui-theme="minimalist"] body {
+html.dark[data-ui-theme="minimalist"] body:has(.theme-dashboard),
+html.dark[data-ui-theme="minimalist"] .theme-dashboard {
   background:
     radial-gradient(at 0% 0%, rgba(24, 24, 27, 0.7) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(15, 15, 18, 0.6) 0px, transparent 50%),
@@ -418,7 +420,8 @@ html.dark[data-ui-theme="bubble"] {
   --ui-glass-blur: 16px;
 }
 
-html[data-ui-theme="bubble"] body {
+html[data-ui-theme="bubble"] body:has(.theme-dashboard),
+html[data-ui-theme="bubble"] .theme-dashboard {
   background:
     radial-gradient(circle at 15% 20%, rgba(244, 114, 182, 0.2) 0%, transparent 45%),
     radial-gradient(circle at 85% 80%, rgba(196, 181, 253, 0.22) 0%, transparent 45%),
@@ -428,7 +431,8 @@ html[data-ui-theme="bubble"] body {
   animation: bubble-mesh-drift 25s ease-in-out infinite;
 }
 
-html.dark[data-ui-theme="bubble"] body {
+html.dark[data-ui-theme="bubble"] body:has(.theme-dashboard),
+html.dark[data-ui-theme="bubble"] .theme-dashboard {
   background:
     radial-gradient(circle at 20% 20%, rgba(232, 121, 249, 0.18) 0%, transparent 45%),
     radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.2) 0%, transparent 45%),
@@ -538,7 +542,8 @@ html.dark[data-ui-theme="glass"] {
   --ui-glass-blur: 24px;
 }
 
-html[data-ui-theme="glass"] body {
+html[data-ui-theme="glass"] body:has(.theme-dashboard),
+html[data-ui-theme="glass"] .theme-dashboard {
   /* Light glass: oceanic azure base with vivid soft ambient orbs */
   background:
     radial-gradient(circle at 18% 18%, rgba(34, 211, 238, 0.2) 0%, transparent 45%),
@@ -549,7 +554,8 @@ html[data-ui-theme="glass"] body {
   animation: glass-aurora-drift 30s ease-in-out infinite;
 }
 
-html.dark[data-ui-theme="glass"] body {
+html.dark[data-ui-theme="glass"] body:has(.theme-dashboard),
+html.dark[data-ui-theme="glass"] .theme-dashboard {
   /* Dark glass: deep cosmic obsidian with vivid neon cyan and indigo aurora */
   background:
     radial-gradient(circle at 15% 15%, rgba(6, 182, 212, 0.26) 0%, transparent 45%),
@@ -602,7 +608,8 @@ html.dark[data-ui-theme="glass"] .theme-btn-primary:hover {
   font-family: var(--font-sans) !important;
 }
 
-.theme-surface {
+.theme-dashboard .theme-surface,
+.theme-dashboard.theme-surface {
   background: var(--ui-surface-bg) !important;
   border-color: var(--ui-surface-border) !important;
   box-shadow: var(--ui-surface-shadow) !important;
@@ -611,30 +618,30 @@ html.dark[data-ui-theme="glass"] .theme-btn-primary:hover {
   -webkit-backdrop-filter: blur(var(--ui-glass-blur));
 }
 
-.theme-input,
-.theme-search {
+.theme-dashboard .theme-input,
+.theme-dashboard .theme-search {
   background: var(--ui-input-bg) !important;
   border: 1px solid var(--ui-input-border) !important;
   border-radius: var(--ui-radius-md) !important;
 }
 
-.theme-search {
+.theme-dashboard .theme-search {
   background: var(--ui-search-bg) !important;
   border-color: var(--ui-search-border) !important;
 }
 
-.theme-btn {
+.theme-dashboard .theme-btn {
   border-radius: var(--ui-btn-radius) !important;
 }
 
-.theme-btn-primary {
+.theme-dashboard .theme-btn-primary {
   background: var(--ui-btn-fill) !important;
   color: var(--ui-btn-text) !important;
   border: 1px solid var(--ui-btn-border) !important;
   box-shadow: var(--ui-btn-shadow) !important;
 }
 
-.theme-btn-primary:hover {
+.theme-dashboard .theme-btn-primary:hover {
   background: var(--ui-btn-fill-hover) !important;
 }
 

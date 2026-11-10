@@ -47,16 +47,16 @@ export const Input: React.FC<InputProps> = ({
         className={`
           w-full px-4 py-3
           theme-input
-          bg-gray-100 dark:bg-[#2C2C2E]
-          border-0
+          bg-slate-100/90 dark:bg-slate-800/80
+          border border-slate-200 dark:border-slate-700
           rounded-xl
-          text-gray-900 dark:text-white
-          placeholder-gray-500 dark:placeholder-gray-400
+          text-slate-900 dark:text-slate-100
+          placeholder-slate-400 dark:placeholder-slate-500
           transition-all duration-200
-          focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 focus:bg-white dark:focus:bg-[#3A3A3C]
+          focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800
           ${icon ? "pl-11" : ""}
           ${rightElement ? "pr-11" : ""}
-          ${error ? "ring-2 ring-red-500/50" : ""}
+          ${error ? "ring-2 ring-red-500/50 border-red-500" : ""}
           ${className}
         `}
         {...props}

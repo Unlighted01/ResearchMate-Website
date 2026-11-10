@@ -847,7 +847,7 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
           difficulty: "mixed",
           timedMode: false,
           benchmarkScore: 80,
-          sections: [{ name: "Old Section", questionCount: 2 }],
+          sections: [{ name: "Old Section", questionCount: 2, mode: "grounded" }],
         },
         questions: [
           {
