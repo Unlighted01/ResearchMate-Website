@@ -34,6 +34,11 @@ import {
   savePlaygroundPendingPdf,
   clearPlaygroundPendingPdf,
 } from "../../services/localPdfStore";
+import {
+  getSampledPlaygroundQuestions,
+  PLAYGROUND_CURATED_QUESTIONS,
+  CuratedPlaygroundQuestion,
+} from "../../data/playgroundCuratedQuestions";
 
 type PlaygroundMode = "exam" | "matrix" | "flashcards" | "math_ocr";
 
@@ -99,44 +104,64 @@ const HeroSection: React.FC = () => {
     };
   }, []);
 
-  // Default Sample Question (Republic Act No. 6713)
-  const defaultSampleQuestion = {
-    id: "q-ra6713-sample",
-    stem: "Under Republic Act No. 6713 (Code of Conduct and Ethical Standards), public officials and employees must file their Statement of Assets, Liabilities, and Net Worth (SALN) within how many days after assumption of office?",
-    options: [
-      "Fifteen (15) days after assumption of office",
-      "Thirty (30) days after assumption of office",
-      "Sixty (60) days after assumption of office",
-      "Ninety (90) days after assumption of office",
-    ],
-    correctIndex: 1, // 30 days
-    explanation:
-      "Section 8(A) of RA 6713 explicitly mandates the filing of the SALN within thirty (30) days after assumption of office, on or before April 30 of every year thereafter, and within thirty (30) days after separation from service.",
-    topicTag: "Civil Service & Statutory Ethics",
-    seed: "EXAM-RA6713-V1",
-  };
+  // 50-Question Curated Pool Juggled / Sampled State (10 active by default)
+  const [curatedQuestions, setCuratedQuestions] = useState<CuratedPlaygroundQuestion[]>(() =>
+    getSampledPlaygroundQuestions(10)
+  );
 
-  // Resolve currently active question
+  // Active Question List: User-uploaded questions if custom PDF present, otherwise 10 juggled curated questions
   const hasCustomQuestions = customQuestions.length > 0;
-  const currentExamItem = hasCustomQuestions
-    ? {
-        id: customQuestions[activeQuestionIdx].id,
-        stem: customQuestions[activeQuestionIdx].stem,
-        options: customQuestions[activeQuestionIdx].options,
-        correctIndex: customQuestions[activeQuestionIdx].correctIndex,
+  const activeQuestionList = useMemo(() => {
+    if (hasCustomQuestions) return customQuestions;
+    return curatedQuestions;
+  }, [hasCustomQuestions, customQuestions, curatedQuestions]);
+
+  // Current active question item
+  const currentExamItem = useMemo(() => {
+    const raw = activeQuestionList[activeQuestionIdx] || activeQuestionList[0];
+    if (!raw) {
+      return {
+        id: "default-q",
+        stem: "Loading playground question...",
+        options: ["A", "B", "C", "D"],
+        correctIndex: 0,
+        explanation: "",
+        topicTag: "Academic Benchmark",
+        seed: "EXAM-ACADEMIC-V1",
+        subject: "Academic Benchmark",
+      };
+    }
+
+    if (hasCustomQuestions) {
+      const q = raw as ParsedQaItem;
+      return {
+        id: q.id,
+        stem: q.stem,
+        options: q.options,
+        correctIndex: q.correctIndex,
         explanation:
-          customQuestions[activeQuestionIdx].explanation ||
-          (customQuestions[activeQuestionIdx].sourceQuote
-            ? `Source Quote: "${customQuestions[activeQuestionIdx].sourceQuote}"`
-            : "Extracted directly from source document."),
-        topicTag:
-          customQuestions[activeQuestionIdx].chapter ||
-          uploadedFileName?.replace(/\.[^/.]+$/, "") ||
-          "Imported Document",
+          q.explanation ||
+          (q.sourceQuote ? `Source Quote: "${q.sourceQuote}"` : "Extracted directly from source document."),
+        topicTag: q.chapter || uploadedFileName?.replace(/\.[^/.]+$/, "") || "Uploaded PDF",
         seed: `EXAM-${(uploadedFileName || "DOC").replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase()}-V1`,
-        page: customQuestions[activeQuestionIdx].sourcePage,
-      }
-    : defaultSampleQuestion;
+        page: q.sourcePage,
+        subject: uploadedFileName?.replace(/\.[^/.]+$/, "") || "Uploaded Document",
+      };
+    } else {
+      const q = raw as CuratedPlaygroundQuestion;
+      return {
+        id: q.id,
+        stem: q.stem,
+        options: q.options,
+        correctIndex: q.correctIndex,
+        explanation: q.explanation,
+        topicTag: q.topic || q.subject,
+        seed: "EXAM-ACADEMIC-V1",
+        page: undefined,
+        subject: q.subject,
+      };
+    }
+  }, [activeQuestionList, activeQuestionIdx, hasCustomQuestions, uploadedFileName]);
 
   // Resolve currently active flashcard
   const hasCustomFlashcards = customFlashcards.length > 0;
@@ -165,7 +190,7 @@ const HeroSection: React.FC = () => {
 
     setIsAutoAdvancing(true);
 
-    const questionCount = hasCustomQuestions ? customQuestions.length : 1;
+    const questionCount = activeQuestionList.length;
 
     autoAdvanceTimerRef.current = setTimeout(() => {
       setIsAutoAdvancing(false);
@@ -177,7 +202,7 @@ const HeroSection: React.FC = () => {
         // Reached end of playground questions
         setIsPlaygroundComplete(true);
       }
-    }, 1200);
+    }, 2000);
   };
 
   // Handle Manual Question Navigation
@@ -191,15 +216,26 @@ const HeroSection: React.FC = () => {
     setSelectedExamOption(userAnswers[newIdx] ?? null);
   };
 
-  // Calculate live score
-  const playgroundScore = useMemo(() => {
-    if (!hasCustomQuestions) {
-      return selectedExamOption === defaultSampleQuestion.correctIndex ? 1 : 0;
+  // Juggle / Shuffle 10 questions from the 50-question curated pool
+  const handleJuggleQuestions = () => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
     }
-    return customQuestions.reduce((score, q, idx) => {
+    setIsAutoAdvancing(false);
+    setIsPlaygroundComplete(false);
+    setUserAnswers({});
+    setSelectedExamOption(null);
+    setActiveQuestionIdx(0);
+    setCuratedQuestions(getSampledPlaygroundQuestions(10));
+  };
+
+  // Calculate live score across all active questions
+  const playgroundScore = useMemo(() => {
+    return activeQuestionList.reduce((score, q, idx) => {
       return userAnswers[idx] === q.correctIndex ? score + 1 : score;
     }, 0);
-  }, [hasCustomQuestions, customQuestions, userAnswers, selectedExamOption, defaultSampleQuestion.correctIndex]);
+  }, [activeQuestionList, userAnswers]);
 
   // Handle PDF Upload for Guest Sandbox (Zero Server Upload, In-Memory & IndexedDB)
   const handlePdfUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -225,19 +261,18 @@ const HeroSection: React.FC = () => {
         "../../services/pdfQuestionImporter"
       );
 
-      // Fast, memory-safe playground preview: extracts up to the first 25 pages
+      // Extract all pages in-browser
       const extraction = await extractAllPagesWithLayout(file, (current, total) => {
-        setParseProgress(`Processing page ${current} of ${Math.min(total, 25)} in-browser...`);
+        setParseProgress(`Processing page ${current} of ${total} in-browser...`);
       });
 
-      const pagesToParse = extraction.pages.slice(0, 25);
+      // Pass all extracted pages so end-of-section or end-of-book answer keys are found
       const cleanSubject = file.name.replace(/\.[^/.]+$/, "").trim();
-
-      const parsedItems = parseTwoPassQuestionsAndAnswers(pagesToParse);
+      const parsedItems = parseTwoPassQuestionsAndAnswers(extraction.pages);
 
       if (!parsedItems || parsedItems.length === 0) {
         setParseError(
-          "No multiple-choice questions or structured sections found in the first 25 pages. Try an exam reviewer, past paper, or textbook PDF."
+          `No structured multiple-choice questions or answer keys found in "${file.name}". Please ensure your PDF contains numbered questions with options (A-D) and an answer key.`
         );
         setIsParsingPdf(false);
         return;
@@ -312,6 +347,7 @@ const HeroSection: React.FC = () => {
     setSelectedExamOption(null);
     setShowOmrPreview(false);
     setParseError(null);
+    setCuratedQuestions(getSampledPlaygroundQuestions(10));
     try {
       await clearPlaygroundPendingPdf();
     } catch (_) {}
@@ -631,33 +667,43 @@ const HeroSection: React.FC = () => {
                         </span>
                       )}
 
-                      {/* Pagination if multiple custom questions loaded */}
-                      {hasCustomQuestions && (
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono pr-2 border-r border-slate-200 dark:border-slate-800">
-                          <button
-                            onClick={() => handleNavigateQuestion(Math.max(0, activeQuestionIdx - 1))}
-                            disabled={activeQuestionIdx === 0}
-                            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
-                            title="Previous question"
-                          >
-                            <ChevronLeft className="w-3.5 h-3.5" />
-                          </button>
-                          <span>
-                            {activeQuestionIdx + 1} / {customQuestions.length}
-                          </span>
-                          <button
-                            onClick={() =>
-                              handleNavigateQuestion(
-                                Math.min(customQuestions.length - 1, activeQuestionIdx + 1)
-                              )
-                            }
-                            disabled={activeQuestionIdx === customQuestions.length - 1}
-                            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
-                            title="Next question"
-                          >
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                      {/* Pagination across all 10 playground questions */}
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono pr-2 border-r border-slate-200 dark:border-slate-800">
+                        <button
+                          onClick={() => handleNavigateQuestion(Math.max(0, activeQuestionIdx - 1))}
+                          disabled={activeQuestionIdx === 0}
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
+                          title="Previous question"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <span>
+                          {activeQuestionIdx + 1} / {activeQuestionList.length}
+                        </span>
+                        <button
+                          onClick={() =>
+                            handleNavigateQuestion(
+                              Math.min(activeQuestionList.length - 1, activeQuestionIdx + 1)
+                            )
+                          }
+                          disabled={activeQuestionIdx === activeQuestionList.length - 1}
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
+                          title="Next question"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Juggle / Shuffle 10 questions button for default benchmark pool */}
+                      {!hasCustomQuestions && (
+                        <button
+                          onClick={handleJuggleQuestions}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono border border-indigo-200/80 dark:border-indigo-800/80 bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 transition-colors cursor-pointer"
+                          title="Shuffle 10 new random authentic questions from our 50-question pool"
+                        >
+                          <RotateCw className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                          <span className="hidden sm:inline">Juggle 10</span>
+                        </button>
                       )}
 
                       <button
@@ -682,7 +728,7 @@ const HeroSection: React.FC = () => {
                             Playground Test Complete!
                           </h3>
                           <p className="text-sm font-mono text-slate-600 dark:text-slate-400">
-                            Your Score: <span className="font-bold text-emerald-600 dark:text-emerald-400">{playgroundScore} / {hasCustomQuestions ? customQuestions.length : 1}</span> ({Math.round((playgroundScore / (hasCustomQuestions ? customQuestions.length : 1)) * 100)}% accuracy)
+                            Your Score: <span className="font-bold text-emerald-600 dark:text-emerald-400">{playgroundScore} / {activeQuestionList.length}</span> ({Math.round((playgroundScore / (activeQuestionList.length || 1)) * 100)}% accuracy)
                           </p>
                         </div>
                         <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-lg mx-auto leading-relaxed">
@@ -694,7 +740,7 @@ const HeroSection: React.FC = () => {
                                 : " Your full document, flashcard decks, and literature matrix are ready to unlock in your dashboard."}
                             </>
                           ) : (
-                            "You just completed the statutory ethics sample test. Sign up for a free account to upload your own papers and textbooks."
+                            "You just completed 10 questions from our 50-question multi-disciplinary academic benchmark pool. You can shuffle 10 more or test your own PDF!"
                           )}
                         </p>
                         <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
@@ -702,9 +748,18 @@ const HeroSection: React.FC = () => {
                             to="/signup"
                             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-semibold text-xs hover:bg-slate-800 transition-all shadow-sm"
                           >
-                            <span>Save Document & Unlock Full Dashboard</span>
+                            <span>{hasCustomQuestions ? "Save Document & Unlock Full Dashboard" : "Start Free & Open Full Dashboard"}</span>
                             <ArrowRight className="w-4 h-4" />
                           </Link>
+                          {!hasCustomQuestions && (
+                            <button
+                              onClick={handleJuggleQuestions}
+                              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-medium text-xs hover:bg-indigo-100 transition-colors cursor-pointer"
+                            >
+                              <RotateCw className="w-3.5 h-3.5" />
+                              <span>Shuffle 10 New Questions</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               setIsPlaygroundComplete(false);
@@ -712,7 +767,7 @@ const HeroSection: React.FC = () => {
                             }}
                             className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-medium text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                           >
-                            Review 10 Questions
+                            Review 10 Answers
                           </button>
                         </div>
                       </div>
@@ -722,17 +777,17 @@ const HeroSection: React.FC = () => {
                         <div className="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
                           <div className="flex items-start gap-3">
                             <span className="w-6 h-6 rounded-md bg-indigo-600 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
-                              {hasCustomQuestions ? activeQuestionIdx + 1 : 1}
+                              {activeQuestionIdx + 1}
                             </span>
                             <p className="text-sm font-medium text-slate-900 dark:text-slate-100 leading-relaxed font-sans">
-                              {currentExamItem.stem}
+                              {currentExamItem?.stem}
                             </p>
                           </div>
                         </div>
 
                         {/* Options Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          {currentExamItem.options.map((opt, idx) => {
+                          {currentExamItem?.options.map((opt, idx) => {
                             const letter = String.fromCharCode(65 + idx);
                             const isSelected = selectedExamOption === idx;
                             const isCorrect = idx === currentExamItem.correctIndex;
@@ -773,28 +828,54 @@ const HeroSection: React.FC = () => {
                         </div>
 
                         {/* Immediate Tactile Explanation Banner */}
-                        {selectedExamOption !== null && (
+                        {selectedExamOption !== null && currentExamItem && (
                           <motion.div
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: "auto" }}
-                            className="p-3.5 rounded-xl border border-indigo-200/80 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 text-xs text-slate-700 dark:text-slate-300 space-y-1"
+                            className="p-3.5 rounded-xl border border-indigo-200/80 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 text-xs text-slate-700 dark:text-slate-300 space-y-2"
                           >
-                            <p className="font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                              <span>
-                                {selectedExamOption === currentExamItem.correctIndex
-                                  ? "Correct! Verified Key"
-                                  : `Review Note: Correct answer is Option ${String.fromCharCode(
-                                      65 + currentExamItem.correctIndex
-                                    )}`}
-                              </span>
-                            </p>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                <span>
+                                  {selectedExamOption === currentExamItem.correctIndex
+                                    ? "Correct! Verified Key"
+                                    : `Review Note: Correct answer is Option ${String.fromCharCode(
+                                        65 + currentExamItem.correctIndex
+                                      )}`}
+                                </span>
+                              </p>
+                              {activeQuestionIdx < activeQuestionList.length - 1 ? (
+                                <button
+                                  onClick={() => handleNavigateQuestion(activeQuestionIdx + 1)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs transition-colors cursor-pointer shadow-xs shrink-0"
+                                >
+                                  <span>Next</span>
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    if (autoAdvanceTimerRef.current) {
+                                      clearTimeout(autoAdvanceTimerRef.current);
+                                      autoAdvanceTimerRef.current = null;
+                                    }
+                                    setIsAutoAdvancing(false);
+                                    setIsPlaygroundComplete(true);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs transition-colors cursor-pointer shadow-xs shrink-0"
+                                >
+                                  <span>Finish & Review</span>
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                             <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
                               {currentExamItem.explanation}
                             </p>
                             {isAutoAdvancing && (
                               <p className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 pt-1.5 border-t border-indigo-200/50 dark:border-indigo-900/50">
-                                <Clock className="w-3 h-3 animate-spin" /> Moving to next question automatically...
+                                <Clock className="w-3 h-3 animate-spin" /> Moving to next question automatically (or click Next above)...
                               </p>
                             )}
                           </motion.div>

@@ -1619,6 +1619,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   const numberBlanks: { word: string; numeral: number; unitCategory: string; sentence: string; pageNumber: number; section: string; isConsistent: boolean; reason?: string }[] = [];
   const sectionCards: { sectionNum: string; title: string; pageNumber: number; quote: string }[] = [];
 
+  const fullDocText = pages.map((p) => p.text).join(" ");
+  const isRa6713 = /R\.?A\.?\s*6713|Republic\s+Act\s+No\.?\s*6713|Code\s+of\s+Conduct\s+and\s+Ethical\s+Standards/i.test(fullDocText);
+
   let currentRule = "";
   let currentSection = "General Provisions";
   chaptersDetected.push(currentSection);
@@ -1825,7 +1828,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   for (const t of normTerms) {
     const rawDef = trimStemPrefix(t.definition);
     const stemSnippet = rawDef.length > 250 ? rawDef.slice(0, 247) + "..." : rawDef;
-    let stem = `Under RA 6713, which norm of conduct is defined as: "${stemSnippet}"?`;
+    let stem = isRa6713
+      ? `Under RA 6713, which norm of conduct is defined as: "${stemSnippet}"?`
+      : `Which concept or principle is defined as: "${stemSnippet}"?`;
 
     const customDistractors = normDistractorSets[t.term];
     const siblingDistractors = customDistractors || generateSiblingTermDistractors(t.term, t.section, termPool);
@@ -1848,7 +1853,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       flashcardItems.push({
         id: generateUUID(),
         number: qNumber++,
-        stem: `Under RA 6713, which norm of conduct is defined as:\n"${rawDef}"?`,
+        stem: isRa6713
+          ? `Under RA 6713, which norm of conduct is defined as:\n"${rawDef}"?`
+          : `Which concept or principle is defined as:\n"${rawDef}"?`,
         options: [],
         correctIndex: -1,
         correctLetter: "",
@@ -1901,7 +1908,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     const rawDef = trimStemPrefix(t.definition);
     const stemSnippet = rawDef.length > 250 ? rawDef.slice(0, 247) + "..." : rawDef;
     const termNoun = getTermWordingNoun(t.section);
-    let stem = `Under RA 6713, which ${termNoun} is defined as: "${stemSnippet}"?`;
+    let stem = isRa6713
+      ? `Under RA 6713, which ${termNoun} is defined as: "${stemSnippet}"?`
+      : `Which ${termNoun} is defined as: "${stemSnippet}"?`;
 
     const customDistractors = termDistractorSets[t.term];
     const siblingDistractors = customDistractors || generateSiblingTermDistractors(t.term, t.section, termPool);
@@ -1929,7 +1938,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       flashcardItems.push({
         id: generateUUID(),
         number: qNumber++,
-        stem: `Under RA 6713, which ${termNoun} is defined as:\n"${rawDef}"?`,
+        stem: isRa6713
+          ? `Under RA 6713, which ${termNoun} is defined as:\n"${rawDef}"?`
+          : `Which ${termNoun} is defined as:\n"${rawDef}"?`,
         options: [],
         correctIndex: -1,
         correctLetter: "",
@@ -2074,13 +2085,15 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     seenDeadlineAnswers.add(nb.numeral);
 
     // Build fully contextualized, grounded stem with exact statutory quotes
-    let stem = `Complete the legal provision: "${blankedSentence}"`;
-    if (nb.numeral === 15) {
-      stem = 'Complete the legal provision under Section 5(a) of RA 6713: "All public officials and employees shall, within _____ working days from receipt thereof, respond to letters telegrams or other means of communications sent by the public."';
-    } else if (nb.numeral === 30) {
-      stem = 'Complete the legal provision under Section 8(a) of RA 6713: Statements of Assets, Liabilities and Net Worth (SALN) and financial disclosures must be filed "within _____ days after assumption of office".';
-    } else if (nb.numeral === 60) {
-      stem = 'Complete the legal provision under Section 9 of RA 6713: When a conflict of interest arises, a public official must divest himself of his shareholdings or interest "within _____ days from such assumption".';
+    let stem = `Complete the provision: "${blankedSentence}"`;
+    if (isRa6713) {
+      if (nb.numeral === 15) {
+        stem = 'Complete the legal provision under Section 5(a) of RA 6713: "All public officials and employees shall, within _____ working days from receipt thereof, respond to letters telegrams or other means of communications sent by the public."';
+      } else if (nb.numeral === 30) {
+        stem = 'Complete the legal provision under Section 8(a) of RA 6713: Statements of Assets, Liabilities and Net Worth (SALN) and financial disclosures must be filed "within _____ days after assumption of office".';
+      } else if (nb.numeral === 60) {
+        stem = 'Complete the legal provision under Section 9 of RA 6713: When a conflict of interest arises, a public official must divest himself of his shareholdings or interest "within _____ days from such assumption".';
+      }
     }
 
     const lintResult = lintDistractorQuality({
@@ -2122,7 +2135,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     flashcardItems.push({
       id: generateUUID(),
       number: qNumber++,
-      stem: `What is the subject matter of Section ${sc.sectionNum} of RA 6713?`,
+      stem: isRa6713
+        ? `What is the subject matter of Section ${sc.sectionNum} of RA 6713?`
+        : `What is the subject matter of Section ${sc.sectionNum}?`,
       options: [],
       correctIndex: -1,
       correctLetter: "",
@@ -2141,228 +2156,227 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   }
 
   // -------------------------------------------------------------
-  // 4. Rule-Based Variety Templates
+  // 4. Rule-Based Variety Templates (RA 6713 Statutory Specialization)
+  // Only generated when the document actually is RA 6713
   // -------------------------------------------------------------
+  if (isRa6713) {
+    // 4A. True / False Templates (3 items: 1 True, 2 False with swapped values)
+    // ALL stems are derived from real PDF sentences; false items swap exactly one number.
+    const tfItems: {
+      stem: string;
+      correctIsAnswer: "True" | "False";
+      explanation: string;
+      sourcePage: number;
+      sourceQuote: string;
+      chapter: string;
+    }[] = [
+      {
+        // TRUE — Sec. 9: covers both conditions (resign 30d AND/OR divest 60d)
+        stem: "Under Section 9 of RA 6713, when a conflict of interest arises, a public official shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption.",
+        correctIsAnswer: "True",
+        explanation:
+          'True. Section 9 of RA 6713 states: "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption."',
+        sourcePage: 9,
+        sourceQuote:
+          "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption.",
+        chapter: "Sec. 9 (Divestment)",
+      },
+      {
+        // FALSE — Sec. 5(a): real sentence says fifteen (15); we swap to forty-five (45)
+        stem: "Under Section 5(a) of RA 6713, all public officials and employees shall, within forty-five (45) working days from receipt thereof, respond to letters telegrams or other means of communications sent by the public.",
+        correctIsAnswer: "False",
+        explanation:
+          'False. Section 5(a) of RA 6713 requires a response "within fifteen (15) working days from receipt thereof", not forty-five (45) working days.',
+        sourcePage: 4,
+        sourceQuote:
+          "within fifteen (15) working days from receipt thereof, respond to letters telegrams or other means of communications sent by the public.",
+        chapter: "Sec. 5 (Duties of public Officials and Employees)",
+      },
+      {
+        // FALSE — Sec. 8(A): real sentence says thirty (30) days after assumption; we swap to sixty (60)
+        stem: "Under Section 8 of RA 6713, the Statement of Assets, Liabilities and Net Worth must be filed within sixty (60) days after assumption of office.",
+        correctIsAnswer: "False",
+        explanation:
+          'False. Section 8 of RA 6713 requires the SALN to be filed "(a) within thirty (30) days after assumption of office", not sixty (60) days.',
+        sourcePage: 7,
+        sourceQuote: "(a) within thirty (30) days after assumption of office;",
+        chapter: "Sec. 8 (Statements and Disclosure)",
+      },
+    ];
 
-  // 4A. True / False Templates (3 items: 1 True, 2 False with swapped values)
-  // ALL stems are derived from real PDF sentences; false items swap exactly one number.
-  const tfItems: {
-    stem: string;
-    correctIsAnswer: "True" | "False";
-    explanation: string;
-    sourcePage: number;
-    sourceQuote: string;
-    chapter: string;
-  }[] = [
-    {
-      // TRUE — Sec. 9: covers both conditions (resign 30d AND/OR divest 60d)
-      stem: "Under Section 9 of RA 6713, when a conflict of interest arises, a public official shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption.",
-      correctIsAnswer: "True",
-      explanation:
-        'True. Section 9 of RA 6713 states: "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption."',
-      sourcePage: 9,
-      sourceQuote:
-        "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption.",
-      chapter: "Sec. 9 (Divestment)",
-    },
-    {
-      // FALSE — Sec. 5(a): real sentence says fifteen (15); we swap to forty-five (45)
-      stem: "Under Section 5(a) of RA 6713, all public officials and employees shall, within forty-five (45) working days from receipt thereof, respond to letters telegrams or other means of communications sent by the public.",
-      correctIsAnswer: "False",
-      explanation:
-        'False. Section 5(a) of RA 6713 requires a response "within fifteen (15) working days from receipt thereof", not forty-five (45) working days.',
-      sourcePage: 4,
-      sourceQuote:
-        "within fifteen (15) working days from receipt thereof, respond to letters telegrams or other means of communications sent by the public.",
-      chapter: "Sec. 5 (Duties of public Officials and Employees)",
-    },
-    {
-      // FALSE — Sec. 8(A): real sentence says thirty (30) days after assumption; we swap to sixty (60)
-      stem: "Under Section 8 of RA 6713, the Statement of Assets, Liabilities and Net Worth must be filed within sixty (60) days after assumption of office.",
-      correctIsAnswer: "False",
-      explanation:
-        'False. Section 8 of RA 6713 requires the SALN to be filed "(a) within thirty (30) days after assumption of office", not sixty (60) days.',
-      sourcePage: 7,
-      sourceQuote: "(a) within thirty (30) days after assumption of office;",
-      chapter: "Sec. 8 (Statements and Disclosure)",
-    },
-  ];
+    for (const tf of tfItems) {
+      const options = ["True", "False"];
+      const correctIndex = tf.correctIsAnswer === "True" ? 0 : 1;
+      templateCounts.true_false = (templateCounts.true_false || 0) + 1;
+      candidateMcqs.push({
+        id: generateUUID(),
+        number: qNumber++,
+        stem: tf.stem,
+        options,
+        correctIndex,
+        correctLetter: ["a", "b"][correctIndex],
+        explanation: tf.explanation,
+        chapter: tf.chapter,
+        pageNumber: tf.sourcePage,
+        sourcePage: tf.sourcePage,
+        sourceQuote: tf.sourceQuote,
+        questionType: "mcq",
+        reviewStatus: "verified",
+        templateType: "true_false",
+        isSuspicious: false,
+        suspiciousReasons: [],
+      });
+    }
 
-  for (const tf of tfItems) {
-    const options = ["True", "False"];
-    const correctIndex = tf.correctIsAnswer === "True" ? 0 : 1;
-    templateCounts.true_false = (templateCounts.true_false || 0) + 1;
-    candidateMcqs.push({
-      id: generateUUID(),
-      number: qNumber++,
-      stem: tf.stem,
-      options,
-      correctIndex,
-      correctLetter: ["a", "b"][correctIndex],
-      explanation: tf.explanation,
-      chapter: tf.chapter,
-      pageNumber: tf.sourcePage,
-      sourcePage: tf.sourcePage,
-      sourceQuote: tf.sourceQuote,
-      questionType: "mcq",
-      reviewStatus: "verified",
-      templateType: "true_false",
-      isSuspicious: false,
-      suspiciousReasons: [],
-    });
-  }
+    // 4B. Negative Choice: "Which of the following is NOT..." (3 items with real statutory concepts)
+    // Uses real duties or prohibited acts from the same document
+    const negativeItems: {
+      stem: string;
+      oddOption: string;
+      realNorms: string[];
+      explanation: string;
+      sourcePage: number;
+      sourceQuote: string;
+      chapter: string;
+    }[] = [
+      {
+        // Sec. 4 Norms NOT question — odd option is real prohibited act from Sec. 7(b)
+        stem: "Under Section 4 of RA 6713, which of the following is NOT recognized as one of the eight statutory norms of conduct for public officials and employees?",
+        oddOption: "Private practice of profession",
+        realNorms: ["Commitment to public interest", "Political neutrality", "Simple living"],
+        explanation:
+          '"Private practice of profession" is a prohibited conflict of interest regulated under Section 7(b) of RA 6713, which states: "Engage in the private practice of their profession unless authorized by the Constitution or law, provided that such practice will not conflict or tend to conflict with their official functions." It is not one of the eight norms of conduct under Section 4.',
+        sourcePage: 5,
+        sourceQuote:
+          "Engage in the private practice of their profession unless authorized by the Constitution or law, provided that such practice will not conflict or tend to conflict with their official functions.",
+        chapter: "Sec. 4 (Norms of Conduct)",
+      },
+      {
+        // Sec. 5 Duties NOT question — odd option is real prohibited act from Sec. 7(a)
+        // Distractors use duties from Sec. 5 that do not collide with other negative items
+        stem: "Under Section 5 of RA 6713, which of the following is NOT an enumerated statutory duty of public officials and employees?",
+        oddOption: "Financial and material interest",
+        realNorms: [
+          "Act promptly on letters and requests",
+          "Act immediately on the public's personal transactions",
+          "Submit annual performance reports",
+        ],
+        explanation:
+          '"Financial and material interest" is a prohibited act and transaction governed by Section 7(a) of RA 6713 ("Public officials and employees shall not, directly and indirectly, have any financial or material interest in any transaction requiring the approval of their office."). It is not one of the statutory duties under Section 5.',
+        sourcePage: 5,
+        sourceQuote:
+          "Public officials and employees shall not, directly and indirectly, have any financial or material interest in any transaction requiring the approval of their office.",
+        chapter: "Sec. 5 (Duties of public Officials and Employees)",
+      },
+      {
+        // Sec. 7 Prohibited Acts NOT question — odd option is real duty from Sec. 5(c)
+        // Distractors use prohibited acts from Sec. 7 that do not collide with other negative items
+        stem: "Under Section 7 of RA 6713, which of the following is NOT a prohibited act or transaction for public officials and employees?",
+        oddOption: "Process documents and papers expeditiously",
+        realNorms: [
+          "Outside employment in private enterprises",
+          "Disclosure and/or misuse of confidential information",
+          "Solicitation or acceptance of gifts",
+        ],
+        explanation:
+          '"Process documents and papers expeditiously" is an affirmative statutory duty established under Section 5(c) of RA 6713 ("All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein."). It is not a prohibited act under Section 7.',
+        sourcePage: 4,
+        sourceQuote:
+          "All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein.",
+        chapter: "Sec. 7 (Prohibited Acts and Transactions)",
+      },
+    ];
 
-  // 4B. Negative Choice: "Which of the following is NOT..." (3 items with real statutory concepts)
-  // Uses real duties or prohibited acts from the same document
-  const negativeItems: {
-    stem: string;
-    oddOption: string;
-    realNorms: string[];
-    explanation: string;
-    sourcePage: number;
-    sourceQuote: string;
-    chapter: string;
-  }[] = [
-    {
-      // Sec. 4 Norms NOT question — odd option is real prohibited act from Sec. 7(b)
-      stem: "Under Section 4 of RA 6713, which of the following is NOT recognized as one of the eight statutory norms of conduct for public officials and employees?",
-      oddOption: "Private practice of profession",
-      realNorms: ["Commitment to public interest", "Political neutrality", "Simple living"],
-      explanation:
-        '"Private practice of profession" is a prohibited conflict of interest regulated under Section 7(b) of RA 6713, which states: "Engage in the private practice of their profession unless authorized by the Constitution or law, provided that such practice will not conflict or tend to conflict with their official functions." It is not one of the eight norms of conduct under Section 4.',
-      sourcePage: 5,
-      sourceQuote:
-        "Engage in the private practice of their profession unless authorized by the Constitution or law, provided that such practice will not conflict or tend to conflict with their official functions.",
-      chapter: "Sec. 4 (Norms of Conduct)",
-    },
-    {
-      // Sec. 5 Duties NOT question — odd option is real prohibited act from Sec. 7(a)
-      // Distractors use duties from Sec. 5 that do not collide with other negative items
-      stem: "Under Section 5 of RA 6713, which of the following is NOT an enumerated statutory duty of public officials and employees?",
-      oddOption: "Financial and material interest",
-      realNorms: [
-        "Act promptly on letters and requests",
-        "Act immediately on the public's personal transactions",
-        "Submit annual performance reports",
-      ],
-      explanation:
-        '"Financial and material interest" is a prohibited act and transaction governed by Section 7(a) of RA 6713 ("Public officials and employees shall not, directly and indirectly, have any financial or material interest in any transaction requiring the approval of their office."). It is not one of the statutory duties under Section 5.',
-      sourcePage: 5,
-      sourceQuote:
-        "Public officials and employees shall not, directly and indirectly, have any financial or material interest in any transaction requiring the approval of their office.",
-      chapter: "Sec. 5 (Duties of public Officials and Employees)",
-    },
-    {
-      // Sec. 7 Prohibited Acts NOT question — odd option is real duty from Sec. 5(c)
-      // Distractors use prohibited acts from Sec. 7 that do not collide with other negative items
-      stem: "Under Section 7 of RA 6713, which of the following is NOT a prohibited act or transaction for public officials and employees?",
-      oddOption: "Process documents and papers expeditiously",
-      realNorms: [
-        "Outside employment in private enterprises",
-        "Disclosure and/or misuse of confidential information",
-        "Solicitation or acceptance of gifts",
-      ],
-      explanation:
-        '"Process documents and papers expeditiously" is an affirmative statutory duty established under Section 5(c) of RA 6713 ("All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein."). It is not a prohibited act under Section 7.',
-      sourcePage: 4,
-      sourceQuote:
-        "All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein.",
-      chapter: "Sec. 7 (Prohibited Acts and Transactions)",
-    },
-  ];
+    for (const neg of negativeItems) {
+      const options = [neg.oddOption, ...neg.realNorms].sort();
+      const correctIndex = options.indexOf(neg.oddOption);
+      templateCounts.negative_choice = (templateCounts.negative_choice || 0) + 1;
+      candidateMcqs.push({
+        id: generateUUID(),
+        number: qNumber++,
+        stem: neg.stem,
+        options,
+        correctIndex,
+        correctLetter: ["a", "b", "c", "d"][correctIndex],
+        explanation: neg.explanation,
+        chapter: neg.chapter,
+        pageNumber: neg.sourcePage,
+        sourcePage: neg.sourcePage,
+        sourceQuote: neg.sourceQuote,
+        questionType: "mcq",
+        reviewStatus: "verified",
+        templateType: "negative_choice",
+        isSuspicious: false,
+        suspiciousReasons: [],
+      });
+    }
 
-  for (const neg of negativeItems) {
-    const options = [neg.oddOption, ...neg.realNorms].sort();
-    const correctIndex = options.indexOf(neg.oddOption);
-    templateCounts.negative_choice = (templateCounts.negative_choice || 0) + 1;
-    candidateMcqs.push({
-      id: generateUUID(),
-      number: qNumber++,
-      stem: neg.stem,
-      options,
-      correctIndex,
-      correctLetter: ["a", "b", "c", "d"][correctIndex],
-      explanation: neg.explanation,
-      chapter: neg.chapter,
-      pageNumber: neg.sourcePage,
-      sourcePage: neg.sourcePage,
-      sourceQuote: neg.sourceQuote,
-      questionType: "mcq",
-      reviewStatus: "verified",
-      templateType: "negative_choice",
-      isSuspicious: false,
-      suspiciousReasons: [],
-    });
-  }
+    // 4C. Matching Set for the 8 Norms (4 items sharing one canonical option list, exact source clauses)
+    const NORMS_CANONICAL_OPTIONS = [
+      "Commitment to democracy",
+      "Commitment to public interest",
+      "Justness and sincerity",
+      "Nationalism and patriotism",
+      "Political neutrality",
+      "Professionalism",
+      "Responsiveness to the public",
+      "Simple living",
+    ];
 
-  // 4C. Matching Set for the 8 Norms (4 items sharing one canonical option list, exact source clauses)
-  const NORMS_CANONICAL_OPTIONS = [
-    "Commitment to democracy",
-    "Commitment to public interest",
-    "Justness and sincerity",
-    "Nationalism and patriotism",
-    "Political neutrality",
-    "Professionalism",
-    "Responsiveness to the public",
-    "Simple living",
-  ];
+    const matchingDefinitions = [
+      {
+        norm: "Nationalism and patriotism",
+        clause: "shall at all times be loyal to the Republic and to the Filipino people, promote the use of locally-produced goods, resources and technology and encourage appreciation and pride of the country and people. They shall endeavor to maintain and defend Philippine sovereignty against foreign intrusion",
+        rawQuote:
+          "(f) Nationalism and patriotism. - Public officials and employees shall at all times be loyal to the Republic and to the Filipino people, promote the use of locally-produced goods, resources and technology and encourage appreciation and pride of the country and people. They shall endeavor to maintain and defend Philippine sovereignty against foreign intrusion.",
+        itemNum: 1,
+        sourcePage: 3,
+      },
+      {
+        norm: "Professionalism",
+        clause: "shall perform and discharge their duties with the highest degree of excellence, [______], intelligence and skill. They shall enter public service with utmost devotion and dedication to duty. They shall endeavor to discourage wrong perceptions of their roles as dispensers or peddlers of undue patronage",
+        rawQuote: "(b) Professionalism. - Public officials and employees shall perform and discharge their duties with the highest degree of excellence, professionalism, intelligence and skill. They shall enter public service with utmost devotion and dedication to duty. They shall endeavor to discourage wrong perceptions of their roles as dispensers or peddlers of undue patronage.",
+        itemNum: 2,
+        sourcePage: 3,
+      },
+      {
+        norm: "Responsiveness to the public",
+        clause: "shall extend prompt, courteous, and adequate service to [______]. Unless otherwise provided by law or when required by [______], public officials and employees shall provide information on their policies and procedures in clear and understandable language, ensure openness of information",
+        rawQuote: "(e) Responsiveness to the public. - Public officials and employees shall extend prompt, courteous, and adequate service to the public. Unless otherwise provided by law or when required by the public interest, public officials and employees shall provide information on their policies and procedures in clear and understandable language, ensure openness of information",
+        itemNum: 3,
+        sourcePage: 3,
+      },
+      {
+        norm: "Simple living",
+        clause: "Public officials and employees and their families shall lead modest lives appropriate to their positions and income. They shall not indulge in extravagant or ostentatious display of wealth in any form",
+        rawQuote: "(h) Simple living. - Public officials and employees and their families shall lead modest lives appropriate to their positions and income. They shall not indulge in extravagant or ostentatious display of wealth in any form.",
+        itemNum: 4,
+        sourcePage: 4,
+      },
+    ];
 
-  const matchingDefinitions = [
-    {
-      // Changed from "Commitment to public interest" (covered by norm_definition MCQs)
-      // to "Nationalism and patriotism" to avoid cross-template enemy duplication.
-      // Masking: don't mask words not part of the answer (Philippine)
-      norm: "Nationalism and patriotism",
-      clause: "shall at all times be loyal to the Republic and to the Filipino people, promote the use of locally-produced goods, resources and technology and encourage appreciation and pride of the country and people. They shall endeavor to maintain and defend Philippine sovereignty against foreign intrusion",
-      rawQuote:
-        "(f) Nationalism and patriotism. - Public officials and employees shall at all times be loyal to the Republic and to the Filipino people, promote the use of locally-produced goods, resources and technology and encourage appreciation and pride of the country and people. They shall endeavor to maintain and defend Philippine sovereignty against foreign intrusion.",
-      itemNum: 1,
-      sourcePage: 3,
-    },
-    {
-      norm: "Professionalism",
-      clause: "shall perform and discharge their duties with the highest degree of excellence, [______], intelligence and skill. They shall enter public service with utmost devotion and dedication to duty. They shall endeavor to discourage wrong perceptions of their roles as dispensers or peddlers of undue patronage",
-      rawQuote: "(b) Professionalism. - Public officials and employees shall perform and discharge their duties with the highest degree of excellence, professionalism, intelligence and skill. They shall enter public service with utmost devotion and dedication to duty. They shall endeavor to discourage wrong perceptions of their roles as dispensers or peddlers of undue patronage.",
-      itemNum: 2,
-      sourcePage: 3,
-    },
-    {
-      norm: "Responsiveness to the public",
-      clause: "shall extend prompt, courteous, and adequate service to [______]. Unless otherwise provided by law or when required by [______], public officials and employees shall provide information on their policies and procedures in clear and understandable language, ensure openness of information",
-      rawQuote: "(e) Responsiveness to the public. - Public officials and employees shall extend prompt, courteous, and adequate service to the public. Unless otherwise provided by law or when required by the public interest, public officials and employees shall provide information on their policies and procedures in clear and understandable language, ensure openness of information",
-      itemNum: 3,
-      sourcePage: 3,
-    },
-    {
-      norm: "Simple living",
-      clause: "Public officials and employees and their families shall lead modest lives appropriate to their positions and income. They shall not indulge in extravagant or ostentatious display of wealth in any form",
-      rawQuote: "(h) Simple living. - Public officials and employees and their families shall lead modest lives appropriate to their positions and income. They shall not indulge in extravagant or ostentatious display of wealth in any form.",
-      itemNum: 4,
-      sourcePage: 4,
-    },
-  ];
-
-  for (const md of matchingDefinitions) {
-    const correctIndex = NORMS_CANONICAL_OPTIONS.indexOf(md.norm);
-    templateCounts.matching_set = (templateCounts.matching_set || 0) + 1;
-    candidateMcqs.push({
-      id: generateUUID(),
-      number: qNumber++,
-      stem: `[Matching Set: Norms of Conduct - Item ${md.itemNum}/4] Under Section 4 of RA 6713, which statutory norm requires government officials and employees to: "${md.clause}"?`,
-      options: [...NORMS_CANONICAL_OPTIONS],
-      correctIndex,
-      correctLetter: ["a", "b", "c", "d", "e", "f", "g", "h"][correctIndex],
-      explanation: `Correct: ${md.norm}. Defined under Section 4: "${md.rawQuote}".`,
-      chapter: "Sec. 4 (Norms of Conduct)",
-      pageNumber: md.sourcePage || 3,
-      sourcePage: md.sourcePage || 3,
-      sourceQuote: md.rawQuote,
-      questionType: "mcq",
-      reviewStatus: "verified",
-      templateType: "matching_set",
-      isSuspicious: false,
-      suspiciousReasons: [],
-    });
+    for (const md of matchingDefinitions) {
+      const correctIndex = NORMS_CANONICAL_OPTIONS.indexOf(md.norm);
+      templateCounts.matching_set = (templateCounts.matching_set || 0) + 1;
+      candidateMcqs.push({
+        id: generateUUID(),
+        number: qNumber++,
+        stem: `[Matching Set: Norms of Conduct - Item ${md.itemNum}/4] Under Section 4 of RA 6713, which statutory norm requires government officials and employees to: "${md.clause}"?`,
+        options: [...NORMS_CANONICAL_OPTIONS],
+        correctIndex,
+        correctLetter: ["a", "b", "c", "d", "e", "f", "g", "h"][correctIndex],
+        explanation: `Correct: ${md.norm}. Defined under Section 4: "${md.rawQuote}".`,
+        chapter: "Sec. 4 (Norms of Conduct)",
+        pageNumber: md.sourcePage || 3,
+        sourcePage: md.sourcePage || 3,
+        sourceQuote: md.rawQuote,
+        questionType: "mcq",
+        reviewStatus: "verified",
+        templateType: "matching_set",
+        isSuspicious: false,
+        suspiciousReasons: [],
+      });
+    }
   }
 
   // -------------------------------------------------------------
