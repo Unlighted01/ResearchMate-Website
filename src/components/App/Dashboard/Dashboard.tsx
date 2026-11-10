@@ -43,6 +43,7 @@ import ConfirmDialog from "../../shared/ConfirmDialog";
 import { useDashboardData } from "./useDashboardData";
 import { useDashboardActions } from "./useDashboardActions";
 import { useIngestion } from "../../../context/IngestionContext";
+import { getPlaygroundPendingPdf, clearPlaygroundPendingPdf } from "../../../services/localPdfStore";
 import DashboardHeader from "./DashboardHeader";
 import DashboardToolbar from "./DashboardToolbar";
 import DashboardStatsBar from "./DashboardStatsBar";
@@ -80,11 +81,65 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const data = useDashboardData(showToast);
 
   // ---------- PART 3B: ACTIONS HOOK ----------
-  const { batch } = useIngestion();
+  const { batch, ingestFiles } = useIngestion();
   const [readinessStats, setReadinessStats] = React.useState<ExamReadinessStats>(() => getReadinessStats());
   const [isSprintModalOpen, setIsSprintModalOpen] = React.useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
   const [bankStats, setBankStats] = React.useState<QuestionBankStats>(() => getBankStats());
+
+  // ---------- AUTOMATIC PLAYGROUND PDF HANDOVER ----------
+  // If a guest tested a PDF on the landing page playground and then logged in / registered,
+  // automatically ingest that document and import all its parsed questions into their dashboard!
+  React.useEffect(() => {
+    let isMounted = true;
+    const checkPlaygroundHandover = async () => {
+      try {
+        const pending = await getPlaygroundPendingPdf();
+        if (!pending || !isMounted) return;
+
+        // Ingest document into library
+        await ingestFiles([pending.file]);
+
+        // If questions were parsed from the document, also populate question bank with ALL questions
+        if (pending.allParsedQuestions && pending.allParsedQuestions.length > 0) {
+          try {
+            const { importQuestionsToBank } = await import(
+              "../../../services/questionImportService"
+            );
+            await importQuestionsToBank({
+              rawQuestions: pending.allParsedQuestions,
+              sourceFile: pending.file.name,
+              origin: "pdf_import",
+            });
+            if (isMounted) {
+              setBankStats(getBankStats());
+            }
+          } catch (bankErr) {
+            console.warn("Playground Question Bank handover warning:", bankErr);
+          }
+        }
+
+        // Clean up temporary playground store so it only runs once
+        await clearPlaygroundPendingPdf();
+
+        showToast(
+          `🎉 "${pending.file.name}" from your playground preview was added to your dashboard with all full features unlocked!`,
+          "success"
+        );
+
+        // Refresh items list
+        data.fetchItems();
+      } catch (err) {
+        console.error("Failed to complete playground handover:", err);
+      }
+    };
+
+    checkPlaygroundHandover();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [ingestFiles, showToast, data]);
   const actions = useDashboardActions({
     items: data.items,
     setItems: data.setItems,
