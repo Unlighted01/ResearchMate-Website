@@ -27,7 +27,7 @@ import {
   deleteExam,
   getAllFlashcardDecks,
   deleteFlashcardDeck,
-  ExamRecord,
+  StoredExam,
   FlashcardDeckRecord,
 } from "../../../services/examService";
 import {
@@ -117,8 +117,8 @@ export interface UseDashboardDataReturn {
   setAdvancedFilters: (filters: SearchFilters) => void;
 
   // Multi-Engine Assets
-  exams: ExamRecord[];
-  filteredExams: ExamRecord[];
+  exams: StoredExam[];
+  filteredExams: StoredExam[];
   decks: FlashcardDeckRecord[];
   filteredDecks: FlashcardDeckRecord[];
   batches: ImportBatch[];
@@ -177,7 +177,7 @@ export function useDashboardData(
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Multi-Engine Assets
-  const [exams, setExams] = useState<ExamRecord[]>([]);
+  const [exams, setExams] = useState<StoredExam[]>([]);
   const [decks, setDecks] = useState<FlashcardDeckRecord[]>([]);
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [assetTab, setAssetTab] = useState<"all" | "exams" | "flashcards" | "bank" | "materials">("all");

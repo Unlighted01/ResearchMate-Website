@@ -127,9 +127,8 @@ export interface ExamSeedRecord {
   orderedQuestionIds: string[];
   permutations: Record<string, QuestionPermutationRecord>;
   answerKey: number[]; // resolved newCorrectIndex for each question in order
+  isLegacy?: boolean; // True for backfilled legacy exams
 }
-
-export type ExamRecord = ExamSeedRecord; // Backwards-compatibility alias
 
 const STORAGE_KEY = "researchmate_exam_records_v1";
 
@@ -382,6 +381,91 @@ export function generateQrPayload(
     p: pageNumber,
     t: totalPages,
   });
+}
+
+/**
+ * Rebuilds the exact assembled questions, choice order, and answer key from an
+ * immutable ExamSeedRecord and the original unpermuted bank questions.
+ */
+export function rebuildExamFromSeedRecord(
+  bankQuestions: readonly Question[],
+  seedRecord: ExamSeedRecord
+): Question[] {
+  const bankMap = new Map<string, Question>();
+  for (const q of bankQuestions) {
+    bankMap.set(q.id, q);
+  }
+
+  const rebuilt: Question[] = [];
+  for (const qId of seedRecord.orderedQuestionIds) {
+    const origQ = bankMap.get(qId);
+    if (!origQ) continue;
+
+    const perm = seedRecord.permutations[qId];
+    if (!perm) {
+      rebuilt.push(origQ);
+      continue;
+    }
+
+    const permutedOptions = perm.choiceOrder.map((origIdx) => origQ.options[origIdx]);
+    rebuilt.push({
+      ...origQ,
+      options: permutedOptions,
+      correctIndex: perm.newCorrectIndex,
+    });
+  }
+
+  return rebuilt;
+}
+
+/**
+ * Builds a backward-compatible ExamSeedRecord for legacy exams saved without one.
+ * Uses an identity permutation (choiceOrder = [0, 1, 2, ...]) matching the stored
+ * question and option order, marked as isLegacy: true. Safe to run repeatedly.
+ */
+export function buildLegacySeedRecord(exam: {
+  id: string;
+  seed?: string;
+  questions: Question[];
+  created_at?: string;
+  config?: ExamRecordConfig | any;
+}): ExamSeedRecord {
+  const seed = (exam.seed || "").trim() || `LEGACY-${exam.id.slice(0, 8).toUpperCase()}`;
+  const orderedQuestionIds: string[] = [];
+  const permutations: Record<string, QuestionPermutationRecord> = {};
+  const answerKey: number[] = [];
+
+  for (let i = 0; i < (exam.questions || []).length; i++) {
+    const q = exam.questions[i];
+    orderedQuestionIds.push(q.id);
+    const choiceCount = q.options?.length || 4;
+    const identityOrder = Array.from({ length: choiceCount }, (_, idx) => idx);
+    const correctIdx = typeof q.correctIndex === "number" ? q.correctIndex : 0;
+
+    permutations[q.id] = {
+      questionId: q.id,
+      choiceOrder: identityOrder,
+      originalCorrectIndex: correctIdx,
+      newCorrectIndex: correctIdx,
+    };
+    answerKey.push(correctIdx);
+  }
+
+  return {
+    examId: exam.id,
+    formatVersion: 1, // Legacy format
+    seed,
+    createdAt: exam.created_at ? Date.parse(exam.created_at) || Date.now() : Date.now(),
+    config: {
+      totalQuestions: (exam.questions || []).length,
+      choicesPerItem: 4,
+      ...(exam.config || {}),
+    },
+    orderedQuestionIds,
+    permutations,
+    answerKey,
+    isLegacy: true,
+  };
 }
 
 /**

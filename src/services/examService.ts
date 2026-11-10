@@ -24,6 +24,8 @@ import {
   getExamRecordBySeed,
   saveExamRecord,
   generateSeedCode,
+  buildLegacySeedRecord,
+  rebuildExamFromSeedRecord,
 } from "./examSeedService";
 
 // ============================================
@@ -78,8 +80,6 @@ export interface StoredExam {
   created_at: string;
   updated_at: string;
 }
-
-export type ExamRecord = StoredExam; // Backwards-compatibility alias
 
 export interface ExamAttemptRecord {
   id: string;
@@ -377,6 +377,60 @@ export async function saveExam(
   return { ...record, syncStatus: "failed", syncError: errorMsg };
 }
 
+/**
+ * For legacy exams stored before seed_record persistence was added:
+ * Generates an identity ExamSeedRecord preserving the stored question and choice order,
+ * caches it in local recordsCache, and attaches it to the exam so it can be printed via OMR.
+ * Idempotent: safe to run multiple times.
+ */
+export function backfillLegacyExamSeedRecord(exam: StoredExam): { exam: StoredExam; backfilled: boolean } {
+  if (
+    exam.seed_record &&
+    Array.isArray(exam.seed_record.answerKey) &&
+    exam.seed_record.answerKey.length > 0 &&
+    exam.seed_record.permutations &&
+    Object.keys(exam.seed_record.permutations).length > 0
+  ) {
+    saveExamRecord(exam.seed_record);
+    return { exam, backfilled: false };
+  }
+
+  const seedRecord = buildLegacySeedRecord(exam);
+  saveExamRecord(seedRecord);
+
+  const updated: StoredExam = {
+    ...exam,
+    seed: exam.seed && exam.seed.trim() ? exam.seed : seedRecord.seed,
+    seed_record: seedRecord,
+  };
+
+  return { exam: updated, backfilled: true };
+}
+
+/**
+ * One-time or on-demand backfill for all locally stored exams missing seed records.
+ * Safe to run multiple times (idempotent).
+ */
+export function backfillLegacyExams(): { backfilledCount: number; updatedExams: StoredExam[] } {
+  const current = getLocalExams();
+  let backfilledCount = 0;
+  const updatedExams: StoredExam[] = [];
+
+  for (const exam of current) {
+    const { exam: updated, backfilled } = backfillLegacyExamSeedRecord(exam);
+    if (backfilled) {
+      backfilledCount++;
+    }
+    updatedExams.push(updated);
+  }
+
+  if (backfilledCount > 0) {
+    saveLocalExams(updatedExams);
+  }
+
+  return { backfilledCount, updatedExams };
+}
+
 export async function getAllExams(): Promise<StoredExam[]> {
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
@@ -390,20 +444,17 @@ export async function getAllExams(): Promise<StoredExam[]> {
         .order("updated_at", { ascending: false });
 
       if (!error && data) {
-        for (const row of data) {
-          if (row.seed_record) {
-            saveExamRecord(row.seed_record);
-          }
-        }
-        saveLocalExams(data); // update read cache
-        return data;
+        const normalized = data.map((row) => backfillLegacyExamSeedRecord(row).exam);
+        saveLocalExams(normalized); // update read cache
+        return normalized;
       }
     } catch (err) {
       console.warn("Failed to fetch exams from Supabase, using local cache:", err);
     }
   }
 
-  return getLocalExams();
+  const local = getLocalExams();
+  return local.map((exam) => backfillLegacyExamSeedRecord(exam).exam);
 }
 
 export async function getExamById(examId: string): Promise<StoredExam | null> {
@@ -419,10 +470,8 @@ export async function getExamById(examId: string): Promise<StoredExam | null> {
         .maybeSingle();
 
       if (!error && data) {
-        if (data.seed_record) {
-          saveExamRecord(data.seed_record);
-        }
-        return data;
+        const { exam } = backfillLegacyExamSeedRecord(data);
+        return exam;
       }
     } catch (err) {
       console.warn("Failed to fetch exam by ID from Supabase:", err);
@@ -430,7 +479,8 @@ export async function getExamById(examId: string): Promise<StoredExam | null> {
   }
 
   const local = getLocalExams();
-  return local.find((e) => e.id === examId) || null;
+  const found = local.find((e) => e.id === examId) || null;
+  return found ? backfillLegacyExamSeedRecord(found).exam : null;
 }
 
 export async function deleteExam(examId: string): Promise<boolean> {
