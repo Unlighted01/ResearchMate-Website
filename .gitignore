@@ -44,6 +44,7 @@ lerna-debug.log*
 .agents/
 .claude/
 scratch/
+reports/
 CLAUDE.md
 CLAUDE_CODE_SETUP.md
 api/AGENTS.md
