@@ -4,13 +4,13 @@ The full-stack web platform for ResearchMate - part of the ResearchMate ecosyste
 
 ## 🚀 Features
 
-- **Dashboard** - View and manage all research items from any device
-- **AI Assistant** - Chat with AI about your research
-- **Collections** - Organize research into custom collections
-- **Real-time Sync** - See updates from extension/mobile/smart pen instantly
-- **Statistics** - Track your research habits and patterns
-- **Smart Pen Gallery** - View and manage handwritten note scans
-- **Bulk Image Import** - Import multiple JPG/PNG captures at once from Settings → Import; each image is run through the OCR pipeline (`api/ocr.ts`) and saved as a `smart_pen` item
+- **Board-Grade Mock Exam Engine** - Seeded PRNG (`mulberry32`), balanced answer keys, and timed practice testing with physical OMR answer sheet planning (A–D, T/F 2-bubble, matching 8-bubble).
+- **Deterministic PDF Ingestion** - 2-pass layout-aware extractor converting statutory codes, syllabi, and textbooks into grounded MCQs, negative-choice items, deadline blanks, and flashcard decks.
+- **Local-First Question Bank** - $0 runtime API cost, high-capacity browser IndexedDB storage, batch rollback, and psychometric enemy-item cluing elimination.
+- **Document Studio** - Split-screen PDF reader with in-text citation pins, note highlights, and LaTeX formula manuscript editing (TipTap).
+- **AI Research Assistant & RAG** - Multi-paper literature review synthesis matrix, hybrid vector search, and document-scoped chat.
+- **Multimodal & Smart Pen OCR** - Ingest handwritten notebook and whiteboard derivations directly into LaTeX math and editable review items.
+- **Real-Time Sync & Monetization** - Supabase real-time sync with browser extension, mobile app, and PayMongo tier checkout.
 
 ## 📋 Prerequisites
 
@@ -62,25 +62,27 @@ npm run dev
 
 Open [YOUR_SITE_URL](YOUR_SITE_URL) in your browser.
 
-## 🏗️ Project Structure
+## 🏗️ Project Architecture & Engines
+
+For an exhaustive architectural walkthrough of all 28 services, psychometric engines, file hierarchies, and the multimodal ingestion pipeline, see [docs/CODEBASE_OVERVIEW.md](file:///c:/Users/netne/ReserachMate/Researchmate%20Website/docs/CODEBASE_OVERVIEW.md).
 
 ```
-researchmate-website/
-├── components/           # React components
-│   ├── Layouts.tsx       # Marketing & Dashboard layouts
-│   └── UIComponents.tsx  # Reusable UI components
-├── services/             # Backend services
-│   ├── supabaseClient.ts # Supabase auth & database
-│   ├── geminiService.ts  # AI/Gemini integration
-│   └── storageService.ts # Research items CRUD
-├── lib/                  # Utility libraries
-│   └── validation.ts     # Input validation
-├── App.tsx               # Main app with routes
-├── types.ts              # TypeScript definitions
-├── index.tsx             # React entry point
-├── index.html            # HTML template
-├── vite.config.ts        # Vite configuration
-└── .env.local            # Environment variables (git-ignored)
+ResearchMate Platform
+├── Exam & Assessment Engine
+│   ├── Deterministic PDF Ingestion (pdfQuestionImporter.ts)
+│   ├── Psychometric Quality & Linting (distractorQualityService.ts)
+│   ├── Seeded PRNG Shuffling & Answer Keys (examSeedService.ts)
+│   ├── Local-First Question Bank & IndexedDB (questionBankService.ts)
+│   └── Answer Sheet Layout Planner (choicesPerItem: 2, 4, 5, 8 bubbles)
+├── Research & Document Studio
+│   ├── PDF Studio with In-Text Citations (DocumentStudio.tsx)
+│   ├── TipTap LaTeX Manuscript Editor (StudioNoteEditor.tsx)
+│   ├── Literature Review Comparative Matrix (api/literature-matrix.ts)
+│   └── 3D Citation Force Graph (CollectionsPage)
+└── Multimodal & Offline Sync
+    ├── Gemini Vision OCR for Handwritten STEM & Notes (api/ocr.ts)
+    ├── Smart Pen / Mobile Photo Gallery Ingestion
+    └── Supabase Real-Time Database & Auth
 ```
 
 ## 🔧 Available Scripts
