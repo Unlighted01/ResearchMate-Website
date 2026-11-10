@@ -21,7 +21,7 @@ import {
   SlidersHorizontal,
   Plus,
 } from "lucide-react";
-import { Question, Flashcard, saveFlashcardDeck } from "../../../services/examService";
+import { Question, Flashcard, saveFlashcardDeck, saveExam, generateUUID } from "../../../services/examService";
 import { parsePlainTextQuestions, parseCsvQuestions, ParseResult } from "../../../services/examParser";
 import { extractAllPagesWithLayout } from "../../../services/pdfService";
 import {
@@ -301,6 +301,45 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
         explanation: q.explanation || "",
         topicTag: q.chapter || subjectName,
       }));
+
+      // Automatically register a ready-to-take ExamRecord so the user sees it in Dashboard & Exams workspace
+      const docCleanTitle = (fileName || subjectName || "Imported Material").replace(/\.[^/.]+$/, "").trim();
+      const examTitle = `${docCleanTitle} Practice Exam`;
+      await saveExam({
+        title: examTitle,
+        source_document_title: fileName || subjectName,
+        questions: validQuestions,
+        config: {
+          difficulty: "mixed",
+          timedMode: false,
+          benchmarkScore: 80,
+          sections: [
+            {
+              name: subjectName || "General Assessment",
+              questionCount: validQuestions.length,
+              mode: "grounded",
+            },
+          ],
+        },
+      }).catch((err) => console.warn("Auto-registering exam record failed:", err));
+
+      // Automatically generate a companion active-recall flashcard deck
+      const flashcards: Flashcard[] = validQuestions.map((q) => {
+        const letter = String.fromCharCode(65 + q.correctIndex);
+        return {
+          id: generateUUID(),
+          front: q.question,
+          back: `**Correct Answer:** Option ${letter}: ${q.options[q.correctIndex] || ""}\n\n**Explanation:**\n${q.explanation || "Extracted from source document."}`,
+          category: q.topicTag || subjectName,
+        };
+      });
+
+      await saveFlashcardDeck({
+        title: `${docCleanTitle} Flashcards`,
+        source_document_title: fileName || subjectName,
+        description: `Active recall study deck generated from ${docCleanTitle} (${flashcards.length} cards)`,
+        cards: flashcards,
+      }).catch((err) => console.warn("Auto-registering flashcard deck failed:", err));
 
       onImport(validQuestions, "append");
       onClose();

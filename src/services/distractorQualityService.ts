@@ -1136,7 +1136,7 @@ export function isEnemyItem(
 /**
  * Filters a pool of candidate questions for exam assembly, dropping enemy items.
  */
-export function filterEnemyItems<T extends { id?: string; stem: string; options: string[]; correctIndex: number; templateType?: string }>(
+export function filterEnemyItems<T extends { id?: string; stem?: string; question?: string; options: string[]; correctIndex: number; templateType?: string; sourceQuote?: string; chapter?: string }>(
   pool: T[],
   targetCount: number = pool.length
 ): { selected: T[]; rejected: { item: T; reason: string }[] } {

@@ -19,6 +19,10 @@ import {
   Award,
   CheckCircle2,
   Loader2,
+  Layers,
+  Database,
+  FileText,
+  ArrowRight,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Modal } from "../../shared/ui";
@@ -44,6 +48,9 @@ import DashboardToolbar from "./DashboardToolbar";
 import DashboardStatsBar from "./DashboardStatsBar";
 import ItemGridCard from "./ItemGridCard";
 import ItemListRow from "./ItemListRow";
+import ExamGridCard from "./ExamGridCard";
+import FlashcardDeckGridCard from "./FlashcardDeckGridCard";
+import QuestionBankGridCard from "./QuestionBankGridCard";
 import ItemDetailModal from "./ItemDetailModal";
 import QuestionImportModal from "../ReviewCompanion/QuestionImportModal";
 import { getBankStats, QuestionBankStats } from "../../../services/questionBankService";
@@ -167,6 +174,12 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   };
 
   // ---------- PART 3F: RENDER ----------
+  const hasAnyAssets =
+    data.filteredExams.length > 0 ||
+    data.filteredDecks.length > 0 ||
+    data.filteredBatches.length > 0 ||
+    data.filteredItems.length > 0;
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* ========== HEADER ========== */}
@@ -198,6 +211,12 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         onViewModeChange={data.setViewMode}
         advancedFilters={data.advancedFilters}
         onShowAdvancedFilters={() => data.setShowAdvancedFilters(true)}
+        assetTab={data.assetTab}
+        onAssetTabChange={data.setAssetTab}
+        examsCount={data.filteredExams.length}
+        decksCount={data.filteredDecks.length}
+        batchesCount={data.filteredBatches.length}
+        materialsCount={data.filteredItems.length}
       />
 
       {/* ========== LIVE INGESTION PROGRESS BANNER ========== */}
@@ -251,7 +270,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
         ) : (
           <SkeletonDashboardList count={8} />
         )
-      ) : data.filteredItems.length === 0 ? (
+      ) : !hasAnyAssets ? (
         /* Empty State */
         <div
           onDragOver={handleDragOver}
@@ -348,36 +367,164 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
             </>
           )}
         </div>
-      ) : data.viewMode === "grid" ? (
-        /* Grid View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-stagger">
-          {data.filteredItems.map((item, idx) => (
-            <ItemGridCard
-              key={item.id}
-              item={item}
-              index={idx}
-              isSelected={data.selectedItems.has(item.id)}
-              hasAnySelection={data.selectedItems.size > 0}
-              onSelect={actions.toggleItemSelection}
-              onClick={handleItemClick}
-              onDelete={actions.handleDeleteItem}
-            />
-          ))}
-        </div>
       ) : (
-        /* List View */
-        <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800 flex flex-col w-full max-w-full overflow-hidden">
-          {data.filteredItems.map((item) => (
-            <ItemListRow
-              key={item.id}
-              item={item}
-              isSelected={data.selectedItems.has(item.id)}
-              hasAnySelection={data.selectedItems.size > 0}
-              onSelect={actions.toggleItemSelection}
-              onClick={handleItemClick}
-              onDelete={actions.handleDeleteItem}
-            />
-          ))}
+        <div className="space-y-8 animate-fade-in">
+          {/* Section 1: Mock Exams */}
+          {(data.assetTab === "all" || data.assetTab === "exams") && data.filteredExams.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                    <Award className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 font-mono">
+                    Mock Exam Simulations ({data.filteredExams.length})
+                  </h3>
+                </div>
+                <Link
+                  to="/app/exams"
+                  className="text-xs font-mono font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                >
+                  <span>Open Simulator</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {data.filteredExams.map((exam, idx) => (
+                  <ExamGridCard
+                    key={exam.id}
+                    exam={exam}
+                    index={idx}
+                    onDelete={data.deleteExamAsset}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Section 2: Flashcard Decks */}
+          {(data.assetTab === "all" || data.assetTab === "flashcards") && data.filteredDecks.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                    <Layers className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 font-mono">
+                    Active Recall Flashcard Decks ({data.filteredDecks.length})
+                  </h3>
+                </div>
+                <Link
+                  to="/app/flashcards"
+                  className="text-xs font-mono font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                >
+                  <span>Open Deck Runner</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {data.filteredDecks.map((deck, idx) => (
+                  <FlashcardDeckGridCard
+                    key={deck.id}
+                    deck={deck}
+                    index={idx}
+                    onDelete={data.deleteDeckAsset}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Section 3: Question Banks */}
+          {(data.assetTab === "all" || data.assetTab === "bank") && data.filteredBatches.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <Database className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 font-mono">
+                    Ingested Question Banks ({data.filteredBatches.length})
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Import More</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {data.filteredBatches.map((batch, idx) => (
+                  <QuestionBankGridCard
+                    key={batch.id}
+                    batch={batch}
+                    index={idx}
+                    onDelete={data.deleteBatchAsset}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Section 4: Study Materials & Raw Quotes */}
+          {(data.assetTab === "all" || data.assetTab === "materials") && data.filteredItems.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-slate-500/10 text-slate-700 dark:text-slate-300 flex items-center justify-center">
+                    <FileText className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 font-mono">
+                    Grounding Documents & Notes ({data.filteredItems.length})
+                  </h3>
+                </div>
+                <Link
+                  to="/app/materials"
+                  className="text-xs font-mono font-semibold text-slate-600 dark:text-slate-400 hover:underline flex items-center gap-1"
+                >
+                  <span>Materials Workspace</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+
+              {data.viewMode === "grid" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-stagger">
+                  {data.filteredItems.map((item, idx) => (
+                    <ItemGridCard
+                      key={item.id}
+                      item={item}
+                      index={idx}
+                      isSelected={data.selectedItems.has(item.id)}
+                      hasAnySelection={data.selectedItems.size > 0}
+                      onSelect={actions.toggleItemSelection}
+                      onClick={handleItemClick}
+                      onDelete={actions.handleDeleteItem}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl border border-gray-200/50 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800 flex flex-col w-full max-w-full overflow-hidden">
+                  {data.filteredItems.map((item) => (
+                    <ItemListRow
+                      key={item.id}
+                      item={item}
+                      isSelected={data.selectedItems.has(item.id)}
+                      hasAnySelection={data.selectedItems.size > 0}
+                      onSelect={actions.toggleItemSelection}
+                      onClick={handleItemClick}
+                      onDelete={actions.handleDeleteItem}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

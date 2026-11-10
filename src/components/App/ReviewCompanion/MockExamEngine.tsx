@@ -5,6 +5,7 @@
 // ============================================
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Sparkles,
   CheckCircle2,
@@ -31,6 +32,9 @@ import {
   RefreshCw,
   ChevronDown,
   ThumbsDown,
+  FolderOpen,
+  Play,
+  Calendar,
 } from "lucide-react";
 import { StorageItem } from "../../../services/storageService";
 import {
@@ -45,6 +49,10 @@ import {
   ExamAttemptRecord,
   generateTwinQuestion,
   ExamQuestion,
+  getAllExams,
+  getExamById,
+  deleteExam,
+  ExamRecord as FullExamRecord,
 } from "../../../services/examService";
 import { recordExamAttempt } from "../../../services/examReadinessService";
 import AcademicMathView from "../../shared/AcademicMathView";
@@ -125,6 +133,8 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   showToast,
 }) => {
   const { addNotification } = useNotifications();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Configuration State
   const [topicInput, setTopicInput] = useState("");
   const [scopeSelection, setScopeSelection] = useState<MaterialScopeSelection>({
@@ -141,6 +151,8 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   });
   const [viewMode, setViewMode] = useState<"stepper" | "list">("stepper");
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
+  const [showSavedExamsModal, setShowSavedExamsModal] = useState(false);
+  const [savedExams, setSavedExams] = useState<FullExamRecord[]>([]);
 
   // Modals State
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -215,12 +227,42 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   const abortControllerRef = useRef<AbortController | null>(null);
   const timerRef = useRef<any>(null);
 
-  // Load history from Supabase / Local cache
+  const refreshSavedExams = async () => {
+    try {
+      const list = await getAllExams();
+      setSavedExams(list);
+    } catch (err) {
+      console.warn("Failed to load saved exams:", err);
+    }
+  };
+
+  // Load history & saved exams from Supabase / Local cache
   useEffect(() => {
     getExamAttempts().then((attempts) => {
       setExamHistory(attempts);
     }).catch(() => {});
+    refreshSavedExams();
   }, []);
+
+  // Deep linking: If ?examId=... is in the URL, load and start that exam immediately
+  useEffect(() => {
+    const examId = searchParams.get("examId");
+    if (!examId) return;
+
+    getExamById(examId).then((loadedExam) => {
+      if (loadedExam && loadedExam.questions && loadedExam.questions.length > 0) {
+        startSeededExamSession(
+          loadedExam.questions,
+          loadedExam.seed || (loadedExam.config as any)?.seed || "SEED",
+          loadedExam.id,
+          loadedExam.title
+        );
+        showToast(`Loaded exam: "${loadedExam.title}" (${loadedExam.questions.length} questions)`, "success");
+      }
+    }).catch((err) => {
+      console.warn("Failed to load exam by examId query param:", err);
+    });
+  }, [searchParams]);
 
   // Timer Countdown Effect
   useEffect(() => {
@@ -300,14 +342,19 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
 
   // Seeded Exam Session Starter: Creates and stores immutable ExamRecord
   // By default, excludes questions marked as needs_review or flagged
-  const startSeededExamSession = (rawQuestions: Question[], seedToUse?: string) => {
+  const startSeededExamSession = (
+    rawQuestions: Question[],
+    seedToUse?: string,
+    customExamId?: string,
+    customTitle?: string
+  ) => {
     const verifiedOnly = rawQuestions.filter(
       (q) => q.reviewStatus !== "needs_review" && q.reviewStatus !== "flagged"
     );
     const questionsToUse = verifiedOnly.length > 0 ? verifiedOnly : rawQuestions;
 
     const seed = seedToUse?.trim() || generateSeedCode("SEED");
-    const examId = generateUUID();
+    const examId = customExamId || generateUUID();
     const { examRecord, orderedQuestions } = createSeededExam(
       questionsToUse,
       {
@@ -328,7 +375,35 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     setFlaggedIds(new Set());
     setActiveQuestionIdx(0);
     if (timedMode) setSecondsRemaining(orderedQuestions.length * timePerQuestion);
+
+    // Auto-save exam to localStorage and Supabase so it immediately exists in Dashboard & Saved list
+    const sourceTitle = targetScopeItems[0]?.title || targetScopeItems[0]?.sourceTitle || "Course Materials";
+    const examTitle = customTitle || (topicInput.trim() ? `${topicInput.trim()} Simulation` : `${sourceTitle} Exam`);
+    saveExam({
+      id: examId,
+      title: examTitle,
+      questions: orderedQuestions,
+      seed,
+      source_document_title: sourceTitle,
+      config: {
+        difficulty,
+        timedMode,
+        benchmarkScore: benchmarkThreshold,
+        sections: buildExamSections(presetCount, topicInput.trim()),
+      },
+    }).then(() => {
+      refreshSavedExams();
+    }).catch((err) => console.warn("Auto-save exam failed:", err));
+
     return { examRecord, orderedQuestions };
+  };
+
+  const handleDeleteSavedExam = async (idToDelete: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this saved exam simulation?")) return;
+    await deleteExam(idToDelete);
+    await refreshSavedExams();
+    showToast("Saved exam deleted.", "info");
   };
 
   // Flag low-quality or overly obvious questions
@@ -699,6 +774,17 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {savedExams.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowSavedExamsModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-100/70 transition-colors cursor-pointer"
+                title="Browse and launch saved exam simulations"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span>Saved Exams ({savedExams.length})</span>
+              </button>
+            )}
             {examHistory.length > 0 && (
               <div className="px-3 py-1 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-xs font-mono text-slate-700 dark:text-slate-300">
                 Diagnostic Avg: <strong className="text-slate-900 dark:text-slate-100">{Math.round(examHistory.reduce((a, b) => a + b.percentage, 0) / examHistory.length)}%</strong>
@@ -1500,6 +1586,112 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
         onClose={() => setIsImportOpen(false)}
         defaultTopic={topicInput.trim() || "General"}
       />
+
+      {/* Saved Exams Modal */}
+      {showSavedExamsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <FolderOpen className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 font-title">
+                    Saved Exam Simulations
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    {savedExams.length} saved simulation{savedExams.length === 1 ? "" : "s"} ready to retake
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSavedExamsModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-3 flex-1">
+              {savedExams.length === 0 ? (
+                <div className="py-12 text-center space-y-2">
+                  <p className="text-sm text-slate-500 font-medium">No saved mock exams yet.</p>
+                  <p className="text-xs text-slate-400">
+                    Generate an exam or import questions to automatically save simulations here and on your dashboard.
+                  </p>
+                </div>
+              ) : (
+                savedExams.map((exam) => (
+                  <div
+                    key={exam.id}
+                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 hover:border-amber-300 dark:hover:border-amber-700/60 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                          {exam.title}
+                        </h4>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20">
+                          {exam.questions?.length || 0} Questions
+                        </span>
+                        {exam.config?.difficulty && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 capitalize">
+                            {exam.config.difficulty}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-slate-500 font-mono">
+                        {exam.seed && <span>Seed: {exam.seed}</span>}
+                        {exam.source_document_title && (
+                          <span className="truncate max-w-[200px]">Doc: {exam.source_document_title}</span>
+                        )}
+                        <span>{new Date(exam.created_at || exam.updated_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => {
+                          startSeededExamSession(
+                            exam.questions,
+                            exam.seed || (exam.config as any)?.seed || "SEED",
+                            exam.id,
+                            exam.title
+                          );
+                          setSearchParams({ examId: exam.id });
+                          setShowSavedExamsModal(false);
+                          showToast(`Loaded exam: "${exam.title}"`, "success");
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-colors shadow-2xs cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Take Exam</span>
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteSavedExam(exam.id, e)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                        title="Delete saved exam"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-end">
+              <button
+                onClick={() => setShowSavedExamsModal(false)}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

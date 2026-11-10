@@ -48,6 +48,8 @@ export interface ExamRecord {
   title: string;
   description?: string;
   source_item_ids: string[];
+  source_document_title?: string;
+  seed?: string;
   config: ExamConfig;
   questions: Question[];
   version: number;
@@ -82,7 +84,9 @@ export interface FlashcardDeckRecord {
   id: string;
   user_id?: string;
   title: string;
+  description?: string;
   source_item_ids: string[];
+  source_document_title?: string;
   cards: Flashcard[];
   version: number;
   visibility: "private" | "unlisted" | "public";
@@ -204,6 +208,8 @@ export async function saveExam(
     title: examData.title.trim() || "Untitled Exam",
     description: examData.description || "",
     source_item_ids: examData.source_item_ids || [],
+    source_document_title: examData.source_document_title || "",
+    seed: examData.seed || "",
     config: examData.config || {
       difficulty: "mixed",
       timedMode: false,
@@ -241,7 +247,7 @@ export async function saveExam(
           title: record.title,
           description: record.description,
           source_item_ids: record.source_item_ids,
-          config: record.config,
+          config: { ...record.config, seed: record.seed, source_document_title: record.source_document_title },
           questions: record.questions,
           version: record.version,
           visibility: record.visibility,
@@ -291,6 +297,30 @@ export async function getAllExams(): Promise<ExamRecord[]> {
   }
 
   return getLocalExams();
+}
+
+export async function getExamById(examId: string): Promise<ExamRecord | null> {
+  const isAuth = await isAuthenticated();
+  const user = await getCurrentUser();
+
+  if (isAuth && user) {
+    try {
+      const { data, error } = await supabase
+        .from("exams")
+        .select("*")
+        .eq("id", examId)
+        .maybeSingle();
+
+      if (!error && data) {
+        return data;
+      }
+    } catch (err) {
+      console.warn("Failed to fetch exam by ID from Supabase:", err);
+    }
+  }
+
+  const local = getLocalExams();
+  return local.find((e) => e.id === examId) || null;
 }
 
 export async function deleteExam(examId: string): Promise<boolean> {
@@ -425,7 +455,9 @@ export async function saveFlashcardDeck(
     id: deckData.id || generateUUID(),
     user_id: user?.id,
     title: deckData.title.trim() || "Custom Study Deck",
+    description: deckData.description || "",
     source_item_ids: deckData.source_item_ids || [],
+    source_document_title: deckData.source_document_title || "",
     cards: deckData.cards,
     version: (deckData.version || 0) + 1,
     visibility: deckData.visibility || "private",
@@ -441,6 +473,7 @@ export async function saveFlashcardDeck(
           id: record.id,
           user_id: user.id,
           title: record.title,
+          description: record.description,
           source_item_ids: record.source_item_ids,
           cards: record.cards,
           version: record.version,
@@ -488,6 +521,53 @@ export async function getAllFlashcardDecks(): Promise<FlashcardDeckRecord[]> {
   }
 
   return getLocalFlashcardDecks();
+}
+
+export async function getFlashcardDeckById(deckId: string): Promise<FlashcardDeckRecord | null> {
+  const isAuth = await isAuthenticated();
+  const user = await getCurrentUser();
+
+  if (isAuth && user) {
+    try {
+      const { data, error } = await supabase
+        .from("flashcard_decks")
+        .select("*")
+        .eq("id", deckId)
+        .maybeSingle();
+
+      if (!error && data) {
+        return data;
+      }
+    } catch (err) {
+      console.warn("Failed to fetch deck by ID from Supabase:", err);
+    }
+  }
+
+  const local = getLocalFlashcardDecks();
+  return local.find((d) => d.id === deckId) || null;
+}
+
+export async function deleteFlashcardDeck(deckId: string): Promise<boolean> {
+  const isAuth = await isAuthenticated();
+  const user = await getCurrentUser();
+
+  const local = getLocalFlashcardDecks().filter((d) => d.id !== deckId);
+  saveLocalFlashcardDecks(local);
+
+  if (isAuth && user) {
+    try {
+      const { error } = await supabase
+        .from("flashcard_decks")
+        .delete()
+        .eq("id", deckId)
+        .eq("user_id", user.id);
+      return !error;
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 // ============================================

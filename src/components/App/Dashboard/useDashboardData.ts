@@ -22,6 +22,19 @@ import {
   getAllCollections,
   Collection,
 } from "../../../services/collectionsService";
+import {
+  getAllExams,
+  deleteExam,
+  getAllFlashcardDecks,
+  deleteFlashcardDeck,
+  ExamRecord,
+  FlashcardDeckRecord,
+} from "../../../services/examService";
+import {
+  getImportBatches,
+  ImportBatch,
+} from "../../../services/questionBankService";
+import { deleteImportBatch } from "../../../services/questionImportService";
 import { useNotifications } from "../../../context/NotificationContext";
 import { SearchFilters } from "../../shared/AdvancedSearchFilter";
 
@@ -103,6 +116,20 @@ export interface UseDashboardDataReturn {
   advancedFilters: SearchFilters;
   setAdvancedFilters: (filters: SearchFilters) => void;
 
+  // Multi-Engine Assets
+  exams: ExamRecord[];
+  filteredExams: ExamRecord[];
+  decks: FlashcardDeckRecord[];
+  filteredDecks: FlashcardDeckRecord[];
+  batches: ImportBatch[];
+  filteredBatches: ImportBatch[];
+  assetTab: "all" | "exams" | "flashcards" | "bank" | "materials";
+  setAssetTab: (tab: "all" | "exams" | "flashcards" | "bank" | "materials") => void;
+  deleteExamAsset: (id: string, e?: React.MouseEvent) => Promise<void>;
+  deleteDeckAsset: (id: string, e?: React.MouseEvent) => Promise<void>;
+  deleteBatchAsset: (id: string, e?: React.MouseEvent) => Promise<void>;
+  refreshAllAssets: () => Promise<void>;
+
   // Actions
   fetchItems: () => Promise<void>;
   loadMoreItems: () => Promise<void>;
@@ -148,6 +175,56 @@ export function useDashboardData(
   // Bulk operations
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  // Multi-Engine Assets
+  const [exams, setExams] = useState<ExamRecord[]>([]);
+  const [decks, setDecks] = useState<FlashcardDeckRecord[]>([]);
+  const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [assetTab, setAssetTab] = useState<"all" | "exams" | "flashcards" | "bank" | "materials">("all");
+
+  const refreshAllAssets = useCallback(async () => {
+    try {
+      const [fetchedExams, fetchedDecks, fetchedBatches] = await Promise.all([
+        getAllExams().catch(() => []),
+        getAllFlashcardDecks().catch(() => []),
+        getImportBatches().catch(() => []),
+      ]);
+      setExams(fetchedExams);
+      setDecks(fetchedDecks);
+      setBatches(fetchedBatches);
+    } catch (err) {
+      console.warn("Failed to refresh assets:", err);
+    }
+  }, []);
+
+  const deleteExamAsset = useCallback(async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this saved exam simulation?")) return;
+    await deleteExam(id);
+    setExams((prev) => prev.filter((x) => x.id !== id));
+    showToast("Exam simulation deleted.", "info");
+  }, [showToast]);
+
+  const deleteDeckAsset = useCallback(async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this saved flashcard deck?")) return;
+    await deleteFlashcardDeck(id);
+    setDecks((prev) => prev.filter((d) => d.id !== id));
+    showToast("Flashcard deck deleted.", "info");
+  }, [showToast]);
+
+  const deleteBatchAsset = useCallback(async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this question bank batch? This will remove its questions.")) return;
+    await deleteImportBatch(id);
+    setBatches((prev) => prev.filter((b) => b.id !== id));
+    showToast("Question bank batch deleted.", "info");
+  }, [showToast]);
+
+  // Initial load of multi-engine assets
+  useEffect(() => {
+    refreshAllAssets();
+  }, [refreshAllAssets]);
 
   // Collections state
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -341,6 +418,35 @@ export function useDashboardData(
     return filtered;
   }, [items, debouncedSearchQuery, advancedFilters]);
 
+  const filteredExams = useMemo(() => {
+    if (!debouncedSearchQuery.trim()) return exams;
+    const q = debouncedSearchQuery.toLowerCase().trim();
+    return exams.filter((e) =>
+      e.title.toLowerCase().includes(q) ||
+      (e.source_document_title && e.source_document_title.toLowerCase().includes(q)) ||
+      (e.seed && e.seed.toLowerCase().includes(q))
+    );
+  }, [exams, debouncedSearchQuery]);
+
+  const filteredDecks = useMemo(() => {
+    if (!debouncedSearchQuery.trim()) return decks;
+    const q = debouncedSearchQuery.toLowerCase().trim();
+    return decks.filter((d) =>
+      d.title.toLowerCase().includes(q) ||
+      (d.source_document_title && d.source_document_title.toLowerCase().includes(q)) ||
+      (d.description && d.description.toLowerCase().includes(q))
+    );
+  }, [decks, debouncedSearchQuery]);
+
+  const filteredBatches = useMemo(() => {
+    if (!debouncedSearchQuery.trim()) return batches;
+    const q = debouncedSearchQuery.toLowerCase().trim();
+    return batches.filter((b) =>
+      b.subject.toLowerCase().includes(q) ||
+      b.sourceFile.toLowerCase().includes(q)
+    );
+  }, [batches, debouncedSearchQuery]);
+
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
     items.forEach((item) => {
@@ -387,5 +493,19 @@ export function useDashboardData(
     advancedFilters, setAdvancedFilters,
     fetchItems, loadMoreItems,
     searchInputRef,
+
+    // Multi-Engine Assets
+    exams,
+    filteredExams,
+    decks,
+    filteredDecks,
+    batches,
+    filteredBatches,
+    assetTab,
+    setAssetTab,
+    deleteExamAsset,
+    deleteDeckAsset,
+    deleteBatchAsset,
+    refreshAllAssets,
   };
 }

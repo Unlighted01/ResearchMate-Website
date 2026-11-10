@@ -4,7 +4,8 @@
 // Dual-Entry: Grounded AI Generation + Manual Card Builder & Editor
 // ============================================
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Sparkles,
   ChevronLeft,
@@ -18,12 +19,22 @@ import {
   Edit2,
   Trash2,
   CheckCircle2,
+  FolderOpen,
+  Layers,
 } from "lucide-react";
 import { generateAiResponse } from "../../../services/geminiService";
 import { StorageItem } from "../../../services/storageService";
 import { buildSynthesisContext } from "../../../services/ragService";
 import { findRelevantFormulary } from "../../../services/formularyService";
-import { Flashcard, generateUUID, saveFlashcardDeck } from "../../../services/examService";
+import {
+  Flashcard,
+  generateUUID,
+  saveFlashcardDeck,
+  getAllFlashcardDecks,
+  getFlashcardDeckById,
+  deleteFlashcardDeck,
+  FlashcardDeckRecord,
+} from "../../../services/examService";
 import { sanitizeCurrencyAndMath } from "../../../services/examParser";
 import AcademicMathView from "../../shared/AcademicMathView";
 import MaterialScopeSelector, { MaterialScopeSelection } from "./MaterialScopeSelector";
@@ -77,6 +88,7 @@ export const FlashcardsDeck: React.FC<FlashcardsDeckProps> = ({
   items,
   showToast,
 }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [topicInput, setTopicInput] = useState("");
   const [scopeSelection, setScopeSelection] = useState<MaterialScopeSelection>({
     mode: "all",
@@ -89,12 +101,83 @@ export const FlashcardsDeck: React.FC<FlashcardsDeckProps> = ({
   const [masteredIds, setMasteredIds] = useState<Set<string>>(new Set());
   const [cards, setCards] = useState<Flashcard[]>(UNIVERSAL_STARTER_DECK);
 
+  // Saved Decks State
+  const [savedDecks, setSavedDecks] = useState<FlashcardDeckRecord[]>([]);
+  const [activeDeckId, setActiveDeckId] = useState<string>("starter");
+  const [activeDeckTitle, setActiveDeckTitle] = useState<string>("Universal Starter Deck");
+
   // Card Editor Modal State
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null);
   const [editorFront, setEditorFront] = useState("");
   const [editorBack, setEditorBack] = useState("");
   const [editorCategory, setEditorCategory] = useState("");
+
+  const refreshDecks = async () => {
+    try {
+      const decks = await getAllFlashcardDecks();
+      setSavedDecks(decks);
+    } catch (err) {
+      console.warn("Failed to load saved flashcard decks:", err);
+    }
+  };
+
+  useEffect(() => {
+    refreshDecks();
+  }, []);
+
+  // Deep linking: If ?deckId=... in URL, load that deck immediately
+  useEffect(() => {
+    const deckId = searchParams.get("deckId");
+    if (!deckId) return;
+
+    getFlashcardDeckById(deckId).then((deck) => {
+      if (deck && deck.cards && deck.cards.length > 0) {
+        setCards(deck.cards);
+        setActiveDeckId(deck.id);
+        setActiveDeckTitle(deck.title);
+        setMasteredIds(new Set());
+        setCurrentIndex(0);
+        setIsFlipped(false);
+        showToast(`Loaded deck: "${deck.title}" (${deck.cards.length} cards)`, "success");
+      }
+    }).catch((err) => {
+      console.warn("Failed to load flashcard deck by ID:", err);
+    });
+  }, [searchParams]);
+
+  const handleSelectDeck = (deckId: string) => {
+    if (deckId === "starter") {
+      setCards(UNIVERSAL_STARTER_DECK);
+      setActiveDeckId("starter");
+      setActiveDeckTitle("Universal Starter Deck");
+      setMasteredIds(new Set());
+      setCurrentIndex(0);
+      setIsFlipped(false);
+      setSearchParams({});
+      return;
+    }
+    const found = savedDecks.find((d) => d.id === deckId);
+    if (found && found.cards && found.cards.length > 0) {
+      setCards(found.cards);
+      setActiveDeckId(found.id);
+      setActiveDeckTitle(found.title);
+      setMasteredIds(new Set());
+      setCurrentIndex(0);
+      setIsFlipped(false);
+      setSearchParams({ deckId: found.id });
+      showToast(`Switched to deck: "${found.title}"`, "info");
+    }
+  };
+
+  const handleDeleteCurrentDeck = async () => {
+    if (activeDeckId === "starter") return;
+    if (!window.confirm(`Are you sure you want to delete deck "${activeDeckTitle}"?`)) return;
+    await deleteFlashcardDeck(activeDeckId);
+    await refreshDecks();
+    handleSelectDeck("starter");
+    showToast("Deck deleted.", "info");
+  };
 
   const targetScopeItems = useMemo(() => {
     if (scopeSelection.mode === "all") return items;
@@ -176,11 +259,21 @@ Respond ONLY with a valid raw JSON array of objects:
         }
 
         // Save to persistent storage
+        const docTitle = targetScopeItems[0]?.title || targetScopeItems[0]?.sourceTitle || targetTopic;
         saveFlashcardDeck({
           title: targetTopic,
           source_item_ids: targetScopeItems.map((i) => i.id),
+          source_document_title: docTitle,
+          description: `Active recall study deck generated from ${docTitle}`,
           cards: appendCount ? [...cards, ...normalized] : normalized,
-        }).catch(() => {});
+        }).then((saved) => {
+          if (saved) {
+            setActiveDeckId(saved.id);
+            setActiveDeckTitle(saved.title);
+            setSearchParams({ deckId: saved.id });
+            refreshDecks();
+          }
+        }).catch((err) => console.warn("Failed to save flashcard deck:", err));
       } else {
         throw new Error("Invalid flashcard JSON structure");
       }
@@ -354,6 +447,45 @@ Respond ONLY with a valid raw JSON array of objects:
               <span>{isGenerating ? "Synthesizing Deck..." : `Generate ${cardCount} Cards`}</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Deck Selector & Management Bar */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <Layers className="w-4 h-4 text-indigo-500 shrink-0" />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-medium">Study Deck:</span>
+            <select
+              value={activeDeckId}
+              onChange={(e) => handleSelectDeck(e.target.value)}
+              className="text-xs font-bold text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="starter">Universal Starter Deck (6 cards)</option>
+              {savedDecks.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.title} ({d.cards?.length || 0} cards)
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {activeDeckId !== "starter" && (
+            <button
+              type="button"
+              onClick={handleDeleteCurrentDeck}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+              title="Delete this saved deck"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Deck</span>
+            </button>
+          )}
+          <span className="text-[11px] font-mono text-slate-400">
+            {savedDecks.length} Saved Deck{savedDecks.length === 1 ? "" : "s"}
+          </span>
         </div>
       </div>
 
