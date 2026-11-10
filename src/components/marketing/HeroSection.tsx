@@ -16,10 +16,19 @@ import {
   FileText,
   Layers,
   ChevronRight,
+  ChevronLeft,
   Clock,
   ShieldCheck,
+  UploadCloud,
+  Loader2,
+  AlertCircle,
+  X,
+  FileCheck,
+  BookmarkCheck,
 } from "lucide-react";
 import { AcademicMathView } from "../shared/AcademicMathView";
+import type { ParsedQaItem } from "../../services/pdfQuestionImporter";
+import type { Flashcard } from "../../services/examService";
 
 type PlaygroundMode = "exam" | "matrix" | "flashcards" | "math_ocr";
 
@@ -59,8 +68,18 @@ const HeroSection: React.FC = () => {
   const [copiedLatex, setCopiedLatex] = useState(false);
   const [copiedMatrix, setCopiedMatrix] = useState(false);
 
-  // Sample Exam Question
-  const sampleQuestion = {
+  // PDF Testing Sandbox State (In-Memory Only)
+  const [isParsingPdf, setIsParsingPdf] = useState(false);
+  const [parseProgress, setParseProgress] = useState<string>("");
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [customQuestions, setCustomQuestions] = useState<ParsedQaItem[]>([]);
+  const [customFlashcards, setCustomFlashcards] = useState<Flashcard[]>([]);
+  const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
+  const [activeCardIdx, setActiveCardIdx] = useState(0);
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  // Default Sample Question (Republic Act No. 6713)
+  const defaultSampleQuestion = {
     id: "q-ra6713-sample",
     stem: "Under Republic Act No. 6713 (Code of Conduct and Ethical Standards), public officials and employees must file their Statement of Assets, Liabilities, and Net Worth (SALN) within how many days after assumption of office?",
     options: [
@@ -74,6 +93,132 @@ const HeroSection: React.FC = () => {
       "Section 8(A) of RA 6713 explicitly mandates the filing of the SALN within thirty (30) days after assumption of office, on or before April 30 of every year thereafter, and within thirty (30) days after separation from service.",
     topicTag: "Civil Service & Statutory Ethics",
     seed: "EXAM-RA6713-V1",
+  };
+
+  // Resolve currently active question
+  const hasCustomQuestions = customQuestions.length > 0;
+  const currentExamItem = hasCustomQuestions
+    ? {
+        id: customQuestions[activeQuestionIdx].id,
+        stem: customQuestions[activeQuestionIdx].stem,
+        options: customQuestions[activeQuestionIdx].options,
+        correctIndex: customQuestions[activeQuestionIdx].correctIndex,
+        explanation:
+          customQuestions[activeQuestionIdx].explanation ||
+          (customQuestions[activeQuestionIdx].sourceQuote
+            ? `Source Quote: "${customQuestions[activeQuestionIdx].sourceQuote}"`
+            : "Extracted directly from source document."),
+        topicTag:
+          customQuestions[activeQuestionIdx].chapter ||
+          uploadedFileName?.replace(/\.[^/.]+$/, "") ||
+          "Imported Document",
+        seed: `EXAM-${(uploadedFileName || "DOC").replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase()}-V1`,
+        page: customQuestions[activeQuestionIdx].sourcePage,
+      }
+    : defaultSampleQuestion;
+
+  // Resolve currently active flashcard
+  const hasCustomFlashcards = customFlashcards.length > 0;
+  const currentFlashcard = hasCustomFlashcards
+    ? customFlashcards[activeCardIdx]
+    : {
+        id: "flashcard-sample-1",
+        front:
+          "What is the core quadratic bottleneck in standard Multi-Head Attention, and how does FlashAttention's IO-aware tiling achieve linear memory complexity?",
+        back: "Standard attention materializes the intermediate N × N attention matrix to High Bandwidth Memory (HBM), resulting in O(N²) memory reads and writes.\n\nFlashAttention tiles queries, keys, and values into fast on-chip SRAM blocks, computing softmax normalization incrementally without writing large intermediate matrices back to HBM.",
+        category: "Machine Learning Architecture",
+      };
+
+  // Handle PDF Upload for Guest Sandbox (Zero Server Upload, In-Memory Only)
+  const handlePdfUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setParseError("Please upload a standard .pdf document.");
+      return;
+    }
+
+    setIsParsingPdf(true);
+    setParseError(null);
+    setParseProgress("Extracting layout & text in-browser...");
+    setSelectedExamOption(null);
+    setShowOmrPreview(false);
+
+    try {
+      const { extractAllPagesWithLayout } = await import("../../services/pdfService");
+      const { parseTwoPassQuestionsAndAnswers, toFlashcards } = await import(
+        "../../services/pdfQuestionImporter"
+      );
+
+      // Fast, memory-safe playground preview: extracts up to the first 25 pages
+      const extraction = await extractAllPagesWithLayout(file, (current, total) => {
+        setParseProgress(`Processing page ${current} of ${Math.min(total, 25)} in-browser...`);
+      });
+
+      const pagesToParse = extraction.pages.slice(0, 25);
+      const cleanSubject = file.name.replace(/\.[^/.]+$/, "").trim();
+
+      const parsedItems = parseTwoPassQuestionsAndAnswers(pagesToParse);
+
+      if (!parsedItems || parsedItems.length === 0) {
+        setParseError(
+          "No multiple-choice questions or structured sections found in the first 25 pages. Try an exam reviewer, past paper, or textbook PDF."
+        );
+        setIsParsingPdf(false);
+        return;
+      }
+
+      setUploadedFileName(file.name);
+      setCustomQuestions(parsedItems);
+      setCustomFlashcards(toFlashcards(parsedItems));
+      setActiveQuestionIdx(0);
+      setActiveCardIdx(0);
+      setActiveMode("exam");
+
+      // Stash into sessionStorage so guest users don't lose their parsed questions if they choose to sign up
+      try {
+        sessionStorage.setItem(
+          "rm_pending_playground_exam",
+          JSON.stringify({
+            fileName: file.name,
+            questionCount: parsedItems.length,
+            questions: parsedItems.map((q) => ({
+              id: q.id,
+              question: q.stem,
+              options: q.options,
+              correctIndex: q.correctIndex,
+              explanation: q.explanation,
+              topicTag: q.chapter || cleanSubject,
+            })),
+          })
+        );
+      } catch (_) {
+        // Ignore quota limits
+      }
+    } catch (err: any) {
+      console.error("Playground PDF parse error:", err);
+      setParseError(
+        err?.message || "Failed to parse PDF in-browser. Please ensure the PDF is not password-protected."
+      );
+    } finally {
+      setIsParsingPdf(false);
+      event.target.value = "";
+    }
+  };
+
+  const handleResetToDefault = () => {
+    setUploadedFileName(null);
+    setCustomQuestions([]);
+    setCustomFlashcards([]);
+    setActiveQuestionIdx(0);
+    setActiveCardIdx(0);
+    setSelectedExamOption(null);
+    setShowOmrPreview(false);
+    setParseError(null);
+    try {
+      sessionStorage.removeItem("rm_pending_playground_exam");
+    } catch (_) {}
   };
 
   const handleCopyLatex = () => {
@@ -199,7 +344,7 @@ const HeroSection: React.FC = () => {
         className="scroll-mt-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden"
       >
         {/* Playground Top Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200/60 dark:border-indigo-900/60">
               <Sparkles className="w-3.5 h-3.5" />
@@ -209,459 +354,649 @@ const HeroSection: React.FC = () => {
                 Interactive Engine Playground
               </p>
               <p className="text-[11px] text-slate-500">
-                Click any tab to test live components with real academic datasets.
+                Test pre-loaded datasets or upload your own PDF for a zero-save, in-browser live preview.
               </p>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-xs font-medium border border-slate-200/80 dark:border-slate-700/80 overflow-x-auto">
-            <button
-              onClick={() => setActiveMode("exam")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                activeMode === "exam"
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs font-semibold"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              }`}
-            >
-              <GraduationCap className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Exam Simulator & OMR</span>
-            </button>
+          {/* Action Row: Mode Switcher + Upload Own PDF Button */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Mode Tabs */}
+            <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-xs font-medium border border-slate-200/80 dark:border-slate-700/80 overflow-x-auto">
+              <button
+                onClick={() => setActiveMode("exam")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                  activeMode === "exam"
+                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs font-semibold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <GraduationCap className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Exam Simulator & OMR</span>
+              </button>
 
-            <button
-              onClick={() => setActiveMode("matrix")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                activeMode === "matrix"
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs font-semibold"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              }`}
-            >
-              <Table2 className="w-3.5 h-3.5 text-blue-500" />
-              <span>Literature Matrix</span>
-            </button>
+              <button
+                onClick={() => setActiveMode("matrix")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                  activeMode === "matrix"
+                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs font-semibold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <Table2 className="w-3.5 h-3.5 text-blue-500" />
+                <span>Literature Matrix</span>
+              </button>
 
-            <button
-              onClick={() => setActiveMode("flashcards")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                activeMode === "flashcards"
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs font-semibold"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Active Recall Cards</span>
-            </button>
+              <button
+                onClick={() => setActiveMode("flashcards")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                  activeMode === "flashcards"
+                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs font-semibold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Active Recall Cards</span>
+              </button>
 
-            <button
-              onClick={() => setActiveMode("math_ocr")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                activeMode === "math_ocr"
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs font-semibold"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              }`}
-            >
-              <PenTool className="w-3.5 h-3.5 text-amber-500" />
-              <span>Whiteboard Math OCR</span>
-            </button>
+              <button
+                onClick={() => setActiveMode("math_ocr")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                  activeMode === "math_ocr"
+                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-2xs font-semibold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <PenTool className="w-3.5 h-3.5 text-amber-500" />
+                <span>Whiteboard Math OCR</span>
+              </button>
+            </div>
+
+            {/* Test Your Own PDF Button */}
+            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-xs font-semibold text-indigo-900 dark:text-indigo-200 transition-colors cursor-pointer shadow-2xs">
+              <UploadCloud className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Test Your Own PDF</span>
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={handlePdfUpload}
+                disabled={isParsingPdf}
+                className="hidden"
+              />
+            </label>
           </div>
         </div>
 
-        {/* Playground Workspace */}
-        <div className="p-5 sm:p-7">
-          <AnimatePresence mode="wait">
-            {/* 1. EXAM SIMULATOR & OMR PREVIEW */}
-            {activeMode === "exam" && (
-              <motion.div
-                key="exam"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-                className="space-y-4"
+        {/* Error Alert Banner */}
+        {parseError && (
+          <div className="px-5 py-3 bg-rose-50 dark:bg-rose-950/40 border-b border-rose-200 dark:border-rose-900 flex items-center justify-between text-xs text-rose-800 dark:text-rose-200">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{parseError}</span>
+            </div>
+            <button
+              onClick={() => setParseError(null)}
+              className="text-rose-600 hover:text-rose-800 p-1"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Guest In-Memory Live Preview Notice */}
+        {uploadedFileName && (
+          <div className="px-5 py-3 bg-amber-50/60 dark:bg-amber-950/30 border-b border-amber-200/80 dark:border-amber-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              <div>
+                <span className="font-bold font-title">Guest Memory Sandbox:</span>{" "}
+                <span>"{uploadedFileName}"</span>{" "}
+                <span className="text-amber-700 dark:text-amber-400 font-mono">
+                  ({customQuestions.length} questions parsed)
+                </span>
+                <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80 font-mono mt-0.5">
+                  🔒 Running 100% in local memory. Not saved to server or database.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                to="/signup"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-semibold text-xs hover:bg-slate-800 transition-all shadow-2xs"
               >
-                {/* Meta Header */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-2 text-xs font-mono">
-                    <span className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/50 font-semibold">
-                      {sampleQuestion.seed}
-                    </span>
-                    <span className="text-slate-400">•</span>
-                    <span className="text-slate-500">{sampleQuestion.topicTag}</span>
-                    <span className="text-slate-400">•</span>
-                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" /> Enemy Filter Passed
-                    </span>
-                  </div>
+                <span>Save to Free Account</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+              <button
+                onClick={handleResetToDefault}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs transition-colors cursor-pointer"
+                title="Reset to default legal/statutory sample"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
 
-                  <button
-                    onClick={() => setShowOmrPreview(!showOmrPreview)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shadow-2xs"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{showOmrPreview ? "Back to Question" : "Inspect Printable OMR Sheet"}</span>
-                  </button>
-                </div>
+        {/* In-Browser PDF Parsing Loader */}
+        {isParsingPdf && (
+          <div className="py-12 px-6 flex flex-col items-center justify-center space-y-3 bg-slate-50/40 dark:bg-slate-950/40">
+            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Parsing PDF layout in-browser...
+            </p>
+            <p className="text-xs text-slate-500 font-mono text-center">
+              {parseProgress || "Extracting text coordinates, choices, and chapter answer keys..."}
+            </p>
+            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/50">
+              100% Client-Side Privacy • Zero API Cost • File Never Leaves Device
+            </span>
+          </div>
+        )}
 
-                {!showOmrPreview ? (
-                  /* Question Card */
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
-                      <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 rounded-md bg-indigo-600 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
-                          1
-                        </span>
-                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100 leading-relaxed font-sans">
-                          {sampleQuestion.stem}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Options Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {sampleQuestion.options.map((opt, idx) => {
-                        const letter = String.fromCharCode(65 + idx);
-                        const isSelected = selectedExamOption === idx;
-                        const isCorrect = idx === sampleQuestion.correctIndex;
-                        let optionStyle =
-                          "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 text-slate-800 dark:text-slate-200";
-
-                        if (selectedExamOption !== null) {
-                          if (isCorrect) {
-                            optionStyle =
-                              "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-500/50";
-                          } else if (isSelected) {
-                            optionStyle =
-                              "border-rose-400 bg-rose-50/50 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200";
-                          }
-                        }
-
-                        return (
-                          <button
-                            key={idx}
-                            onClick={() => setSelectedExamOption(idx)}
-                            className={`p-3 rounded-xl border text-left text-xs font-sans transition-all flex items-start gap-2.5 cursor-pointer ${optionStyle}`}
-                          >
-                            <span
-                              className={`w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 border ${
-                                isSelected
-                                  ? isCorrect
-                                    ? "bg-emerald-600 text-white border-emerald-600"
-                                    : "bg-rose-500 text-white border-rose-500"
-                                  : "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
-                              }`}
-                            >
-                              {letter}
-                            </span>
-                            <span className="leading-relaxed mt-0.5">{opt}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Immediate Tactile Explanation Banner */}
-                    {selectedExamOption !== null && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        className="p-3.5 rounded-xl border border-indigo-200/80 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 text-xs text-slate-700 dark:text-slate-300 space-y-1"
-                      >
-                        <p className="font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                          <span>
-                            {selectedExamOption === sampleQuestion.correctIndex
-                              ? "Correct! Verified Statutory Key"
-                              : "Review Note: Correct answer is Option B (30 days)"}
-                          </span>
-                        </p>
-                        <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                          {sampleQuestion.explanation}
-                        </p>
-                      </motion.div>
-                    )}
-                  </div>
-                ) : (
-                  /* OMR Sheet Preview */
-                  <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 space-y-3 font-mono">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 text-xs">
-                      <div className="flex items-center gap-2">
-                        <QrCode className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                        <div>
-                          <p className="font-bold text-slate-900 dark:text-slate-100">
-                            ResearchMate OMR Sheet (50/100 Format)
-                          </p>
-                          <p className="text-[10px] text-slate-500">
-                            Code: EXAM-RA6713-V1 • Layout: 2-Column Standard MCQ
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300">
-                        Printable A4 / Letter
+        {/* Playground Workspace */}
+        {!isParsingPdf && (
+          <div className="p-5 sm:p-7">
+            <AnimatePresence mode="wait">
+              {/* 1. EXAM SIMULATOR & OMR PREVIEW */}
+              {activeMode === "exam" && (
+                <motion.div
+                  key="exam"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                  className="space-y-4"
+                >
+                  {/* Meta Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2 text-xs font-mono">
+                      <span className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/50 font-semibold">
+                        {currentExamItem.seed}
+                      </span>
+                      <span className="text-slate-400">•</span>
+                      <span className="text-slate-500 truncate max-w-[200px] sm:max-w-xs">
+                        {currentExamItem.topicTag}
+                      </span>
+                      <span className="text-slate-400">•</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" /> Enemy Filter Passed
                       </span>
                     </div>
 
-                    {/* Simulated Bubbles Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map((qNum) => (
-                        <div
-                          key={qNum}
-                          className="flex items-center justify-between p-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
-                        >
-                          <span className="font-bold text-slate-500 w-4">{qNum}.</span>
-                          <div className="flex items-center gap-1">
-                            {["A", "B", "C", "D"].map((b, bIdx) => (
+                    <div className="flex items-center gap-2">
+                      {/* Pagination if multiple custom questions loaded */}
+                      {hasCustomQuestions && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono pr-2 border-r border-slate-200 dark:border-slate-800">
+                          <button
+                            onClick={() => {
+                              setActiveQuestionIdx((prev) => Math.max(0, prev - 1));
+                              setSelectedExamOption(null);
+                            }}
+                            disabled={activeQuestionIdx === 0}
+                            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
+                            title="Previous question"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <span>
+                            {activeQuestionIdx + 1} / {customQuestions.length}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setActiveQuestionIdx((prev) =>
+                                Math.min(customQuestions.length - 1, prev + 1)
+                              );
+                              setSelectedExamOption(null);
+                            }}
+                            disabled={activeQuestionIdx === customQuestions.length - 1}
+                            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
+                            title="Next question"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => setShowOmrPreview(!showOmrPreview)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shadow-2xs"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{showOmrPreview ? "Back to Question" : "Inspect Printable OMR Sheet"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {!showOmrPreview ? (
+                    /* Question Card */
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+                        <div className="flex items-start gap-3">
+                          <span className="w-6 h-6 rounded-md bg-indigo-600 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                            {hasCustomQuestions ? activeQuestionIdx + 1 : 1}
+                          </span>
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100 leading-relaxed font-sans">
+                            {currentExamItem.stem}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Options Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {currentExamItem.options.map((opt, idx) => {
+                          const letter = String.fromCharCode(65 + idx);
+                          const isSelected = selectedExamOption === idx;
+                          const isCorrect = idx === currentExamItem.correctIndex;
+                          let optionStyle =
+                            "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 text-slate-800 dark:text-slate-200";
+
+                          if (selectedExamOption !== null) {
+                            if (isCorrect) {
+                              optionStyle =
+                                "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-500/50";
+                            } else if (isSelected) {
+                              optionStyle =
+                                "border-rose-400 bg-rose-50/50 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200";
+                            }
+                          }
+
+                          return (
+                            <button
+                              key={idx}
+                              onClick={() => setSelectedExamOption(idx)}
+                              className={`p-3 rounded-xl border text-left text-xs font-sans transition-all flex items-start gap-2.5 cursor-pointer ${optionStyle}`}
+                            >
                               <span
-                                key={b}
-                                className={`w-4 h-4 rounded-full border text-[9px] flex items-center justify-center font-bold ${
-                                  qNum === 1 && b === "B"
-                                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950 border-slate-900"
-                                    : "border-slate-300 dark:border-slate-700 text-slate-400"
+                                className={`w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 border ${
+                                  isSelected
+                                    ? isCorrect
+                                      ? "bg-emerald-600 text-white border-emerald-600"
+                                      : "bg-rose-500 text-white border-rose-500"
+                                    : "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
                                 }`}
                               >
-                                {b}
+                                {letter}
                               </span>
-                            ))}
+                              <span className="leading-relaxed mt-0.5">{opt}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Immediate Tactile Explanation Banner */}
+                      {selectedExamOption !== null && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          className="p-3.5 rounded-xl border border-indigo-200/80 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 text-xs text-slate-700 dark:text-slate-300 space-y-1"
+                        >
+                          <p className="font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            <span>
+                              {selectedExamOption === currentExamItem.correctIndex
+                                ? "Correct! Verified Key"
+                                : `Review Note: Correct answer is Option ${String.fromCharCode(
+                                    65 + currentExamItem.correctIndex
+                                  )}`}
+                            </span>
+                          </p>
+                          <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                            {currentExamItem.explanation}
+                          </p>
+                        </motion.div>
+                      )}
+                    </div>
+                  ) : (
+                    /* OMR Sheet Preview */
+                    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 space-y-3 font-mono">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 text-xs">
+                        <div className="flex items-center gap-2">
+                          <QrCode className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                          <div>
+                            <p className="font-bold text-slate-900 dark:text-slate-100">
+                              ResearchMate OMR Sheet (50/100 Format)
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              Code: {currentExamItem.seed} • Document:{" "}
+                              {uploadedFileName || "Statutory Reviewer"}
+                            </p>
                           </div>
                         </div>
-                      ))}
+                        <span className="text-[10px] bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300">
+                          Printable A4 / Letter
+                        </span>
+                      </div>
+
+                      {/* Simulated Bubbles Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((qNum) => {
+                          const item = hasCustomQuestions ? customQuestions[qNum - 1] : null;
+                          const correctLetter = item
+                            ? String.fromCharCode(65 + item.correctIndex)
+                            : qNum === 1
+                            ? "B"
+                            : null;
+
+                          return (
+                            <div
+                              key={qNum}
+                              className="flex items-center justify-between p-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
+                            >
+                              <span className="font-bold text-slate-500 w-4">{qNum}.</span>
+                              <div className="flex items-center gap-1">
+                                {["A", "B", "C", "D"].map((b) => (
+                                  <span
+                                    key={b}
+                                    className={`w-4 h-4 rounded-full border text-[9px] flex items-center justify-center font-bold ${
+                                      correctLetter === b
+                                        ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950 border-slate-900"
+                                        : "border-slate-300 dark:border-slate-700 text-slate-400"
+                                    }`}
+                                  >
+                                    {b}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 text-[11px] text-slate-500">
+                        <p>
+                          💡 Mobile camera pen grading reads QR code to reconstruct key without internet access.
+                        </p>
+                        {!uploadedFileName ? (
+                          <Link
+                            to="/signup"
+                            className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+                          >
+                            Sign in to download full PDF sheet →
+                          </Link>
+                        ) : (
+                          <Link
+                            to="/signup"
+                            className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+                          >
+                            Save this exam to download PDF sheet →
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* 2. LITERATURE MATRIX */}
+              {activeMode === "matrix" && (
+                <motion.div
+                  key="matrix"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                  className="space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 font-title uppercase tracking-wider">
+                        Multi-Paper Synthesis Matrix (3 Breakthrough Architecture Papers)
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Auto-extracted comparative table. Highlights core methodologies and unaddressed literature gaps.
+                      </p>
                     </div>
 
-                    <p className="text-[11px] text-slate-500 pt-1">
-                      💡 Scanned by mobile camera or camera pen. Answer key is automatically reconstructed from the QR seed code.
-                    </p>
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {/* 2. LITERATURE MATRIX */}
-            {activeMode === "matrix" && (
-              <motion.div
-                key="matrix"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-                className="space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 font-title uppercase tracking-wider">
-                      Multi-Paper Synthesis Matrix (3 Breakthrough Architecture Papers)
-                    </h3>
-                    <p className="text-[11px] text-slate-500">
-                      Auto-extracted comparative table. Highlights core methodologies and unaddressed literature gaps.
-                    </p>
+                    <button
+                      onClick={handleCopyMatrix}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                    >
+                      {copiedMatrix ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      )}
+                      <span>{copiedMatrix ? "Copied" : "Copy Citations"}</span>
+                    </button>
                   </div>
 
-                  <button
-                    onClick={handleCopyMatrix}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
-                  >
-                    {copiedMatrix ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
-                    <span>{copiedMatrix ? "Copied" : "Copy Citations"}</span>
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <table className="w-full text-left text-xs font-sans">
-                    <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-semibold">
-                      <tr>
-                        <th className="p-2.5">Paper / Author</th>
-                        <th className="p-2.5">Methodology</th>
-                        <th className="p-2.5">Dataset / Benchmarks</th>
-                        <th className="p-2.5">Key Finding</th>
-                        <th className="p-2.5">Identified Limitation / Gap</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                      {MATRIX_DATA.map((row, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                          <td className="p-2.5 font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                            <p>{row.paper}</p>
-                            <p className="text-[10px] text-slate-400 italic">{row.title}</p>
-                          </td>
-                          <td className="p-2.5">{row.method}</td>
-                          <td className="p-2.5 text-slate-500 font-mono text-[11px]">{row.dataset}</td>
-                          <td className="p-2.5 text-emerald-700 dark:text-emerald-400 font-medium">{row.finding}</td>
-                          <td className="p-2.5 text-amber-700 dark:text-amber-400">{row.gap}</td>
+                  <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                    <table className="w-full text-left text-xs font-sans">
+                      <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-semibold">
+                        <tr>
+                          <th className="p-2.5">Paper / Author</th>
+                          <th className="p-2.5">Methodology</th>
+                          <th className="p-2.5">Dataset / Benchmarks</th>
+                          <th className="p-2.5">Key Finding</th>
+                          <th className="p-2.5">Identified Limitation / Gap</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </motion.div>
-            )}
-
-            {/* 3. ACTIVE RECALL FLASHCARDS */}
-            {activeMode === "flashcards" && (
-              <motion.div
-                key="flashcards"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-                className="space-y-4"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 font-title uppercase tracking-wider">
-                      Interactive Flashcard Companion
-                    </h3>
-                    <p className="text-[11px] text-slate-500">
-                      Click card or press flip to test recall. Rates mastery for spaced repetition scheduling.
-                    </p>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                        {MATRIX_DATA.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                            <td className="p-2.5 font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                              <p>{row.paper}</p>
+                              <p className="text-[10px] text-slate-400 italic">{row.title}</p>
+                            </td>
+                            <td className="p-2.5">{row.method}</td>
+                            <td className="p-2.5 text-slate-500 font-mono text-[11px]">
+                              {row.dataset}
+                            </td>
+                            <td className="p-2.5 text-emerald-700 dark:text-emerald-400 font-medium">
+                              {row.finding}
+                            </td>
+                            <td className="p-2.5 text-amber-700 dark:text-amber-400">{row.gap}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <span className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/50">
-                    Spaced Repetition
-                  </span>
-                </div>
+                </motion.div>
+              )}
 
-                {/* Flip Card Container */}
-                <div
-                  onClick={() => setIsFlipped(!isFlipped)}
-                  className="p-6 rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/60 bg-gradient-to-br from-indigo-50/40 via-white to-slate-50 dark:from-slate-900 dark:to-slate-950 min-h-[160px] flex flex-col justify-between cursor-pointer hover:border-indigo-400 transition-all select-none shadow-xs"
+              {/* 3. ACTIVE RECALL FLASHCARDS */}
+              {activeMode === "flashcards" && (
+                <motion.div
+                  key="flashcards"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                  className="space-y-4"
                 >
-                  <div className="flex items-center justify-between text-xs text-indigo-600 dark:text-indigo-400 font-mono">
-                    <span>{isFlipped ? "BACK • ANSWER & DERIVATION" : "FRONT • ACTIVE PROMPT"}</span>
-                    <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                      <RotateCw className="w-3 h-3" /> Click anywhere to flip
-                    </span>
-                  </div>
-
-                  <div className="py-3">
-                    {!isFlipped ? (
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 font-title leading-relaxed">
-                        What is the core quadratic bottleneck in standard Multi-Head Attention, and how does FlashAttention's IO-aware tiling achieve linear memory complexity?
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 font-title uppercase tracking-wider">
+                        Interactive Flashcard Companion
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Click card or press flip to test recall. Rates mastery for spaced repetition scheduling.
                       </p>
-                    ) : (
-                      <div className="space-y-2 text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-sans">
-                        <p>
-                          Standard attention materializes the intermediate N × N attention matrix to High Bandwidth Memory (HBM), resulting in O(N²) memory reads and writes.
-                        </p>
-                        <p className="text-emerald-700 dark:text-emerald-400 font-medium">
-                          FlashAttention tiles queries, keys, and values into fast on-chip SRAM blocks, computing softmax normalization incrementally without writing large intermediate matrices back to HBM.
-                        </p>
+                    </div>
+
+                    {/* Card pagination if custom flashcards loaded */}
+                    {hasCustomFlashcards && (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono">
+                        <button
+                          onClick={() => {
+                            setActiveCardIdx((prev) => Math.max(0, prev - 1));
+                            setIsFlipped(false);
+                            setFlashcardRating(null);
+                          }}
+                          disabled={activeCardIdx === 0}
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
+                          title="Previous card"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <span>
+                          {activeCardIdx + 1} / {customFlashcards.length}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setActiveCardIdx((prev) =>
+                              Math.min(customFlashcards.length - 1, prev + 1)
+                            );
+                            setIsFlipped(false);
+                            setFlashcardRating(null);
+                          }}
+                          disabled={activeCardIdx === customFlashcards.length - 1}
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
+                          title="Next card"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                    <span>Category: Machine Learning Architecture</span>
-                    <span>Card 1 of 24</span>
-                  </div>
-                </div>
-
-                {/* Rating Pills */}
-                {isFlipped && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex items-center justify-center gap-3 pt-1"
+                  {/* Flip Card Container */}
+                  <div
+                    onClick={() => setIsFlipped(!isFlipped)}
+                    className="p-6 rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/60 bg-gradient-to-br from-indigo-50/40 via-white to-slate-50 dark:from-slate-900 dark:to-slate-950 min-h-[170px] flex flex-col justify-between cursor-pointer hover:border-indigo-400 transition-all select-none shadow-xs"
                   >
-                    <span className="text-xs text-slate-500">Rate Recall:</span>
-                    <button
-                      onClick={() => setFlashcardRating("Hard")}
-                      className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                        flashcardRating === "Hard"
-                          ? "bg-rose-600 text-white border-rose-600"
-                          : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      }`}
-                    >
-                      Hard (1 day)
-                    </button>
-                    <button
-                      onClick={() => setFlashcardRating("Good")}
-                      className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                        flashcardRating === "Good"
-                          ? "bg-indigo-600 text-white border-indigo-600"
-                          : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      }`}
-                    >
-                      Good (3 days)
-                    </button>
-                    <button
-                      onClick={() => setFlashcardRating("Easy")}
-                      className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                        flashcardRating === "Easy"
-                          ? "bg-emerald-600 text-white border-emerald-600"
-                          : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      }`}
-                    >
-                      Easy (7 days)
-                    </button>
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
-
-            {/* 4. WHITEBOARD MATH OCR */}
-            {activeMode === "math_ocr" && (
-              <motion.div
-                key="math_ocr"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-                className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch"
-              >
-                {/* Left: Input Whiteboard Derivation */}
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/70 dark:bg-slate-950/60 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pb-2 border-b border-slate-200 dark:border-slate-800">
-                      <span>Input: Camera / Scratchpad</span>
-                      <span className="text-amber-600 dark:text-amber-400">Faraday's Law of Induction</span>
+                    <div className="flex items-center justify-between text-xs text-indigo-600 dark:text-indigo-400 font-mono">
+                      <span>{isFlipped ? "BACK • ANSWER & DERIVATION" : "FRONT • ACTIVE PROMPT"}</span>
+                      <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                        <RotateCw className="w-3 h-3" /> Click anywhere to flip
+                      </span>
                     </div>
 
-                    <div className="p-4 rounded-lg bg-amber-50/30 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 font-mono text-xs text-slate-800 dark:text-slate-200 space-y-1">
-                      <p className="text-slate-400 italic text-[11px]">// Physical Whiteboard Ink Transcription</p>
-                      <p className="font-semibold text-slate-900 dark:text-slate-100">
-                        contour_integral(E . dl) = - d/dt (surface_integral(B . dA))
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        Identified: closed line integral of electric field along boundary Sigma equals rate of change of magnetic flux.
-                      </p>
+                    <div className="py-3">
+                      {!isFlipped ? (
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 font-title leading-relaxed">
+                          {currentFlashcard.front}
+                        </p>
+                      ) : (
+                        <div className="space-y-2 text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-sans whitespace-pre-line">
+                          {currentFlashcard.back}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+                      <span>Category: {currentFlashcard.category || "General Review"}</span>
+                      <span>
+                        Card {hasCustomFlashcards ? activeCardIdx + 1 : 1} of{" "}
+                        {hasCustomFlashcards ? customFlashcards.length : 24}
+                      </span>
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-slate-500 pt-3">
-                    📷 Upload phone camera photos, tablet drawings, or PDF scan pages.
-                  </p>
-                </div>
-
-                {/* Right: Rendered KaTeX Equation */}
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 flex flex-col justify-between shadow-xs">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pb-2 border-b border-slate-100 dark:border-slate-800">
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">Output: KaTeX Equation</span>
-                      <span>Overleaf & Typst Ready</span>
-                    </div>
-
-                    <div className="py-2 text-center overflow-x-auto">
-                      <AcademicMathView
-                        text={"$$\\oint_{\\partial \\Sigma} \\mathbf{E} \\cdot d\\boldsymbol{\\ell} = -\\frac{d}{dt} \\iint_{\\Sigma} \\mathbf{B} \\cdot d\\mathbf{A}$$"}
-                      />
-                    </div>
-
-                    <div className="p-2.5 rounded-lg bg-slate-100/70 dark:bg-slate-800/60 font-mono text-[11px] text-slate-700 dark:text-slate-300 overflow-x-auto">
-                      {"\\oint_{\\partial \\Sigma} \\mathbf{E} \\cdot d\\boldsymbol{\\ell} = -\\frac{d}{dt} \\iint_{\\Sigma} \\mathbf{B} \\cdot d\\mathbf{A}"}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-3 text-xs">
-                    <span className="text-[11px] text-slate-500 font-mono">LaTeX block syntax ($$...$$)</span>
-                    <button
-                      onClick={handleCopyLatex}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 text-xs font-medium transition-colors cursor-pointer"
+                  {/* Rating Pills */}
+                  {isFlipped && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex items-center justify-center gap-3 pt-1"
                     >
-                      {copiedLatex ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedLatex ? "Copied" : "Copy LaTeX"}</span>
-                    </button>
+                      <span className="text-xs text-slate-500">Rate Recall:</span>
+                      <button
+                        onClick={() => setFlashcardRating("Hard")}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                          flashcardRating === "Hard"
+                            ? "bg-rose-600 text-white border-rose-600"
+                            : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        Hard (1 day)
+                      </button>
+                      <button
+                        onClick={() => setFlashcardRating("Good")}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                          flashcardRating === "Good"
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        Good (3 days)
+                      </button>
+                      <button
+                        onClick={() => setFlashcardRating("Easy")}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                          flashcardRating === "Easy"
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        Easy (7 days)
+                      </button>
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* 4. WHITEBOARD MATH OCR */}
+              {activeMode === "math_ocr" && (
+                <motion.div
+                  key="math_ocr"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                  className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch"
+                >
+                  {/* Left: Input Whiteboard Derivation */}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/70 dark:bg-slate-950/60 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pb-2 border-b border-slate-200 dark:border-slate-800">
+                        <span>Input: Camera / Scratchpad</span>
+                        <span className="text-amber-600 dark:text-amber-400">Faraday's Law of Induction</span>
+                      </div>
+
+                      <div className="p-4 rounded-lg bg-amber-50/30 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 font-mono text-xs text-slate-800 dark:text-slate-200 space-y-1">
+                        <p className="text-slate-400 italic text-[11px]">// Physical Whiteboard Ink Transcription</p>
+                        <p className="font-semibold text-slate-900 dark:text-slate-100">
+                          contour_integral(E . dl) = - d/dt (surface_integral(B . dA))
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          Identified: closed line integral of electric field along boundary Sigma equals rate of change of magnetic flux.
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 pt-3">
+                      📷 Upload phone camera photos, tablet drawings, or PDF scan pages.
+                    </p>
                   </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+
+                  {/* Right: Rendered KaTeX Equation */}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 flex flex-col justify-between shadow-xs">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">Output: KaTeX Equation</span>
+                        <span>Overleaf & Typst Ready</span>
+                      </div>
+
+                      <div className="py-2 text-center overflow-x-auto">
+                        <AcademicMathView
+                          text={"$$\\oint_{\\partial \\Sigma} \\mathbf{E} \\cdot d\\boldsymbol{\\ell} = -\\frac{d}{dt} \\iint_{\\Sigma} \\mathbf{B} \\cdot d\\mathbf{A}$$"}
+                        />
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-slate-100/70 dark:bg-slate-800/60 font-mono text-[11px] text-slate-700 dark:text-slate-300 overflow-x-auto">
+                        {"\\oint_{\\partial \\Sigma} \\mathbf{E} \\cdot d\\boldsymbol{\\ell} = -\\frac{d}{dt} \\iint_{\\Sigma} \\mathbf{B} \\cdot d\\mathbf{A}"}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 text-xs">
+                      <span className="text-[11px] text-slate-500 font-mono">LaTeX block syntax ($$...$$)</span>
+                      <button
+                        onClick={handleCopyLatex}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 text-xs font-medium transition-colors cursor-pointer"
+                      >
+                        {copiedLatex ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedLatex ? "Copied" : "Copy LaTeX"}</span>
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
     </section>
   );
