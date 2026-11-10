@@ -73,16 +73,26 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
             </Link>
 
             {/* Desktop Nav */}
-            <div className="hidden md:flex items-center gap-8">
+            <div className="hidden md:flex items-center gap-7">
               <button
                 onClick={() =>
                   document
                     .getElementById("home")
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
-                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
               >
                 Overview
+              </button>
+              <button
+                onClick={() =>
+                  document
+                    .getElementById("playground")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
+                className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors cursor-pointer font-semibold"
+              >
+                Playground
               </button>
               <button
                 onClick={() =>
@@ -90,7 +100,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
                     .getElementById("features")
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
-                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
               >
                 Features
               </button>
@@ -100,7 +110,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
                     .getElementById("products")
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
-                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
               >
                 Platform
               </button>
@@ -110,7 +120,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
                     .getElementById("how-it-works")
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
-                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
               >
                 Workflow
               </button>
@@ -119,12 +129,12 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
             {/* CTA Buttons */}
             <div className="hidden md:flex items-center gap-3">
               <Link to="/login">
-                <button className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors px-3 py-1.5">
+                <button className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors px-3 py-1.5 cursor-pointer">
                   Sign In
                 </button>
               </Link>
               <Link to="/signup">
-                <button className="text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg transition-all active:scale-[0.98] shadow-2xs">
+                <button className="text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg transition-all active:scale-[0.98] shadow-2xs cursor-pointer">
                   Start Free
                 </button>
               </Link>
@@ -158,9 +168,31 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
                     .getElementById("home")
                     ?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className="block py-3 text-base font-medium text-gray-900 w-full text-left"
+                className="block py-2.5 text-sm font-medium text-gray-900 w-full text-left"
               >
-                Home
+                Overview
+              </button>
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  document
+                    .getElementById("playground")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="block py-2.5 text-sm font-medium text-indigo-600 w-full text-left font-semibold"
+              >
+                Playground
+              </button>
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  document
+                    .getElementById("features")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="block py-2.5 text-sm font-medium text-gray-900 w-full text-left"
+              >
+                Features
               </button>
               <button
                 onClick={() => {
@@ -169,9 +201,9 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
                     .getElementById("products")
                     ?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className="block py-3 text-base font-medium text-gray-900 w-full text-left"
+                className="block py-2.5 text-sm font-medium text-gray-900 w-full text-left"
               >
-                Products
+                Platform
               </button>
               <button
                 onClick={() => {
@@ -180,19 +212,19 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
                     .getElementById("how-it-works")
                     ?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className="block py-3 text-base font-medium text-gray-900 w-full text-left"
+                className="block py-2.5 text-sm font-medium text-gray-900 w-full text-left"
               >
-                How It Works
+                Workflow
               </button>
               <div className="pt-4 flex gap-3">
                 <Link to="/login" className="flex-1">
-                  <button className="theme-btn theme-btn-outline w-full py-2.5 text-sm font-medium border border-gray-300">
+                  <button className="w-full py-2.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-800 hover:bg-slate-50 transition-colors">
                     Sign In
                   </button>
                 </Link>
                 <Link to="/signup" className="flex-1">
-                  <button className="theme-btn theme-btn-primary w-full py-2.5 text-sm font-medium bg-[#007AFF] text-white">
-                    Get Started
+                  <button className="w-full py-2.5 text-xs font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors">
+                    Start Free
                   </button>
                 </Link>
               </div>
@@ -204,49 +236,55 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
       {/* Main Content */}
       <main className="pt-12 content-above-bubbles">{children}</main>
 
-      {/* Footer - Semi-transparent */}
-      <footer className="border-t border-white/30 bg-white/40 backdrop-blur-sm content-above-bubbles bubble-clickthrough">
-        <div className="max-w-6xl mx-auto px-6 py-12">
+      {/* Footer */}
+      <footer className="border-t border-slate-200/80 bg-white/80 backdrop-blur-sm content-above-bubbles">
+        <div className="max-w-6xl mx-auto px-6 py-14">
           <div className="grid md:grid-cols-4 gap-8">
             {/* Brand */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <ResearchMateLogo size={24} />
-                <span className="font-semibold text-slate-900">ResearchMate</span>
+                <span className="font-semibold text-slate-900 font-title">ResearchMate</span>
               </div>
-              <p className="text-sm text-gray-500">
-                Your research, everywhere.
+              <p className="text-xs text-slate-500 leading-relaxed font-sans max-w-[28ch]">
+                Verifiable academic synthesis, math derivations, and seeded exam simulation.
               </p>
             </div>
 
             {/* Links */}
             {[
               {
-                title: "Product",
-                links: ["Features", "Literature Matrix", "Mobile OCR", "Pricing"],
+                title: "Engines",
+                links: [
+                  "Exam Simulator & OMR",
+                  "Literature Matrix",
+                  "Question Bank ($0 Cost)",
+                  "Active Recall Flashcards",
+                  "Whiteboard Math OCR",
+                ],
               },
               {
-                title: "Company",
-                links: ["About", "Team", "Careers", "Press"],
+                title: "Academic Platform",
+                links: ["Offline Architecture", "Seeded PRNG Verification", "Overleaf LaTeX Bridge", "Privacy Guarantee"],
               },
               {
-                title: "Support",
-                links: ["Help Center", "Contact", "Status", "Terms"],
+                title: "Access",
+                links: ["Sign In", "Create Account", "Mobile Companion", "Help & Docs"],
               },
             ].map((section) => (
               <div key={section.title}>
-                <h4 className="font-semibold text-xs text-gray-900 uppercase tracking-wider mb-4">
+                <h4 className="font-semibold text-[11px] text-slate-900 uppercase tracking-wider mb-3 font-mono">
                   {section.title}
                 </h4>
-                <ul className="space-y-3">
+                <ul className="space-y-2">
                   {section.links.map((link) => (
                     <li key={link}>
-                      <a
-                        href="#"
-                        className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+                      <Link
+                        to="/signup"
+                        className="text-xs text-slate-500 hover:text-slate-900 transition-colors"
                       >
                         {link}
-                      </a>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -254,20 +292,12 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({
             ))}
           </div>
 
-          <div className="mt-12 pt-8 border-t border-gray-200/50 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-xs text-gray-500">
-              © 2024 ResearchMate. All rights reserved.
-            </p>
+          <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500">
+            <p>© 2026 ResearchMate. All rights reserved.</p>
             <div className="flex gap-6">
-              <a href="#" className="text-xs text-gray-500 hover:text-gray-900">
-                Privacy
-              </a>
-              <a href="#" className="text-xs text-gray-500 hover:text-gray-900">
-                Terms
-              </a>
-              <a href="#" className="text-xs text-gray-500 hover:text-gray-900">
-                Cookies
-              </a>
+              <span className="hover:text-slate-900 cursor-pointer">Privacy Policy</span>
+              <span className="hover:text-slate-900 cursor-pointer">Terms of Service</span>
+              <span className="hover:text-slate-900 cursor-pointer">Local-First Architecture</span>
             </div>
           </div>
         </div>

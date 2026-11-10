@@ -1,14 +1,13 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import {
+  GraduationCap,
   Table2,
-  PenTool,
+  Database,
+  Layers,
   ArrowRight,
-  FileText,
-  FileEdit,
   Check,
   Sparkles,
-  ExternalLink,
 } from "lucide-react";
 
 interface Product {
@@ -25,199 +24,151 @@ interface Product {
 
 const PRODUCTS: Product[] = [
   {
-    id: "matrix",
-    name: "Literature Matrix Engine",
-    tagline: "Option A: Multi-Paper Comparative Synthesis",
+    id: "exam_simulator",
+    name: "Seeded Mock Exam Engine",
+    tagline: "Deterministic Simulated Testing & OMR Sheets",
     description:
-      "Drop 10 PDFs at once. Automatically builds a structured matrix extracting methodologies, benchmarks, datasets, findings, and research gaps.",
+      "Generate verifiable, reproducible practice exams with PRNG seed codes. Automatically filters enemy items to prevent stem answer leaks and outputs printable physical OMR bubble sheets with QR code matching.",
+    icon: GraduationCap,
+    status: "Version 2.0",
+    features: [
+      "Reproducible Mulberry32 PRNG seeds (`EXAM-xxx`)",
+      "Printable 50 & 100-question A4/Letter OMR bubble sheets",
+      "Automated enemy-item filter to prevent answer leakage",
+      "Dual-write local & cloud attempt history tracking",
+      "Timed exam modes with customizable benchmark thresholds",
+    ],
+    cta: "Launch Exam Engine",
+    ctaLink: "/signup",
+  },
+  {
+    id: "literature_matrix",
+    name: "Literature Matrix Synthesizer",
+    tagline: "Multi-Paper Comparative Analysis",
+    description:
+      "Drop 10+ PDFs simultaneously. Automatically builds an exhaustive comparative matrix extracting methodologies, benchmark datasets, quantitative metrics, and research gaps without tedious manual highlighting.",
     icon: Table2,
-    status: "Beta Preview",
+    status: "Core Engine",
     features: [
-      "Compare 2–15 PDFs simultaneously",
-      "Auto-extracts methodology & datasets",
-      "Identifies conflicting results & gaps",
-      "Export comparison table to CSV / Excel",
-      "1-Click 'Draft Related Work' bridge",
+      "Compare 2 to 15 academic PDFs simultaneously",
+      "Auto-extracts methodologies, datasets & benchmarks",
+      "Identifies conflicting results & literature gaps",
+      "Export comparison tables to CSV, Excel & LaTeX",
+      "Direct Overleaf (.tex) citation bridge",
     ],
-    cta: "Preview Matrix",
-    ctaLink: "/app/dashboard",
+    cta: "Explore Matrix Engine",
+    ctaLink: "/signup",
   },
   {
-    id: "math_ocr",
-    name: "STEM Math & Derivation OCR",
-    tagline: "Option B: Whiteboard Ink to Standard LaTeX",
+    id: "question_bank",
+    name: "Question Bank & Ingestion Studio",
+    tagline: "100% In-Browser Ingestion • $0 AI Cost",
     description:
-      "Turn physical scratchpads, textbooks, and whiteboard derivations into publication-ready mathematical LaTeX ($$...$$).",
-    icon: PenTool,
-    status: "Early Access",
+      "Ingest full textbook PDFs, past bar/board reviewers, and question banks completely in your browser. Our 2-pass parser extracts stems, choices, and correlated chapter answer keys with zero cloud API cost.",
+    icon: Database,
+    status: "Client-Side Engine",
     features: [
-      "Gemini Vision mathematical transcription",
-      "Supports complex tensors, integrals & matrices",
-      "Preserves step-by-step proof derivations",
-      "One-click copy to Overleaf (.tex)",
-      "Direct insertion into TipTap Editor",
+      "Two-pass client parser for PDF books and exams",
+      "Auto-correlates chapter answer keys and rationales",
+      "One-click batch rollback by import batch ID",
+      "Distractor quality linter and anomaly detector",
+      "Full provenance attribution (source, chapter, page)",
     ],
-    cta: "Try Math OCR",
-    ctaLink: "/mobile-sync",
+    cta: "Explore Question Bank",
+    ctaLink: "/signup",
   },
   {
-    id: "editor",
-    name: "Synthesis-to-Draft Editor",
-    tagline: "Full-Cycle Academic Writing Canvas",
+    id: "flashcards",
+    name: "Active Recall Flashcards Studio",
+    tagline: "Spaced Repetition Companion Decks",
     description:
-      "Integrated TipTap editor designed for manuscripts. Automatically receives your synthesized literature matrix and formatted LaTeX math.",
-    icon: FileEdit,
+      "Every imported question or synthesized note automatically generates a companion flashcard deck. Study with keyboard controls (Space / 1-3), track mastery, and review difficult concepts on a spaced retention curve.",
+    icon: Layers,
     status: "Available",
     features: [
-      "Inline LaTeX math rendering",
-      "Automatic in-text citation pins",
-      "BibTeX bibliography generator",
-      "Export to Overleaf (.tex) and Word (.docx)",
-      "Distraction-free focus environment",
+      "Auto-converts ingested materials into flashcard cards",
+      "Spaced repetition intervals (Hard / Good / Easy)",
+      "Keyboard-driven review (Space / 1-3 keys)",
+      "Category grouping and mastery rate tracking",
+      "Offline-first sync with full local caching",
     ],
-    cta: "Open Editor",
-    ctaLink: "/app/editor",
-  },
-  {
-    id: "ingestor",
-    name: "Automated Paper & PDF Ingestor",
-    tagline: "Zero-Highlight Document Pipeline",
-    description:
-      "Ingest preprints, PDFs, and DOI references from ArXiv, PubMed, and open repositories without manual snippet copying. Automatically parses full-text documents and BibTeX citations.",
-    icon: FileText,
-    status: "Available",
-    features: [
-      "1-Click ArXiv & PubMed paper ingestion",
-      "Full-text open-access PDF extraction",
-      "BibTeX metadata auto-parsing",
-      "Real-time library synchronization",
-      "Direct import into Literature Review Matrix",
-    ],
-    cta: "Import on Web",
-    ctaLink: "/app/pdf-reader",
+    cta: "Open Flashcard Studio",
+    ctaLink: "/signup",
   },
 ];
 
 const ProductsSection: React.FC = () => {
   return (
     <section id="products" className="scroll-mt-12 py-20 px-4 sm:px-6 max-w-7xl mx-auto">
-      {/* Editorial Header */}
+      {/* Header */}
       <div className="max-w-3xl mb-14">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-mono text-slate-700 dark:text-slate-300 mb-4 border border-slate-200 dark:border-slate-700">
+          <span>The Academic Suite</span>
+        </div>
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-title font-semibold tracking-tight text-slate-900 dark:text-slate-50 leading-[1.1] mb-4">
-          Four specialized engines. One unified manuscript pipeline.
+          Four integrated engines for high-stakes academic work.
         </h2>
         <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 font-sans leading-relaxed max-w-[65ch]">
-          From multi-paper literature reviews to whiteboard math derivations, ResearchMate turns raw academic ingestion into publication-ready writing.
+          Designed for graduate researchers, medical and legal candidates, and STEM students who need verifiable accuracy, not conversational guesswork.
         </p>
       </div>
 
-      {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
+      {/* 2x2 Grid of Products */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
         {PRODUCTS.map((product) => {
           const Icon = product.icon;
           return (
             <div
               key={product.id}
-              className="bg-white dark:bg-slate-900 rounded-2xl p-7 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between"
+              className="bg-white dark:bg-slate-900 rounded-2xl p-7 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all"
             >
               <div>
-                <div className="flex items-center justify-between mb-5">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 flex items-center justify-center border border-slate-200/80 dark:border-slate-700">
-                    <Icon className="w-5 h-5" />
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 flex items-center justify-center border border-slate-200/80 dark:border-slate-700">
+                      <Icon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 font-title">
+                        {product.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 font-sans">
+                        {product.tagline}
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-[11px] font-mono text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded border border-indigo-200/50 dark:border-indigo-800/50">
+                  <span className="text-[11px] font-mono text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-0.5 rounded border border-indigo-200/50 dark:border-indigo-800/50">
                     {product.status}
                   </span>
                 </div>
 
-                <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 font-title mb-1">
-                  {product.name}
-                </h3>
-                <p className="text-xs font-mono text-slate-500 mb-3">
-                  {product.tagline}
-                </p>
-                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-6">
+                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-sans mb-6">
                   {product.description}
                 </p>
 
-                <div className="space-y-2 mb-8 border-t border-slate-100 dark:border-slate-800 pt-4">
-                  {product.features.map((feature, fIdx) => (
-                    <div
-                      key={fIdx}
-                      className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300"
-                    >
-                      <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                      <span>{feature}</span>
+                {/* Features List */}
+                <div className="space-y-2 mb-8">
+                  {product.features.map((feat, idx) => (
+                    <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-300">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span className="leading-normal">{feat}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Action */}
-              <div>
-                {product.ctaLink.startsWith("/") ? (
-                  <Link
-                    to={product.ctaLink}
-                    className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 rounded-lg bg-slate-900 text-white font-medium text-xs hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 active:scale-[0.98] transition-all shadow-xs"
-                  >
-                    <span>{product.cta}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                ) : (
-                  <a
-                    href={product.ctaLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 rounded-lg bg-slate-900 text-white font-medium text-xs hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 active:scale-[0.98] transition-all shadow-xs"
-                  >
-                    <span>{product.cta}</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
-              </div>
+              {/* Action Button */}
+              <Link
+                to={product.ctaLink}
+                className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-semibold transition-all active:scale-[0.98]"
+              >
+                <span>{product.cta}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
           );
         })}
-      </div>
-
-      {/* Literature Matrix Spotlight Banner */}
-      <div className="bg-slate-900 text-slate-100 rounded-2xl p-8 sm:p-10 border border-slate-800 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
-        <div className="max-w-xl">
-          <h3 className="text-2xl font-title font-semibold mb-3 text-white">
-            Auto-ingest without manual highlighting.
-          </h3>
-          <p className="text-sm text-slate-300 leading-relaxed font-sans mb-6">
-            ResearchMate automatically parses open-access PDFs, grabs verified BibTeX citations, and queues papers directly into your synthesis matrix.
-          </p>
-          <Link
-            to="/app/literature-matrix"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-white text-slate-950 font-medium text-xs hover:bg-slate-100 active:scale-[0.98] transition-all shadow-sm"
-          >
-            <Sparkles className="w-4 h-4 text-indigo-600" />
-            <span>Launch Literature Matrix Engine</span>
-          </Link>
-        </div>
-
-        <div className="w-full md:w-72 bg-slate-800/80 rounded-xl p-5 border border-slate-700/80 font-mono text-xs space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-700">
-            <span className="text-slate-400">Automated Pipeline</span>
-            <span className="text-emerald-400">Active</span>
-          </div>
-          <div className="space-y-1.5 text-[11px] text-slate-300">
-            <p className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              ArXiv & PDF auto-ingestion
-            </p>
-            <p className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              Direct BibTeX sync
-            </p>
-            <p className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              Queues straight to Matrix
-            </p>
-          </div>
-        </div>
       </div>
     </section>
   );
