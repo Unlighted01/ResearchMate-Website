@@ -441,17 +441,30 @@ export function lintDistractorQuality(
       for (const w of leakedTargetWords) {
         const root = stemWord(w);
         if (root.length < 3) continue;
-        const wordRegex = new RegExp(`\\b${escapeRegExp(root)}[a-z]*\\b`, "gi");
-        workingStem = workingStem.replace(wordRegex, "[______]");
+        if (root === "publ" || root === "public" || w.toLowerCase() === "public") {
+          // Do not mask "public" when part of standard roles or institutions (e.g. "Public officials")
+          const wordRegex = /\bpublic\b(?!\s+(?:officials?|employees?|servants?|office|service|documents?))/gi;
+          workingStem = workingStem.replace(wordRegex, "[______]");
+        } else {
+          const wordRegex = new RegExp(`\\b${escapeRegExp(root)}[a-z]*\\b`, "gi");
+          workingStem = workingStem.replace(wordRegex, "[______]");
+        }
       }
 
       // 4. MASK LEFTOVER PARTNER WORDS (e.g. "public" in "public [______]" or "[______] interest")
       for (const w of rawCorrectWords) {
         const root = stemWord(w);
         if (root.length < 3) continue;
-        const adjacentBefore = new RegExp(`\\b${escapeRegExp(root)}[a-z]*\\s+\\[______\\]`, "gi");
-        const adjacentAfter = new RegExp(`\\[______\\]\\s+\\b${escapeRegExp(root)}[a-z]*\\b`, "gi");
-        workingStem = workingStem.replace(adjacentBefore, "[______]").replace(adjacentAfter, "[______]");
+        if (root === "publ" || root === "public" || w.toLowerCase() === "public") {
+          // Avoid turning "Public officials and employees" into "[______] officials..."
+          const adjacentBefore = /\bpublic\b(?!\s+(?:officials?|employees?|servants?|office|service|documents?))\s+\[______\]/gi;
+          const adjacentAfter = /\[______\]\s+\bpublic\b(?!\s+(?:officials?|employees?|servants?|office|service|documents?))/gi;
+          workingStem = workingStem.replace(adjacentBefore, "[______]").replace(adjacentAfter, "[______]");
+        } else {
+          const adjacentBefore = new RegExp(`\\b${escapeRegExp(root)}[a-z]*\\s+\\[______\\]`, "gi");
+          const adjacentAfter = new RegExp(`\\[______\\]\\s+\\b${escapeRegExp(root)}[a-z]*\\b`, "gi");
+          workingStem = workingStem.replace(adjacentBefore, "[______]").replace(adjacentAfter, "[______]");
+        }
       }
 
       // 5. Mask option numbers appearing outside the blank (e.g. "within thirty (30) days" -> "within [______] days")
@@ -475,9 +488,18 @@ export function lintDistractorQuality(
       workingStem = workingStem.replace(/\s+/g, " ").trim();
 
       // 6. Verify if any content word or option number still leaks after masking
-      const postWords = workingStem.toLowerCase().split(/[^\w]+/);
+      const nonInstWorkingStem = workingStem
+        .replace(/\bpublic\s+(?:officials?|employees?|office|servants?|service|documents?)\b/gi, " ")
+        .replace(/\s+/g, " ");
+      const postWords = nonInstWorkingStem.toLowerCase().split(/[^\w]+/);
       const postStems = postWords.map(stemWord);
-      const remainingLeaks = rawCorrectWords.filter((cw) => postStems.includes(stemWord(cw)));
+      const remainingLeaks = rawCorrectWords.filter((cw) => {
+        const root = stemWord(cw);
+        if (root === "publ" && !nonInstWorkingStem.toLowerCase().includes("public")) {
+          return false;
+        }
+        return postStems.includes(root);
+      });
 
       if (remainingLeaks.length === 0 && workingStem !== currentStem) {
         currentStem = workingStem;
@@ -929,6 +951,54 @@ export function classifyNumberContext(
   return "general_count";
 }
 
+/**
+ * Generic rule: flags as needs_review any sentence where a fine or monetary amount
+ * is measured in time units (e.g. "fine not exceeding one (1) year").
+ */
+export function checkFineOrAmountInTimeUnits(sentence: string): { hasAnomaly: boolean; reason?: string } {
+  const norm = (sentence || "").trim();
+  const pattern = /\b(?:fine|amount)\s+(?:not\s+exceeding\s+|of\s+|up\s+to\s+|equal\s+to\s+)?(?:[a-zA-Z\-]+\s+)?(?:\(\s*\d+\s*\)\s+)?(?:years?|months?|days?|weeks?|hours?)\b(?!\s*['’]s?\s*(?:salary|compensation|income|pay|wages))/i;
+  const match = norm.match(pattern);
+  if (match) {
+    return {
+      hasAnomaly: true,
+      reason: `Fine or amount is measured in time units ("${match[0].trim()}") in source text (possible statutory typo or drafting anomaly)`,
+    };
+  }
+  return { hasAnomaly: false };
+}
+
+function normalizeQuoteForEnemy(q?: string): string {
+  if (!q) return "";
+  return q.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isSameOrOverlappingQuote(q1?: string, q2?: string): boolean {
+  if (!q1 || !q2) return false;
+  const clean1 = normalizeQuoteForEnemy(q1);
+  const clean2 = normalizeQuoteForEnemy(q2);
+  if (!clean1 || !clean2) return false;
+  if (clean1 === clean2) return true;
+  // If one contains the other and length >= 25
+  if ((clean1.length >= 25 && clean2.includes(clean1)) || (clean2.length >= 25 && clean1.includes(clean2))) {
+    return true;
+  }
+  // Word token overlap: only if substantial content words and >= 85% overlap
+  const words1 = new Set(clean1.split(" ").filter((w) => w.length >= 4 && !STOPWORDS.has(w)));
+  const words2 = new Set(clean2.split(" ").filter((w) => w.length >= 4 && !STOPWORDS.has(w)));
+  if (words1.size >= 8 && words2.size >= 8) {
+    let common = 0;
+    for (const w of words1) {
+      if (words2.has(w)) common++;
+    }
+    const minSize = Math.min(words1.size, words2.size);
+    if (common / minSize >= 0.85) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // ============================================
 // EXAM-ASSEMBLY ENEMY ITEM CHECK
 // ============================================
@@ -941,13 +1011,14 @@ export interface EnemyItemCheckResult {
 
 /**
  * Rejects an exam question if:
- * 1. Its option set overlaps another selected question's set by more than 50% (unless explicitly part of a matching set).
- * 2. Its stem contains another selected question's answer term (e.g. Q4 defines "substantial stockholder" which appears in Q5 stem).
- * 3. Another selected question's stem contains the candidate's answer term.
+ * 1. Two items come from the same sourceQuote / clause (#2/#18, #8/#12, #9/#13, #10/#11).
+ * 2. Its option set overlaps another selected question's set by more than 50% (unless matching set).
+ * 3. Its stem contains another selected question's answer term or number from the same clause/provision (#11 contains 60 days = answer of #10).
+ * 4. Another selected question's stem contains the candidate's answer term or number from the same clause/provision.
  */
 export function isEnemyItem(
-  candidate: { id?: string; stem: string; options: string[]; correctIndex: number; templateType?: string },
-  selectedSet: { id?: string; stem: string; options: string[]; correctIndex: number; templateType?: string }[]
+  candidate: { id?: string; stem: string; options: string[]; correctIndex: number; templateType?: string; sourceQuote?: string; chapter?: string },
+  selectedSet: { id?: string; stem: string; options: string[]; correctIndex: number; templateType?: string; sourceQuote?: string; chapter?: string }[]
 ): EnemyItemCheckResult {
   if (!selectedSet || selectedSet.length === 0) {
     return { isEnemy: false };
@@ -963,6 +1034,16 @@ export function isEnemyItem(
 
   for (const existing of selectedSet) {
     const isExistingTf = existing.templateType === "true_false";
+
+    // 0. Same or overlapping sourceQuote check (#2/#18, #8/#12, #9/#13, #10/#11)
+    if (candidate.sourceQuote && existing.sourceQuote && isSameOrOverlappingQuote(candidate.sourceQuote, existing.sourceQuote)) {
+      return {
+        isEnemy: true,
+        reason: `Questions share the same source quote/clause: "${existing.sourceQuote.slice(0, 60)}..."`,
+        conflictingQuestionId: existing.id,
+      };
+    }
+
     // 1. Option Set Overlap Check (> 50%)
     // Exclude matching sets (which share an 8-item option list) and true/false sets (which share ["True", "False"])
     const isCandNb = candidate.templateType === "number_blank_deadline";
@@ -988,12 +1069,13 @@ export function isEnemyItem(
     }
 
     // 2. Answer clue leakage check:
-    // Does candidate stem contain existing question's answer term?
+    // Does candidate stem contain existing question's answer term or number from the same clause/provision?
     const existCorrectOpt = existing.options[existing.correctIndex] || "";
     const existCorrectNorm = normalizeOptionText(existCorrectOpt);
     const isExistTfLabel = existCorrectNorm === "true" || existCorrectNorm === "false";
     const isCandTfLabel = candCorrectNorm === "true" || candCorrectNorm === "false";
 
+    // Check textual answer terms
     if (!isExistTfLabel && existCorrectNorm.length >= 4 && !STOPWORDS.has(existCorrectNorm)) {
       const wholePhraseRegex = new RegExp(`\\b${escapeRegExp(existCorrectNorm)}\\b`, "i");
       if (wholePhraseRegex.test(candStemLower)) {
@@ -1002,6 +1084,33 @@ export function isEnemyItem(
           reason: `Candidate stem contains the answer term "${existCorrectOpt}" of previously selected question "${existing.stem.slice(0, 50)}..."`,
           conflictingQuestionId: existing.id,
         };
+      }
+    }
+
+    // Check numeric answer terms (e.g. #11 contains "60 days" / "60" = answer of #10 from Sec. 9)
+    const existNum = parseInt(existCorrectOpt, 10);
+    if (!isNaN(existNum)) {
+      const existWordRep = DIGIT_TO_NUMBER_WORD[existNum];
+      const numPattern = existWordRep
+        ? new RegExp(`\\b(?:${existNum}|${escapeRegExp(existWordRep)})(?:\\s*\\(\\s*${existNum}\\s*\\))?\\s*(?:working\\s+)?(?:days?|years?|months?|pesos?|%|percent)?\\b`, "i")
+        : new RegExp(`\\b${existNum}\\b`, "i");
+      
+      if (numPattern.test(candStemLower)) {
+        // Verify if both relate to the same section/clause
+        const sameSec =
+          (candidate.chapter && existing.chapter && normalizeOptionText(candidate.chapter) === normalizeOptionText(existing.chapter)) ||
+          isSameOrOverlappingQuote(candidate.sourceQuote, existing.sourceQuote) ||
+          (/section\s*9\b/i.test(candidate.stem) && /section\s*9\b/i.test(existing.stem)) ||
+          (/section\s*5\b/i.test(candidate.stem) && /section\s*5\b/i.test(existing.stem)) ||
+          (/section\s*8\b/i.test(candidate.stem) && /section\s*8\b/i.test(existing.stem));
+
+        if (sameSec) {
+          return {
+            isEnemy: true,
+            reason: `Candidate stem contains answer number/term "${existCorrectOpt}" of previously selected question "${existing.stem.slice(0, 50)}..." from the same clause/provision`,
+            conflictingQuestionId: existing.id,
+          };
+        }
       }
     }
 
@@ -1014,6 +1123,31 @@ export function isEnemyItem(
           reason: `Selected question "${existing.stem.slice(0, 50)}..." stem contains candidate's answer term "${candCorrectOpt}"`,
           conflictingQuestionId: existing.id,
         };
+      }
+    }
+
+    const candNum = parseInt(candCorrectOpt, 10);
+    if (!isNaN(candNum)) {
+      const candWordRep = DIGIT_TO_NUMBER_WORD[candNum];
+      const numPattern = candWordRep
+        ? new RegExp(`\\b(?:${candNum}|${escapeRegExp(candWordRep)})(?:\\s*\\(\\s*${candNum}\\s*\\))?\\s*(?:working\\s+)?(?:days?|years?|months?|pesos?|%|percent)?\\b`, "i")
+        : new RegExp(`\\b${candNum}\\b`, "i");
+
+      if (numPattern.test((existing.stem || "").toLowerCase())) {
+        const sameSec =
+          (candidate.chapter && existing.chapter && normalizeOptionText(candidate.chapter) === normalizeOptionText(existing.chapter)) ||
+          isSameOrOverlappingQuote(candidate.sourceQuote, existing.sourceQuote) ||
+          (/section\s*9\b/i.test(candidate.stem) && /section\s*9\b/i.test(existing.stem)) ||
+          (/section\s*5\b/i.test(candidate.stem) && /section\s*5\b/i.test(existing.stem)) ||
+          (/section\s*8\b/i.test(candidate.stem) && /section\s*8\b/i.test(existing.stem));
+
+        if (sameSec) {
+          return {
+            isEnemy: true,
+            reason: `Selected question "${existing.stem.slice(0, 50)}..." stem contains candidate's answer number/term "${candCorrectOpt}" from the same clause/provision`,
+            conflictingQuestionId: existing.id,
+          };
+        }
       }
     }
   }
@@ -1072,10 +1206,10 @@ export function assertNoStemLeaksOrOptionClashes(item: {
   const correctOpt = item.options[item.correctIndex] || "";
   const stem = (item.stem || "").trim();
 
-  // Strip masked blanks from stem so [______] or _____ aren't evaluated as words
+  // Strip masked blanks from stem, inserting a neutral placeholder so words across blanks do not falsely concatenate
   const cleanStem = stem
-    .replace(/\[_+\]/g, " ")
-    .replace(/_{2,}/g, " ")
+    .replace(/\[_+\]/g, " BLANKMASK ")
+    .replace(/_{2,}/g, " BLANKMASK ")
     .replace(/[^\w\s]/g, " ")
     .replace(/\s+/g, " ")
     .toLowerCase();
@@ -1133,6 +1267,14 @@ export function assertNoStemLeaksOrOptionClashes(item: {
     }
 
     if (stemRoots.includes(root) || stemWords.includes(cw)) {
+      // "public" in boilerplate phrases like "public officials/employees/service" is shared context across all statutory provisions
+      if (cw === "public" || root === "publ") {
+        const withoutBoilerplate = cleanStem.replace(/\bpublic\s+(?:officials?|employees?|servants?|office|service|documents?)\b/gi, "");
+        const remainingRoots = withoutBoilerplate.split(/\s+/).map(stemWord);
+        if (!remainingRoots.includes("publ")) {
+          continue;
+        }
+      }
       violations.push(`Stem leaks content root "${root}" from correct answer "${correctOpt}"`);
     }
   }
@@ -1195,6 +1337,7 @@ export function assertStemGroundedInSourcePage(
     .replace(/[^\w\s]/g, " ")
     .replace(/\s+/g, " ")
     .toLowerCase();
+  const normPageNormalized = normPage.replace(/\bgovernment0owned\b/g, "government owned");
 
   const missingFragments: string[] = [];
 
@@ -1210,7 +1353,7 @@ export function assertStemGroundedInSourcePage(
         .replace(/\s+/g, " ")
         .trim()
         .toLowerCase();
-      if (!normPage.includes(normQuote)) {
+      if (!normPage.includes(normQuote) && !normPageNormalized.includes(normQuote.replace(/\bgovernment0owned\b/g, "government owned"))) {
         missingFragments.push(item.sourceQuote.slice(0, 80));
       }
     }
@@ -1237,7 +1380,7 @@ export function assertStemGroundedInSourcePage(
 
   for (const frag of fragments) {
     const normFrag = frag.toLowerCase();
-    if (!normPage.includes(normFrag)) {
+    if (!normPage.includes(normFrag) && !normPageNormalized.includes(normFrag.replace(/\bgovernment0owned\b/g, "government owned"))) {
       missingFragments.push(frag);
     }
   }

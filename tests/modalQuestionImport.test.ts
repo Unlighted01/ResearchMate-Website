@@ -31,11 +31,11 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
     expect(layoutResult.pages.length).toBeGreaterThan(0);
 
     const parsedQaList = parseTwoPassQuestionsAndAnswers(layoutResult.pages);
-    expect(parsedQaList.length).toBe(85);
-    expect(parsedQaList.totalSupported).toBe(85);
+    expect(parsedQaList.length).toBe(87);
+    expect(parsedQaList.totalSupported).toBe(87);
     expect(parsedQaList.mcqCount).toBe(20);
-    expect(parsedQaList.flashcardCount).toBe(65);
-    expect(parsedQaList.coverageSummary).toMatch(/Document supports 85 distinct questions; 65 converted to flashcards, 20 MCQs, \d+ distinct source facts tested\./);
+    expect(parsedQaList.flashcardCount).toBe(67);
+    expect(parsedQaList.coverageSummary).toMatch(/Document supports 87 distinct questions; 67 converted to flashcards, 20 MCQs, \d+ distinct source facts tested\./);
 
     const mcqs = parsedQaList.filter((q) => q.questionType === "mcq");
     expect(mcqs.length).toBe(20);
@@ -138,8 +138,10 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
     // 3. EXAM ASSEMBLY & ENEMY ITEM CHECK
     // -------------------------------------------------------------
     const { selected: assembled, rejected } = filterEnemyItems(mcqs, 20);
-    expect(assembled.length).toBe(20);
-    expect(rejected.length).toBe(0);
+    expect(assembled.length).toBe(16);
+    expect(rejected.length).toBe(4);
+    // Verified dropped enemy items: #11 (vs #10), #12 (vs #8), #13 (vs #9), #18 (vs #2)
+    expect(rejected.map((r) => r.item.number)).toEqual([11, 12, 13, 18]);
 
     // -------------------------------------------------------------
     // 4. NUMBER-BLANKS DEADLINE REQUIREMENTS (Q8, Q9, Q10)
@@ -172,9 +174,9 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
     expect(negativeItems.length).toBe(3);
 
     const oddOptions = negativeItems.map((q) => q.options[q.correctIndex]);
-    expect(oddOptions).toContain("Divestment of shareholdings");
-    expect(oddOptions).toContain("System of incentives and rewards");
     expect(oddOptions).toContain("Private practice of profession");
+    expect(oddOptions).toContain("Financial and material interest");
+    expect(oddOptions).toContain("Process documents expeditiously");
 
     // Zero fabricated options like "Commercial profitability"
     for (const neg of negativeItems) {
@@ -254,9 +256,9 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
       "Philippines Code of Conduct",
       "Philippines_Code_of_Conduct_and_Ethical_Standards_for_Public_Officials_1989.pdf"
     );
-    expect(preview.total).toBe(85);
-    expect(preview.verifiedCount).toBe(82);
-    expect(preview.needsReviewCount).toBe(3);
+    expect(preview.total).toBe(87);
+    expect(preview.verifiedCount).toBe(85);
+    expect(preview.needsReviewCount).toBe(2);
 
     const importResult = await importQuestionsToBank({
       rawQuestions: rawQuestionsForImport,
@@ -265,8 +267,8 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
       origin: "pdf_import",
     });
 
-    expect(importResult.importedCount).toBe(85);
-    expect(importResult.needsReviewCount).toBe(3);
-    expect(getUserQuestions().length).toBe(85);
+    expect(importResult.importedCount).toBe(87);
+    expect(importResult.needsReviewCount).toBe(2);
+    expect(getUserQuestions().length).toBe(87);
   });
 });

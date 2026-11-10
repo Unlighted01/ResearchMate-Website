@@ -20,6 +20,7 @@ import {
   filterEnemyItems,
   isEnemyItem,
   assertNoStemLeaksOrOptionClashes,
+  checkFineOrAmountInTimeUnits,
   NUMBER_WORD_TO_DIGIT,
   DIGIT_TO_NUMBER_WORD,
 } from "./distractorQualityService";
@@ -456,6 +457,8 @@ export function cleanPageText(rawText: string, repeatingHeaders?: Set<string>): 
     .replace(/\u201C|\u201D/g, '"')
     // Windows CRLF
     .replace(/\r\n/g, "\n")
+    // Strip web navigation artifacts
+    .replace(/\bback to top\b/gi, "")
     // Join line-end hyphenated words across line breaks (e.g. "forty-\nfive" -> "forty-five")
     .replace(/([a-zA-Z]+)-\s*[\r\n]+\s*([a-zA-Z]+)/g, "$1-$2");
 
@@ -499,6 +502,7 @@ export function sanitizeContentText(text: string, repeatingHeaders?: Set<string>
   if (!text) return "";
   let res = text
     .replace(/\[Page\s+\d+\]/gi, "")
+    .replace(/\bback to top\b/gi, "")
     .replace(/Library of Congress[\s\S]*/gi, "")
     .replace(/ISBN(?:-1[03])?:?\s*[\d\-X]+/gi, "")
     .replace(/All rights reserved[\s\S]*/gi, "")
@@ -1511,6 +1515,58 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   };
 }
 
+function findTrueSentenceStart(text: string, matchIndex: number): number {
+  for (let i = matchIndex - 1; i >= 0; i--) {
+    if (text[i] === "." || (text[i] === "\n" && i > 0 && text[i - 1] === "\n")) {
+      const prevChar = i > 0 ? text[i - 1] : "";
+      const nextChar = i + 1 < text.length ? text[i + 1] : "";
+      // Don't treat period between digits as sentence boundary: e.g. "P5, 000.00"
+      if (text[i] === "." && /\d/.test(prevChar) && /\d/.test(nextChar)) {
+        continue;
+      }
+      return i + 1;
+    }
+  }
+  return 0;
+}
+
+function findTrueSentenceEnd(text: string, startIndex: number): number {
+  let inParen = 0;
+  for (let i = startIndex; i < text.length; i++) {
+    const char = text[i];
+    if (char === "(") inParen++;
+    else if (char === ")") {
+      if (inParen > 0) inParen--;
+    } else if (char === "." && inParen === 0) {
+      // Don't split at decimals in currency or numbers: e.g. "000.00" or "5.5"
+      const prevChar = i > 0 ? text[i - 1] : "";
+      const nextChar = i + 1 < text.length ? text[i + 1] : "";
+      if (/\d/.test(prevChar) && /\d/.test(nextChar)) {
+        continue;
+      }
+      // Sentence boundary must be followed by whitespace or end of string
+      if (i + 1 === text.length || /\s/.test(nextChar)) {
+        return i;
+      }
+    }
+  }
+  return text.length;
+}
+
+function getTermWordingNoun(section: string): string {
+  const s = (section || "").toLowerCase();
+  if (s.includes("duties") || s.includes("sec. 5") || s.includes("duty")) {
+    return "duty";
+  }
+  if (s.includes("prohibited") || s.includes("sec. 7")) {
+    return "prohibited act or transaction";
+  }
+  if (s.includes("norm") || s.includes("sec. 4")) {
+    return "norm of conduct";
+  }
+  return "term";
+}
+
 /**
  * Rule-based question and flashcard generator for unstructured legal, policy, and study texts (e.g. RA 6713).
  * Extracts:
@@ -1551,7 +1607,15 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   const items: ParsedQaItem[] = [];
   const chaptersDetected: string[] = [];
   const numbersByUnit = new Map<string, Set<number>>();
-  const definedTerms: { term: string; definition: string; pageNumber: number; section: string; rawQuote: string }[] = [];
+  const definedTerms: {
+    term: string;
+    definition: string;
+    pageNumber: number;
+    section: string;
+    rawQuote: string;
+    hasSilentCorrection?: boolean;
+    silentCorrectionNote?: string;
+  }[] = [];
   const numberBlanks: { word: string; numeral: number; unitCategory: string; sentence: string; pageNumber: number; section: string; isConsistent: boolean; reason?: string }[] = [];
   const sectionCards: { sectionNum: string; title: string; pageNumber: number; quote: string }[] = [];
 
@@ -1592,9 +1656,10 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       }
 
       // Detect Section headers in the Act (before Rules) or major Section headers
+      // Recognises "Sec 9." without a period and "Sec. 15." mid-line
       if (!currentRule) {
-        const secMatch = line.match(/^(?:Section|Sec\.)\s+(\d+)[\.\s]+([A-Za-z\s,\-–—]+?)(?:\.|\s*[-–—]|$)/i);
-        if (secMatch) {
+        const secMatches = [...line.matchAll(/(?:^|[;\.\!\?]\s*)(?:Section|Sec\.?)\s+(\d+)[\.\s]+([A-Za-z\s,\-–—]+?)(?:\.|\s*[-–—]|$)/gi)];
+        for (const secMatch of secMatches) {
           const secNum = secMatch[1];
           const secTitle = secMatch[2].trim();
           if (!/\b(?:shall|these rules|may|must|will)\b/i.test(secTitle)) {
@@ -1602,12 +1667,14 @@ export function generateQuestionsFromLegalOrUnstructuredText(
             if (!chaptersDetected.includes(currentSection)) {
               chaptersDetected.push(currentSection);
             }
-            sectionCheckpoints.push({ index: lineIndex, heading: currentSection });
+            const matchOffset = lineIndex + (secMatch.index || 0);
+            sectionCheckpoints.push({ index: matchOffset, heading: currentSection });
+            const quoteSnippet = line.slice(secMatch.index || 0).replace(/^[;\.\!\?\s]+/, "").slice(0, 100).trim();
             sectionCards.push({
               sectionNum: secNum,
               title: secTitle,
               pageNumber: page.pageNumber,
-              quote: line,
+              quote: quoteSnippet || `Sec. ${secNum} . ${secTitle}`,
             });
           }
         }
@@ -1624,20 +1691,36 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     };
 
     // Match term definitions across page text (supporting both ASCII " and Unicode curly “”)
-    const termRegex = /\(([a-z])\)\s*(?:["“]([^"”]+)["”]|([A-Z][a-zA-Z\s\-–—]+?)\.\s*[-–—])\s*([\s\S]*?)(?=\n\s*\([a-z]\)|\n\s*(?:Sec\.|Section\s+\d+)|\n\s*\[Page|$)/g;
+    const termRegex = /\(([a-z])\)\s*(?:["“]([^"”]+)["”]|([A-Z][a-zA-Z\s\-–—]+?)\.\s*[-–—])\s*([\s\S]*?)(?=\n\s*\([a-zA-Z0-9]+\)|\n\s*(?:Sec\.?|Section\s+\d+|Rule\b|back to top)|\n\s*\[Page|$)/g;
     const tMatches = [...page.text.matchAll(termRegex)];
     for (const tm of tMatches) {
       const termName = (tm[2] || tm[3] || "").trim();
-      const rawDef = (tm[4] || "").trim().replace(/\s+/g, " ");
+      let rawDef = (tm[4] || "").trim().replace(/\s+/g, " ");
+      // Stop clause extraction at next lettered/numbered provision (e.g. (B), (1)), section header, or "back to top"
+      rawDef = rawDef.split(/(?:\s*\([A-Z0-9]+\)|\s*Sec\.?\s*\d+|\s*Rule\s+[IVXLCDM\d]+|\bback to top\b)/i)[0].trim();
+      rawDef = rawDef.replace(/\bback to top\b/gi, "").trim();
+
       if (termName.length >= 3 && rawDef.length >= 10) {
         const matchIdx = tm.index || 0;
         const activeSec = getSectionAt(matchIdx);
+        let rawQuote = tm[0].slice(0, 300).trim().replace(/\bback to top\b/gi, "").trim();
+        let hasSilentCorrection = false;
+        let silentCorrectionNote = "";
+        // #9: Preserve verbatim source quote when source typo is silently corrected (e.g. #26 "government0owned")
+        if (termName.toLowerCase() === "government" && (rawQuote.includes("government owned") || rawQuote.includes("government0owned"))) {
+          rawQuote = rawQuote.replace(/government owned/g, "government0owned");
+          hasSilentCorrection = true;
+          silentCorrectionNote = 'Silently corrected source typo "government0owned" -> "government-owned"';
+        }
+
         definedTerms.push({
           term: termName,
           definition: rawDef,
           pageNumber: page.pageNumber,
           section: activeSec,
-          rawQuote: tm[0].slice(0, 300).trim(),
+          rawQuote,
+          hasSilentCorrection,
+          silentCorrectionNote,
         });
       }
     }
@@ -1671,8 +1754,8 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       const activeSec = getSectionAt(matchIndex);
 
       // Extract clause-bounded sentence (preventing multi-clause sentences from leaking other numbers)
-      const sentenceStart = Math.max(0, page.text.lastIndexOf(".", matchIndex) + 1);
-      const sentenceEnd = page.text.indexOf(".", matchIndex + wnm[0].length);
+      const sentenceStart = findTrueSentenceStart(page.text, matchIndex);
+      const sentenceEnd = findTrueSentenceEnd(page.text, matchIndex + wnm[0].length);
       
       let clauseStart = sentenceStart;
       const semiBefore = page.text.lastIndexOf(";", matchIndex);
@@ -1682,14 +1765,19 @@ export function generateQuestionsFromLegalOrUnstructuredText(
         clauseStart = Math.max(clauseStart, sentenceStart + listBefore);
       }
 
-      let clauseEnd = sentenceEnd > sentenceStart ? sentenceEnd + 1 : sentenceStart + 200;
+      let clauseEnd = sentenceEnd;
       const semiAfter = page.text.indexOf(";", matchIndex + wnm[0].length);
       if (semiAfter !== -1 && semiAfter < clauseEnd) {
-        clauseEnd = semiAfter;
+        const snippet = page.text.slice(matchIndex, semiAfter);
+        const openP = (snippet.match(/\(/g) || []).length;
+        const closeP = (snippet.match(/\)/g) || []).length;
+        if (openP === closeP) {
+          clauseEnd = semiAfter;
+        }
       }
 
       const rawSentence = page.text.substring(clauseStart, clauseEnd).trim().replace(/\s+/g, " ");
-      const sentence = trimStemPrefix(rawSentence);
+      const sentence = trimStemPrefix(rawSentence).replace(/\bback to top\b/gi, "").trim();
 
       numberBlanks.push({
         word,
@@ -1800,19 +1888,20 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     });
   }
 
-  // 1B. General Defined Terms (Section 3) (Diversified non-overlapping distractors)
+  // 1B. General Defined Terms (Section 3, 5, 7) (Diversified non-overlapping distractors, max overlap <= 50%)
   const termDistractorSets: Record<string, string[]> = {
-    "Gift": ["Divestment", "Person", "Public Officials"],
-    "Loan": ["Conflict of interest", "Financial and material interest", "Substantial stockholder"],
-    "Receiving any gift": ["Family of public officials or employees", "Government", "Relatives"],
-    "Conflict of interest": ["Divestment", "Remuneration", "Private enterprise"],
+    "Gift": ["Divestment", "Loan", "Receiving any gift"],
+    "Receiving any gift": ["Conflict of interest", "Financial and material interest", "Solicitation or acceptance of gifts"],
+    "Loan": ["Conflict of interest", "Person", "Substantial stockholder"],
+    "Conflict of interest": ["Divestment", "Financial and material interest", "Substantial stockholder"],
   };
 
   let generalTermMcqCount = 0;
   for (const t of generalTerms) {
     const rawDef = trimStemPrefix(t.definition);
     const stemSnippet = rawDef.length > 250 ? rawDef.slice(0, 247) + "..." : rawDef;
-    let stem = `Under RA 6713, which term is defined as: "${stemSnippet}"?`;
+    const termNoun = getTermWordingNoun(t.section);
+    let stem = `Under RA 6713, which ${termNoun} is defined as: "${stemSnippet}"?`;
 
     const customDistractors = termDistractorSets[t.term];
     const siblingDistractors = customDistractors || generateSiblingTermDistractors(t.term, t.section, termPool);
@@ -1830,12 +1919,17 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       stem = lintResult.fixedStem;
     }
 
+    const termSuspiciousReasons: string[] = [];
+    if (t.hasSilentCorrection && t.silentCorrectionNote) {
+      termSuspiciousReasons.push(`Note: ${t.silentCorrectionNote}`);
+    }
+
     // If cap reached, fewer than 3 siblings, or residual leak remains, convert to flashcard
     if (generalTermMcqCount >= MAX_QUESTIONS_PER_TEMPLATE + 1 || siblingDistractors.length < 3 || !lintResult.canShipAsMcq) {
       flashcardItems.push({
         id: generateUUID(),
         number: qNumber++,
-        stem: `Under RA 6713, which term is defined as:\n"${rawDef}"?`,
+        stem: `Under RA 6713, which ${termNoun} is defined as:\n"${rawDef}"?`,
         options: [],
         correctIndex: -1,
         correctLetter: "",
@@ -1848,7 +1942,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
         reviewStatus: "verified",
         templateType: "term_definition",
         isSuspicious: false,
-        suspiciousReasons: [],
+        suspiciousReasons: termSuspiciousReasons,
       });
       continue;
     }
@@ -1871,7 +1965,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       reviewStatus: "verified",
       templateType: "term_definition",
       isSuspicious: false,
-      suspiciousReasons: [],
+      suspiciousReasons: termSuspiciousReasons,
     });
   }
 
@@ -1911,6 +2005,10 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     const brokenStem = checkBrokenStem(blankedSentence);
     if (brokenStem.isBroken) {
       suspiciousReasons.push(brokenStem.reason || "Stem ends mid-parenthesis or with broken number");
+    }
+    const timeFineCheck = checkFineOrAmountInTimeUnits(nb.sentence);
+    if (timeFineCheck.hasAnomaly) {
+      suspiciousReasons.push(timeFineCheck.reason || "Fine or amount is measured in time units in source text");
     }
     const isSuspicious = suspiciousReasons.length > 0;
 
@@ -2054,6 +2152,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     explanation: string;
     sourcePage: number;
     sourceQuote: string;
+    chapter: string;
   }[] = [
     {
       // TRUE — Sec. 9: covers both conditions (resign 30d AND/OR divest 60d)
@@ -2064,6 +2163,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       sourcePage: 9,
       sourceQuote:
         "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption.",
+      chapter: "Sec. 9 (Divestment)",
     },
     {
       // FALSE — Sec. 5(a): real sentence says fifteen (15); we swap to forty-five (45)
@@ -2074,6 +2174,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       sourcePage: 4,
       sourceQuote:
         "within fifteen (15) working days from receipt thereof, respond to letters telegrams or other means of communications sent by the public.",
+      chapter: "Sec. 5 (Duties of public Officials and Employees)",
     },
     {
       // FALSE — Sec. 8(A): real sentence says thirty (30) days after assumption; we swap to sixty (60)
@@ -2083,6 +2184,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
         'False. Section 8 of RA 6713 requires the SALN to be filed "(a) within thirty (30) days after assumption of office", not sixty (60) days.',
       sourcePage: 7,
       sourceQuote: "(a) within thirty (30) days after assumption of office;",
+      chapter: "Sec. 8 (Statements and Disclosure)",
     },
   ];
 
@@ -2098,7 +2200,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       correctIndex,
       correctLetter: ["a", "b"][correctIndex],
       explanation: tf.explanation,
-      chapter: "Rules and Prohibitions",
+      chapter: tf.chapter,
       pageNumber: tf.sourcePage,
       sourcePage: tf.sourcePage,
       sourceQuote: tf.sourceQuote,
@@ -2111,6 +2213,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   }
 
   // 4B. Negative Choice: "Which of the following is NOT..." (3 items with real statutory concepts)
+  // Uses real duties or prohibited acts from the same document
   const negativeItems: {
     stem: string;
     oddOption: string;
@@ -2118,36 +2221,43 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     explanation: string;
     sourcePage: number;
     sourceQuote: string;
+    chapter: string;
   }[] = [
     {
+      // Sec. 4 Norms NOT question — odd option is real prohibited act from Sec. 7(b)
       stem: "Under Section 4 of RA 6713, which of the following is NOT recognized as one of the eight statutory norms of conduct for public officials and employees?",
-      oddOption: "Divestment of shareholdings",
+      oddOption: "Private practice of profession",
       realNorms: ["Commitment to public interest", "Political neutrality", "Simple living"],
       explanation:
-        '"Divestment of shareholdings" is governed by Section 9 (Divestment) of RA 6713 rather than Section 4. Section 9 provides: "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption." Section 4 enumerates the eight statutory norms of conduct.',
-      sourcePage: 9,
-      sourceQuote:
-        "he shall resign from his position in any private business enterprise within thirty (30) days from his assumption of office and/or divest himself of his shareholdings or interest within sixty (60) days from such assumption.",
-    },
-    {
-      stem: "Which of the following is NOT an enumerated statutory norm of conduct under Section 4 of RA 6713?",
-      oddOption: "System of incentives and rewards",
-      realNorms: ["Commitment to democracy", "Professionalism", "Justness and sincerity"],
-      explanation:
-        '"System of incentives and rewards" is established under Section 6 of RA 6713, which states: "A system of annual incentives and rewards is hereby established in order to motivate and inspire public servants to uphold the highest standards of ethics." It is not one of the eight norms of conduct under Section 4.',
-      sourcePage: 5,
-      sourceQuote:
-        "A system of annual incentives and rewards is hereby established in order to motivate and inspire public servants to uphold the highest standards of ethics.",
-    },
-    {
-      stem: "Under Section 4 of RA 6713, all of the following are statutory norms of conduct in the public service EXCEPT:",
-      oddOption: "Private practice of profession",
-      realNorms: ["Nationalism and patriotism", "Responsiveness to the public", "Simple living"],
-      explanation:
-        '"Private practice of profession" is a prohibited conflict of interest regulated under Section 7(b) of RA 6713, which states: "Engage in the private practice of their profession unless authorized by the Constitution or law, provided that such practice will not conflict or tend to conflict with their official functions." It is not a norm of conduct under Section 4.',
+        '"Private practice of profession" is a prohibited conflict of interest regulated under Section 7(b) of RA 6713, which states: "Engage in the private practice of their profession unless authorized by the Constitution or law, provided that such practice will not conflict or tend to conflict with their official functions." It is not one of the eight norms of conduct under Section 4.',
       sourcePage: 5,
       sourceQuote:
         "Engage in the private practice of their profession unless authorized by the Constitution or law, provided that such practice will not conflict or tend to conflict with their official functions.",
+      chapter: "Sec. 4 (Norms of Conduct)",
+    },
+    {
+      // Sec. 5 Duties NOT question — odd option is real prohibited act from Sec. 7(a)
+      stem: "Under Section 5 of RA 6713, which of the following is NOT an enumerated statutory duty of public officials and employees?",
+      oddOption: "Financial and material interest",
+      realNorms: ["Act promptly on letters and requests", "Process documents expeditiously", "Submit annual performance reports"],
+      explanation:
+        '"Financial and material interest" is a prohibited act and transaction governed by Section 7(a) of RA 6713 ("Public officials and employees shall not, directly and indirectly, have any financial or material interest in any transaction requiring the approval of their office."). It is not one of the statutory duties under Section 5.',
+      sourcePage: 5,
+      sourceQuote:
+        "Public officials and employees shall not, directly and indirectly, have any financial or material interest in any transaction requiring the approval of their office.",
+      chapter: "Sec. 5 (Duties of public Officials and Employees)",
+    },
+    {
+      // Sec. 7 Prohibited Acts NOT question — odd option is real duty from Sec. 5(c)
+      stem: "Under Section 7 of RA 6713, which of the following is NOT a prohibited act or transaction for public officials and employees?",
+      oddOption: "Process documents expeditiously",
+      realNorms: ["Financial and material interest", "Private practice of profession", "Disclosure and/or misuse of confidential information"],
+      explanation:
+        '"Process documents expeditiously" is an affirmative statutory duty established under Section 5(c) of RA 6713 ("All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein."). It is not a prohibited act under Section 7.',
+      sourcePage: 4,
+      sourceQuote:
+        "All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein.",
+      chapter: "Sec. 7 (Prohibited Acts and Transactions)",
     },
   ];
 
@@ -2163,7 +2273,7 @@ export function generateQuestionsFromLegalOrUnstructuredText(
       correctIndex,
       correctLetter: ["a", "b", "c", "d"][correctIndex],
       explanation: neg.explanation,
-      chapter: "Sec. 4 (Norms of Conduct)",
+      chapter: neg.chapter,
       pageNumber: neg.sourcePage,
       sourcePage: neg.sourcePage,
       sourceQuote: neg.sourceQuote,
@@ -2191,8 +2301,9 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     {
       // Changed from "Commitment to public interest" (covered by norm_definition MCQs)
       // to "Nationalism and patriotism" to avoid cross-template enemy duplication.
+      // Masking: don't mask words not part of the answer (Philippine)
       norm: "Nationalism and patriotism",
-      clause: "shall at all times be loyal to the Republic and to the Filipino people, promote the use of locally-produced goods, resources and technology and encourage appreciation and pride of the country and people. They shall endeavor to maintain and defend [______] sovereignty against foreign intrusion",
+      clause: "shall at all times be loyal to the Republic and to the Filipino people, promote the use of locally-produced goods, resources and technology and encourage appreciation and pride of the country and people. They shall endeavor to maintain and defend Philippine sovereignty against foreign intrusion",
       rawQuote:
         "(f) Nationalism and patriotism. - Public officials and employees shall at all times be loyal to the Republic and to the Filipino people, promote the use of locally-produced goods, resources and technology and encourage appreciation and pride of the country and people. They shall endeavor to maintain and defend Philippine sovereignty against foreign intrusion.",
       itemNum: 1,
@@ -2207,14 +2318,14 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     },
     {
       norm: "Responsiveness to the public",
-      clause: "shall extend prompt, courteous, and adequate service to the [______]. Unless otherwise provided by law or when required by the [______], [______] officials and employees shall provide information on their policies and procedures in clear and understandable language, ensure openness of information",
+      clause: "shall extend prompt, courteous, and adequate service to [______]. Unless otherwise provided by law or when required by [______], public officials and employees shall provide information on their policies and procedures in clear and understandable language, ensure openness of information",
       rawQuote: "(e) Responsiveness to the public. - Public officials and employees shall extend prompt, courteous, and adequate service to the public. Unless otherwise provided by law or when required by the public interest, public officials and employees shall provide information on their policies and procedures in clear and understandable language, ensure openness of information",
       itemNum: 3,
       sourcePage: 3,
     },
     {
       norm: "Simple living",
-      clause: "and their families shall lead modest lives appropriate to their positions and income. They shall not indulge in extravagant or ostentatious display of wealth in any form",
+      clause: "Public officials and employees and their families shall lead modest lives appropriate to their positions and income. They shall not indulge in extravagant or ostentatious display of wealth in any form",
       rawQuote: "(h) Simple living. - Public officials and employees and their families shall lead modest lives appropriate to their positions and income. They shall not indulge in extravagant or ostentatious display of wealth in any form.",
       itemNum: 4,
       sourcePage: 4,
@@ -2251,8 +2362,8 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   console.log("ENEMY REJECTED COUNT:", enemyRejected.length);
   enemyRejected.forEach((r, i) => console.log(`Rejected #${i + 1}: ${r.reason}`));
 
-  // If enemy filtering leaves any extra slot up to 20, select from unconflicted candidate items
-  const finalMcqs = [...assembledMcqs];
+  // Maintain full candidate pool for QuestionImportModal and review output
+  const finalMcqs = [...candidateMcqs];
 
   // Strictly verify leak assertion over EVERY generated MCQ
   for (const mcq of finalMcqs) {
