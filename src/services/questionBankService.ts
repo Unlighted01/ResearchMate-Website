@@ -10,6 +10,7 @@ import { Question, generateUUID } from "./examService";
 import {
   OptionPickStats,
   recordOptionPickAndAnalyze,
+  filterEnemyItems,
 } from "./distractorQualityService";
 import {
   getAllQuestionsFromDb,
@@ -36,6 +37,10 @@ export type QuestionType = "mcq" | "free_response";
 export interface StoredQuestion extends Question {
   subject?: string;
   topic?: string;
+  chapter?: string;
+  number?: number;
+  templateType?: string;
+  stem?: string;
   sourceDocument?: string;
   sourceFile?: string;
   sourcePage?: number;
@@ -754,7 +759,28 @@ export function sampleSprintQuestions(
     selected.push(o);
   }
 
-  return selected;
+  const { selected: conflictFreeSelected } = filterEnemyItems(selected, count);
+  return conflictFreeSelected;
+}
+
+/**
+ * Assembles a conflict-free mock exam from verified bank questions, ensuring that
+ * 100% of the assembled items contain no enemy stem leaks, clue leakages, or overlapping clauses.
+ */
+export function assembleExamFromBank(
+  count: number = 20,
+  filter?: { subject?: string; topic?: string }
+): {
+  selectedQuestions: StoredQuestion[];
+  rejectedQuestions: { item: StoredQuestion; reason: string }[];
+} {
+  const verified = getVerifiedQuestions(filter);
+  const mcqs = verified.filter((q) => q.questionType === "mcq");
+  const { selected, rejected } = filterEnemyItems(mcqs, count);
+  return {
+    selectedQuestions: selected,
+    rejectedQuestions: rejected,
+  };
 }
 
 /**

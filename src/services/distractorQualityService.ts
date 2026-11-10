@@ -1017,8 +1017,8 @@ export interface EnemyItemCheckResult {
  * 4. Another selected question's stem contains the candidate's answer term or number from the same clause/provision.
  */
 export function isEnemyItem(
-  candidate: { id?: string; stem: string; options: string[]; correctIndex: number; templateType?: string; sourceQuote?: string; chapter?: string },
-  selectedSet: { id?: string; stem: string; options: string[]; correctIndex: number; templateType?: string; sourceQuote?: string; chapter?: string }[]
+  candidate: { id?: string; stem?: string; question?: string; options: string[]; correctIndex: number; templateType?: string; sourceQuote?: string; chapter?: string },
+  selectedSet: { id?: string; stem?: string; question?: string; options: string[]; correctIndex: number; templateType?: string; sourceQuote?: string; chapter?: string }[]
 ): EnemyItemCheckResult {
   if (!selectedSet || selectedSet.length === 0) {
     return { isEnemy: false };
@@ -1027,13 +1027,15 @@ export function isEnemyItem(
   const isMatchingSet = candidate.templateType === "matching_set";
   const isCandidateTf = candidate.templateType === "true_false";
 
+  const candStem = candidate.stem || (candidate as any).question || "";
   const candNormOptions = (candidate.options || []).map(normalizeOptionText).filter(Boolean);
   const candCorrectOpt = candidate.options[candidate.correctIndex] || "";
   const candCorrectNorm = normalizeOptionText(candCorrectOpt);
-  const candStemLower = (candidate.stem || "").toLowerCase();
+  const candStemLower = candStem.toLowerCase();
 
   for (const existing of selectedSet) {
     const isExistingTf = existing.templateType === "true_false";
+    const existStem = existing.stem || (existing as any).question || "";
 
     // 0. Same or overlapping sourceQuote check (#2/#18, #8/#12, #9/#13, #10/#11)
     if (candidate.sourceQuote && existing.sourceQuote && isSameOrOverlappingQuote(candidate.sourceQuote, existing.sourceQuote)) {
@@ -1044,31 +1046,7 @@ export function isEnemyItem(
       };
     }
 
-    // 1. Option Set Overlap Check (> 50%)
-    // Exclude matching sets (which share an 8-item option list) and true/false sets (which share ["True", "False"])
-    const isCandNb = candidate.templateType === "number_blank_deadline";
-    const isExistNb = existing.templateType === "number_blank_deadline";
-    if (!isMatchingSet && existing.templateType !== "matching_set" && !(isCandidateTf && isExistingTf) && !(isCandNb && isExistNb)) {
-      const existNormOptions = (existing.options || []).map(normalizeOptionText).filter(Boolean);
-      if (candNormOptions.length >= 2 && existNormOptions.length >= 2) {
-        const existSet = new Set(existNormOptions);
-        let intersection = 0;
-        for (const opt of candNormOptions) {
-          if (existSet.has(opt)) intersection++;
-        }
-        const minLen = Math.min(candNormOptions.length, existNormOptions.length);
-        const overlapRatio = intersection / minLen;
-        if (overlapRatio > 0.5) {
-          return {
-            isEnemy: true,
-            reason: `Option set overlaps by ${Math.round(overlapRatio * 100)}% (> 50%) with selected question "${existing.stem.slice(0, 50)}..."`,
-            conflictingQuestionId: existing.id,
-          };
-        }
-      }
-    }
-
-    // 2. Answer clue leakage check:
+    // 1. Answer clue leakage check:
     // Does candidate stem contain existing question's answer term or number from the same clause/provision?
     const existCorrectOpt = existing.options[existing.correctIndex] || "";
     const existCorrectNorm = normalizeOptionText(existCorrectOpt);
@@ -1081,7 +1059,7 @@ export function isEnemyItem(
       if (wholePhraseRegex.test(candStemLower)) {
         return {
           isEnemy: true,
-          reason: `Candidate stem contains the answer term "${existCorrectOpt}" of previously selected question "${existing.stem.slice(0, 50)}..."`,
+          reason: `Candidate stem contains the answer term "${existCorrectOpt}" of previously selected question "${existStem.slice(0, 50)}..."`,
           conflictingQuestionId: existing.id,
         };
       }
@@ -1100,14 +1078,14 @@ export function isEnemyItem(
         const sameSec =
           (candidate.chapter && existing.chapter && normalizeOptionText(candidate.chapter) === normalizeOptionText(existing.chapter)) ||
           isSameOrOverlappingQuote(candidate.sourceQuote, existing.sourceQuote) ||
-          (/section\s*9\b/i.test(candidate.stem) && /section\s*9\b/i.test(existing.stem)) ||
-          (/section\s*5\b/i.test(candidate.stem) && /section\s*5\b/i.test(existing.stem)) ||
-          (/section\s*8\b/i.test(candidate.stem) && /section\s*8\b/i.test(existing.stem));
+          (/section\s*9\b/i.test(candStem) && /section\s*9\b/i.test(existStem)) ||
+          (/section\s*5\b/i.test(candStem) && /section\s*5\b/i.test(existStem)) ||
+          (/section\s*8\b/i.test(candStem) && /section\s*8\b/i.test(existStem));
 
         if (sameSec) {
           return {
             isEnemy: true,
-            reason: `Candidate stem contains answer number/term "${existCorrectOpt}" of previously selected question "${existing.stem.slice(0, 50)}..." from the same clause/provision`,
+            reason: `Candidate stem contains answer number/term "${existCorrectOpt}" of previously selected question "${existStem.slice(0, 50)}..." from the same clause/provision`,
             conflictingQuestionId: existing.id,
           };
         }
@@ -1117,10 +1095,10 @@ export function isEnemyItem(
     // Does existing question's stem contain candidate's answer term?
     if (!isCandTfLabel && candCorrectNorm.length >= 4 && !STOPWORDS.has(candCorrectNorm)) {
       const wholePhraseRegex = new RegExp(`\\b${escapeRegExp(candCorrectNorm)}\\b`, "i");
-      if (wholePhraseRegex.test((existing.stem || "").toLowerCase())) {
+      if (wholePhraseRegex.test(existStem.toLowerCase())) {
         return {
           isEnemy: true,
-          reason: `Selected question "${existing.stem.slice(0, 50)}..." stem contains candidate's answer term "${candCorrectOpt}"`,
+          reason: `Selected question "${existStem.slice(0, 50)}..." stem contains candidate's answer term "${candCorrectOpt}"`,
           conflictingQuestionId: existing.id,
         };
       }
@@ -1133,18 +1111,18 @@ export function isEnemyItem(
         ? new RegExp(`\\b(?:${candNum}|${escapeRegExp(candWordRep)})(?:\\s*\\(\\s*${candNum}\\s*\\))?\\s*(?:working\\s+)?(?:days?|years?|months?|pesos?|%|percent)?\\b`, "i")
         : new RegExp(`\\b${candNum}\\b`, "i");
 
-      if (numPattern.test((existing.stem || "").toLowerCase())) {
+      if (numPattern.test(existStem.toLowerCase())) {
         const sameSec =
           (candidate.chapter && existing.chapter && normalizeOptionText(candidate.chapter) === normalizeOptionText(existing.chapter)) ||
           isSameOrOverlappingQuote(candidate.sourceQuote, existing.sourceQuote) ||
-          (/section\s*9\b/i.test(candidate.stem) && /section\s*9\b/i.test(existing.stem)) ||
-          (/section\s*5\b/i.test(candidate.stem) && /section\s*5\b/i.test(existing.stem)) ||
-          (/section\s*8\b/i.test(candidate.stem) && /section\s*8\b/i.test(existing.stem));
+          (/section\s*9\b/i.test(candStem) && /section\s*9\b/i.test(existStem)) ||
+          (/section\s*5\b/i.test(candStem) && /section\s*5\b/i.test(existStem)) ||
+          (/section\s*8\b/i.test(candStem) && /section\s*8\b/i.test(existStem));
 
         if (sameSec) {
           return {
             isEnemy: true,
-            reason: `Selected question "${existing.stem.slice(0, 50)}..." stem contains candidate's answer number/term "${candCorrectOpt}" from the same clause/provision`,
+            reason: `Selected question "${existStem.slice(0, 50)}..." stem contains candidate's answer number/term "${candCorrectOpt}" from the same clause/provision`,
             conflictingQuestionId: existing.id,
           };
         }

@@ -6,15 +6,108 @@
 // ============================================
 
 import { Question, generateUUID } from "./examService";
+import { filterEnemyItems } from "./distractorQualityService";
 
 export const EXAM_FORMAT_VERSION = 2;
 
+export type ExamSectionType = "standard_mcq" | "true_false" | "matching_set" | "other";
+
+export interface ExamSectionConfig {
+  name: string;
+  questionCount: number;
+  /**
+   * Per-section choice/bubble count for the answer sheet:
+   * - default: 4 (A-D)
+   * - true_false: 2 (A-B / True-False)
+   * - matching_set: up to 8 (A-H bubbles)
+   * - standard_mcq: capped at 5 (A-E)
+   */
+  choicesPerItem?: number;
+  sectionType?: ExamSectionType;
+}
+
 export interface ExamRecordConfig {
   totalQuestions: number;
-  choicesPerItem?: number; // 4 (A-D) or 5 (A-E)
-  sections?: { name: string; questionCount: number }[];
+  choicesPerItem?: number; // Global default fallback (default 4, max 5 for standard MCQs)
+  sections?: ExamSectionConfig[];
   paperSize?: "A4" | "Letter" | "Legal";
   formatVersion?: number;
+}
+
+/**
+ * Resolves the choice/bubble count for a section according to the answer sheet specifications:
+ * - Default: 4 (A-D)
+ * - True / False: 2 (A-B)
+ * - Matching sets: up to 8 (A-H)
+ * - Normal MCQs: capped at 5 (A-E)
+ */
+export function resolveSectionChoicesPerItem(
+  section?: Partial<ExamSectionConfig>,
+  globalDefault: number = 4
+): number {
+  if (!section) return Math.min(Math.max(globalDefault, 2), 5);
+
+  if (section.sectionType === "true_false") {
+    return 2;
+  }
+  if (section.sectionType === "matching_set") {
+    const requested = section.choicesPerItem || 8;
+    return Math.min(Math.max(requested, 2), 8); // Up to 8 bubbles (A-H)
+  }
+  // Normal MCQs (default 4, capped at 5)
+  const count = section.choicesPerItem ?? globalDefault;
+  return Math.min(Math.max(count, 2), 5);
+}
+
+export interface SheetSectionLayoutPlan {
+  name: string;
+  questionCount: number;
+  choicesPerItem: number; // 2, 4, 5, or up to 8
+  bubbleLabels: string[]; // e.g. ["A", "B"] or ["A", "B", "C", "D"] or ["A", "B", "C", "D", "E", "F", "G", "H"]
+  sectionType: ExamSectionType;
+}
+
+export interface SheetLayoutPlan {
+  totalQuestions: number;
+  sections: SheetSectionLayoutPlan[];
+}
+
+/**
+ * Plans the answer sheet layout by reading the per-section choice count.
+ * Conforms to answer sheet planning requirements without rendering DOM/PDF yet.
+ */
+export function computeSheetLayoutPlan(config: ExamRecordConfig): SheetLayoutPlan {
+  const globalDefault = config.choicesPerItem ?? 4;
+  const sections: SheetSectionLayoutPlan[] =
+    config.sections && config.sections.length > 0
+      ? config.sections.map((sec) => {
+          const choices = resolveSectionChoicesPerItem(sec, globalDefault);
+          const labels = Array.from({ length: choices }, (_, i) => String.fromCharCode(65 + i));
+          return {
+            name: sec.name,
+            questionCount: sec.questionCount,
+            choicesPerItem: choices,
+            bubbleLabels: labels,
+            sectionType: sec.sectionType || (choices === 2 ? "true_false" : choices > 5 ? "matching_set" : "standard_mcq"),
+          };
+        })
+      : [
+          {
+            name: "General Questions",
+            questionCount: config.totalQuestions,
+            choicesPerItem: Math.min(Math.max(globalDefault, 2), 5),
+            bubbleLabels: Array.from(
+              { length: Math.min(Math.max(globalDefault, 2), 5) },
+              (_, i) => String.fromCharCode(65 + i)
+            ),
+            sectionType: "standard_mcq",
+          },
+        ];
+
+  return {
+    totalQuestions: config.totalQuestions,
+    sections,
+  };
 }
 
 export interface QuestionPermutationRecord {
@@ -134,10 +227,12 @@ export function createSeededExam(
   const examId = explicitExamId?.trim() || generateUUID();
   const rng = mulberry32(stringToSeed(seed));
 
-  // 1. Deterministically shuffle questions
+  // 1. Deterministically shuffle candidate questions
   const shuffledQuestions = seededShuffle(questions, rng);
-  const totalCount = Math.min(config.totalQuestions, shuffledQuestions.length);
-  const selectedQuestions = shuffledQuestions.slice(0, totalCount);
+  // 2. Filter enemy items so no stem contains another selected item's answer or duplicate source quote
+  const { selected: conflictFreeQuestions } = filterEnemyItems(shuffledQuestions, config.totalQuestions);
+  const totalCount = Math.min(config.totalQuestions, conflictFreeQuestions.length);
+  const selectedQuestions = conflictFreeQuestions.slice(0, totalCount);
 
   const orderedQuestionIds: string[] = [];
   const permutations: Record<string, QuestionPermutationRecord> = {};

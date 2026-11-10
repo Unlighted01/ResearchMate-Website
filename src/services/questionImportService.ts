@@ -41,6 +41,8 @@ export interface RawImportQuestionItem {
   sourceQuote?: string;
   reviewStatus?: QuestionReviewStatus;
   suspiciousReasons?: string[];
+  number?: number;
+  templateType?: string;
 }
 
 export interface QuestionImportParams {
@@ -148,6 +150,7 @@ export async function importQuestionsToBank(
     return {
       id: item.id || generateUUID(),
       question: stem,
+      stem,
       options,
       correctIndex: typeof item.correctIndex === "number" ? item.correctIndex : 0,
       correctLetter: item.correctLetter,
@@ -155,6 +158,9 @@ export async function importQuestionsToBank(
       subject,
       topic,
       topicTag: topic,
+      chapter: item.chapter || topic,
+      number: item.number,
+      templateType: item.templateType,
       sourceFile,
       sourceDocument: sourceFile,
       sourcePage: item.sourcePage ?? defaultPage,

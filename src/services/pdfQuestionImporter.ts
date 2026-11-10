@@ -2237,9 +2237,14 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     },
     {
       // Sec. 5 Duties NOT question — odd option is real prohibited act from Sec. 7(a)
+      // Distractors use duties from Sec. 5 that do not collide with other negative items
       stem: "Under Section 5 of RA 6713, which of the following is NOT an enumerated statutory duty of public officials and employees?",
       oddOption: "Financial and material interest",
-      realNorms: ["Act promptly on letters and requests", "Process documents expeditiously", "Submit annual performance reports"],
+      realNorms: [
+        "Act promptly on letters and requests",
+        "Act immediately on the public's personal transactions",
+        "Submit annual performance reports",
+      ],
       explanation:
         '"Financial and material interest" is a prohibited act and transaction governed by Section 7(a) of RA 6713 ("Public officials and employees shall not, directly and indirectly, have any financial or material interest in any transaction requiring the approval of their office."). It is not one of the statutory duties under Section 5.',
       sourcePage: 5,
@@ -2249,11 +2254,16 @@ export function generateQuestionsFromLegalOrUnstructuredText(
     },
     {
       // Sec. 7 Prohibited Acts NOT question — odd option is real duty from Sec. 5(c)
+      // Distractors use prohibited acts from Sec. 7 that do not collide with other negative items
       stem: "Under Section 7 of RA 6713, which of the following is NOT a prohibited act or transaction for public officials and employees?",
-      oddOption: "Process documents expeditiously",
-      realNorms: ["Financial and material interest", "Private practice of profession", "Disclosure and/or misuse of confidential information"],
+      oddOption: "Process documents and papers expeditiously",
+      realNorms: [
+        "Outside employment in private enterprises",
+        "Disclosure and/or misuse of confidential information",
+        "Solicitation or acceptance of gifts",
+      ],
       explanation:
-        '"Process documents expeditiously" is an affirmative statutory duty established under Section 5(c) of RA 6713 ("All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein."). It is not a prohibited act under Section 7.',
+        '"Process documents and papers expeditiously" is an affirmative statutory duty established under Section 5(c) of RA 6713 ("All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein."). It is not a prohibited act under Section 7.',
       sourcePage: 4,
       sourceQuote:
         "All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein.",

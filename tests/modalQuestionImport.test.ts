@@ -13,7 +13,15 @@ import {
   computeImportPreview,
   RawImportQuestionItem,
 } from "../src/services/questionImportService";
-import { clearQuestionBank, getUserQuestions } from "../src/services/questionBankService";
+import {
+  clearQuestionBank,
+  getUserQuestions,
+  assembleExamFromBank,
+} from "../src/services/questionBankService";
+import {
+  createSeededExam,
+  computeSheetLayoutPlan,
+} from "../src/services/examSeedService";
 
 describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () => {
   it("imports RA 6713 through the modal import pipeline and verifies Quality Round 5 requirements", async () => {
@@ -176,7 +184,16 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
     const oddOptions = negativeItems.map((q) => q.options[q.correctIndex]);
     expect(oddOptions).toContain("Private practice of profession");
     expect(oddOptions).toContain("Financial and material interest");
-    expect(oddOptions).toContain("Process documents expeditiously");
+    expect(oddOptions).toContain("Process documents and papers expeditiously");
+
+    // Zero cross-item contamination: no negative choice item's options contain another's answer
+    for (let i = 0; i < negativeItems.length; i++) {
+      for (let j = 0; j < negativeItems.length; j++) {
+        if (i === j) continue;
+        const answerJ = negativeItems[j].options[negativeItems[j].correctIndex];
+        expect(negativeItems[i].options).not.toContain(answerJ);
+      }
+    }
 
     // Zero fabricated options like "Commercial profitability"
     for (const neg of negativeItems) {
@@ -240,12 +257,15 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
     // -------------------------------------------------------------
     const rawQuestionsForImport: RawImportQuestionItem[] = parsedQaList.map((item) => ({
       id: item.id,
+      number: item.number,
+      templateType: item.templateType,
       stem: item.stem,
       options: item.options,
       correctIndex: item.correctIndex,
       explanation: item.explanation,
       chapter: item.chapter,
       sourcePage: item.sourcePage,
+      sourceQuote: item.sourceQuote,
       questionType: item.questionType,
       reviewStatus: item.reviewStatus,
       suspiciousReasons: item.suspiciousReasons,
@@ -270,5 +290,73 @@ describe("QuestionImportModal Pipeline End-to-End Audit - Quality Round 5", () =
     expect(importResult.importedCount).toBe(87);
     expect(importResult.needsReviewCount).toBe(2);
     expect(getUserQuestions().length).toBe(87);
+
+    // -------------------------------------------------------------
+    // 9. MOCK EXAM START PATH ENEMY-ITEM INTEGRATION & ZERO-LEAK TEST
+    // -------------------------------------------------------------
+    // Assemble exam from the bank via assembleExamFromBank
+    const { selectedQuestions: bankAssembled, rejectedQuestions: bankRejected } = assembleExamFromBank(20, {
+      subject: "Philippines Code of Conduct",
+    });
+    console.log("BANK REJECTED ITEMS:", bankRejected.map((r) => ({ num: r.item.number, reason: r.reason })));
+
+    expect(bankAssembled.length).toBe(16);
+    expect(bankRejected.length).toBe(4);
+    expect(bankRejected.map((r) => r.item.number)).toEqual([11, 12, 13, 18]);
+
+    // Test that in 100% of the assembled exam, NO item's stem contains another selected item's answer
+    for (let i = 0; i < bankAssembled.length; i++) {
+      const qA = bankAssembled[i];
+      const answerA = qA.options[qA.correctIndex];
+      const answerANorm = answerA.toLowerCase().trim();
+
+      for (let j = 0; j < bankAssembled.length; j++) {
+        if (i === j) continue;
+        const qB = bankAssembled[j];
+        const stemBLower = qB.stem.toLowerCase();
+
+        // 1. Textual answer terms from same section must never appear in another item's stem
+        if (answerANorm.length >= 4 && !["true", "false"].includes(answerANorm)) {
+          const sameSec = qA.chapter && qB.chapter && qA.chapter === qB.chapter;
+          if (sameSec) {
+            expect(stemBLower).not.toContain(answerANorm);
+          }
+        }
+
+        // 2. Numeric answers from same section/quote must never appear in another item's stem
+        const numVal = parseInt(answerA, 10);
+        if (!isNaN(numVal) && (qA.chapter === qB.chapter || qA.sourcePage === qB.sourcePage)) {
+          const numRegex = new RegExp(`\\b${numVal}\\b|\\b${numVal}\\s*days?\\b`, "i");
+          expect(stemBLower).not.toMatch(numRegex);
+        }
+      }
+    }
+
+    // Verify seeded exam start path creates conflict-free exam
+    const seededResult = createSeededExam(
+      getUserQuestions({ subject: "Philippines Code of Conduct" }).filter((q) => q.questionType === "mcq"),
+      {
+        totalQuestions: 20,
+        choicesPerItem: 4,
+        sections: [
+          { name: "Norms and Conduct", questionCount: 10, sectionType: "standard_mcq", choicesPerItem: 4 },
+          { name: "Matching Set", questionCount: 4, sectionType: "matching_set", choicesPerItem: 8 },
+          { name: "True / False", questionCount: 2, sectionType: "true_false", choicesPerItem: 2 },
+        ],
+      },
+      "SEED-6713"
+    );
+
+    expect(seededResult.orderedQuestions.length).toBe(16);
+    expect(seededResult.examRecord.answerKey.length).toBe(16);
+
+    // Verify answer sheet layout plan module reads per-section choice count
+    const sheetPlan = computeSheetLayoutPlan(seededResult.examRecord.config);
+    expect(sheetPlan.sections[0].choicesPerItem).toBe(4);
+    expect(sheetPlan.sections[0].bubbleLabels).toEqual(["A", "B", "C", "D"]);
+    expect(sheetPlan.sections[1].choicesPerItem).toBe(8);
+    expect(sheetPlan.sections[1].bubbleLabels).toEqual(["A", "B", "C", "D", "E", "F", "G", "H"]);
+    expect(sheetPlan.sections[2].choicesPerItem).toBe(2);
+    expect(sheetPlan.sections[2].bubbleLabels).toEqual(["A", "B"]);
   });
 });
