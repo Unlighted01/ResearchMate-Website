@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import { useToast } from "../src/App";
 import {
   saveExam,
   saveExamAttempt,
@@ -478,6 +479,49 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
       expect(validSourceItemIds).not.toContain("local_1794280465130_abc123");
       expect(validSourceItemIds).not.toContain("active-session");
       expect(validSourceItemIds).not.toContain("doc-ra-6713");
+    });
+  });
+
+  // ============================================
+  // 7. TOAST LIFECYCLE & NO RENDER SIDE-EFFECTS
+  // ============================================
+  describe("7. Toast Lifecycle & No Render Side-Effects", () => {
+    it("renders toast and auto-dismisses without 'Cannot update a component while rendering a different component' warning", () => {
+      vi.useFakeTimers();
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const TestHost: React.FC = () => {
+        const { showToast, ToastComponent } = useToast();
+        return (
+          <div>
+            <button onClick={() => showToast("Test notification", "info")}>Trigger Toast</button>
+            {ToastComponent}
+          </div>
+        );
+      };
+
+      const { getByText, queryByText } = render(<TestHost />);
+
+      // Trigger the toast via event handler
+      fireEvent.click(getByText("Trigger Toast"));
+      expect(getByText("Test notification")).toBeDefined();
+
+      // Advance timers through the 3000ms duration
+      act(() => {
+        vi.advanceTimersByTime(3100);
+      });
+
+      // Toast auto-closes cleanly
+      expect(queryByText("Test notification")).toBeNull();
+
+      // Assert no React warnings about updating component during render were logged
+      const badSetStateWarnings = consoleErrorSpy.mock.calls.filter((call) =>
+        call.some((arg) => typeof arg === "string" && (arg.includes("Cannot update a component") || arg.includes("bad setState")))
+      );
+      expect(badSetStateWarnings).toHaveLength(0);
+
+      consoleErrorSpy.mockRestore();
+      vi.useRealTimers();
     });
   });
 });

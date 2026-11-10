@@ -56,18 +56,18 @@ const Toast: React.FC<ToastProps> = ({ message, type, onClose }) => {
     const interval = 30;
     const decrement = 100 / (duration / interval);
 
-    const timer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev <= 0) {
-          clearInterval(timer);
-          onClose();
-          return 0;
-        }
-        return prev - decrement;
-      });
+    const closeTimer = setTimeout(() => {
+      onClose();
+    }, duration);
+
+    const progressTimer = setInterval(() => {
+      setProgress((prev) => Math.max(0, prev - decrement));
     }, interval);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(closeTimer);
+      clearInterval(progressTimer);
+    };
   }, [onClose]);
 
   const config = {

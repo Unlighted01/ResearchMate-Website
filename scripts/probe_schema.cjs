@@ -162,6 +162,17 @@ async function authenticateTestUser() {
       password: testUserPassword
     });
 
+    const isCaptchaFailed =
+      res.data?.error === "captcha_failed" ||
+      res.data?.msg_code === "captcha_failed" ||
+      String(res.data?.error_code || "").toLowerCase().includes("captcha") ||
+      String(res.data?.error_description || res.data?.message || res.raw || "").toLowerCase().includes("captcha");
+
+    if (isCaptchaFailed) {
+      console.log("captcha is enabled: run signed-in checks through the app");
+      return { token: null, userId: null, captchaBlocked: true };
+    }
+
     if (res.status === 200 && res.data?.access_token) {
       console.log(`Authentication successful. User ID: ${res.data.user?.id}`);
       return { token: res.data.access_token, userId: res.data.user?.id };
@@ -174,6 +185,17 @@ async function authenticateTestUser() {
 }
 
 async function runCanaryWriteTests(authInfo) {
+  if (authInfo?.captchaBlocked) {
+    console.log("\n--- Phase 2: Canary Write Tests Skipped ---");
+    console.log("captcha is enabled: run signed-in checks through the app");
+    return {
+      writeResults: {},
+      isUserAuthenticated: false,
+      skipped: true,
+      skippedReason: "captcha is enabled: run signed-in checks through the app",
+    };
+  }
+
   console.log("\n--- Phase 2: Canary Write Tests (INSERT + immediate DELETE) ---");
   const writeResults = {};
   const token = authInfo?.token || anonKey;
@@ -346,14 +368,19 @@ runProbe().then(({ columnReport, canaryOutput }) => {
   }
 
   md += `\n## 2. Canary Write & RLS Execution (Insert + Delete)\n\n`;
-  md += `| Table | HTTP Status | Insert Result | Cleaned Up (Deleted)? | Error / Policy Diagnostic |\n`;
-  md += `| :--- | :---: | :--- | :---: | :--- |\n`;
+  if (canaryOutput.skipped) {
+    md += `> **Canary Write Tests Skipped:**\n`;
+    md += `> ${canaryOutput.skippedReason}\n\n`;
+  } else {
+    md += `| Table | HTTP Status | Insert Result | Cleaned Up (Deleted)? | Error / Policy Diagnostic |\n`;
+    md += `| :--- | :---: | :--- | :---: | :--- |\n`;
 
-  for (const [tbl, res] of Object.entries(canaryOutput.writeResults)) {
-    md += `| \`${tbl}\` | \`${res.insertStatus}\` | ${res.insertSuccess ? "✅ Insert Succeeded" : "❌ Insert Failed"} | ${res.deleteSuccess ? "✅ Yes" : "—"} | ${res.insertError ? `\`${res.insertError.replace(/\|/g, "\\|")}\`` : "OK"} |\n`;
+    for (const [tbl, res] of Object.entries(canaryOutput.writeResults)) {
+      md += `| \`${tbl}\` | \`${res.insertStatus}\` | ${res.insertSuccess ? "✅ Insert Succeeded" : "❌ Insert Failed"} | ${res.deleteSuccess ? "✅ Yes" : "—"} | ${res.insertError ? `\`${res.insertError.replace(/\|/g, "\\|")}\`` : "OK"} |\n`;
+    }
   }
 
-  if (!canaryOutput.isUserAuthenticated) {
+  if (!canaryOutput.isUserAuthenticated && !canaryOutput.skipped) {
     md += `\n> **Note on Authenticated RLS Testing:**\n`;
     md += `> To test with authenticated Row-Level Security (RLS) enforcement, supply test user credentials:\n`;
     md += `> \`\`\`bash\n`;

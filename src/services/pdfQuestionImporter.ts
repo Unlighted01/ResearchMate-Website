@@ -2369,8 +2369,6 @@ export function generateQuestionsFromLegalOrUnstructuredText(
   // 5. Exam Assembly & Enemy Item Filtering
   // -------------------------------------------------------------
   const { selected: assembledMcqs, rejected: enemyRejected } = filterEnemyItems(candidateMcqs, 20);
-  console.log("ENEMY REJECTED COUNT:", enemyRejected.length);
-  enemyRejected.forEach((r, i) => console.log(`Rejected #${i + 1}: ${r.reason}`));
 
   // Maintain full candidate pool for QuestionImportModal and review output
   const finalMcqs = [...candidateMcqs];

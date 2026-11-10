@@ -1,7 +1,3 @@
--- ====================================================================
--- MIGRATION: 20261020000001_exam_columns_and_fixes.sql
--- ====================================================================
-
 ALTER TABLE public.exams
   ADD COLUMN IF NOT EXISTS source_document_title TEXT,
   ADD COLUMN IF NOT EXISTS seed TEXT,
