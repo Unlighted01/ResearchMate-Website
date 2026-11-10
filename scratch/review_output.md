@@ -1,7 +1,7 @@
 # Review Output: Question Import Modal Simulation
 
 ## Build & Source Metadata
-- **Git Commit Hash**: `4488d921cb17e493a53be75b59147906fa70f1ef`
+- **Git Commit Hash**: `48e1f5f5d402c241b7ece87e11e98863299cacaa`
 - **Git Branch**: `preview/quality-round-6`
 - **Source File**: `tests/fixtures/Philippines_Code_of_Conduct_and_Ethical_Standards_for_Public_Officials_1989.pdf`
 - **Total Items Generated**: **87**
@@ -422,9 +422,9 @@ Under Section 5 of RA 6713, which of the following is NOT an enumerated statutor
 ```
 
 **Options:**
-- **(A)** Act promptly on letters and requests
-- **(B)** Financial and material interest  <-- [CORRECT ANSWER]
-- **(C)** Process documents expeditiously
+- **(A)** Act immediately on the public's personal transactions
+- **(B)** Act promptly on letters and requests
+- **(C)** Financial and material interest  <-- [CORRECT ANSWER]
 - **(D)** Submit annual performance reports
 
 **Explanation:**  
@@ -450,12 +450,12 @@ Under Section 7 of RA 6713, which of the following is NOT a prohibited act or tr
 
 **Options:**
 - **(A)** Disclosure and/or misuse of confidential information
-- **(B)** Financial and material interest
-- **(C)** Private practice of profession
-- **(D)** Process documents expeditiously  <-- [CORRECT ANSWER]
+- **(B)** Outside employment in private enterprises
+- **(C)** Process documents and papers expeditiously  <-- [CORRECT ANSWER]
+- **(D)** Solicitation or acceptance of gifts
 
 **Explanation:**  
-"Process documents expeditiously" is an affirmative statutory duty established under Section 5(c) of RA 6713 ("All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein."). It is not a prohibited act under Section 7.
+"Process documents and papers expeditiously" is an affirmative statutory duty established under Section 5(c) of RA 6713 ("All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein."). It is not a prohibited act under Section 7.
 
 **Source Quote:**  
 > All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three (3) signatories therein.
