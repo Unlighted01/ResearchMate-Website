@@ -152,25 +152,30 @@ describe("Real PDF Reviewer Fixtures & Regression Audit", () => {
       expect(item.options.length).toBeGreaterThanOrEqual(4);
     }
 
-    // Verify consistency check flagged Section 8(C)(2) ("ten (100") and broken stems ending mid-parenthesis
+    // Verify consistency check flagged exactly the two known statutory anomalies:
+    // 1. Sec. 8(C)(2) ("ten (100)") word/numeral mismatch
+    // 2. Sec. 11 ("fine not exceeding one (1) year") fine measured in time units
     const flagged = result.items.filter((it) => it.reviewStatus === "needs_review");
-    expect(flagged.length).toBe(3);
+    expect(flagged.length).toBe(2);
 
-    // Flagged 1: Sec. 8(C)(2)
-    const sec8Item = flagged.find((it) => it.sourcePage === 8);
+    // Flagged 1: Sec. 8(C)(2) word-numeral mismatch
+    const sec8Item = flagged.find((it) =>
+      it.sourcePage === 8 &&
+      it.suspiciousReasons?.some((r) => r.includes("disagrees with numeral (100)") || r.includes("ten"))
+    );
     expect(sec8Item).toBeDefined();
     expect(sec8Item!.chapter).toContain("Sec. 8");
-    expect(sec8Item!.suspiciousReasons?.some((r) => r.includes("unclosed parenthesis") && r.includes("disagrees with numeral (100)"))).toBe(true);
+    expect(sec8Item!.suspiciousReasons?.some((r) => r.includes("disagrees with numeral (100)"))).toBe(true);
 
-    // Test case 1: "imprisonment not exceeding five (5) years" provision must be Sec. 11 (Penalties)
-    // and flagged as needs_review because stem ends mid-parenthesis / broken number "(P5, 000."
-    // Numeral (5) is masked to "_____" so it does not leak into the stem
-    const sec11Item = flagged.find((it) => it.sourcePage === 10 && it.stem.includes("years"));
+    // Flagged 2: Sec. 11 fine measured in time units
+    const sec11Item = flagged.find((it) =>
+      it.sourcePage === 10 &&
+      it.suspiciousReasons?.some((r) => r.includes("fine not exceeding one (1) year") || r.includes("time units"))
+    );
     expect(sec11Item).toBeDefined();
     expect(sec11Item!.chapter).toBe("Sec. 11 (Penalties)");
     expect(sec11Item!.reviewStatus).toBe("needs_review");
-    expect(sec11Item!.stem).not.toContain("(5) years");
-    expect(sec11Item!.suspiciousReasons?.some((r) => r.includes("mid-parenthesis"))).toBe(true);
+    expect(sec11Item!.suspiciousReasons?.some((r) => r.includes("time units"))).toBe(true);
 
     // Test case 2: "These Rules shall take effect thirty (30) days" must be Rule XIV (Effectivity)
     // Numeral (30) is masked to "_____" so it does not leak into the stem

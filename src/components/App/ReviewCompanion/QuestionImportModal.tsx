@@ -313,6 +313,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
       await saveExam({
         title: examTitle,
         source_document_title: fileName || subjectName,
+        import_batch_id: importResult?.batchId,
         questions: validQuestions,
         config: {
           difficulty: "mixed",
@@ -342,6 +343,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
       await saveFlashcardDeck({
         title: `${docCleanTitle} Flashcards`,
         source_document_title: fileName || subjectName,
+        import_batch_id: importResult?.batchId,
         description: `Active recall study deck generated from ${docCleanTitle} (${flashcards.length} cards)`,
         cards: flashcards,
       }).catch((err) => console.warn("Auto-registering flashcard deck failed:", err));

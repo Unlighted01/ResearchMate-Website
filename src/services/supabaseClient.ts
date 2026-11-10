@@ -165,22 +165,25 @@ export function isTransientError(error: any): boolean {
   }
 
   // 5. Network / connection failures are transient
-  if (
+  // Only treat actual network fetch failures ("Failed to fetch", ECONNRESET, ETIMEDOUT, etc.) as transient,
+  // NOT generic TypeErrors (e.g. TypeError: Cannot read properties of undefined).
+  const isNetworkFetchFailure =
     status === 0 ||
-    error.name === "TypeError" ||
     msg.includes("fetch failed") ||
     msg.includes("failed to fetch") ||
+    msg.includes("econnreset") ||
+    msg.includes("etimedout") ||
+    msg.includes("enotfound") ||
     msg.includes("network error") ||
     msg.includes("networkerror") ||
     msg.includes("network failure") ||
     msg.includes("network outage") ||
-    msg.includes("econnreset") ||
-    msg.includes("etimedout") ||
-    msg.includes("enotfound") ||
     msg.includes("err_network") ||
     msg.includes("aborterror") ||
-    msg.includes("timeout")
-  ) {
+    error.name === "AbortError" ||
+    (error.name === "TypeError" && (msg.includes("fetch") || msg.includes("network")));
+
+  if (isNetworkFetchFailure) {
     return true;
   }
 
@@ -659,7 +662,7 @@ export function onAuthStateChange(callback: AuthEventCallback) {
     if (import.meta.env?.DEV) {
       console.log("🔄 Auth state changed:", event);
     }
-    if (event === "SIGNED_IN" && session) {
+    if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") && session) {
       sessionKnownInvalid = false;
       setSyncStatus({ state: "synced", label: "SYNCED" });
     } else if (event === "SIGNED_OUT") {

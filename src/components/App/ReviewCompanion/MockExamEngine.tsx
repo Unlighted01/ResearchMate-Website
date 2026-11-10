@@ -404,6 +404,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       title: examTitle,
       questions: orderedQuestions,
       seed,
+      seed_record: examRecord,
       source_document_title: sourceTitle,
       config: {
         difficulty,
@@ -658,6 +659,8 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
         id: activeExamId,
         title: topicInput.trim() ? `${topicInput.trim()} Simulation` : "Custom Practice Exam",
         questions: [...questions],
+        seed: activeSeed || undefined,
+        seed_record: currentExamRecord || undefined,
         config: {
           difficulty,
           timedMode,

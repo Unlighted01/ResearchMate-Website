@@ -118,7 +118,7 @@ export interface QuestionPermutationRecord {
   newCorrectIndex: number;
 }
 
-export interface ExamRecord {
+export interface ExamSeedRecord {
   examId: string;
   formatVersion: number; // "v" in QR code
   seed: string;
@@ -129,12 +129,14 @@ export interface ExamRecord {
   answerKey: number[]; // resolved newCorrectIndex for each question in order
 }
 
+export type ExamRecord = ExamSeedRecord; // Backwards-compatibility alias
+
 const STORAGE_KEY = "researchmate_exam_records_v1";
 
 // In-memory fallback
-let recordsCache: Record<string, ExamRecord> | null = null;
+let recordsCache: Record<string, ExamSeedRecord> | null = null;
 
-function loadRecordsFromStorage(): Record<string, ExamRecord> {
+function loadRecordsFromStorage(): Record<string, ExamSeedRecord> {
   if (recordsCache !== null) return recordsCache;
   if (typeof localStorage === "undefined") {
     recordsCache = {};
@@ -152,7 +154,7 @@ function loadRecordsFromStorage(): Record<string, ExamRecord> {
   }
 }
 
-function persistRecordsToStorage(records: Record<string, ExamRecord>): void {
+function persistRecordsToStorage(records: Record<string, ExamSeedRecord>): void {
   recordsCache = records;
   if (typeof localStorage === "undefined") return;
 
@@ -220,7 +222,7 @@ export function createSeededExam(
   seedString?: string,
   explicitExamId?: string
 ): {
-  examRecord: ExamRecord;
+  examRecord: ExamSeedRecord;
   orderedQuestions: Question[];
   droppedCount: number;
   droppedReasons: string[];
@@ -297,7 +299,7 @@ export function createSeededExam(
     });
   }
 
-  const examRecord: ExamRecord = {
+  const examRecord: ExamSeedRecord = {
     examId,
     formatVersion: config.formatVersion || EXAM_FORMAT_VERSION,
     seed,
@@ -323,28 +325,28 @@ export function createSeededExam(
 }
 
 /**
- * Saves an immutable ExamRecord into local storage.
+ * Saves an immutable ExamSeedRecord into local storage.
  */
-export function saveExamRecord(record: ExamRecord): void {
+export function saveExamRecord(record: ExamSeedRecord): void {
   const records = loadRecordsFromStorage();
   records[record.examId] = record;
   persistRecordsToStorage(records);
 }
 
 /**
- * Retrieves an ExamRecord by its exact examId.
+ * Retrieves an ExamSeedRecord by its exact examId.
  * Used by the OMR scanner to find the answer key.
  */
-export function getExamRecord(examId: string): ExamRecord | null {
+export function getExamRecord(examId: string): ExamSeedRecord | null {
   const records = loadRecordsFromStorage();
   return records[examId] || null;
 }
 
 /**
- * Retrieves an ExamRecord by its seed code.
+ * Retrieves an ExamSeedRecord by its seed code.
  * Used when a student wants to retake or inspect a shared seed.
  */
-export function getExamRecordBySeed(seed: string): ExamRecord | null {
+export function getExamRecordBySeed(seed: string): ExamSeedRecord | null {
   const records = loadRecordsFromStorage();
   const cleanSeed = seed.trim().toLowerCase();
   for (const record of Object.values(records)) {
@@ -356,9 +358,9 @@ export function getExamRecordBySeed(seed: string): ExamRecord | null {
 }
 
 /**
- * Lists all stored ExamRecords, sorted by most recent first.
+ * Lists all stored ExamSeedRecords, sorted by most recent first.
  */
-export function listExamRecords(): ExamRecord[] {
+export function listExamRecords(): ExamSeedRecord[] {
   const records = loadRecordsFromStorage();
   return Object.values(records).sort((a, b) => b.createdAt - a.createdAt);
 }

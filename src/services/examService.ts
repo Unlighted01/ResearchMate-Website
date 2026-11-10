@@ -17,6 +17,14 @@ import { findRelevantFormulary } from "./formularyService";
 import { sanitizeCurrencyAndMath } from "./examParser";
 import { StorageItem } from "./storageService";
 import { lintDistractorQuality } from "./distractorQualityService";
+import {
+  ExamSeedRecord,
+  createSeededExam,
+  getExamRecord,
+  getExamRecordBySeed,
+  saveExamRecord,
+  generateSeedCode,
+} from "./examSeedService";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -53,14 +61,16 @@ export interface ExamConfig {
   sections: ExamSectionConfig[];
 }
 
-export interface ExamRecord {
+export interface StoredExam {
   id: string;
   user_id?: string;
   title: string;
   description?: string;
   source_item_ids: string[];
   source_document_title?: string;
-  seed?: string;
+  seed: string;
+  seed_record?: ExamSeedRecord;
+  import_batch_id?: string;
   config: ExamConfig;
   questions: Question[];
   version: number;
@@ -68,6 +78,8 @@ export interface ExamRecord {
   created_at: string;
   updated_at: string;
 }
+
+export type ExamRecord = StoredExam; // Backwards-compatibility alias
 
 export interface ExamAttemptRecord {
   id: string;
@@ -98,6 +110,7 @@ export interface FlashcardDeckRecord {
   description?: string;
   source_item_ids: string[];
   source_document_title?: string;
+  import_batch_id?: string;
   cards: Flashcard[];
   version: number;
   visibility: "private" | "unlisted" | "public";
@@ -150,7 +163,7 @@ function setStorageItem(key: string, value: string): void {
 // LOCAL STORAGE HELPERS (Offline / Cache)
 // ============================================
 
-export function getLocalExams(): ExamRecord[] {
+export function getLocalExams(): StoredExam[] {
   try {
     const raw = getStorageItem(LOCAL_STORAGE_EXAMS_KEY);
     return raw ? JSON.parse(raw) : [];
@@ -159,7 +172,7 @@ export function getLocalExams(): ExamRecord[] {
   }
 }
 
-export function saveLocalExams(exams: ExamRecord[]): void {
+export function saveLocalExams(exams: StoredExam[]): void {
   try {
     setStorageItem(LOCAL_STORAGE_EXAMS_KEY, JSON.stringify(exams));
   } catch (err) {
@@ -206,8 +219,8 @@ export function saveLocalFlashcardDecks(decks: FlashcardDeckRecord[]): void {
 // ============================================
 
 export async function saveExam(
-  examData: Partial<ExamRecord> & { title: string; questions: Question[] }
-): Promise<WriteSyncResult<ExamRecord>> {
+  examData: Partial<StoredExam> & { title: string; questions: Question[] }
+): Promise<WriteSyncResult<StoredExam>> {
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
   const now = new Date().toISOString();
@@ -217,21 +230,50 @@ export async function saveExam(
   const isIdUuid = UUID_REGEX.test(examData.id || "");
   const recordId = isIdUuid ? (examData.id as string) : generateUUID();
 
-  const record: ExamRecord = {
+  // Enforce deterministic seed and immutable ExamSeedRecord
+  let seed = (examData.seed || "").trim();
+  if (!seed) {
+    seed = generateSeedCode("EXAM");
+  }
+
+  let seedRecord: ExamSeedRecord | undefined =
+    examData.seed_record || getExamRecord(recordId) || getExamRecordBySeed(seed) || undefined;
+  let assembledQuestions = examData.questions;
+
+  // If no seed record was provided or cached, assemble the exam now through createSeededExam:
+  // this filters enemy items, balances correct options, and stores the answer key.
+  if (!seedRecord) {
+    const seeded = createSeededExam(
+      examData.questions,
+      {
+        totalQuestions: examData.questions.length,
+        choicesPerItem: 4,
+      },
+      seed,
+      recordId
+    );
+    seedRecord = seeded.examRecord;
+    assembledQuestions = seeded.orderedQuestions;
+  }
+  saveExamRecord(seedRecord);
+
+  const record: StoredExam = {
     id: recordId,
     user_id: user?.id,
     title: examData.title.trim() || "Untitled Exam",
     description: examData.description || "",
     source_item_ids: examData.source_item_ids || [],
     source_document_title: examData.source_document_title || "",
-    seed: examData.seed || "",
+    seed,
+    seed_record: seedRecord,
+    import_batch_id: examData.import_batch_id || "",
     config: examData.config || {
       difficulty: "mixed",
       timedMode: false,
       benchmarkScore: 80,
-      sections: [{ name: "General Assessment", questionCount: examData.questions.length, mode: "grounded" }],
+      sections: [{ name: "General Assessment", questionCount: assembledQuestions.length, mode: "grounded" }],
     },
-    questions: examData.questions,
+    questions: assembledQuestions,
     version: nextVersion,
     visibility: examData.visibility || "private",
     created_at: examData.created_at || now,
@@ -281,6 +323,10 @@ export async function saveExam(
         title: record.title,
         description: record.description,
         source_item_ids: validSourceItemIds,
+        source_document_title: record.source_document_title || null,
+        seed: record.seed,
+        seed_record: record.seed_record || null,
+        import_batch_id: record.import_batch_id || null,
         config: { ...record.config, seed: record.seed, source_document_title: record.source_document_title },
         questions: record.questions,
         version: record.version,
@@ -296,6 +342,9 @@ export async function saveExam(
   }, { maxRetries: 3, initialDelayMs: 1000 });
 
   if (syncResult.success && syncResult.data) {
+    if (syncResult.data.seed_record) {
+      saveExamRecord(syncResult.data.seed_record);
+    }
     const local = getLocalExams().filter((e) => e.id !== record.id);
     saveLocalExams([syncResult.data, ...local]);
     setSyncStatus({
@@ -328,7 +377,7 @@ export async function saveExam(
   return { ...record, syncStatus: "failed", syncError: errorMsg };
 }
 
-export async function getAllExams(): Promise<ExamRecord[]> {
+export async function getAllExams(): Promise<StoredExam[]> {
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
 
@@ -341,6 +390,11 @@ export async function getAllExams(): Promise<ExamRecord[]> {
         .order("updated_at", { ascending: false });
 
       if (!error && data) {
+        for (const row of data) {
+          if (row.seed_record) {
+            saveExamRecord(row.seed_record);
+          }
+        }
         saveLocalExams(data); // update read cache
         return data;
       }
@@ -352,7 +406,7 @@ export async function getAllExams(): Promise<ExamRecord[]> {
   return getLocalExams();
 }
 
-export async function getExamById(examId: string): Promise<ExamRecord | null> {
+export async function getExamById(examId: string): Promise<StoredExam | null> {
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
 
@@ -365,6 +419,9 @@ export async function getExamById(examId: string): Promise<ExamRecord | null> {
         .maybeSingle();
 
       if (!error && data) {
+        if (data.seed_record) {
+          saveExamRecord(data.seed_record);
+        }
         return data;
       }
     } catch (err) {
@@ -549,6 +606,7 @@ export async function saveFlashcardDeck(
     description: deckData.description || "",
     source_item_ids: deckData.source_item_ids || [],
     source_document_title: deckData.source_document_title || "",
+    import_batch_id: deckData.import_batch_id || "",
     cards: deckData.cards,
     version: (deckData.version || 0) + 1,
     visibility: deckData.visibility || "private",
@@ -583,8 +641,10 @@ export async function saveFlashcardDeck(
         id: record.id,
         user_id: user.id,
         title: record.title,
-        description: record.description,
+        description: record.description || null,
         source_item_ids: validSourceItemIds,
+        source_document_title: record.source_document_title || null,
+        import_batch_id: record.import_batch_id || null,
         cards: record.cards,
         version: record.version,
         visibility: record.visibility,

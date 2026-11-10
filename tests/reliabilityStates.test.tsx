@@ -9,7 +9,9 @@ import {
   saveFlashcardDeck,
   getLocalExams,
   saveLocalExams,
+  getExamById,
   generateUUID,
+  StoredExam,
 } from "../src/services/examService";
 import {
   getSyncStatus,
@@ -18,9 +20,15 @@ import {
   isTransientError,
   isAuthError,
   resetSessionInvalidFlag,
+  isSessionKnownInvalid,
   supabase,
 } from "../src/services/supabaseClient";
-import { createSeededExam } from "../src/services/examSeedService";
+import {
+  createSeededExam,
+  ExamSeedRecord,
+  getExamRecord,
+  getExamRecordBySeed,
+} from "../src/services/examSeedService";
 import { filterEnemyItems } from "../src/services/distractorQualityService";
 import MockExamEngine from "../src/components/App/ReviewCompanion/MockExamEngine";
 import QuestionImportModal from "../src/components/App/ReviewCompanion/QuestionImportModal";
@@ -292,9 +300,14 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
       expect(isTransientError({ status: 503 })).toBe(true);
       expect(isTransientError({ status: 429 })).toBe(true);
       expect(isTransientError(new TypeError("Failed to fetch"))).toBe(true);
+      expect(isTransientError(new TypeError("fetch failed"))).toBe(true);
       expect(isTransientError({ message: "network error ECONNRESET" })).toBe(true);
+      expect(isTransientError({ message: "ETIMEDOUT" })).toBe(true);
 
-      // Non-transient errors
+      // Non-transient errors: generic TypeError (e.g. reading property of undefined) MUST NOT be transient
+      expect(isTransientError(new TypeError("Cannot read properties of undefined (reading 'foo')"))).toBe(false);
+      expect(isTransientError(new TypeError("null is not an object"))).toBe(false);
+
       expect(isTransientError({ status: 400 })).toBe(false);
       expect(isTransientError({ status: 401 })).toBe(false);
       expect(isTransientError({ status: 403 })).toBe(false);
@@ -302,6 +315,30 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
       expect(isTransientError({ message: "Could not find the table 'public.exams' in the schema cache" })).toBe(false);
       expect(isTransientError({ code: "42P01", message: "relation exams does not exist" })).toBe(false);
       expect(isTransientError({ code: "23503", message: "foreign key violation" })).toBe(false);
+    });
+
+    it("resets sessionKnownInvalid flag after successful sign-in or resetSessionInvalidFlag", async () => {
+      // Simulate session marked invalid (e.g. after 401 refresh failure)
+      setSyncStatus({ state: "signed_out", label: "Signed out, working locally" });
+      resetSessionInvalidFlag();
+      expect(isSessionKnownInvalid()).toBe(false);
+
+      // Spy signInWithPassword
+      const signInSpy = vi.spyOn(supabase.auth, "signInWithPassword").mockResolvedValueOnce({
+        data: {
+          user: { id: "user-test-uuid", email: "test@example.com" } as any,
+          session: { access_token: "token" } as any,
+        },
+        error: null,
+      });
+
+      const { signInWithEmail } = await import("../src/services/supabaseClient");
+      const res = await signInWithEmail("test@example.com", "password123");
+      expect(res.error).toBeNull();
+      expect(isSessionKnownInvalid()).toBe(false);
+      expect(getSyncStatus().state).toBe("synced");
+
+      signInSpy.mockRestore();
     });
   });
 
@@ -522,6 +559,176 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
 
       consoleErrorSpy.mockRestore();
       vi.useRealTimers();
+    });
+  });
+
+  // ============================================
+  // 8. STORED EXAM & SEED RECORD PERSISTENCE & ASSEMBLY
+  // ============================================
+  describe("8. StoredExam & ExamSeedRecord Persistence and Cloud Sync", () => {
+    it("guarantees every stored exam has a deterministic seed and seed_record, whichever path created it", async () => {
+      // Scenario: Import path passes raw questions with empty/missing seed and no seed_record
+      const rawQuestions = [
+        {
+          id: generateUUID(),
+          question: "What is the speed of light?",
+          options: ["3x10^8 m/s", "100 m/s", "1000 km/h", "0 m/s"],
+          correctIndex: 0,
+          explanation: "Universal constant c",
+          topicTag: "Physics",
+        },
+        {
+          id: generateUUID(),
+          question: "What is the boiling point of water at standard pressure?",
+          options: ["50 C", "100 C", "200 C", "0 C"],
+          correctIndex: 1,
+          explanation: "100 degrees Celsius",
+          topicTag: "Chemistry",
+        },
+      ];
+
+      const saved: StoredExam = await saveExam({
+        title: "Imported Physics Exam",
+        source_document_title: "Physics_101.pdf",
+        import_batch_id: "batch_12345",
+        questions: rawQuestions,
+      });
+
+      // 1. Seed must not be empty
+      expect(saved.seed).toBeDefined();
+      expect(saved.seed.length).toBeGreaterThan(0);
+
+      // 2. Seed record must exist inside StoredExam
+      expect(saved.seed_record).toBeDefined();
+      expect(saved.seed_record?.examId).toBe(saved.id);
+      expect(saved.seed_record?.seed).toBe(saved.seed);
+      expect(saved.seed_record?.answerKey).toBeDefined();
+      expect(saved.seed_record?.answerKey.length).toBe(saved.questions.length);
+      expect(saved.seed_record?.permutations).toBeDefined();
+
+      // 3. StoredExam preserves import metadata
+      expect(saved.source_document_title).toBe("Physics_101.pdf");
+      expect(saved.import_batch_id).toBe("batch_12345");
+
+      // 4. Stored in local examSeedService cache as well
+      const cachedSeedRecord = getExamRecord(saved.id);
+      expect(cachedSeedRecord).not.toBeNull();
+      expect(cachedSeedRecord?.examId).toBe(saved.id);
+    });
+
+    it("saveExam stores the final assembled exam after enemy filtering and choice balancing", async () => {
+      // Provide questions containing an enemy pair
+      const questionsWithEnemy = [
+        {
+          id: generateUUID(),
+          question: "What is the capital of Japan?",
+          options: ["Tokyo", "Kyoto", "Osaka", "Nagoya"],
+          correctIndex: 0,
+          explanation: "Tokyo is the current capital.",
+          topicTag: "Geography",
+        },
+        {
+          id: generateUUID(),
+          question: "Tokyo is the capital of which Asian country?",
+          options: ["Japan", "China", "Korea", "Vietnam"],
+          correctIndex: 0,
+          explanation: "Japan.",
+          topicTag: "Geography",
+        },
+      ];
+
+      const saved = await saveExam({
+        title: "Geography Exam",
+        questions: questionsWithEnemy,
+      });
+
+      // Enemy item filter in createSeededExam must have dropped 1 enemy question
+      expect(saved.questions.length).toBe(1);
+      expect(saved.seed_record?.orderedQuestionIds.length).toBe(1);
+      expect(saved.seed_record?.answerKey.length).toBe(1);
+    });
+
+    it("getExamById restores seed_record into examSeedService cache when fetched", async () => {
+      const examId = generateUUID();
+      const mockCloudSeedRecord: ExamSeedRecord = {
+        examId,
+        formatVersion: 1,
+        seed: "EXAM-TEST-SEED",
+        config: {
+          totalQuestions: 1,
+          choicesPerItem: 4,
+        },
+        createdAt: Date.now(),
+        permutations: {
+          [examId]: {
+            questionId: examId,
+            choiceOrder: [1, 0, 2, 3],
+            originalCorrectIndex: 0,
+            newCorrectIndex: 1,
+          },
+        },
+        orderedQuestionIds: [examId],
+        answerKey: [1],
+      };
+
+      const mockStoredExam: StoredExam = {
+        id: examId,
+        title: "Cloud Synced Exam",
+        seed: "EXAM-TEST-SEED",
+        seed_record: mockCloudSeedRecord,
+        source_item_ids: [],
+        config: {
+          difficulty: "mixed",
+          timedMode: false,
+          benchmarkScore: 80,
+          sections: [],
+        },
+        questions: [
+          {
+            id: examId,
+            question: "Question 1?",
+            options: ["A", "B", "C", "D"],
+            correctIndex: 1,
+            explanation: "",
+            topicTag: "General",
+          },
+        ],
+        version: 1,
+        visibility: "private",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // Mock Supabase returning cloud row
+      const selectSpy = vi.spyOn(supabase, "from").mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: mockStoredExam, error: null }),
+      } as any);
+
+      const authSpy = vi.spyOn(supabase.auth, "getUser").mockResolvedValue({
+        data: { user: { id: "user-123" } as any },
+        error: null,
+      });
+
+      const sessionSpy = vi.spyOn(supabase.auth, "getSession").mockResolvedValue({
+        data: { session: { access_token: "mock-token" } as any },
+        error: null,
+      });
+
+      const fetched = await getExamById(examId);
+      expect(fetched).not.toBeNull();
+      expect(fetched?.seed_record).toBeDefined();
+
+      // Seed record must now be restored in examSeedService memory/storage cache
+      const restored = getExamRecord(examId);
+      expect(restored).not.toBeNull();
+      expect(restored?.seed).toBe("EXAM-TEST-SEED");
+      expect(restored?.answerKey).toEqual([1]);
+
+      selectSpy.mockRestore();
+      authSpy.mockRestore();
+      sessionSpy.mockRestore();
     });
   });
 });
