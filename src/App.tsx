@@ -9,6 +9,7 @@ import {
   Navigate,
   useLocation,
   useNavigate,
+  useSearchParams,
 } from "react-router-dom";
 import {
   supabase,
@@ -339,7 +340,20 @@ import AIAssistant from "./components/App/AIAssistant";
 import PdfReader from "./components/App/PdfReader/PdfReader";
 import DocumentStudio from "./components/App/PdfStudio/DocumentStudio";
 import ReviewCompanionPage from "./components/App/ReviewCompanion/ReviewCompanionPage";
+import ExamsWorkspacePage from "./components/App/ReviewCompanion/ExamsWorkspacePage";
+import FlashcardsWorkspacePage from "./components/App/ReviewCompanion/FlashcardsWorkspacePage";
+import MaterialsWorkspacePage from "./components/App/ReviewCompanion/MaterialsWorkspacePage";
+import ScholarSearchWorkspacePage from "./components/App/ReviewCompanion/ScholarSearchWorkspacePage";
 import SupportPage from "./components/marketing/SupportPage";
+
+const ReviewRedirect: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get("tab");
+  if (tab === "flashcards") return <Navigate to="/app/flashcards" replace />;
+  if (tab === "materials") return <Navigate to="/app/materials" replace />;
+  if (tab === "search") return <Navigate to="/app/search" replace />;
+  return <Navigate to="/app/exams" replace />;
+};
 
 // ============================================
 // PART 5: MAIN APP COMPONENT
@@ -475,17 +489,47 @@ export default function App() {
                           }
                         />
 
-                        {/* 2. Practice & Mock Simulator (Materials Ingest, Mock Exams, Flashcards, Scholar Search) */}
+                        {/* 2. Dedicated Assessment & Practice Workstations */}
                         <Route
-                          path="review"
+                          path="exams"
                           element={
-                            <ReviewCompanionPage
+                            <ExamsWorkspacePage
+                              useToast={toastProp}
+                            />
+                          }
+                        />
+                        <Route
+                          path="flashcards"
+                          element={
+                            <FlashcardsWorkspacePage
+                              useToast={toastProp}
+                            />
+                          }
+                        />
+                        <Route
+                          path="materials"
+                          element={
+                            <MaterialsWorkspacePage
                               useToast={toastProp}
                             />
                           }
                         />
 
-                        {/* 3. AI Speed Tutor */}
+                        {/* 3. Dedicated Research Discovery Workstation */}
+                        <Route
+                          path="search"
+                          element={
+                            <ScholarSearchWorkspacePage />
+                          }
+                        />
+
+                        {/* Backward-Compatible Dynamic Forwarder for /app/review */}
+                        <Route
+                          path="review"
+                          element={<ReviewRedirect />}
+                        />
+
+                        {/* 4. AI Speed Tutor */}
                         <Route
                           path="assistant"
                           element={
@@ -495,8 +539,7 @@ export default function App() {
                           }
                         />
 
-                        
-                        {/* Document Studio & PDF Canvas */}
+                        {/* 5. Document Studio & PDF Canvas */}
                         <Route
                           path="studio"
                           element={<DocumentStudio useToast={toastProp} />}
@@ -506,7 +549,7 @@ export default function App() {
                           element={<DocumentStudio useToast={toastProp} />}
                         />
 
-                        {/* 5. Settings */}
+                        {/* 6. Settings */}
                         <Route
                           path="settings"
                           element={<SettingsPage />}
@@ -518,8 +561,8 @@ export default function App() {
                         <Route path="editor" element={<Navigate to="/app/studio" replace />} />
                         <Route path="citations" element={<Navigate to="/app/studio" replace />} />
                         <Route path="pdf-reader" element={<Navigate to="/app/reader" replace />} />
-                        <Route path="smart-pen" element={<Navigate to="/app/review?tab=materials" replace />} />
-                        <Route path="pair-pen" element={<Navigate to="/app/review?tab=materials" replace />} />
+                        <Route path="smart-pen" element={<Navigate to="/app/materials" replace />} />
+                        <Route path="pair-pen" element={<Navigate to="/app/materials" replace />} />
                         <Route path="ai-assistant" element={<Navigate to="/app/assistant" replace />} />
                         <Route path="collections" element={<Navigate to="/app/dashboard" replace />} />
 

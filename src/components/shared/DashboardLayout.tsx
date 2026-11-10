@@ -50,6 +50,8 @@ import {
   BrainCircuit,
   Award,
   Zap,
+  Upload,
+  Globe,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { subscribeToItems } from "../../services/storageService";
@@ -58,8 +60,8 @@ import { subscribeToItems } from "../../services/storageService";
 // PART 2: CONSTANTS
 // ============================================
 
-// Grouped sidebar nav matching the core workstations:
-// Dashboard, Document Studio, Study & Review, AI Assistant (Settings is pinned to bottom nav)
+// Grouped sidebar nav matching the dedicated workstations:
+// Workspace, Assessment & Practice, Research (Settings is pinned to bottom nav)
 const NAV_GROUPS: {
   label: string;
   items: {
@@ -70,12 +72,25 @@ const NAV_GROUPS: {
   }[];
 }[] = [
   {
-    label: "Main Navigation",
+    label: "Workspace",
     items: [
       { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
       { icon: FileText, label: "Document Studio", path: "/app/studio" },
-      { icon: BrainCircuit, label: "Study & Review", path: "/app/review", badge: "AI" },
       { icon: MessageSquare, label: "AI Assistant", path: "/app/assistant" },
+    ],
+  },
+  {
+    label: "Assessment & Practice",
+    items: [
+      { icon: Award, label: "Mock Exams", path: "/app/exams", badge: "Sim" },
+      { icon: BookOpen, label: "Flashcards", path: "/app/flashcards" },
+      { icon: Upload, label: "Materials & OCR", path: "/app/materials" },
+    ],
+  },
+  {
+    label: "Research",
+    items: [
+      { icon: Globe, label: "Scholar Search", path: "/app/search" },
     ],
   },
 ];
@@ -490,42 +505,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             {/* Bottom Nav */}
             <ul className="space-y-1">
               <li>
-                <button
-                  onClick={() => setCommandPaletteOpen(true)}
-                  className={`
-                    theme-sidebar-item theme-hover-surface
-                    flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
-                    transition-all duration-200 group relative
-                    ${isCollapsed ? "justify-center" : ""}
-                  `}
-                >
-                  <Search className="theme-nav-icon w-5 h-5 flex-shrink-0" />
-                  <AnimatePresence mode="wait">
-                    {!isCollapsed && (
-                      <motion.div
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        transition={{ duration: 0.15 }}
-                        className="flex-1 flex justify-between items-center min-w-0 whitespace-nowrap"
-                      >
-                        <span className="text-sm font-medium theme-muted-text">
-                          Search
-                        </span>
-                        <kbd className="theme-kbd px-1.5 py-0.5 rounded text-[10px]">
-                          ⌘K
-                        </kbd>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  {isCollapsed && (
-                    <div className="theme-tooltip absolute left-full ml-3 px-3 py-1.5 text-xs font-medium rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:translate-x-1 group-hover:scale-100 scale-95 origin-left transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] pointer-events-none whitespace-nowrap z-50">
-                      Search (⌘K)
-                    </div>
-                  )}
-                </button>
-              </li>
-              <li>
                 <Link
                   to="/app/settings"
                   onClick={() => setMobileSidebarOpen(false)}
@@ -668,23 +647,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <Menu className="w-5 h-5" />
               </button>
 
-              {/* Search - Hide on Dashboard to avoid duplication */}
+              {/* Search / Command Palette Trigger - Hide on Dashboard to avoid duplication */}
               {location.pathname !== "/app/dashboard" && (
                 <div
-                  className={`
-                  relative flex-1 max-w-md transition-all duration-300
-                  ${searchFocused ? "max-w-lg" : ""}
-                `}
+                  onClick={() => setCommandPaletteOpen(true)}
+                  className="relative flex-1 max-w-md transition-all duration-300 cursor-pointer"
                 >
-                  <Search className="text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" />
+                  <Search className="text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" />
                   <input
                     type="text"
-                    placeholder="Search library, notes, matrices..."
-                    className="w-full pl-10 pr-12 py-2 rounded-lg text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                    onFocus={() => setSearchFocused(true)}
-                    onBlur={() => setSearchFocused(false)}
+                    readOnly
+                    placeholder="Search library, notes, matrices... (⌘K)"
+                    className="w-full pl-10 pr-12 py-2 rounded-lg text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors cursor-pointer"
+                    onFocus={() => setCommandPaletteOpen(true)}
                   />
-                  <div className="text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs">
+                  <div className="text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs pointer-events-none">
                     <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500">
                       ⌘K
                     </kbd>

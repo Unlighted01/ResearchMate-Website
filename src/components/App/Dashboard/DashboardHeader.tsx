@@ -64,7 +64,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       <div className="flex items-center flex-wrap sm:flex-nowrap gap-1.5 sm:gap-2">
         {/* Quick link to Practice Mocks & Reader */}
         <Link
-          to="/app/review?tab=exams"
+          to="/app/exams"
           className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-2xs"
         >
           <BrainCircuit className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
