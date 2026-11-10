@@ -71,7 +71,7 @@ export interface ExamRecord {
 
 export interface ExamAttemptRecord {
   id: string;
-  exam_id: string;
+  exam_id: string | null;
   user_id?: string;
   score: number;
   total: number;
@@ -411,10 +411,10 @@ export async function saveExamAttempt(
   const user = await getCurrentUser();
   const now = new Date().toISOString();
 
-  // Ensure exam_id is a valid UUID
+  // Ensure exam_id is a valid UUID, otherwise store NULL to avoid foreign key violations against public.exams
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const isExamUuid = UUID_REGEX.test(attemptInput.exam_id || "");
-  const safeExamId = isExamUuid ? attemptInput.exam_id : generateUUID();
+  const isExamUuid = Boolean(attemptInput.exam_id && UUID_REGEX.test(attemptInput.exam_id));
+  const safeExamId = isExamUuid ? (attemptInput.exam_id as string) : null;
 
   // Calculate precise percentage with 2 decimals
   const precisePercentage = attemptInput.total > 0

@@ -117,9 +117,8 @@ describe("Phase 1: Database Hardening & Schema Integrity", () => {
       passed: true,
     });
 
-    // UUID format regex
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    expect(attempt.exam_id).toMatch(uuidRegex);
+    // Non-UUID placeholder 'active-session' should be stored as NULL to avoid foreign key violations on public.exams
+    expect(attempt.exam_id).toBeNull();
     expect(attempt.percentage).toBe(81.25);
   });
 

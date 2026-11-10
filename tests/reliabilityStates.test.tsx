@@ -74,9 +74,9 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
       expect(exam.id).toMatch(UUID_REGEX);
     });
 
-    it("saveExamAttempt reports 'local-only' when unauthenticated and enforces valid UUIDs", async () => {
+    it("saveExamAttempt reports 'local-only' when unauthenticated and stores null for non-UUID exam_id", async () => {
       const attempt = await saveExamAttempt({
-        exam_id: "non-uuid-placeholder", // placeholder id should be sanitized to valid UUID
+        exam_id: "active-session", // placeholder id should be sanitized to null to prevent FK violations
         score: 5,
         total: 10,
         percentage: 50,
@@ -86,8 +86,21 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
       });
 
       expect(attempt.syncStatus).toBe("local-only");
-      expect(attempt.exam_id).toMatch(UUID_REGEX);
+      expect(attempt.exam_id).toBeNull();
       expect(attempt.id).toMatch(UUID_REGEX);
+
+      // Verify that when a valid UUID is provided, it is preserved
+      const realExamUuid = generateUUID();
+      const attemptWithUuid = await saveExamAttempt({
+        exam_id: realExamUuid,
+        score: 8,
+        total: 10,
+        percentage: 80,
+        answers: {},
+        questions_snapshot: [],
+        passed: true,
+      });
+      expect(attemptWithUuid.exam_id).toBe(realExamUuid);
     });
 
     it("saveFlashcardDeck reports 'local-only' when unauthenticated", async () => {
