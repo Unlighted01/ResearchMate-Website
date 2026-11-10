@@ -19,6 +19,15 @@ vi.mock("../src/services/supabaseClient", () => ({
   },
   isAuthenticated: vi.fn().mockResolvedValue(false),
   getCurrentUser: vi.fn().mockResolvedValue(null),
+  setSyncStatus: vi.fn(),
+  executeWithBackoff: vi.fn().mockImplementation(async (action) => {
+    try {
+      const data = await action();
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }),
 }));
 
 import {

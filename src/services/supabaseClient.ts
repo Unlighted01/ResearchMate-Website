@@ -54,11 +54,15 @@ export type AuthEventCallback = (
   session: Session | null
 ) => void;
 
-export type SyncState = "synced" | "syncing" | "signed_out" | "error";
+export type SyncState = "synced" | "syncing" | "signed_out" | "error" | "local_only";
 
 export interface SyncStatus {
   state: SyncState;
   label: string;
+  errorDetail?: string;
+  failedAction?: string;
+  retryHandler?: () => Promise<void>;
+  isRetrying?: boolean;
 }
 
 // ============================================
@@ -111,6 +115,45 @@ export function setSyncStatus(status: SyncStatus): void {
       new CustomEvent("researchmate:sync_status_changed", { detail: status })
     );
   }
+}
+
+/**
+ * Executes a sync action with limited exponential backoff (no tight loops).
+ * Maximum 3 retries, doubling delay (1000ms -> 2000ms -> 4000ms).
+ */
+export async function executeWithBackoff<T>(
+  action: () => Promise<T>,
+  options: {
+    maxRetries?: number;
+    initialDelayMs?: number;
+    maxDelayMs?: number;
+    onAttempt?: (attempt: number, delayMs: number) => void;
+  } = {}
+): Promise<{ success: boolean; data?: T; error?: any }> {
+  const maxRetries = options.maxRetries ?? 3;
+  const initialDelay = options.initialDelayMs ?? 1000;
+  const maxDelay = options.maxDelayMs ?? 4000;
+
+  let delay = initialDelay;
+  let lastError: any = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await action();
+      return { success: true, data: result };
+    } catch (err: any) {
+      lastError = err;
+      if (options.onAttempt) {
+        options.onAttempt(attempt, delay);
+      }
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(delay * 2, maxDelay);
+      }
+    }
+  }
+
+  return { success: false, error: lastError };
 }
 
 export function subscribeToSyncStatus(

@@ -15,6 +15,15 @@ vi.mock("../src/services/supabaseClient", () => ({
   supabase: mockSupabase,
   isAuthenticated: vi.fn().mockResolvedValue(true),
   getCurrentUser: vi.fn().mockResolvedValue({ id: "user-123", email: "student@univ.edu" }),
+  setSyncStatus: vi.fn(),
+  executeWithBackoff: vi.fn().mockImplementation(async (action) => {
+    try {
+      const data = await action();
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }),
 }));
 
 import {

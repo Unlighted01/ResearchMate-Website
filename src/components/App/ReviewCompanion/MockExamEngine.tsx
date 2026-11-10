@@ -35,6 +35,7 @@ import {
   FolderOpen,
   Play,
   Calendar,
+  User,
 } from "lucide-react";
 import { StorageItem } from "../../../services/storageService";
 import {
@@ -222,6 +223,8 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   const [activeSeed, setActiveSeed] = useState<string>(() => generateSeedCode("SEED"));
   const [inputSeed, setInputSeed] = useState<string>("");
   const [currentExamRecord, setCurrentExamRecord] = useState<ExamRecord | null>(null);
+  const [notFoundExamId, setNotFoundExamId] = useState<string | null>(null);
+  const [dropNotice, setDropNotice] = useState<{ droppedCount: number; droppedReasons: string[] } | null>(null);
 
   // Generation abort controller ref
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -247,10 +250,14 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   // Deep linking: If ?examId=... is in the URL, load and start that exam immediately
   useEffect(() => {
     const examId = searchParams.get("examId");
-    if (!examId) return;
+    if (!examId) {
+      setNotFoundExamId(null);
+      return;
+    }
 
     getExamById(examId).then((loadedExam) => {
       if (loadedExam && loadedExam.questions && loadedExam.questions.length > 0) {
+        setNotFoundExamId(null);
         startSeededExamSession(
           loadedExam.questions,
           loadedExam.seed || (loadedExam.config as any)?.seed || "SEED",
@@ -258,9 +265,12 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
           loadedExam.title
         );
         showToast(`Loaded exam: "${loadedExam.title}" (${loadedExam.questions.length} questions)`, "success");
+      } else {
+        setNotFoundExamId(examId);
       }
     }).catch((err) => {
       console.warn("Failed to load exam by examId query param:", err);
+      setNotFoundExamId(examId);
     });
   }, [searchParams]);
 
@@ -355,7 +365,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
 
     const seed = seedToUse?.trim() || generateSeedCode("SEED");
     const examId = customExamId || generateUUID();
-    const { examRecord, orderedQuestions } = createSeededExam(
+    const { examRecord, orderedQuestions, droppedCount, droppedReasons } = createSeededExam(
       questionsToUse,
       {
         totalQuestions: questionsToUse.length,
@@ -365,6 +375,16 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       seed,
       examId
     );
+
+    if (droppedCount > 0) {
+      setDropNotice({ droppedCount, droppedReasons });
+      showToast(
+        `Quality filter: ${droppedCount} question(s) dropped due to enemy / clue conflicts (${droppedReasons.slice(0, 2).join("; ")})`,
+        "info"
+      );
+    } else {
+      setDropNotice(null);
+    }
 
     setCurrentExamRecord(examRecord);
     setActiveSeed(seed);
@@ -499,16 +519,14 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
         console.error("Exam generation failed:", err);
         const errMsg = err.message || "Request timed out or API failed";
         setGenerationError(errMsg);
-        // If we already accumulated some questions before the error, PRESERVE them!
+        // Preserve any partial batches synthesized so far as a draft; NEVER fallback to the 5-question starter pool
         setQuestions((prevQuestions) => {
           if (prevQuestions && prevQuestions.length > 0) {
-            showToast(`Generation stopped: ${errMsg}. Preserved ${prevQuestions.length} questions ready to practice.`, "info");
+            showToast(`Generation failed: ${errMsg}. Preserved ${prevQuestions.length} draft question(s) ready to practice.`, "info");
             return prevQuestions;
           }
-          // Only fallback to offline bank if zero questions could be generated
-          if (timedMode) setSecondsRemaining(UNIVERSAL_FALLBACK_POOL.length * timePerQuestion);
-          showToast(`AI generation issue: ${errMsg}. Loaded 5 offline practice questions.`, "error");
-          return UNIVERSAL_FALLBACK_POOL;
+          showToast(`Exam generation failed: ${errMsg}. Click Retry to attempt again.`, "error");
+          return [];
         });
       }
     } finally {
@@ -759,6 +777,81 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   return (
     <div className="space-y-6">
       {/* ------------------------------------------------------------- */}
+      {/* Exam Not Found State Banner (?examId=<uuid> not found)        */}
+      {/* ------------------------------------------------------------- */}
+      {notFoundExamId && (
+        <div className="p-5 sm:p-6 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl shadow-sm space-y-3 animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 font-title">
+                Exam not found on this device or account
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-sans">
+                The requested exam <code className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 font-mono text-[11px] text-amber-900 dark:text-amber-200">{notFoundExamId}</code> could not be found in local storage or on your account. If this exam was generated on another device, sign in to synchronize, or import reviewer materials to generate it.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap pt-1 pl-0 sm:pl-13">
+            <button
+              type="button"
+              onClick={() => {
+                window.location.hash = "#/profile";
+              }}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Sign In / Account</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setNotFoundExamId(null);
+                setIsImportOpen(true);
+              }}
+              className="px-3.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Import Study Material</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setNotFoundExamId(null);
+                setSearchParams({});
+              }}
+              className="px-3 py-1.5 rounded-lg border border-transparent text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* Enemy & Quality Filter Drop Notice Banner                     */}
+      {/* ------------------------------------------------------------- */}
+      {dropNotice && dropNotice.droppedCount > 0 && (
+        <div className="p-3.5 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-xl flex items-center justify-between text-xs text-sky-800 dark:text-sky-300 animate-in fade-in">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-sky-900 dark:text-sky-200">⚠️ Quality Filter:</span>
+            <span>
+              {dropNotice.droppedCount} question{dropNotice.droppedCount > 1 ? "s were" : " was"} dropped to prevent clues and enemy conflicts ({dropNotice.droppedReasons.slice(0, 2).join("; ")}).
+            </span>
+          </div>
+          <button
+            onClick={() => setDropNotice(null)}
+            className="text-sky-600 dark:text-sky-400 hover:underline ml-2 text-[11px] font-mono cursor-pointer shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
       {/* 1. Console Header & Exam Customization Bar                    */}
       {/* ------------------------------------------------------------- */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
@@ -926,35 +1019,71 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
           </div>
         )}
 
-        {/* AI Server Error / Key Exhaustion Callout */}
+        {/* AI Generation Error & Retry Action */}
         {generationError && (
-          <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl space-y-2 text-xs">
-            <div className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>AI Generation Offline: Server API keys are exhausted ({generationError})</span>
+          <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl space-y-2.5 text-xs animate-in fade-in">
+            <div className="font-bold text-amber-900 dark:text-amber-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>AI Generation Failed: {generationError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGenerationError(null)}
+                className="text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+              >
+                Dismiss
+              </button>
             </div>
             <p className="text-amber-700 dark:text-amber-300">
-              The public shared AI credits for the server are currently exhausted. You have two immediate options:
+              Exam synthesis encountered an issue. You can retry generation, continue with any partial draft batches preserved below, or import offline questions directly.
             </p>
             <div className="flex items-center gap-2 flex-wrap pt-1">
               <button
                 type="button"
                 onClick={() => {
                   setGenerationError(null);
+                  handleGenerateExam();
+                }}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry Generation</span>
+              </button>
+
+              {questions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGenerationError(null);
+                    startSeededExamSession(questions);
+                  }}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Practice Draft ({questions.length} Questions)</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setGenerationError(null);
                   setIsImportOpen(true);
                 }}
-                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-xs cursor-pointer"
+                className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
               >
-                1. Import 160+ Qs Directly from PDF Book ($0 Cost, Instant) &rarr;
+                Import Questions from PDF &rarr;
               </button>
+
               <button
                 type="button"
                 onClick={() => {
                   window.location.hash = "#/app/settings";
                 }}
-                className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-lg hover:bg-slate-100 cursor-pointer"
+                className="px-3 py-1.5 text-slate-600 dark:text-slate-400 hover:underline cursor-pointer"
               >
-                2. Connect Free Gemini Key in Settings (BYOK) ⚙️
+                Settings (BYOK) ⚙️
               </button>
             </div>
           </div>
@@ -1585,6 +1714,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
         onImport={handleImportQuestions}
         onClose={() => setIsImportOpen(false)}
         defaultTopic={topicInput.trim() || "General"}
+        showToast={showToast}
       />
 
       {/* Saved Exams Modal */}

@@ -43,6 +43,7 @@ interface QuestionImportModalProps {
   onClose: () => void;
   defaultTopic?: string;
   onFlashcardsCreated?: (count: number) => void;
+  showToast?: (msg: string, type: "success" | "error" | "info") => void;
 }
 
 export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
@@ -51,12 +52,14 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
   onClose,
   defaultTopic = "General",
   onFlashcardsCreated,
+  showToast,
 }) => {
   const [activeTab, setActiveTab] = useState<"pdf" | "paste" | "csv">("pdf");
   const [pastedText, setPastedText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [subjectName, setSubjectName] = useState(() => sanitizeDefaultSubject(defaultTopic || "General Review"));
   const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [isExtractingPdf, setIsExtractingPdf] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
@@ -283,18 +286,20 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
   const handleApplyImportToBank = async () => {
     if (!rawQuestionsForImport || rawQuestionsForImport.length === 0) return;
     setIsImporting(true);
+    setImportError(null);
 
     try {
       const origin = activeTab === "pdf" ? "pdf_import" : activeTab === "csv" ? "csv" : "manual";
-      await importQuestionsToBank({
+      const importResult = await importQuestionsToBank({
         rawQuestions: rawQuestionsForImport,
         subject: subjectName,
         sourceFile: fileName || "Reviewer Document",
         origin,
       });
 
-      const validQuestions: Question[] = rawQuestionsForImport.map((q, idx) => ({
-        id: q.id || `q_${Date.now()}_${idx}`,
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validQuestions: Question[] = rawQuestionsForImport.map((q) => ({
+        id: q.id && UUID_REGEX.test(q.id) ? q.id : generateUUID(),
         question: q.stem || "",
         options: q.options || [],
         correctIndex: q.correctIndex ?? 0,
@@ -341,10 +346,24 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
         cards: flashcards,
       }).catch((err) => console.warn("Auto-registering flashcard deck failed:", err));
 
+      const added = importResult?.importedCount ?? validQuestions.length;
+      const needsReview = importResult?.needsReviewCount ?? 0;
+      const successMsg = `Successfully imported ${added} question(s) (${needsReview} need review). Accessible on Dashboard & Exams Workspace.`;
+
+      if (showToast) {
+        showToast(successMsg, "success");
+      }
+
       onImport(validQuestions, "append");
       onClose();
-    } catch (err) {
+    } catch (err: any) {
+      const errMsg = err?.message || "Failed to import questions to question bank.";
       console.error("Failed to import to question bank:", err);
+      setImportError(errMsg);
+      if (showToast) {
+        showToast(errMsg, "error");
+      }
+      // Note: Modal remains open so user does not lose their state or parsed items
     } finally {
       setIsImporting(false);
     }
@@ -813,6 +832,19 @@ Answers and Explanations
             </div>
           )}
         </div>
+
+        {/* Import Error Banner */}
+        {importError && (
+          <div className="mx-6 mb-3 p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between animate-in fade-in">
+            <span className="font-medium">⚠️ {importError}</span>
+            <button
+              onClick={() => setImportError(null)}
+              className="px-2 py-0.5 rounded text-rose-800 dark:text-rose-200 hover:bg-rose-100 dark:hover:bg-rose-900/50 underline text-[11px] cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Modal Docked Footer */}
         <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-col md:flex-row items-center justify-between gap-3 shrink-0 bg-slate-50/50 dark:bg-slate-950/50">

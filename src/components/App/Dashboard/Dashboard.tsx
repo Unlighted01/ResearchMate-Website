@@ -709,6 +709,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           setBankStats(getBankStats());
         }}
         defaultTopic="General"
+        showToast={showToast}
       />
 
 

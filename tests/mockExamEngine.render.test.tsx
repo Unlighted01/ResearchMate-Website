@@ -2,6 +2,7 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import MockExamEngine from "../src/components/App/ReviewCompanion/MockExamEngine";
 import { NotificationProvider } from "../src/context/NotificationContext";
 import { StorageItem } from "../src/services/storageService";
@@ -19,6 +20,17 @@ vi.mock("../src/services/supabaseClient", () => ({
       insert: () => Promise.resolve({ data: null, error: null }),
     }),
   },
+  isAuthenticated: vi.fn().mockResolvedValue(false),
+  getCurrentUser: vi.fn().mockResolvedValue(null),
+  setSyncStatus: vi.fn(),
+  executeWithBackoff: vi.fn().mockImplementation(async (action) => {
+    try {
+      const data = await action();
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }),
 }));
 
 describe("MockExamEngine Component Render Tests", () => {
@@ -50,9 +62,11 @@ describe("MockExamEngine Component Render Tests", () => {
 
   it("1. renders cleanly in empty bank state without throwing", () => {
     const { container } = render(
-      <NotificationProvider>
-        <MockExamEngine items={[]} showToast={mockShowToast} />
-      </NotificationProvider>
+      <MemoryRouter>
+        <NotificationProvider>
+          <MockExamEngine items={[]} showToast={mockShowToast} />
+        </NotificationProvider>
+      </MemoryRouter>
     );
 
     expect(container).toBeDefined();
@@ -92,9 +106,11 @@ describe("MockExamEngine Component Render Tests", () => {
     ]);
 
     const { container } = render(
-      <NotificationProvider>
-        <MockExamEngine items={sampleItems} showToast={mockShowToast} />
-      </NotificationProvider>
+      <MemoryRouter>
+        <NotificationProvider>
+          <MockExamEngine items={sampleItems} showToast={mockShowToast} />
+        </NotificationProvider>
+      </MemoryRouter>
     );
 
     expect(container).toBeDefined();
@@ -123,9 +139,11 @@ describe("MockExamEngine Component Render Tests", () => {
     ]);
 
     const { container } = render(
-      <NotificationProvider>
-        <MockExamEngine items={sampleItems} showToast={mockShowToast} />
-      </NotificationProvider>
+      <MemoryRouter>
+        <NotificationProvider>
+          <MockExamEngine items={sampleItems} showToast={mockShowToast} />
+        </NotificationProvider>
+      </MemoryRouter>
     );
 
     expect(container).toBeDefined();

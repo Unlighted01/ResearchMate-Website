@@ -222,6 +222,9 @@ export function createSeededExam(
 ): {
   examRecord: ExamRecord;
   orderedQuestions: Question[];
+  droppedCount: number;
+  droppedReasons: string[];
+  rejectedQuestions: { item: Question; reason: string }[];
 } {
   const seed = seedString?.trim() || generateSeedCode("SEED");
   const examId = explicitExamId?.trim() || generateUUID();
@@ -230,9 +233,12 @@ export function createSeededExam(
   // 1. Deterministically shuffle candidate questions
   const shuffledQuestions = seededShuffle(questions, rng);
   // 2. Filter enemy items so no stem contains another selected item's answer or duplicate source quote
-  const { selected: conflictFreeQuestions } = filterEnemyItems(shuffledQuestions, config.totalQuestions);
+  const { selected: conflictFreeQuestions, rejected } = filterEnemyItems(shuffledQuestions, config.totalQuestions);
   const totalCount = Math.min(config.totalQuestions, conflictFreeQuestions.length);
   const selectedQuestions = conflictFreeQuestions.slice(0, totalCount);
+
+  const droppedCount = rejected.length;
+  const droppedReasons = Array.from(new Set(rejected.map((r) => r.reason)));
 
   const orderedQuestionIds: string[] = [];
   const permutations: Record<string, QuestionPermutationRecord> = {};
@@ -310,6 +316,9 @@ export function createSeededExam(
   return {
     examRecord,
     orderedQuestions: finalQuestions,
+    droppedCount,
+    droppedReasons,
+    rejectedQuestions: rejected as any,
   };
 }
 

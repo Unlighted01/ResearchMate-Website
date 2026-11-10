@@ -52,6 +52,7 @@ import {
   Zap,
   Upload,
   Globe,
+  RefreshCw,
 } from "lucide-react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { subscribeToItems } from "../../services/storageService";
@@ -153,6 +154,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => getSyncStatus());
+  const [isRetryingSync, setIsRetryingSync] = useState(false);
 
   useEffect(() => {
     return subscribeToSyncStatus((status) => {
@@ -673,34 +675,65 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             {/* Right: Actions */}
             <div className="flex items-center gap-3">
               {/* Real-time Sync activity badge */}
-              <div
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium select-none border transition-colors ${
-                  syncStatus.state === "synced"
-                    ? "bg-emerald-500/10 dark:bg-emerald-500/15 border-emerald-500/25 text-emerald-700 dark:text-emerald-400"
-                    : syncStatus.state === "syncing"
-                    ? "bg-sky-500/10 dark:bg-sky-500/15 border-sky-500/25 text-sky-700 dark:text-sky-400"
-                    : syncStatus.state === "signed_out"
-                    ? "bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/25 text-amber-700 dark:text-amber-400"
-                    : "bg-rose-500/10 dark:bg-rose-500/15 border-rose-500/25 text-rose-700 dark:text-rose-400"
-                }`}
-                title={
-                  syncStatus.state === "signed_out"
-                    ? "Operating in local-first offline mode. All exams and question banks save locally."
-                    : syncStatus.label
-                }
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
+              <div className="flex items-center gap-1.5">
+                <div
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium select-none border transition-colors ${
                     syncStatus.state === "synced"
-                      ? "bg-emerald-500"
+                      ? "bg-emerald-500/10 dark:bg-emerald-500/15 border-emerald-500/25 text-emerald-700 dark:text-emerald-400"
                       : syncStatus.state === "syncing"
-                      ? "bg-sky-500 animate-pulse"
-                      : syncStatus.state === "signed_out"
-                      ? "bg-amber-500"
-                      : "bg-rose-500"
+                      ? "bg-sky-500/10 dark:bg-sky-500/15 border-sky-500/25 text-sky-700 dark:text-sky-400"
+                      : syncStatus.state === "local_only" || syncStatus.state === "signed_out"
+                      ? "bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/25 text-amber-700 dark:text-amber-400"
+                      : "bg-rose-500/10 dark:bg-rose-500/15 border-rose-500/25 text-rose-700 dark:text-rose-400"
                   }`}
-                />
-                <span className="hidden sm:inline">{syncStatus.label}</span>
+                  title={
+                    syncStatus.state === "local_only" || syncStatus.state === "signed_out"
+                      ? "Operating in local-only offline mode. All items and exams save locally on this device."
+                      : syncStatus.errorDetail || syncStatus.label
+                  }
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      syncStatus.state === "synced"
+                        ? "bg-emerald-500"
+                        : syncStatus.state === "syncing"
+                        ? "bg-sky-500 animate-pulse"
+                        : syncStatus.state === "local_only" || syncStatus.state === "signed_out"
+                        ? "bg-amber-500"
+                        : "bg-rose-500"
+                    }`}
+                  />
+                  <span className="hidden sm:inline">
+                    {syncStatus.state === "local_only" || syncStatus.state === "signed_out"
+                      ? "Local only"
+                      : syncStatus.state === "error"
+                      ? "Sync failed"
+                      : syncStatus.label}
+                  </span>
+                </div>
+
+                {/* Interactive Retry Button with exponential backoff */}
+                {syncStatus.state === "error" && syncStatus.retryHandler && (
+                  <button
+                    onClick={async () => {
+                      if (isRetryingSync) return;
+                      setIsRetryingSync(true);
+                      try {
+                        await syncStatus.retryHandler!();
+                      } catch (e) {
+                        console.warn("Retry failed:", e);
+                      } finally {
+                        setIsRetryingSync(false);
+                      }
+                    }}
+                    disabled={isRetryingSync}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-xs font-mono font-medium text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors disabled:opacity-50"
+                    title="Retry syncing failed write with exponential backoff"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isRetryingSync ? "animate-spin" : ""}`} />
+                    <span>{isRetryingSync ? "Retrying..." : "Retry"}</span>
+                  </button>
+                )}
               </div>
 
               {/* Local-First Architecture Badge */}

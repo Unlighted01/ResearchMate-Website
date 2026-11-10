@@ -7,6 +7,7 @@
 // ============================================
 
 import { Question, generateUUID } from "./examService";
+import { setSyncStatus } from "./supabaseClient";
 import {
   OptionPickStats,
   recordOptionPickAndAnalyze,
@@ -311,11 +312,18 @@ export function saveQuestionsToBank(
   totalCount: number;
   needsReviewCount: number;
   duplicatesSkipped: number;
+  syncStatus: "local-only" | "synced" | "failed";
 } {
   if (!newQuestions || newQuestions.length === 0) {
     const current = getMemoryOrStorage();
     const needsRev = current.filter((q) => q.reviewStatus === "needs_review").length;
-    return { addedCount: 0, totalCount: current.length, needsReviewCount: needsRev, duplicatesSkipped: 0 };
+    return {
+      addedCount: 0,
+      totalCount: current.length,
+      needsReviewCount: needsRev,
+      duplicatesSkipped: 0,
+      syncStatus: "local-only",
+    };
   }
 
   const existing = mode === "replace" ? [] : getMemoryOrStorage();
@@ -410,7 +418,18 @@ export function saveQuestionsToBank(
     persistBatches([batchRecord, ...currentBatches.filter((b) => b.id !== batchId)]);
   }
 
-  return { addedCount, totalCount: combined.length, needsReviewCount, duplicatesSkipped };
+  setSyncStatus({
+    state: "local_only",
+    label: "Local only",
+  });
+
+  return {
+    addedCount,
+    totalCount: combined.length,
+    needsReviewCount,
+    duplicatesSkipped,
+    syncStatus: "local-only",
+  };
 }
 
 /**

@@ -4,7 +4,13 @@
 // Immutability Snapshots, and Multi-Batch Generation
 // ============================================
 
-import { supabase, isAuthenticated, getCurrentUser } from "./supabaseClient";
+import {
+  supabase,
+  isAuthenticated,
+  getCurrentUser,
+  setSyncStatus,
+  executeWithBackoff,
+} from "./supabaseClient";
 import { generateAiResponse, generateExamAiResponse } from "./geminiService";
 import { buildSynthesisContext, chunkText } from "./ragService";
 import { findRelevantFormulary } from "./formularyService";
@@ -15,6 +21,11 @@ import { lintDistractorQuality } from "./distractorQualityService";
 // ============================================
 // TYPE DEFINITIONS
 // ============================================
+
+export type WriteSyncResult<T> = T & {
+  syncStatus: "synced" | "local-only" | "failed";
+  syncError?: string;
+};
 
 export interface Question {
   id: string; // crypto.randomUUID()
@@ -196,14 +207,18 @@ export function saveLocalFlashcardDecks(decks: FlashcardDeckRecord[]): void {
 
 export async function saveExam(
   examData: Partial<ExamRecord> & { title: string; questions: Question[] }
-): Promise<ExamRecord> {
+): Promise<WriteSyncResult<ExamRecord>> {
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
   const now = new Date().toISOString();
   const nextVersion = (examData.version || 0) + 1;
 
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const isIdUuid = UUID_REGEX.test(examData.id || "");
+  const recordId = isIdUuid ? (examData.id as string) : generateUUID();
+
   const record: ExamRecord = {
-    id: examData.id || generateUUID(),
+    id: recordId,
     user_id: user?.id,
     title: examData.title.trim() || "Untitled Exam",
     description: examData.description || "",
@@ -223,56 +238,94 @@ export async function saveExam(
     updated_at: now,
   };
 
-  // 1. If authenticated, Supabase is source of truth
-  if (isAuth && user) {
-    try {
-      // Optimistic concurrency check: if updating existing exam, verify version
-      if (examData.id && examData.version) {
-        const { data: existing } = await supabase
-          .from("exams")
-          .select("version")
-          .eq("id", examData.id)
-          .maybeSingle();
+  // Only send valid UUIDs to Supabase UUID[] column to prevent 400 invalid input syntax errors
+  const validSourceItemIds = (record.source_item_ids || []).filter((id) => UUID_REGEX.test(id));
 
-        if (existing && existing.version > examData.version) {
-          throw new Error("Conflict: This exam was modified in another session. Please reload to see latest updates.");
-        }
-      }
-
-      const { data, error } = await supabase
-        .from("exams")
-        .upsert({
-          id: record.id,
-          user_id: user.id,
-          title: record.title,
-          description: record.description,
-          source_item_ids: record.source_item_ids,
-          config: { ...record.config, seed: record.seed, source_document_title: record.source_document_title },
-          questions: record.questions,
-          version: record.version,
-          visibility: record.visibility,
-          updated_at: now,
-        })
-        .select()
-        .single();
-
-      if (!error && data) {
-        // Update local cache
-        const local = getLocalExams().filter((e) => e.id !== record.id);
-        saveLocalExams([data, ...local]);
-        return data;
-      }
-    } catch (err: any) {
-      if (err.message?.includes("Conflict")) throw err;
-      console.warn("Supabase exam upsert failed, caching locally:", err);
-    }
+  // 1. Unauthenticated / Offline: LocalStorage is source of truth
+  if (!isAuth || !user) {
+    const local = getLocalExams().filter((e) => e.id !== record.id);
+    const updatedLocal = [record, ...local];
+    saveLocalExams(updatedLocal);
+    setSyncStatus({
+      state: "local_only",
+      label: "Local only",
+    });
+    return { ...record, syncStatus: "local-only" };
   }
 
-  // 2. Unauthenticated / Offline fallback: LocalStorage is source of truth
+  // 2. Authenticated: Supabase cloud sync with retry backoff
+  setSyncStatus({
+    state: "syncing",
+    label: "Syncing exam...",
+  });
+
+  const syncResult = await executeWithBackoff(async () => {
+    // Optimistic concurrency check: if updating existing exam, verify version
+    if (examData.id && examData.version) {
+      const { data: existing } = await supabase
+        .from("exams")
+        .select("version")
+        .eq("id", examData.id)
+        .maybeSingle();
+
+      if (existing && existing.version > examData.version) {
+        throw new Error("Conflict: This exam was modified in another session. Please reload to see latest updates.");
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("exams")
+      .upsert({
+        id: record.id,
+        user_id: user.id,
+        title: record.title,
+        description: record.description,
+        source_item_ids: validSourceItemIds,
+        config: { ...record.config, seed: record.seed, source_document_title: record.source_document_title },
+        questions: record.questions,
+        version: record.version,
+        visibility: record.visibility,
+        updated_at: now,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error("No data returned from exam upsert");
+    return data;
+  }, { maxRetries: 3, initialDelayMs: 1000 });
+
+  if (syncResult.success && syncResult.data) {
+    const local = getLocalExams().filter((e) => e.id !== record.id);
+    saveLocalExams([syncResult.data, ...local]);
+    setSyncStatus({
+      state: "synced",
+      label: "SYNCED",
+    });
+    return { ...syncResult.data, syncStatus: "synced" };
+  }
+
+  // If optimistic concurrency conflict detected, bubble it up directly
+  if (syncResult.error?.message?.includes("Conflict")) {
+    throw syncResult.error;
+  }
+
+  // Failed cloud write: store in local cache and set error state with retryHandler
+  const errorMsg = syncResult.error?.message || "Cloud sync failed";
   const local = getLocalExams().filter((e) => e.id !== record.id);
-  const updatedLocal = [record, ...local];
-  saveLocalExams(updatedLocal);
-  return record;
+  saveLocalExams([record, ...local]);
+
+  setSyncStatus({
+    state: "error",
+    label: "Sync failed",
+    errorDetail: errorMsg,
+    failedAction: "Save Exam",
+    retryHandler: async () => {
+      await saveExam(examData);
+    },
+  });
+
+  return { ...record, syncStatus: "failed", syncError: errorMsg };
 }
 
 export async function getAllExams(): Promise<ExamRecord[]> {
@@ -353,14 +406,15 @@ export async function deleteExam(examId: string): Promise<boolean> {
 
 export async function saveExamAttempt(
   attemptInput: Omit<ExamAttemptRecord, "id" | "created_at">
-): Promise<ExamAttemptRecord> {
+): Promise<WriteSyncResult<ExamAttemptRecord>> {
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
   const now = new Date().toISOString();
 
   // Ensure exam_id is a valid UUID
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(attemptInput.exam_id || "");
-  const safeExamId = isUuid ? attemptInput.exam_id : generateUUID();
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const isExamUuid = UUID_REGEX.test(attemptInput.exam_id || "");
+  const safeExamId = isExamUuid ? attemptInput.exam_id : generateUUID();
 
   // Calculate precise percentage with 2 decimals
   const precisePercentage = attemptInput.total > 0
@@ -376,39 +430,72 @@ export async function saveExamAttempt(
     created_at: now,
   };
 
-  if (isAuth && user) {
-    try {
-      const { data, error } = await supabase
-        .from("exam_attempts")
-        .insert({
-          id: attempt.id,
-          exam_id: attempt.exam_id,
-          user_id: user.id,
-          score: attempt.score,
-          total: attempt.total,
-          percentage: attempt.percentage,
-          answers: attempt.answers,
-          questions_snapshot: attempt.questions_snapshot,
-          duration_seconds: attempt.duration_seconds,
-          passed: attempt.passed,
-        })
-        .select()
-        .single();
-
-      if (!error && data) {
-        const local = getLocalAttempts().filter((a) => a.id !== attempt.id);
-        saveLocalAttempts([data, ...local]);
-        return data;
-      }
-    } catch (err) {
-      console.warn("Supabase attempt insert failed, caching locally:", err);
-    }
+  // 1. Unauthenticated: save locally
+  if (!isAuth || !user) {
+    const local = getLocalAttempts().filter((a) => a.id !== attempt.id);
+    const updated = [attempt, ...local];
+    saveLocalAttempts(updated);
+    setSyncStatus({
+      state: "local_only",
+      label: "Local only",
+    });
+    return { ...attempt, syncStatus: "local-only" };
   }
 
+  // 2. Authenticated: Supabase cloud write with backoff
+  setSyncStatus({
+    state: "syncing",
+    label: "Syncing attempt...",
+  });
+
+  const syncResult = await executeWithBackoff(async () => {
+    const { data, error } = await supabase
+      .from("exam_attempts")
+      .insert({
+        id: attempt.id,
+        exam_id: attempt.exam_id,
+        user_id: user.id,
+        score: attempt.score,
+        total: attempt.total,
+        percentage: attempt.percentage,
+        answers: attempt.answers,
+        questions_snapshot: attempt.questions_snapshot,
+        duration_seconds: attempt.duration_seconds,
+        passed: attempt.passed,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error("No data returned from attempt insert");
+    return data;
+  }, { maxRetries: 3, initialDelayMs: 1000 });
+
+  if (syncResult.success && syncResult.data) {
+    const local = getLocalAttempts().filter((a) => a.id !== attempt.id);
+    saveLocalAttempts([syncResult.data, ...local]);
+    setSyncStatus({
+      state: "synced",
+      label: "SYNCED",
+    });
+    return { ...syncResult.data, syncStatus: "synced" };
+  }
+
+  const errorMsg = syncResult.error?.message || "Cloud sync failed";
   const local = getLocalAttempts().filter((a) => a.id !== attempt.id);
-  const updated = [attempt, ...local];
-  saveLocalAttempts(updated);
-  return attempt;
+  saveLocalAttempts([attempt, ...local]);
+
+  setSyncStatus({
+    state: "error",
+    label: "Sync failed",
+    errorDetail: errorMsg,
+    failedAction: "Save Attempt",
+    retryHandler: async () => {
+      await saveExamAttempt(attemptInput);
+    },
+  });
+
+  return { ...attempt, syncStatus: "failed", syncError: errorMsg };
 }
 
 export async function getExamAttempts(examId?: string): Promise<ExamAttemptRecord[]> {
@@ -446,13 +533,17 @@ export async function getExamAttempts(examId?: string): Promise<ExamAttemptRecor
 
 export async function saveFlashcardDeck(
   deckData: Partial<FlashcardDeckRecord> & { title: string; cards: Flashcard[] }
-): Promise<FlashcardDeckRecord> {
+): Promise<WriteSyncResult<FlashcardDeckRecord>> {
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
   const now = new Date().toISOString();
 
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const isIdUuid = UUID_REGEX.test(deckData.id || "");
+  const recordId = isIdUuid ? (deckData.id as string) : generateUUID();
+
   const record: FlashcardDeckRecord = {
-    id: deckData.id || generateUUID(),
+    id: recordId,
     user_id: user?.id,
     title: deckData.title.trim() || "Custom Study Deck",
     description: deckData.description || "",
@@ -465,38 +556,73 @@ export async function saveFlashcardDeck(
     updated_at: now,
   };
 
-  if (isAuth && user) {
-    try {
-      const { data, error } = await supabase
-        .from("flashcard_decks")
-        .upsert({
-          id: record.id,
-          user_id: user.id,
-          title: record.title,
-          description: record.description,
-          source_item_ids: record.source_item_ids,
-          cards: record.cards,
-          version: record.version,
-          visibility: record.visibility,
-          updated_at: now,
-        })
-        .select()
-        .single();
+  const validSourceItemIds = (record.source_item_ids || []).filter((id) => UUID_REGEX.test(id));
 
-      if (!error && data) {
-        const local = getLocalFlashcardDecks().filter((d) => d.id !== record.id);
-        saveLocalFlashcardDecks([data, ...local]);
-        return data;
-      }
-    } catch (err) {
-      console.warn("Supabase flashcards upsert failed, caching locally:", err);
-    }
+  // 1. Unauthenticated: save locally
+  if (!isAuth || !user) {
+    const local = getLocalFlashcardDecks().filter((d) => d.id !== record.id);
+    const updated = [record, ...local];
+    saveLocalFlashcardDecks(updated);
+    setSyncStatus({
+      state: "local_only",
+      label: "Local only",
+    });
+    return { ...record, syncStatus: "local-only" };
   }
 
+  // 2. Authenticated: Supabase cloud write with backoff
+  setSyncStatus({
+    state: "syncing",
+    label: "Syncing flashcards...",
+  });
+
+  const syncResult = await executeWithBackoff(async () => {
+    const { data, error } = await supabase
+      .from("flashcard_decks")
+      .upsert({
+        id: record.id,
+        user_id: user.id,
+        title: record.title,
+        description: record.description,
+        source_item_ids: validSourceItemIds,
+        cards: record.cards,
+        version: record.version,
+        visibility: record.visibility,
+        updated_at: now,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error("No data returned from deck upsert");
+    return data;
+  }, { maxRetries: 3, initialDelayMs: 1000 });
+
+  if (syncResult.success && syncResult.data) {
+    const local = getLocalFlashcardDecks().filter((d) => d.id !== record.id);
+    saveLocalFlashcardDecks([syncResult.data, ...local]);
+    setSyncStatus({
+      state: "synced",
+      label: "SYNCED",
+    });
+    return { ...syncResult.data, syncStatus: "synced" };
+  }
+
+  const errorMsg = syncResult.error?.message || "Cloud sync failed";
   const local = getLocalFlashcardDecks().filter((d) => d.id !== record.id);
-  const updated = [record, ...local];
-  saveLocalFlashcardDecks(updated);
-  return record;
+  saveLocalFlashcardDecks([record, ...local]);
+
+  setSyncStatus({
+    state: "error",
+    label: "Sync failed",
+    errorDetail: errorMsg,
+    failedAction: "Save Flashcards",
+    retryHandler: async () => {
+      await saveFlashcardDeck(deckData);
+    },
+  });
+
+  return { ...record, syncStatus: "failed", syncError: errorMsg };
 }
 
 export async function getAllFlashcardDecks(): Promise<FlashcardDeckRecord[]> {
