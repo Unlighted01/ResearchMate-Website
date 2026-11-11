@@ -121,7 +121,7 @@ export const PROFILE_STANDARD_TWO_PASS: ParserProfile = {
   id: "standard_two_pass",
   name: "Standard Chapter Q&A (Two-Pass)",
   description: "Numbered chapters or sections with questions followed by chapter-end or section-end answers",
-  headingPattern: /^(?:Chapter\s+(\d+|[IVXLCDM]+)|SECTION\s+(\d+|[IVXLCDM]+)|PART\s+(\d+|[IVXLCDM]+))\b[^\n]*/i,
+  headingPattern: /^(?:(?:CHAPTER|SECTION|SET|UNIT|LESSON)\s+(\d+|[IVXLCDM]+|[A-Z]\b)|PART\s+(?:\d+|[IVXLCDM]+|[A-Z]\b|[-—–])|(\d{1,2})\s+(?:[A-Za-z\s]+)?Practice)\b[^\n]*/i,
   keyLocation: "end_of_chapter",
   choiceStyle: "letter_dot",
   expectedChoicesPerItem: 4,
@@ -725,6 +725,9 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
   if (/\bSet\s+\d+\b/i.test(sampleText)) {
     headingPattern = PROFILE_1001_MATH.headingPattern;
     detectedHeading = "Set \\d+ / Section \\d+";
+  } else if (/\b(?:Practice\s+\d+|\d+\s+(?:[A-Za-z\s]+)?Practice)\b/i.test(sampleText)) {
+    headingPattern = PROFILE_STANDARD_TWO_PASS.headingPattern;
+    detectedHeading = "Practice \\d+ / Chapter \\d+";
   } else if (/Topic:\s+[\w\s]+/i.test(sampleText)) {
     headingPattern = /^(?:Topic:\s+[\w\s]+|Chapter\s+\d+)/i;
     detectedHeading = "Topic: [Name]";
@@ -868,6 +871,10 @@ export function splitStemAndOptions(
         const options = rawOpts
           .map((opt) => sanitizeContentText(opt.replace(/^[a-eA-E][\.\)\]]\s*|^\([a-eA-E]\)\s*/, ""), repeatingHeaders))
           .filter((opt) => opt.length > 0);
+        const maxOptLen = config.maxOptionLength || 250;
+        if (options.some((opt) => opt.length > maxOptLen)) {
+          return null;
+        }
         return { stem, options };
       }
     }
@@ -892,10 +899,22 @@ export function splitStemAndOptions(
         .replace(/(?:\n|^|\s{2,})\s*(?:Section\s+\d+|Chapter\s+\d+|Set\s+\d+|Answers\b)[\s\S]*/i, "")
         .replace(/(?:[\s\n]+[A-F](?:[\s\t]+[A-F])*)+\s*$/g, "")
         .replace(/(?:\n|^)\s*[-–—\s]+[A-Za-z\s]{3,}[-–—\s]+\d{1,4}\s*$/g, "")
+        .replace(/(?:\n|^|\s{2,})\s*501\s+Word\s+Analogy\s+Questions[\s\S]*/i, "")
+        .replace(/\n\s*[\d\s]+$/g, "")
+        .replace(/(?:\s+\d){2,4}\s*$/g, "")
         .trim();
+
+      if (!/^\d{1,4}$/.test(optText)) {
+        optText = optText.replace(/(?<=[a-zA-Z\.\)])\s+\d{1,4}\s*$/g, "").trim();
+      }
     }
 
     options.push(optText || `Choice ${String.fromCharCode(65 + i)}`);
+  }
+
+  const maxOptLen = config.maxOptionLength || 250;
+  if (options.some((opt) => opt.length > maxOptLen)) {
+    return null;
   }
 
   return { stem, options };
@@ -1090,7 +1109,48 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     fullCleanedText = pagesOrText
       .map((p, idx) => {
         const pageNum = typeof p === "string" ? idx + 1 : p.pageNumber;
-        const pageContent = typeof p === "string" ? p : p.text || reconstructStackedFractions(p.items);
+        let pageContent = typeof p === "string" ? p : p.text || "";
+        if (typeof p !== "string" && p.items && p.items.length > 0) {
+          const hasBannerKeyword = p.items.some((it) => /\b(?:Practice|Analogy)\b/i.test(it.str) && it.y > 450);
+          if (hasBannerKeyword) {
+            const bannerItems = p.items.filter(
+              (it) =>
+                it.y > 450 &&
+                (/\b(?:Practice|Analogy|Targeted|Challenging|Chapter|Section)\b/i.test(it.str) ||
+                  (/^\d{1,2}$/.test(it.str.trim()) && it.y > 500) ||
+                  (it.str.trim() === "" && it.y > 500))
+            );
+            const bodyItems = p.items.filter((it) => !bannerItems.includes(it));
+            const bodyTextItems = bodyItems.filter((it) => it.str.trim().length > 0);
+            if (bannerItems.length > 0 && bodyTextItems.length > 0) {
+              const minBannerY = Math.min(...bannerItems.map((it) => it.y));
+              const maxBodyY = Math.max(...bodyTextItems.map((it) => it.y));
+              if (minBannerY - maxBodyY > 15) {
+                const bannerSorted = [...bannerItems].sort((a, b) => {
+                  const yDiff = b.y - a.y;
+                  if (Math.abs(yDiff) > 4) return yDiff;
+                  return a.x - b.x;
+                });
+                let bText = "";
+                let lastY: number | null = null;
+                for (const it of bannerSorted) {
+                  if (lastY !== null && Math.abs(it.y - lastY) > 4) bText += "\n";
+                  else if (bText.length > 0 && !bText.endsWith("\n") && !bText.endsWith(" ")) bText += " ";
+                  bText += it.str;
+                  lastY = it.y;
+                }
+                let bdText = "";
+                for (const it of bodyItems) {
+                  bdText += (it.str || "") + (it.hasEOL ? "\n" : " ");
+                }
+                pageContent = `${bText.trim()}\n${bdText.trim()}`.trim();
+              }
+            }
+          }
+        }
+        if (!pageContent && typeof p !== "string" && p.items) {
+          pageContent = reconstructStackedFractions(p.items);
+        }
         return `\n[Page ${pageNum}]\n` + cleanPageText(pageContent, repeatingHeaders);
       })
       .join("\n");
@@ -1114,8 +1174,11 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   const answersMap = new Map<string, { number: number; letter: string; explanation: string; chapter: string; textAnswer?: string }>();
   const chaptersDetected = new Set<string>();
 
-  let currentChapter = "Chapter 1";
-  chaptersDetected.add(currentChapter);
+  let currentChapter = "";
+  let hasExplicitChapters = false;
+  let inFrontMatter = false;
+  let inContents = false;
+  let inIntroduction = false;
   let isAnswerMode = false;
   let currentPage = 1;
 
@@ -1147,11 +1210,20 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     // 1. Check if it's an answer key block (only valid in an answer section or if marked as answer mode)
     const isAnswerContext = isAnswerMode || /Answers\b/i.test(currentChapter);
     const isFreeResponseContext = isAnswerContext || profile.id === "free_response";
-    const ansMatch = isAnswerContext
+    let ansMatch = isAnswerContext
       ? block.match(/^(?:(?:Choice\s+|Option\s+)\s*([a-eA-E])\b|\(?([a-eA-E])(?:[\.\)\:\-\]]|\s+is\s+correct\b|\s+|$))\s*([\s\S]*)/i)
       : null;
 
-    if (ansMatch && isAnswerContext) {
+    // Safety check: In end_of_chapter mode, if currently in isAnswerMode, but the block is NOT an answer key
+    // and splitStemAndOptions finds valid options, then we have entered a new questions section!
+    if (isAnswerMode && !ansMatch && profile.keyLocation === "end_of_chapter") {
+      const testSplit = splitStemAndOptions(blockForQuestion, repeatingHeaders, config);
+      if (testSplit && testSplit.options.length >= config.minOptionsCount) {
+        isAnswerMode = false;
+      }
+    }
+
+    if (ansMatch && (isAnswerMode || /Answers\b/i.test(currentChapter))) {
       const letter = (ansMatch[1] || ansMatch[2]).toLowerCase();
       let explanation = sanitizeContentText(ansMatch[3] || "", repeatingHeaders);
       explanation = explanation
@@ -1160,13 +1232,14 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         .replace(/(?:Library of Congress|All rights reserved)[\s\S]*/gi, "")
         .trim();
 
-      const key = `${currentChapter}::${currentNum}`;
+      const effectiveChapter = currentChapter || "Chapter 1";
+      const key = `${effectiveChapter}::${currentNum}`;
       const globalKey = `${currentNum}`;
       const answerData = {
         number: currentNum,
         letter,
         explanation: explanation || `Identified based on answer key (${letter.toUpperCase()}).`,
-        chapter: currentChapter,
+        chapter: effectiveChapter,
       };
       answersMap.set(key, answerData);
       answersMap.set(globalKey, answerData);
@@ -1184,14 +1257,15 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
           .replace(/(?:Library of Congress|All rights reserved)[\s\S]*/gi, "")
           .trim();
 
-        const key = `${currentChapter}::${currentNum}`;
+        const effectiveChapter = currentChapter || "Chapter 1";
+        const key = `${effectiveChapter}::${currentNum}`;
         const globalKey = `${currentNum}`;
         const answerData = {
           number: currentNum,
           letter: "a",
           textAnswer,
           explanation: explanation || `Answer: ${textAnswer}`,
-          chapter: currentChapter,
+          chapter: effectiveChapter,
         };
         answersMap.set(key, answerData);
         answersMap.set(globalKey, answerData);
@@ -1202,6 +1276,16 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     // 2. Question statement handling (only when not in an answers section)
     if (isAnswerMode || /Answers\b/i.test(currentChapter)) {
       return;
+    }
+
+    // Front matter check: Never accept questions before first chapter starts or while in front matter
+    if (inFrontMatter && !hasExplicitChapters) {
+      return;
+    }
+
+    const effectiveChapter = currentChapter || "Chapter 1";
+    if (!chaptersDetected.has(effectiveChapter)) {
+      chaptersDetected.add(effectiveChapter);
     }
 
     const splitResult = splitStemAndOptions(blockForQuestion, repeatingHeaders, config);
@@ -1227,14 +1311,14 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       }
 
       if (stem.length > 2) {
-        const key = `${currentChapter}::${currentNum}`;
+        const key = `${effectiveChapter}::${currentNum}`;
         const globalKey = `${currentNum}`;
         const itemData: RawParsedQuestion = {
           number: currentNum,
           stem,
           options: options.slice(0, config.maxOptionsCount),
           questionType: "mcq",
-          chapter: currentChapter,
+          chapter: effectiveChapter,
           pageNumber: currentPage,
           inlineAnswer: inlineAnswerData,
         };
@@ -1243,18 +1327,18 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
           currentRunMap.set(globalKey, itemData);
         }
       }
-    } else if (profile.id === "free_response" || /Practice|Exercise/i.test(currentChapter)) {
+    } else if (profile.id === "free_response" || /Practice|Exercise/i.test(effectiveChapter)) {
       // Free-response problem statement without multiple choice options
       const stem = sanitizeContentText(blockForQuestion, repeatingHeaders);
       if (stem.length > 2) {
-        const key = `${currentChapter}::${currentNum}`;
+        const key = `${effectiveChapter}::${currentNum}`;
         const globalKey = `${currentNum}`;
         const itemData: RawParsedQuestion = {
           number: currentNum,
           stem,
           options: [],
           questionType: "free_response",
-          chapter: currentChapter,
+          chapter: effectiveChapter,
           pageNumber: currentPage,
         };
         currentRunMap.set(key, itemData);
@@ -1262,13 +1346,13 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
           currentRunMap.set(globalKey, itemData);
         }
       }
-    } else if (!isAnswerMode && !/Answers\b/i.test(currentChapter)) {
+    } else if (!isAnswerMode && !/Answers\b/i.test(effectiveChapter)) {
       // Unparseable item or reflection/practice prompt
       const stem = sanitizeContentText(blockForQuestion, repeatingHeaders);
       // Suppress short single-word/phrase fragments that are not questions (Requirement B)
       const isShortFragment = stem.length < config.minStemLengthStandard && !stem.includes("?");
       if (stem.length > 2 && currentNum !== null && !isShortFragment) {
-        const key = `${currentChapter}::${currentNum}`;
+        const key = `${effectiveChapter}::${currentNum}`;
         const globalKey = `${currentNum}`;
         const itemData: RawParsedQuestion = {
           number: currentNum,
@@ -1276,7 +1360,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
           options: splitResult ? splitResult.options : [],
           questionType: "prompt",
           isUnparseableStub: true,
-          chapter: currentChapter,
+          chapter: effectiveChapter,
           pageNumber: currentPage,
         };
         currentRunMap.set(key, itemData);
@@ -1301,8 +1385,34 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       continue;
     }
 
+    // Track Table of Contents / Front Matter section
+    if (/(?:^|\s)(?:TABLE OF CONTENTS|CONTENTS|Library of Congress|Cataloging-in-Publication)\b/i.test(trimmed)) {
+      inFrontMatter = true;
+      if (/^(?:TABLE OF CONTENTS|CONTENTS)\b/i.test(trimmed)) {
+        inContents = true;
+        inIntroduction = false;
+        continue;
+      }
+    }
+
+    if (inContents) {
+      if (/^(?:Introduction|Preface)\b/i.test(trimmed)) {
+        inContents = false;
+        inIntroduction = true;
+        inFrontMatter = true;
+      }
+      continue;
+    }
+
+    // Track Introduction section
+    if (!hasExplicitChapters && /^(?:Introduction|Preface|About the Authors?)\b/i.test(trimmed)) {
+      inIntroduction = true;
+      inFrontMatter = true;
+      continue;
+    }
+
     // Filter out Table of Contents lines (e.g. "Chapter 1: Fractions ............. 5")
-    if (/\.{3,}\s*\d+$/i.test(trimmed) || /^(?:TABLE OF CONTENTS|CONTENTS)$/i.test(trimmed)) {
+    if (/\.{3,}\s*\d+$/i.test(trimmed)) {
       continue;
     }
 
@@ -1316,12 +1426,87 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       inStepOrTableBlock = false;
     }
 
-    // Detect standalone CHAPTER or SECTION line with number or title on next line
-    if (/^(?:CHAPTER|SECTION|PART)$/i.test(trimmed) && i + 1 < lines.length) {
+    // Check A: Standalone chapter number (e.g. "1" or "2" or "12" or "13") followed by Practice/Title lines
+    const standaloneNumMatch = trimmed.match(/^(\d{1,2})$/);
+    if (standaloneNumMatch && i + 1 < lines.length) {
+      const chNum = parseInt(standaloneNumMatch[1], 10);
+      if (chNum >= 1 && chNum <= 100) {
+        let titleParts: string[] = [];
+        let lookaheadIdx = i + 1;
+        let isPracticeHeading = false;
+
+        while (lookaheadIdx < Math.min(i + 5, lines.length)) {
+          const ahead = lines[lookaheadIdx].trim();
+          if (!ahead || /^\d+[\.\)]/.test(ahead) || /^\[Page\s+\d+\]/i.test(ahead)) break;
+          titleParts.push(ahead);
+          if (/\b(?:Practice|Review|Exercises?|Test|Exam)\b/i.test(ahead)) {
+            isPracticeHeading = true;
+            break;
+          }
+          lookaheadIdx++;
+        }
+
+        if (isPracticeHeading && titleParts.length > 0) {
+          flush();
+          if (currentRunMap.size > 0) {
+            questionRuns.push(currentRunMap);
+            currentRunMap = new Map();
+          }
+          inStepOrTableBlock = false;
+          hasExplicitChapters = true;
+          inFrontMatter = false;
+          currentChapter = `Practice ${chNum}: ${titleParts.join(" ")}`;
+          chaptersDetected.add(currentChapter);
+          currentNum = null;
+          if (profile.keyLocation === "end_of_chapter") {
+            isAnswerMode = false;
+          }
+          i = lookaheadIdx;
+          continue;
+        }
+      }
+    }
+
+    // Check B: Single-line Practice heading (e.g. "1 Word Analogy Practice" or "Practice 1")
+    const practiceHeadingMatch =
+      trimmed.match(/^(\d{1,2})\s+([A-Za-z\s]+(?:Practice|Review|Exercises?|Test|Exam))\b/i) ||
+      trimmed.match(/^(?:Practice|Review|Exercise|Unit|Lesson)\s+(\d{1,2})\b[^\n]*/i);
+
+    if (
+      practiceHeadingMatch &&
+      !trimmed.includes(",") &&
+      !/\s+\d{1,4}$/.test(trimmed) &&
+      !/\b(?:which|contains|is|are|will|can|don't)\b/i.test(trimmed)
+    ) {
+      flush();
+      if (currentRunMap.size > 0) {
+        questionRuns.push(currentRunMap);
+        currentRunMap = new Map();
+      }
+      inStepOrTableBlock = false;
+      hasExplicitChapters = true;
+      inFrontMatter = false;
+      currentChapter = trimmed.replace(/\s*\([^\)]*\)/g, "").trim();
+      chaptersDetected.add(currentChapter);
+      currentNum = null;
+      if (profile.keyLocation === "end_of_chapter") {
+        isAnswerMode = false;
+      }
+      continue;
+    }
+
+    // Check C: Standalone CHAPTER or SECTION line with number or title on next line
+    if (/^(?:CHAPTER|SECTION)$/i.test(trimmed) && i + 1 < lines.length) {
       const nextTrimmed = lines[i + 1].trim();
       if (/^\d+/i.test(nextTrimmed) || /^[A-Z][a-z]+/i.test(nextTrimmed) || /^[-—–]/.test(nextTrimmed)) {
         flush();
+        if (currentRunMap.size > 0) {
+          questionRuns.push(currentRunMap);
+          currentRunMap = new Map();
+        }
         inStepOrTableBlock = false;
+        hasExplicitChapters = true;
+        inFrontMatter = false;
         currentChapter = `${trimmed} ${nextTrimmed}`;
         chaptersDetected.add(currentChapter);
         currentNum = null;
@@ -1333,37 +1518,65 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       }
     }
 
-    // Detect chapter headings using profile.headingPattern or general Chapter/Section line (e.g. "Chapter — Whole Numbers")
-    const isChHeading = profile.headingPattern.test(trimmed) || /^(?:CHAPTER|SECTION|PART)\s+[-—–\w\s]+/i.test(trimmed);
+    // Check D: Detect chapter headings using profile.headingPattern or general Chapter/Section line
+    const isChHeading =
+      profile.headingPattern.test(trimmed) ||
+      /^(?:CHAPTER|SECTION)\s+[-—–\w\s]+/i.test(trimmed) ||
+      /^PART\s+(?:\d+|[IVXLCDM]+|[A-Z]\b|[-—–])/i.test(trimmed);
+
     if (isChHeading) {
-      const chMatch = trimmed.match(profile.headingPattern) || trimmed.match(/^(?:CHAPTER|SECTION|PART)\s+[-—–\w\s]+/i);
-      if (chMatch) {
-        flush();
-        inStepOrTableBlock = false;
-        let detectedName = chMatch[0].replace(/\s*\([^\)]*\)/g, "").trim();
-        // If question marker was consumed on same line (e.g. "Set 62 ... 977. Lara"), strip it
-        const inlineNumMatch = detectedName.match(/^([\s\S]*?)(?=\s+\d{1,4}[\.\)]\s+)/);
-        if (inlineNumMatch) {
-          detectedName = inlineNumMatch[1].trim();
-        }
+      const isSentence =
+        trimmed.length > 80 ||
+        /[,\.\?;]$/.test(trimmed) ||
+        /\b(?:which\s+contains|contains|don't\s+miss|is\s+made\s+up|part\s+of\s+the|part\s+of\s+a)\b/i.test(trimmed) ||
+        (/\s+\d{1,4}$/.test(trimmed) && !/^(?:CHAPTER|SECTION|PART|SET|UNIT|LESSON)\s+\d+$/i.test(trimmed));
 
-        // Ensure it's not a running head with trailing margin number
-        if (!/\s+\d{1,4}$/.test(detectedName) && detectedName.length > 2) {
-          currentChapter = detectedName;
-          chaptersDetected.add(currentChapter);
-          currentNum = null;
-          if (profile.keyLocation === "end_of_chapter") {
-            isAnswerMode = false;
+      if (!isSentence) {
+        const chMatch =
+          trimmed.match(profile.headingPattern) ||
+          trimmed.match(/^(?:CHAPTER|SECTION)\s+[-—–\w\s]+/i) ||
+          trimmed.match(/^PART\s+(?:\d+|[IVXLCDM]+|[A-Z]\b|[-—–])/i);
+
+        if (chMatch) {
+          flush();
+          if (currentRunMap.size > 0) {
+            questionRuns.push(currentRunMap);
+            currentRunMap = new Map();
+          }
+          inStepOrTableBlock = false;
+          hasExplicitChapters = true;
+          inFrontMatter = false;
+          inContents = false;
+          inIntroduction = false;
+          let detectedName = chMatch[0].replace(/\s*\([^\)]*\)/g, "").trim();
+          // If question marker was consumed on same line (e.g. "Set 62 ... 977. Lara"), strip it
+          const inlineNumMatch = detectedName.match(/^([\s\S]*?)(?=\s+\d{1,4}[\.\)]\s+)/);
+          if (inlineNumMatch) {
+            detectedName = inlineNumMatch[1].trim();
           }
 
-          // If the line also contained a question (e.g. "Set 62 ... 977. Question text"), process the question
-          const restOfLine = trimmed.substring(chMatch[0].length).trim();
-          const numOnSameLine = restOfLine.match(/^(\d{1,4})[\.\)](?:\s+|$|(?=[^\d\s\.]))\s*([\s\S]*)/);
-          if (numOnSameLine) {
-            currentNum = parseInt(numOnSameLine[1], 10);
-            currentBuffer = numOnSameLine[2] ? [numOnSameLine[2]] : [];
+          // Ensure it's not a running head with trailing margin number
+          const isTrailingMargin =
+            /\s+\d{1,4}$/.test(detectedName) &&
+            !/^(?:CHAPTER|SECTION|PART|SET|UNIT|LESSON)\s+\d+$/i.test(detectedName);
+
+          if (!isTrailingMargin && detectedName.length > 2) {
+            currentChapter = detectedName;
+            chaptersDetected.add(currentChapter);
+            currentNum = null;
+            if (profile.keyLocation === "end_of_chapter") {
+              isAnswerMode = false;
+            }
+
+            // If the line also contained a question (e.g. "Set 62 ... 977. Question text"), process the question
+            const restOfLine = trimmed.substring(chMatch[0].length).trim();
+            const numOnSameLine = restOfLine.match(/^(\d{1,4})[\.\)](?:\s+|$|(?=[^\d\s\.]))\s*([\s\S]*)/);
+            if (numOnSameLine) {
+              currentNum = parseInt(numOnSameLine[1], 10);
+              currentBuffer = numOnSameLine[2] ? [numOnSameLine[2]] : [];
+            }
+            continue;
           }
-          continue;
         }
       }
     }
@@ -1410,6 +1623,9 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         if (currentNum !== null) {
           currentBuffer.push(line);
         }
+        continue;
+      }
+      if (inFrontMatter && !hasExplicitChapters) {
         continue;
       }
       const nextNum = parseInt(numMatch[1], 10);

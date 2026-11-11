@@ -68,10 +68,11 @@ export async function extractAllPagesWithLayout(
   for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
     try {
       const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1.0 });
+      const pageHeight = viewport.height || 792;
       const textContent = await page.getTextContent();
       const items: PdfLayoutItem[] = [];
 
-      let pageRawText = "";
       for (const item of textContent.items as any[]) {
         if (!item.str && !item.hasEOL) continue;
         const transform = item.transform || [1, 0, 0, 1, 0, 0];
@@ -89,8 +90,57 @@ export async function extractAllPagesWithLayout(
           fontName: item.fontName,
           hasEOL: item.hasEOL,
         });
+      }
 
-        pageRawText += (item.str || "") + (item.hasEOL ? "\n" : " ");
+      // Check if top-of-page banner/header items were emitted late in the content stream.
+      // In many published books (e.g. LearningExpress), the top chapter banner is emitted at the end of the stream after the body.
+      let pageRawText = "";
+      const hasBannerKeyword = items.some((it) => /\b(?:Practice|Analogy)\b/i.test(it.str) && it.y > 450);
+      if (hasBannerKeyword) {
+        const bannerItems = items.filter(
+          (it) =>
+            it.y > 450 &&
+            (/\b(?:Practice|Analogy|Targeted|Challenging|Chapter|Section)\b/i.test(it.str) ||
+              (/^\d{1,2}$/.test(it.str.trim()) && it.y > 500))
+        );
+        const bodyItems = items.filter((it) => !bannerItems.includes(it));
+        if (bannerItems.length > 0 && bodyItems.length > 0) {
+          const minBannerY = Math.min(...bannerItems.map((it) => it.y));
+          const maxBodyY = Math.max(...bodyItems.map((it) => it.y));
+
+          if (minBannerY - maxBodyY > 15) {
+            const bannerSorted = [...bannerItems].sort((a, b) => {
+              const yDiff = b.y - a.y;
+              if (Math.abs(yDiff) > 4) return yDiff;
+              return a.x - b.x;
+            });
+
+            let bannerText = "";
+            let lastY: number | null = null;
+            for (const item of bannerSorted) {
+              if (lastY !== null && Math.abs(item.y - lastY) > 4) {
+                bannerText += "\n";
+              } else if (bannerText.length > 0 && !bannerText.endsWith("\n") && !bannerText.endsWith(" ")) {
+                bannerText += " ";
+              }
+              bannerText += item.str;
+              lastY = item.y;
+            }
+
+            let bodyText = "";
+            for (const item of bodyItems) {
+              bodyText += (item.str || "") + (item.hasEOL ? "\n" : " ");
+            }
+
+            pageRawText = `${bannerText.trim()}\n${bodyText.trim()}`.trim();
+          }
+        }
+      }
+
+      if (!pageRawText) {
+        for (const item of items) {
+          pageRawText += (item.str || "") + (item.hasEOL ? "\n" : " ");
+        }
       }
 
       const cleanPageText = pageRawText.trim();
