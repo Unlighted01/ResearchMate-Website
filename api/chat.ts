@@ -228,11 +228,12 @@ async function callGeminiAPI(
   const sysInstruction = options.systemInstruction || SYSTEM_INSTRUCTION;
   const fullPrompt = `${sysInstruction}\n\nUSER REQUEST:\n${prompt}`;
 
-  const requestBody = {
+  const requestBody: any = {
     contents: [{ parts: [{ text: fullPrompt }] }],
     generationConfig: {
       temperature: options.temperature || 0.7,
       maxOutputTokens: options.maxTokens || 4096,
+      ...(options.responseMimeType ? { responseMimeType: options.responseMimeType } : {}),
     },
   };
 
@@ -283,6 +284,7 @@ async function callOpenRouterAPI(prompt: string, options: any = {}) {
       ],
       temperature: options.temperature || 0.7,
       max_tokens: options.maxTokens || 4096,
+      ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
     }),
   });
 
@@ -324,6 +326,7 @@ async function callGroqAPI(prompt: string, options: any = {}) {
       ],
       temperature: options.temperature || 0.7,
       max_tokens: options.maxTokens || 4096,
+      ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
     }),
   });
 
@@ -408,10 +411,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let actualModelUsed = "gemini-2.5-flash";
+    const isExamMode = mode === "exam";
+    const geminiOpts = (extra: Record<string, any> = {}) => ({
+      systemInstruction: activeInstruction,
+      ...(isExamMode ? { responseMimeType: "application/json" } : {}),
+      ...extra,
+    });
+    const openRouterOpts = (extra: Record<string, any> = {}) => ({
+      systemInstruction: activeInstruction,
+      ...(isExamMode ? { responseFormat: { type: "json_object" } } : {}),
+      ...extra,
+    });
+    const groqOpts = (extra: Record<string, any> = {}) => ({
+      systemInstruction: activeInstruction,
+      ...(isExamMode ? { responseFormat: { type: "json_object" } } : {}),
+      ...extra,
+    });
 
     if (isClaude && process.env.OPENROUTER_API_KEY) {
       try {
-        responseText = await callOpenRouterAPI(prompt, { model: "anthropic/claude-3.5-sonnet", systemInstruction: activeInstruction });
+        responseText = await callOpenRouterAPI(prompt, openRouterOpts({ model: "anthropic/claude-3.5-sonnet" }));
         actualModelUsed = "claude-3.5-sonnet";
       } catch (err) {
         console.warn("Claude via OpenRouter failed, falling back to default:", err);
@@ -419,7 +438,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } else if (isGeminiPro && keyToUse) {
       try {
-        responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-1.5-pro", systemInstruction: activeInstruction });
+        responseText = await callGeminiAPI(prompt, keyToUse, geminiOpts({ model: "gemini-1.5-pro" }));
         actualModelUsed = "gemini-1.5-pro";
       } catch (err) {
         console.warn("Gemini Pro failed, falling back to Flash:", err);
@@ -429,7 +448,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // 1. Try Groq (Free DeepSeek-R1 Distill Llama 70B)
       if (process.env.GROQ_API_KEY) {
         try {
-          responseText = await callGroqAPI(prompt, { model: "deepseek-r1-distill-llama-70b", systemInstruction: activeInstruction });
+          responseText = await callGroqAPI(prompt, groqOpts({ model: "deepseek-r1-distill-llama-70b" }));
           actualModelUsed = "deepseek-r1";
         } catch (groqErr) {
           console.warn("DeepSeek via Groq failed, trying OpenRouter fallback:", groqErr);
@@ -439,7 +458,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // 2. Try OpenRouter if Groq did not respond
       if (!responseText && process.env.OPENROUTER_API_KEY) {
         try {
-          responseText = await callOpenRouterAPI(prompt, { model: "deepseek/deepseek-r1", systemInstruction: activeInstruction });
+          responseText = await callOpenRouterAPI(prompt, openRouterOpts({ model: "deepseek/deepseek-r1" }));
           actualModelUsed = "deepseek-r1";
         } catch (openRouterErr) {
           console.warn("DeepSeek via OpenRouter failed:", openRouterErr);
@@ -450,7 +469,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Try Groq (Llama 3.3 70B Versatile)
       if (process.env.GROQ_API_KEY) {
         try {
-          responseText = await callGroqAPI(prompt, { model: "llama-3.3-70b-versatile", systemInstruction: activeInstruction });
+          responseText = await callGroqAPI(prompt, groqOpts({ model: "llama-3.3-70b-versatile" }));
           actualModelUsed = "llama-3.3-70b";
         } catch (groqErr) {
           console.warn("Llama 3.3 via Groq failed:", groqErr);
@@ -462,7 +481,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Default or Fallback: Gemini 2.5 Flash
     if (!responseText && keyToUse) {
       try {
-        responseText = await callGeminiAPI(prompt, keyToUse, { model: "gemini-2.5-flash", systemInstruction: activeInstruction });
+        responseText = await callGeminiAPI(prompt, keyToUse, geminiOpts({ model: "gemini-2.5-flash" }));
         actualModelUsed = "gemini-2.5-flash";
       } catch (geminiError) {
         const msg = `Gemini Failed: ${(geminiError as Error).message}`;
@@ -473,7 +492,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (process.env.OPENROUTER_API_KEY) {
           console.log("🔄 Switching to Fallback: OpenRouter...");
           try {
-            responseText = await callOpenRouterAPI(prompt, { systemInstruction: activeInstruction });
+            responseText = await callOpenRouterAPI(prompt, openRouterOpts());
             actualModelUsed = "openrouter-grok";
           } catch (openRouterError) {
             const msg = `OpenRouter Failed: ${(openRouterError as Error).message}`;
@@ -486,7 +505,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!responseText && process.env.GROQ_API_KEY) {
           console.log("🔄 Switching to Fallback: Groq...");
           try {
-            responseText = await callGroqAPI(prompt, { systemInstruction: activeInstruction });
+            responseText = await callGroqAPI(prompt, groqOpts());
             actualModelUsed = "groq-llama";
           } catch (groqError) {
             const msg = `Groq Failed: ${(groqError as Error).message}`;

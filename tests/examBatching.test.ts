@@ -33,6 +33,8 @@ vi.mock("../src/services/supabaseClient", () => ({
 import {
   partitionExamSections,
   generateExamInBatches,
+  extractJsonQuestions,
+  repairJsonString,
   ExamSectionConfig,
   BatchProgress,
 } from "../src/services/examService";
@@ -131,5 +133,92 @@ describe("Phase 4: Multi-Batch Exam Generation & Slicing", () => {
     const questions = await generateExamInBatches([], sections);
     expect(questions.length).toBe(1);
     expect(questions[0].question).toBe("Recovered question");
+  });
+
+  it("extracts and repairs JSON containing unescaped LaTeX math formulas", () => {
+    // Single backslashes in math formulas like \sqrt, \int, \frac, \times, \pm
+    const rawAiMathOutput = `Here are your questions:
+\`\`\`json
+[
+  {
+    "question": "Evaluate the definite integral $\\int_0^1 x dx$ and find $\\sqrt{16} + \\frac{1}{2}$.",
+    "options": ["$\\frac{9}{2}$", "$\\pm 4$", "$\\alpha + 1$", "$10\\text{ m/s}$"],
+    "correctIndex": 0,
+    "explanation": "Because $\\int_0^1 x dx = \\frac{1}{2}$ and $\\sqrt{16} = 4$, the sum is $4 + \\frac{1}{2} = \\frac{9}{2}$.",
+    "topicTag": "Calculus"
+  }
+]
+\`\`\``;
+
+    const parsed = extractJsonQuestions(rawAiMathOutput);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.length).toBe(1);
+    expect(parsed![0].question).toContain("\\int_0^1");
+    expect(parsed![0].options[0]).toContain("\\frac{9}{2}");
+    expect(parsed![0].correctIndex).toBe(0);
+  });
+
+  it("strips <thought> and <think> reasoning tags and parses wrapped object arrays", () => {
+    const rawThoughtOutput = `<thought>
+I need to generate 1 question about algebra.
+Let's make sure the options are balanced:
+[ { "draft": true } ]
+</thought>
+\`\`\`json
+{
+  "questions": [
+    {
+      "question": "What is the slope of $y = 3x + 5$?",
+      "options": ["3", "-3", "5", "1/3"],
+      "correctIndex": 0,
+      "explanation": "In slope-intercept form $y = mx + b$, the coefficient of $x$ is 3.",
+      "topicTag": "Algebra"
+    }
+  ]
+}
+\`\`\``;
+
+    const parsed = extractJsonQuestions(rawThoughtOutput);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.length).toBe(1);
+    expect(parsed![0].question).toBe("What is the slope of $y = 3x + 5$?");
+    expect(parsed![0].options).toEqual(["3", "-3", "5", "1/3"]);
+  });
+
+  it("salvages completed question objects from truncated JSON outputs", () => {
+    const truncatedOutput = `[
+  {
+    "question": "Question 1: What is $2 + 2$?",
+    "options": ["4", "3", "5", "6"],
+    "correctIndex": 0,
+    "explanation": "Basic addition."
+  },
+  {
+    "question": "Question 2: What is $3 \\times 3$?",
+    "options": ["9", "6", "8", "12"],
+    "correctIndex": 0,
+    "explanation": "Basic multiplication."
+  },
+  {
+    "question": "Question 3: Incomplete question statement`;
+
+    const parsed = extractJsonQuestions(truncatedOutput);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.length).toBe(2);
+    expect(parsed![0].question).toContain("Question 1");
+    expect(parsed![1].question).toContain("Question 2");
+  });
+
+  it("immediately halts and throws when AbortSignal is cancelled", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const sections: ExamSectionConfig[] = [
+      { name: "Biology", questionCount: 5, mode: "grounded" },
+    ];
+
+    await expect(
+      generateExamInBatches([], sections, "mixed", undefined, controller.signal)
+    ).rejects.toThrow(/aborted/i);
   });
 });

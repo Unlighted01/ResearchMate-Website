@@ -315,6 +315,26 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     return items.filter((i) => scopeSelection.selectedIds.includes(i.id));
   }, [scopeSelection, items]);
 
+  // Smartly identify review material matching active topic or having exam/problem keywords
+  const detectedReviewBook = useMemo(() => {
+    if (targetScopeItems.length === 0) return null;
+    const query = topicInput.trim().toLowerCase();
+    if (query) {
+      const directMatch = targetScopeItems.find((item) => {
+        const t = (item.title || item.sourceTitle || "").toLowerCase();
+        return t.includes(query) || query.includes(t.replace(/\.[^/.]+$/, "").toLowerCase());
+      });
+      if (directMatch) return directMatch;
+    }
+    return (
+      targetScopeItems.find((item) =>
+        /problem|exam|review|math|csc|test|question|analogy|grammar/i.test(
+          item.title || item.sourceTitle || ""
+        )
+      ) || targetScopeItems[0] || null
+    );
+  }, [targetScopeItems, topicInput]);
+
   // Build section configuration based on preset and actual study material
   const buildExamSections = (targetPreset: string, customTopic: string): ExamSectionConfig[] => {
     const docTitle = targetScopeItems.length > 0
@@ -531,6 +551,13 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     } catch (err: any) {
       if (err.message?.includes("aborted")) {
         showToast("Generation cancelled.", "info");
+        setQuestions((prevQuestions) => {
+          if (prevQuestions && prevQuestions.length > 0) {
+            showToast(`Preserved ${prevQuestions.length} draft question(s) synthesized before cancellation.`, "info");
+            return prevQuestions;
+          }
+          return [];
+        });
       } else {
         console.error("Exam generation failed:", err);
         const errMsg = err.message || "Request timed out or API failed";
@@ -549,6 +576,17 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       setIsGenerating(false);
       setGenerationPhase("");
     }
+  };
+
+  // Cancel Active Exam Generation
+  const handleCancelSimulation = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+    setGenerationPhase("");
+    showToast("Exam generation cancelled.", "info");
   };
 
   // Append 10 More Questions to Active Exam Session
@@ -956,19 +994,37 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
               <span>Import</span>
             </button>
 
-            {/* AI Multi-Batch Generator */}
-            <button
-              onClick={() => handleGenerateExam()}
-              disabled={isGenerating}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs disabled:opacity-50 shrink-0 cursor-pointer"
-            >
-              {isGenerating ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
+            {/* AI Multi-Batch Generator & Cancel Trigger */}
+            {isGenerating ? (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  disabled
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600/70 text-white rounded-lg text-xs font-semibold cursor-not-allowed shadow-2xs"
+                >
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Synthesizing Exam...</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelSimulation}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-lg text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
+                  title="Cancel question synthesis"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Cancel</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleGenerateExam()}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs shrink-0 cursor-pointer"
+              >
                 <Sparkles className="w-3.5 h-3.5" />
-              )}
-              <span>{isGenerating ? "Synthesizing Exam..." : `Generate ${presetCount} Qs`}</span>
-            </button>
+                <span>Generate {presetCount} Qs</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1019,12 +1075,12 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
         </div>
 
         {/* Smart Q&A Review Book Detection Callout */}
-        {targetScopeItems.some((item) => /problem|exam|review|math|csc|test|question/i.test(item.title || item.sourceTitle || "")) && (
+        {detectedReviewBook && /problem|exam|review|math|csc|test|question|analogy|grammar/i.test(detectedReviewBook.title || detectedReviewBook.sourceTitle || "") && (
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-indigo-50/90 to-purple-50/70 dark:from-indigo-950/40 dark:to-purple-950/30 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl text-xs">
             <div className="flex items-center gap-2.5 text-indigo-900 dark:text-indigo-200">
               <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
               <span>
-                <strong>Review Material Detected:</strong> <em>{targetScopeItems[0]?.title || targetScopeItems[0]?.sourceTitle || "Your document"}</em> has real questions and answer keys printed inside.
+                <strong>Review Material Detected:</strong> <em>{detectedReviewBook.title || detectedReviewBook.sourceTitle || "Your document"}</em> has real questions and answer keys printed inside.
               </span>
             </div>
             <button
@@ -1249,9 +1305,20 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                 <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
                 {generationPhase}
               </span>
-              <span className="font-mono text-indigo-700 dark:text-indigo-300 font-bold">
-                {batchProgress?.completedQuestions || 0} / {batchProgress?.totalQuestions || presetCount} Qs (Batch {batchProgress?.currentBatch || 1}/{batchProgress?.totalBatches || 1})
-              </span>
+              <div className="flex items-center gap-2.5">
+                <span className="font-mono text-indigo-700 dark:text-indigo-300 font-bold">
+                  {batchProgress?.completedQuestions || 0} / {batchProgress?.totalQuestions || presetCount} Qs (Batch {batchProgress?.currentBatch || 1}/{batchProgress?.totalBatches || Math.max(1, Math.ceil(Number(presetCount) / 5))})
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCancelSimulation}
+                  className="px-2 py-0.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/60 border border-rose-300 dark:border-rose-800 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Cancel question synthesis"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Cancel</span>
+                </button>
+              </div>
             </div>
 
             <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">

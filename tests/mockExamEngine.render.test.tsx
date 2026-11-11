@@ -150,4 +150,43 @@ describe("MockExamEngine Component Render Tests", () => {
     expect(screen.getByText(/Exam Parameters/i)).toBeDefined();
     expect(screen.getByText(/Universal Mock Exam & Simulator/i)).toBeDefined();
   });
+
+  it("4. dynamically surfaces review material callout when a problem set / exam book is detected", () => {
+    const multiItems: StorageItem[] = [
+      {
+        id: "doc-1",
+        title: "General Reading",
+        text: "Some random notes",
+        note: "General reading material",
+        sourceUrl: "https://example.com/reading",
+        sourceTitle: "General Reading",
+        tags: ["reading"],
+        createdAt: new Date().toISOString(),
+        deviceSource: "web",
+      },
+      {
+        id: "doc-2",
+        title: "1001 Math Problems",
+        text: "Real math problems with keys",
+        note: "Math problem set book",
+        sourceUrl: "https://example.com/math1001",
+        sourceTitle: "1001 Math Problems",
+        tags: ["math", "exam"],
+        createdAt: new Date().toISOString(),
+        deviceSource: "web",
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <NotificationProvider>
+          <MockExamEngine items={multiItems} showToast={mockShowToast} />
+        </NotificationProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/Review Material Detected:/i)).toBeDefined();
+    expect(screen.getAllByText(/1001 Math Problems/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Import Q&A from Book \(\$0 Cost\)/i)).toBeDefined();
+  });
 });

@@ -897,30 +897,184 @@ export function partitionExamSections(sections: ExamSectionConfig[], maxBatchSiz
 }
 
 /**
+ * Sanitizes a JSON string by repairing unescaped LaTeX backslashes inside string literals.
+ * For example, LaTeX commands like \frac, \sqrt, \alpha, \int, \pm inside strings
+ * must be escaped as \\frac, \\sqrt, etc. so JSON.parse does not throw SyntaxError.
+ */
+export function repairJsonString(input: string): string {
+  let out = "";
+  let inString = false;
+  let i = 0;
+
+  while (i < input.length) {
+    const ch = input[i];
+
+    if (!inString) {
+      if (ch === '"') {
+        inString = true;
+      }
+      out += ch;
+      i++;
+      continue;
+    }
+
+    // Inside a JSON string literal:
+    if (ch === '"') {
+      inString = false;
+      out += ch;
+      i++;
+      continue;
+    }
+
+    if (ch === '\\') {
+      const next = input[i + 1];
+      if (next === undefined) {
+        out += "\\\\";
+        i++;
+        break;
+      }
+
+      // Valid already-escaped quotes or slashes:
+      if (next === '"' || next === '\\' || next === '/') {
+        out += ch + next;
+        i += 2;
+        continue;
+      }
+
+      // Unicode escape \uXXXX
+      if (next === 'u' && /^[0-9a-fA-F]{4}/.test(input.slice(i + 2, i + 6))) {
+        out += input.slice(i, i + 6);
+        i += 6;
+        continue;
+      }
+
+      // LaTeX commands colliding with \b, \f, \n, \r, \t
+      const after = input.slice(i + 1);
+      const isLatexCommand = /^(?:frac|text|times|theta|tau|tan|beta|bar|begin|bf|binom|rho|right|rm|root|neg|neq|nabla|nu|ne)\b/i.test(after);
+      if (isLatexCommand) {
+        out += "\\\\";
+        i++;
+        continue;
+      }
+
+      // Standard control escapes \n, \r, \t, \b, \f
+      if (next === 'n' || next === 'r' || next === 't' || next === 'b' || next === 'f') {
+        if (/^[a-zA-Z]/.test(input[i + 2] || '')) {
+          out += "\\\\";
+          i++;
+          continue;
+        }
+        out += ch + next;
+        i += 2;
+        continue;
+      }
+
+      // Any other character following \ (e.g. \s, \i, \a, \p, \d, \alpha, \sqrt, \pm)
+      out += "\\\\";
+      i++;
+      continue;
+    }
+
+    out += ch;
+    i++;
+  }
+
+  return out;
+}
+
+/**
  * Safely extracts a JSON array of questions from raw model output,
- * handling markdown code fences, leading/trailing commentary, and trailing commas.
+ * handling markdown code fences, thought/reasoning tags, object wrappers,
+ * invalid LaTeX backslashes, trailing commas, and truncated response salvaging.
  */
 export function extractJsonQuestions(raw: string): any[] | null {
   if (!raw) return null;
-  const clean = raw.replace(/```json/gi, "").replace(/```/gi, "").trim();
-  try {
-    const direct = JSON.parse(clean);
-    if (Array.isArray(direct)) return direct;
-    if (direct && Array.isArray(direct.questions)) return direct.questions;
-  } catch {}
 
-  const match = clean.match(/\[\s*\{[\s\S]*\}\s*\]/);
-  if (match) {
-    try {
-      const parsed = JSON.parse(match[0]);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      const cleanedTrailing = match[0].replace(/,\s*([\]}])/g, "$1");
-      try {
-        const parsed = JSON.parse(cleanedTrailing);
-        if (Array.isArray(parsed)) return parsed;
-      } catch {}
+  // 1. Strip reasoning / thought tags from reasoning models and markdown fences
+  const clean = raw
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/```json/gi, "")
+    .replace(/```/gi, "")
+    .trim();
+
+  // Helper to extract question list from parsed value
+  const getArrayFromParsed = (val: any): any[] | null => {
+    if (Array.isArray(val) && val.length > 0) return val;
+    if (val && typeof val === "object") {
+      for (const key of ["questions", "exam", "items", "data", "quiz", "problems", "results"]) {
+        if (Array.isArray(val[key]) && val[key].length > 0) return val[key];
+      }
+      const values = Object.values(val);
+      if (values.length > 0 && typeof values[0] === "object" && (values[0] as any)?.question) {
+        return values as any[];
+      }
     }
+    return null;
+  };
+
+  // Helper to try parsing with clean trailing commas and backslash repairs
+  const tryParse = (str: string): any[] | null => {
+    // Attempt 1: Direct JSON.parse
+    try {
+      const p = JSON.parse(str);
+      const arr = getArrayFromParsed(p);
+      if (arr) return arr;
+    } catch {}
+
+    // Attempt 2: Trailing commas removed
+    const cleanedTrailing = str.replace(/,\s*([\]}])/g, "$1");
+    try {
+      const p = JSON.parse(cleanedTrailing);
+      const arr = getArrayFromParsed(p);
+      if (arr) return arr;
+    } catch {}
+
+    // Attempt 3: Repair unescaped LaTeX backslashes
+    const repaired = repairJsonString(cleanedTrailing);
+    try {
+      const p = JSON.parse(repaired);
+      const arr = getArrayFromParsed(p);
+      if (arr) return arr;
+    } catch {}
+
+    return null;
+  };
+
+  // 1. Try parsing full cleaned string
+  const directArr = tryParse(clean);
+  if (directArr) return directArr;
+
+  // 2. Try regex extraction for array: [ ... ]
+  const arrayMatch = clean.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  if (arrayMatch) {
+    const arr = tryParse(arrayMatch[0]);
+    if (arr) return arr;
+  }
+
+  // 3. Try regex extraction for object: { ... }
+  const objectMatch = clean.match(/\{[\s\S]*\}/);
+  if (objectMatch) {
+    const arr = tryParse(objectMatch[0]);
+    if (arr) return arr;
+  }
+
+  // 4. Fallback: Truncated array salvaging (salvage completed individual question objects)
+  const salvaged: any[] = [];
+  const objectRegex = /\{\s*"question"\s*:\s*(?:[^{}]|\{[^{}]*\})*\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = objectRegex.exec(clean)) !== null) {
+    try {
+      const block = repairJsonString(match[0].replace(/,\s*([\]}])/g, "$1"));
+      const parsedObj = JSON.parse(block);
+      if (parsedObj && parsedObj.question && Array.isArray(parsedObj.options)) {
+        salvaged.push(parsedObj);
+      }
+    } catch {}
+  }
+
+  if (salvaged.length > 0) {
+    return salvaged;
   }
 
   return null;
@@ -1036,6 +1190,9 @@ REQUIREMENTS:
         let rawResponse = "";
         try {
           const aiResult = await generateExamAiResponse(prompt, contextCorpus, { signal });
+          if (signal?.aborted || aiResult.reason === "aborted") {
+            throw new Error("Generation aborted by user");
+          }
           if (aiResult.ok && aiResult.response) {
             rawResponse = aiResult.response;
           } else if (aiResult.reason === "no_credits") {
@@ -1044,6 +1201,7 @@ REQUIREMENTS:
             rawResponse = await generateAiResponse(prompt);
           }
         } catch (aiErr: any) {
+          if (signal?.aborted || aiErr.message?.includes("aborted")) throw new Error("Generation aborted by user");
           if (aiErr.message?.includes("credits")) throw aiErr;
           rawResponse = await generateAiResponse(prompt);
         }
