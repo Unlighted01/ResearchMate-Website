@@ -23,7 +23,15 @@ import {
   QuestionReviewStatus,
   QuestionType,
 } from "./questionBankService";
-import { generateUUID } from "./examService";
+import {
+  generateUUID,
+  getLocalExams,
+  deleteExam,
+  saveExam,
+  getExamAttempts,
+  getLocalFlashcardDecks,
+  deleteFlashcardDeck,
+} from "./examService";
 
 export interface RawImportQuestionItem {
   id?: string;
@@ -67,6 +75,8 @@ export interface ImportPreviewSummary {
   total: number;
   verifiedCount: number;
   needsReviewCount: number;
+  gradableCount: number;
+  promptCount: number;
   subject: string;
   sourceFile: string;
   summaryText: string;
@@ -86,7 +96,8 @@ export function sanitizeDefaultSubject(fileName: string): string {
 
 /**
  * Computes a preview summary before committing an import to the bank.
- * Formats: "X questions will be added under subject Y, Z need review".
+ * Formats: "X questions will be added under subject Y, Z need review",
+ * or for ungradable study materials: "Lesson material, 0 gradable questions".
  */
 export function computeImportPreview(
   rawQuestions: RawImportQuestionItem[],
@@ -97,22 +108,38 @@ export function computeImportPreview(
   const total = rawQuestions.length;
 
   let needsReviewCount = 0;
+  let promptCount = 0;
+  let gradableCount = 0;
+
   for (const q of rawQuestions) {
     const qType = q.questionType || "mcq";
     const status = computeReviewStatus(q.options, q.correctIndex, q.reviewStatus, qType);
     if (status === "needs_review") {
       needsReviewCount++;
     }
+    if (qType === "prompt" || (typeof q.correctIndex === "number" && q.correctIndex < 0)) {
+      promptCount++;
+    } else if (status === "verified" || (!q.reviewStatus && typeof q.correctIndex === "number" && q.correctIndex >= 0)) {
+      gradableCount++;
+    }
   }
 
   const verifiedCount = total - needsReviewCount;
-  const reviewClause = needsReviewCount > 0 ? `, ${needsReviewCount} need review` : "";
-  const summaryText = `${total} question${total === 1 ? "" : "s"} will be added under subject '${chosenSubject}'${reviewClause}`;
+
+  let summaryText = "";
+  if (gradableCount === 0 && total > 0) {
+    summaryText = `Lesson material, 0 gradable questions (${promptCount} practice prompt${promptCount === 1 ? "" : "s"})`;
+  } else {
+    const reviewClause = needsReviewCount > 0 ? `, ${needsReviewCount} need review` : "";
+    summaryText = `${total} question${total === 1 ? "" : "s"} will be added under subject '${chosenSubject}'${reviewClause}`;
+  }
 
   return {
     total,
     verifiedCount,
     needsReviewCount,
+    gradableCount,
+    promptCount,
     subject: chosenSubject,
     sourceFile,
     summaryText,
@@ -229,12 +256,61 @@ export function getImportBatchesSync(): ImportBatch[] {
 }
 
 /**
- * One-click rollback: deletes all questions imported in a specific batch.
+ * One-click rollback: deletes all questions imported in a specific batch,
+ * removes associated practice set exam (or marks "source removed" if attempts exist),
+ * and deletes associated flashcard decks.
  */
 export async function deleteImportBatch(
   batchId: string
-): Promise<{ deletedCount: number }> {
-  return deleteBankBatch(batchId);
+): Promise<{ deletedCount: number; deletedExams?: number; deletedDecks?: number }> {
+  // 1. Delete questions & batch from question bank
+  const bankResult = await deleteBankBatch(batchId);
+
+  // 2. Delete or dissociate exams associated with this batch
+  let deletedExams = 0;
+  try {
+    const exams = getLocalExams();
+    for (const exam of exams) {
+      if (exam.import_batch_id === batchId || (exam as any).importBatchId === batchId) {
+        const attempts = await getExamAttempts(exam.id);
+        if (attempts && attempts.length > 0) {
+          // Keep exam with attempts, mark "source removed"
+          if (!exam.title.includes("(source removed)")) {
+            await saveExam({
+              ...exam,
+              title: `${exam.title} (source removed)`,
+              source_document_title: `${exam.source_document_title || "Document"} (source removed)`,
+            });
+          }
+        } else {
+          await deleteExam(exam.id);
+          deletedExams++;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to cleanup batch exams:", err);
+  }
+
+  // 3. Delete flashcard decks associated with this batch
+  let deletedDecks = 0;
+  try {
+    const decks = getLocalFlashcardDecks();
+    for (const deck of decks) {
+      if (deck.import_batch_id === batchId || (deck as any).importBatchId === batchId) {
+        await deleteFlashcardDeck(deck.id);
+        deletedDecks++;
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to cleanup batch flashcard decks:", err);
+  }
+
+  return {
+    deletedCount: bankResult.deletedCount,
+    deletedExams,
+    deletedDecks,
+  };
 }
 
 /**

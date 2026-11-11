@@ -1017,7 +1017,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
               onClick={() => setIsImportOpen(true)}
               className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold text-xs shrink-0 cursor-pointer shadow-xs transition-colors"
             >
-              Import 160+ Qs from Book ($0 Cost) &rarr;
+              Import Q&A from Book ($0 Cost) &rarr;
             </button>
           </div>
         )}

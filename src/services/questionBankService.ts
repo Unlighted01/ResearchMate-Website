@@ -33,7 +33,7 @@ export type QuestionOrigin =
   | "migrated";
 
 export type QuestionReviewStatus = "verified" | "needs_review" | "flagged";
-export type QuestionType = "mcq" | "free_response";
+export type QuestionType = "mcq" | "free_response" | "prompt";
 
 export interface StoredQuestion extends Question {
   subject?: string;
@@ -267,10 +267,16 @@ export function computeReviewStatus(
   questionType?: QuestionType
 ): QuestionReviewStatus {
   if (explicitStatus === "flagged") return "flagged";
-  if (explicitStatus === "needs_review") return "needs_review";
+  if (explicitStatus === "needs_review" || questionType === "prompt") {
+    return "needs_review";
+  }
 
   if (questionType === "free_response") {
     return explicitStatus || "verified";
+  }
+
+  if (explicitStatus === "verified") {
+    return "verified";
   }
 
   if (

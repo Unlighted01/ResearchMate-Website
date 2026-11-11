@@ -11,6 +11,7 @@ import {
   FileText,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   ArrowRight,
   Loader2,
   BookOpen,
@@ -193,6 +194,9 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
       setParsedQaList(parsed);
 
       if (parsed.length > 0) {
+        const gradableCount = parsed.filter(
+          (p) => p.questionType !== "prompt" && p.correctIndex >= 0 && !p.hasIncompleteAnswer
+        ).length;
         setParseResult({
           items: parsed.map((item) => ({
             question: {
@@ -203,12 +207,14 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
               explanation: item.explanation,
               topicTag: item.chapter || defaultTopic,
             },
-            isValid: item.options.length >= 2,
-            warnings: item.hasIncompleteAnswer ? ["Answer key not explicitly indexed in section"] : [],
+            isValid: item.options.length >= 2 && item.correctIndex >= 0,
+            warnings: item.hasIncompleteAnswer || item.questionType === "prompt"
+              ? ["Answer key not explicitly indexed in section (self-check prompt, ungradable)"]
+              : [],
           })),
           totalParsed: parsed.length,
-          validCount: parsed.length,
-          warningCount: parsed.filter((p) => p.hasIncompleteAnswer).length,
+          validCount: gradableCount,
+          warningCount: parsed.filter((p) => p.hasIncompleteAnswer || p.questionType === "prompt" || p.correctIndex < 0).length,
         });
       } else {
         // Fallback: parse plain text if two-pass format not detected
@@ -298,59 +304,70 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
       });
 
       const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      const validQuestions: Question[] = rawQuestionsForImport.map((q) => ({
+      const gradableRaw = rawQuestionsForImport.filter(
+        (q) => q.questionType !== "prompt" && typeof q.correctIndex === "number" && q.correctIndex >= 0 && q.reviewStatus !== "needs_review"
+      );
+
+      // Capped at 50 verified gradable items, chosen BEFORE running enemy filter (Part 2 requirement)
+      const cappedForExam = gradableRaw.slice(0, 50);
+      const validQuestions: Question[] = cappedForExam.map((q) => ({
         id: q.id && UUID_REGEX.test(q.id) ? q.id : generateUUID(),
         question: q.stem || "",
         options: q.options || [],
-        correctIndex: q.correctIndex ?? 0,
+        correctIndex: q.correctIndex as number,
         explanation: q.explanation || "",
         topicTag: q.chapter || subjectName,
       }));
 
-      // Automatically register a ready-to-take ExamRecord so the user sees it in Dashboard & Exams workspace
       const docCleanTitle = (fileName || subjectName || "Imported Material").replace(/\.[^/.]+$/, "").trim();
-      const examTitle = `${docCleanTitle} Practice Exam`;
-      await saveExam({
-        title: examTitle,
-        source_document_title: fileName || subjectName,
-        import_batch_id: importResult?.batchId,
-        questions: validQuestions,
-        config: {
-          difficulty: "mixed",
-          timedMode: false,
-          benchmarkScore: 80,
-          sections: [
-            {
-              name: subjectName || "General Assessment",
-              questionCount: validQuestions.length,
-              mode: "grounded",
-            },
-          ],
-        },
-      }).catch((err) => console.warn("Auto-registering exam record failed:", err));
 
-      // Automatically generate a companion active-recall flashcard deck
-      const flashcards: Flashcard[] = validQuestions.map((q) => {
-        const letter = String.fromCharCode(65 + q.correctIndex);
-        return {
-          id: generateUUID(),
-          front: q.question,
-          back: `**Correct Answer:** Option ${letter}: ${q.options[q.correctIndex] || ""}\n\n**Explanation:**\n${q.explanation || "Extracted from source document."}`,
-          category: q.topicTag || subjectName,
-        };
-      });
+      // Only register a practice set and flashcard deck if there are verified, gradable questions!
+      if (validQuestions.length > 0) {
+        const examTitle = `${docCleanTitle} Practice Set`;
+        await saveExam({
+          title: examTitle,
+          source_document_title: fileName || subjectName,
+          import_batch_id: importResult?.batchId,
+          questions: validQuestions,
+          config: {
+            difficulty: "mixed",
+            timedMode: false,
+            benchmarkScore: 80,
+            sections: [
+              {
+                name: subjectName || "General Assessment",
+                questionCount: validQuestions.length,
+                mode: "grounded",
+              },
+            ],
+          },
+        }).catch((err) => console.warn("Auto-registering exam record failed:", err));
 
-      await saveFlashcardDeck({
-        title: `${docCleanTitle} Flashcards`,
-        source_document_title: fileName || subjectName,
-        import_batch_id: importResult?.batchId,
-        description: `Active recall study deck generated from ${docCleanTitle} (${flashcards.length} cards)`,
-        cards: flashcards,
-      }).catch((err) => console.warn("Auto-registering flashcard deck failed:", err));
+        // Automatically generate a companion active-recall flashcard deck
+        const flashcards: Flashcard[] = validQuestions.map((q) => {
+          const letter = String.fromCharCode(65 + q.correctIndex);
+          return {
+            id: generateUUID(),
+            front: q.question,
+            back: `**Correct Answer:** Option ${letter}: ${q.options[q.correctIndex] || ""}\n\n**Explanation:**\n${q.explanation || "Extracted from source document."}`,
+            category: q.topicTag || subjectName,
+          };
+        });
 
-      const added = importResult?.importedCount ?? validQuestions.length;
+        await saveFlashcardDeck({
+          title: `${docCleanTitle} Flashcards`,
+          source_document_title: fileName || subjectName,
+          import_batch_id: importResult?.batchId,
+          description: `Active recall study deck generated from ${docCleanTitle} (${flashcards.length} cards)`,
+          cards: flashcards,
+        }).catch((err) => console.warn("Auto-registering flashcard deck failed:", err));
+      }
+
+      const added = importResult?.importedCount ?? rawQuestionsForImport.length;
       const needsReview = importResult?.needsReviewCount ?? 0;
-      const successMsg = `Successfully imported ${added} question(s) (${needsReview} need review). Accessible on Dashboard & Exams Workspace.`;
+      const successMsg = validQuestions.length === 0
+        ? `Imported ${added} self-check prompt(s) (0 gradable questions). Saved to question bank.`
+        : `Successfully imported ${added} question(s) (${needsReview} need review). Practice set created.`;
 
       if (showToast) {
         showToast(successMsg, "success");
@@ -451,11 +468,24 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                    {parseResult?.validCount} Questions
-                  </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {previewSummary.gradableCount > 0 ? (
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      {previewSummary.gradableCount} Gradable Qs
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                      0 Gradable Questions
+                    </span>
+                  )}
+
+                  {previewSummary.promptCount > 0 && (
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
+                      {previewSummary.promptCount} Practice Prompts
+                    </span>
+                  )}
 
                   {chapters.length > 1 && (
                     <span className="px-2.5 py-1 rounded-lg text-xs font-mono text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -463,10 +493,10 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
                     </span>
                   )}
 
-                  {parseResult && parseResult.warningCount > 0 && (
+                  {previewSummary.needsReviewCount > 0 && (
                     <span className="px-2.5 py-1 rounded-lg text-xs font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      {parseResult.warningCount} Missing Keys
+                      {previewSummary.needsReviewCount} Needs Review
                     </span>
                   )}
                 </div>
@@ -749,7 +779,8 @@ Answers and Explanations
                   filteredItems.map((item, idx) => {
                     const originalIdx = parseResult?.items.indexOf(item) ?? idx;
                     const q = item.question;
-                    const correctChar = String.fromCharCode(65 + q.correctIndex);
+                    const hasKey = typeof q.correctIndex === "number" && q.correctIndex >= 0 && q.options.length >= 2;
+                    const correctChar = hasKey ? String.fromCharCode(65 + q.correctIndex) : null;
 
                     return (
                       <div
@@ -770,10 +801,16 @@ Answers and Explanations
                           </div>
 
                           <div className="flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
-                              <Check className="w-3 h-3 text-emerald-500" />
-                              Key: {correctChar}
-                            </span>
+                            {hasKey ? (
+                              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                                <Check className="w-3 h-3 text-emerald-500" />
+                                Key: {correctChar}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                                Practice Prompt (Self-Check)
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -783,39 +820,41 @@ Answers and Explanations
                         </div>
 
                         {/* Options Grid (2 Columns) */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                          {q.options.map((opt, oIdx) => {
-                            const isCorrect = oIdx === q.correctIndex;
-                            const optionChar = String.fromCharCode(65 + oIdx);
+                        {q.options.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            {q.options.map((opt, oIdx) => {
+                              const isCorrect = hasKey && oIdx === q.correctIndex;
+                              const optionChar = String.fromCharCode(65 + oIdx);
 
-                            return (
-                              <div
-                                key={oIdx}
-                                className={`px-3 py-2 rounded-lg text-xs flex items-start gap-2 border transition-colors ${
-                                  isCorrect
-                                    ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200 font-medium"
-                                    : "bg-slate-50/50 dark:bg-slate-950/40 border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-                                }`}
-                              >
-                                <span
-                                  className={`font-mono text-[11px] font-bold shrink-0 mt-0.5 ${
+                              return (
+                                <div
+                                  key={oIdx}
+                                  className={`px-3 py-2 rounded-lg text-xs flex items-start gap-2 border transition-colors ${
                                     isCorrect
-                                      ? "text-emerald-600 dark:text-emerald-400"
-                                      : "text-slate-400 dark:text-slate-500"
+                                      ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200 font-medium"
+                                      : "bg-slate-50/50 dark:bg-slate-950/40 border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300"
                                   }`}
                                 >
-                                  {optionChar}.
-                                </span>
-                                <div className="flex-1 break-words">
-                                  <AcademicMathView content={opt} />
+                                  <span
+                                    className={`font-mono text-[11px] font-bold shrink-0 mt-0.5 ${
+                                      isCorrect
+                                        ? "text-emerald-600 dark:text-emerald-400"
+                                        : "text-slate-400 dark:text-slate-500"
+                                    }`}
+                                  >
+                                    {optionChar}.
+                                  </span>
+                                  <div className="flex-1 break-words">
+                                    <AcademicMathView content={opt} />
+                                  </div>
+                                  {isCorrect && (
+                                    <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                  )}
                                 </div>
-                                {isCorrect && (
-                                  <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                              );
+                            })}
+                          </div>
+                        )}
 
                         {/* Step-by-Step Explanation Callout */}
                         {q.explanation && (

@@ -63,7 +63,7 @@ export interface ImporterThresholdConfig {
 export const DEFAULT_IMPORTER_CONFIG: ImporterThresholdConfig = {
   minStemLengthStandard: 15,
   minStemLengthMath: 5,
-  maxStemLength: 3000,
+  maxStemLength: 1200,
   minOptionsCount: 2,
   maxOptionsCount: 5,
   maxOptionLength: 500,
@@ -71,7 +71,7 @@ export const DEFAULT_IMPORTER_CONFIG: ImporterThresholdConfig = {
   frequencyHeaderRatio: 0.15,
 };
 
-export type QuestionType = "mcq" | "free_response";
+export type QuestionType = "mcq" | "free_response" | "prompt";
 
 export interface ParsedQaItem {
   id: string;
@@ -107,6 +107,9 @@ export interface ParseTwoPassResult {
   totalSupported?: number;
   flashcardCount?: number;
   mcqCount?: number;
+  gradableCount?: number;
+  promptCount?: number;
+  isGradable?: boolean;
   templateCounts?: Record<string, number>;
 }
 
@@ -439,13 +442,44 @@ export function findRepeatingHeadersAndFooters(
 }
 
 /**
+ * Normalizes letter-spaced small caps headings and CP437 ASCII 24 or unicode arrow glyphs
+ * (e.g. from font g_d0_f1 where byte 24 was used for "i" and "1").
+ */
+export function normalizeLetterSpacingAndGlyphs(text: string): string {
+  if (!text) return "";
+  let res = text;
+
+  // CP437 ASCII 24 or unicode arrow / replacement char inside words or section headings
+  res = res.replace(/Sect[\x18\u2191\s]*on/gi, "Section");
+  res = res.replace(/Interpret[\x18\u2191\s]*ng/gi, "Interpreting");
+  res = res.replace(/(?:^|\s)[\x18\u2191]\s*\.\s*[\x18\u2191](?:\s|$)/g, " 1.5 ");
+  res = res.replace(/Chapter\s*[\x18\u2191]\s*[-—–]/gi, "Chapter 1 -");
+
+  // Normalise specific letter-spaced headings
+  res = res.replace(/b\s+ui\s+L\s+ding\s+m\s+A\s+them\s+A\s+tic\s+AL(?:\s+L\s+A\s+ngu\s+A\s+ge|\s+m\s+O\s+de\s+L\s+s)?/gi, (match) => {
+    if (/mode/i.test(match)) return "Building Mathematical Models";
+    if (/language/i.test(match)) return "Building Mathematical Language";
+    return "Building Mathematical";
+  });
+  res = res.replace(/P\s*re\s*-\s*A\s*ctivity/gi, "Pre-Activity");
+  res = res.replace(/P\s*re\s*PA\s*r\s*A\s*tion/gi, "Preparation");
+  res = res.replace(/t\s+i\s+P\s+s\s+for\s+s\s+uccess/gi, "Tips for Success");
+  res = res.replace(/d\s+emonstr\s+A\s+te\s+y\s+our\s+u\s+nderst\s+A\s+nding/gi, "Demonstrate Your Understanding");
+
+  // Finally replace remaining isolated control chars or replacement glyphs with space
+  res = res.replace(/[\x18\u2191\u25AF\uFFFD]+/g, " ");
+
+  return res;
+}
+
+/**
  * Normalizes unicode ligatures, running headers, catalog text, and currency symbols.
  * Accepts an optional Set of frequency-detected repeating header strings.
  */
 export function cleanPageText(rawText: string, repeatingHeaders?: Set<string>): string {
   if (!rawText) return "";
 
-  let cleaned = rawText
+  let cleaned = normalizeLetterSpacingAndGlyphs(rawText)
     // Unicode ligatures
     .replace(/\uFB01/g, "fi")
     .replace(/\uFB02/g, "fl")
@@ -800,7 +834,23 @@ export function splitStemAndOptions(
 
       // Valid if it has at least minOptionsCount (e.g. 2 for True/False, or 3 for multiple choice)
       if (currentSeq.length >= config.minOptionsCount && currentSeq.length > validSequence.length) {
-        validSequence = currentSeq;
+        // Enforce Requirement C:
+        // Choices must come from the same page region as the stem, immediately following it.
+        // Never take a)-e) rows from another page or from a table.
+        const textBeforeOptions = block.substring(0, matches[i].index);
+
+        // 1. Never accept choices separated from stem by a page break marker
+        const hasPageBoundary = /(?:^|\n)\[Page\s+\d+\]/i.test(textBeforeOptions);
+
+        // 2. Never accept choices separated by section / chapter / exercise / tips headers
+        const hasInterveningHeaders = /(?:^|\n)\s*(?:Chapter\b|Section\b|Tips\s+for\s+Success|Demonstrate\s+Your\s+Understanding|Step\s+\d+|Steps\s+in\s+the\s+Methodology|Model\s+\d+|Worked\s+Solution)/i.test(textBeforeOptions);
+
+        // 3. Never accept choices that are actually rows in a table (e.g. "Problem | Symbolic Phrase | Validation")
+        const precededByTableHeader = /(?:Problem\s+(?:Symbolic\s+Phrase|Symbolic\s+Expression)|Validation\b|Symbolic\s+Phrase\b|Symbolic\s+Expression\b)[\s\S]{0,120}$/i.test(textBeforeOptions.trim());
+
+        if (!hasPageBoundary && !hasInterveningHeaders && !precededByTableHeader) {
+          validSequence = currentSeq;
+        }
       }
     }
   }
@@ -809,12 +859,17 @@ export function splitStemAndOptions(
     // Fallback: check simple regex split
     const simpleSplit = block.split(/(?:^|\n|\s{2,}|\s+(?=[b-eB-E][\.\)]|\([b-eB-E]\)))(?=[a-eA-E][\.\)]|\([a-eA-E]\))/);
     if (simpleSplit.length >= config.minOptionsCount + 1) {
-      const stem = sanitizeContentText(simpleSplit[0], repeatingHeaders);
-      const rawOpts = simpleSplit.slice(1);
-      const options = rawOpts
-        .map((opt) => sanitizeContentText(opt.replace(/^[a-eA-E][\.\)\]]\s*|^\([a-eA-E]\)\s*/, ""), repeatingHeaders))
-        .filter((opt) => opt.length > 0);
-      return { stem, options };
+      const stemRaw = simpleSplit[0];
+      const hasPageBoundary = /(?:^|\n)\[Page\s+\d+\]/i.test(stemRaw);
+      const precededByTableHeader = /(?:Problem\s+(?:Symbolic\s+Phrase|Symbolic\s+Expression)|Validation\b)[\s\S]{0,120}$/i.test(stemRaw.trim());
+      if (!hasPageBoundary && !precededByTableHeader) {
+        const stem = sanitizeContentText(stemRaw, repeatingHeaders);
+        const rawOpts = simpleSplit.slice(1);
+        const options = rawOpts
+          .map((opt) => sanitizeContentText(opt.replace(/^[a-eA-E][\.\)\]]\s*|^\([a-eA-E]\)\s*/, ""), repeatingHeaders))
+          .filter((opt) => opt.length > 0);
+        return { stem, options };
+      }
     }
     return null;
   }
@@ -928,9 +983,16 @@ export function evaluateSuspiciousItem(
     }
   }
 
-  // Check 1: Missing answer key
-  if (item.hasIncompleteAnswer) {
-    reasons.push("Answer key not found in section or key index");
+  // Check 1: Missing answer key or prompt
+  if (item.hasIncompleteAnswer || item.questionType === "prompt" || (item.correctIndex !== undefined && item.correctIndex < 0)) {
+    reasons.push("Item has no verified answer key (self-check prompt, ungradable)");
+  }
+
+  // Check 1b: Odd or garbled glyphs
+  const hasGarbledGlyphs = /[\x18\u2191\u25AF\uFFFD]/.test(currentStem) ||
+    (item.options || []).some((opt) => /[\x18\u2191\u25AF\uFFFD]/.test(opt));
+  if (hasGarbledGlyphs) {
+    reasons.push("Contains garbled or unusual glyphs (↑, ▯, or replacement characters)");
   }
 
   // Check 2: Question stem anomalies
@@ -1201,17 +1263,18 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         }
       }
     } else if (!isAnswerMode && !/Answers\b/i.test(currentChapter)) {
-      // MCQ Question that couldn't be fully parsed (diagram/image choices or stacked fractions)
-      // Import as needs_review stub with stem, sourcePage, and note, NOT silently dropped (Condition A.2)
+      // Unparseable item or reflection/practice prompt
       const stem = sanitizeContentText(blockForQuestion, repeatingHeaders);
-      if (stem.length > 2 && currentNum !== null) {
+      // Suppress short single-word/phrase fragments that are not questions (Requirement B)
+      const isShortFragment = stem.length < config.minStemLengthStandard && !stem.includes("?");
+      if (stem.length > 2 && currentNum !== null && !isShortFragment) {
         const key = `${currentChapter}::${currentNum}`;
         const globalKey = `${currentNum}`;
         const itemData: RawParsedQuestion = {
           number: currentNum,
           stem,
           options: splitResult ? splitResult.options : [],
-          questionType: "mcq",
+          questionType: "prompt",
           isUnparseableStub: true,
           chapter: currentChapter,
           pageNumber: currentPage,
@@ -1223,6 +1286,8 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       }
     }
   };
+
+  let inStepOrTableBlock = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -1241,11 +1306,22 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       continue;
     }
 
+    // Detect step list or methodology table blocks (Requirement B)
+    if (/(?:^|\s)(?:Steps?\s+in\s+the\s+Methodology|Step\s+\d+\b|Model\s+\d+\b|Worked\s+(?:Example|Solution)|Problem\s+Symbolic\s+Phrase|Problem\s+Symbolic\s+Expression)/i.test(trimmed)) {
+      inStepOrTableBlock = true;
+    }
+
+    // Clear step block when real exercise or section begins
+    if (/(?:Demonstrate\s+Your\s+Understanding|Exercises?\b|Practice\s+Problems?|Critical\s+Thinking)/i.test(trimmed)) {
+      inStepOrTableBlock = false;
+    }
+
     // Detect standalone CHAPTER or SECTION line with number or title on next line
     if (/^(?:CHAPTER|SECTION|PART)$/i.test(trimmed) && i + 1 < lines.length) {
       const nextTrimmed = lines[i + 1].trim();
-      if (/^\d+/i.test(nextTrimmed) || /^[A-Z][a-z]+/i.test(nextTrimmed)) {
+      if (/^\d+/i.test(nextTrimmed) || /^[A-Z][a-z]+/i.test(nextTrimmed) || /^[-—–]/.test(nextTrimmed)) {
         flush();
+        inStepOrTableBlock = false;
         currentChapter = `${trimmed} ${nextTrimmed}`;
         chaptersDetected.add(currentChapter);
         currentNum = null;
@@ -1257,35 +1333,38 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       }
     }
 
-    // Detect chapter headings using profile.headingPattern
-    // e.g. "Section 6: Geometry" or "Set 62"
-    const chMatch = trimmed.match(profile.headingPattern);
-    if (chMatch) {
-      flush();
-      let detectedName = chMatch[0].replace(/\s*\([^\)]*\)/g, "").trim();
-      // If question marker was consumed on same line (e.g. "Set 62 ... 977. Lara"), strip it
-      const inlineNumMatch = detectedName.match(/^([\s\S]*?)(?=\s+\d{1,4}[\.\)]\s+)/);
-      if (inlineNumMatch) {
-        detectedName = inlineNumMatch[1].trim();
-      }
-
-      // Ensure it's not a running head with trailing margin number
-      if (!/\s+\d{1,4}$/.test(detectedName) && detectedName.length > 2) {
-        currentChapter = detectedName;
-        chaptersDetected.add(currentChapter);
-        currentNum = null;
-        if (profile.keyLocation === "end_of_chapter") {
-          isAnswerMode = false;
+    // Detect chapter headings using profile.headingPattern or general Chapter/Section line (e.g. "Chapter — Whole Numbers")
+    const isChHeading = profile.headingPattern.test(trimmed) || /^(?:CHAPTER|SECTION|PART)\s+[-—–\w\s]+/i.test(trimmed);
+    if (isChHeading) {
+      const chMatch = trimmed.match(profile.headingPattern) || trimmed.match(/^(?:CHAPTER|SECTION|PART)\s+[-—–\w\s]+/i);
+      if (chMatch) {
+        flush();
+        inStepOrTableBlock = false;
+        let detectedName = chMatch[0].replace(/\s*\([^\)]*\)/g, "").trim();
+        // If question marker was consumed on same line (e.g. "Set 62 ... 977. Lara"), strip it
+        const inlineNumMatch = detectedName.match(/^([\s\S]*?)(?=\s+\d{1,4}[\.\)]\s+)/);
+        if (inlineNumMatch) {
+          detectedName = inlineNumMatch[1].trim();
         }
 
-        // If the line also contained a question (e.g. "Set 62 ... 977. Question text"), process the question
-        const restOfLine = trimmed.substring(chMatch[0].length).trim();
-        const numOnSameLine = restOfLine.match(/^(\d{1,4})[\.\)](?:\s+|$|(?=[^\d\s\.]))\s*([\s\S]*)/);
-        if (numOnSameLine) {
-          currentNum = parseInt(numOnSameLine[1], 10);
-          currentBuffer = numOnSameLine[2] ? [numOnSameLine[2]] : [];
+        // Ensure it's not a running head with trailing margin number
+        if (!/\s+\d{1,4}$/.test(detectedName) && detectedName.length > 2) {
+          currentChapter = detectedName;
+          chaptersDetected.add(currentChapter);
+          currentNum = null;
+          if (profile.keyLocation === "end_of_chapter") {
+            isAnswerMode = false;
+          }
+
+          // If the line also contained a question (e.g. "Set 62 ... 977. Question text"), process the question
+          const restOfLine = trimmed.substring(chMatch[0].length).trim();
+          const numOnSameLine = restOfLine.match(/^(\d{1,4})[\.\)](?:\s+|$|(?=[^\d\s\.]))\s*([\s\S]*)/);
+          if (numOnSameLine) {
+            currentNum = parseInt(numOnSameLine[1], 10);
+            currentBuffer = numOnSameLine[2] ? [numOnSameLine[2]] : [];
+          }
+          continue;
         }
-        continue;
       }
     }
 
@@ -1326,6 +1405,13 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     // Detect question/answer numbering: "1. ", "64. ", "1) " (also matches numbers on their own line, but excludes decimals like 1.43)
     const numMatch = trimmed.match(/^(\d{1,4})[\.\)](?:\s+|$|(?=[^\d\s\.]))\s*([\s\S]*)/);
     if (numMatch) {
+      if (inStepOrTableBlock) {
+        // Requirement B: Numbered lists inside tables or step lists never become questions
+        if (currentNum !== null) {
+          currentBuffer.push(line);
+        }
+        continue;
+      }
       const nextNum = parseInt(numMatch[1], 10);
       const lastLine = currentBuffer.length > 0 ? currentBuffer[currentBuffer.length - 1].trim() : "";
       const isSentenceContinuation =
@@ -1422,23 +1508,33 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
 
     // Look up answer key (inline answer takes precedence if present, then chapter key, then global key)
     const ans = q.inlineAnswer || answersMap.get(`${q.chapter}::${q.number}`) || answersMap.get(String(q.number));
-    let correctLetter = "a";
-    let correctIndex = 0;
+    let correctLetter = "";
+    let correctIndex = -1;
     let explanation = "Identified based on study materials.";
     let hasIncompleteAnswer = false;
+    let questionType: QuestionType = (q as any).questionType || "mcq";
 
     if (ans) {
       if ((ans as any).textAnswer) {
         // Free-response answer
         explanation = (ans as any).textAnswer;
+        questionType = "free_response";
+        correctLetter = "a";
+        correctIndex = 0;
       } else {
         correctLetter = ans.letter.toLowerCase();
         correctIndex = ["a", "b", "c", "d", "e"].indexOf(correctLetter);
-        if (correctIndex < 0) correctIndex = 0;
+        if (correctIndex < 0) correctIndex = -1;
         explanation = ans.explanation || `Answer: Option ${ans.letter.toUpperCase()}.`;
       }
     } else {
+      // Requirement A: No answer key = not gradable.
+      // Never assign a correctIndex to an item without a verified key (no default 0, no shuffling of an invented key).
+      // Such items become questionType "prompt" (self-check), needs_review.
       hasIncompleteAnswer = true;
+      questionType = "prompt";
+      correctIndex = -1;
+      correctLetter = "";
       explanation = "Answer key not explicitly indexed in this section.";
     }
 
@@ -1448,7 +1544,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         stem: q.stem,
         options: q.options,
         correctIndex,
-        questionType: (q as any).questionType,
+        questionType,
         hasIncompleteAnswer,
         explanation,
       },
@@ -1477,7 +1573,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       chapter: q.chapter,
       pageNumber: q.pageNumber,
       sourcePage: q.pageNumber,
-      questionType: (q as any).questionType || "mcq",
+      questionType,
       hasIncompleteAnswer,
       isSuspicious,
       suspiciousReasons,
@@ -1503,12 +1599,20 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   }
 
   const suspiciousCount = items.filter((it) => it.isSuspicious).length;
+  const gradableCount = items.filter(
+    (it) => it.questionType !== "prompt" && it.correctIndex >= 0 && !it.hasIncompleteAnswer
+  ).length;
+  const promptCount = items.filter((it) => it.questionType === "prompt" || it.correctIndex < 0).length;
+  const isGradable = gradableCount > 0;
 
   return {
     items,
     missingQuestionNumbers,
     chaptersDetected: Array.from(chaptersDetected),
     suspiciousCount,
+    gradableCount,
+    promptCount,
+    isGradable,
     totalExpected: items.length + missingQuestionNumbers.length,
     profileUsed: profile,
     repeatingHeadersStripped: Array.from(repeatingHeaders),
@@ -2454,6 +2558,9 @@ export function parseTwoPassQuestionsAndAnswers(
   totalSupported?: number;
   flashcardCount?: number;
   mcqCount?: number;
+  gradableCount?: number;
+  promptCount?: number;
+  isGradable?: boolean;
   templateCounts?: Record<string, number>;
 } {
   const result = parseTwoPassQuestionsAndAnswersDetailed(pagesOrText, options);
@@ -2466,6 +2573,9 @@ export function parseTwoPassQuestionsAndAnswers(
     totalSupported?: number;
     flashcardCount?: number;
     mcqCount?: number;
+    gradableCount?: number;
+    promptCount?: number;
+    isGradable?: boolean;
     templateCounts?: Record<string, number>;
   };
   arr.missingQuestionNumbers = result.missingQuestionNumbers;
@@ -2477,6 +2587,9 @@ export function parseTwoPassQuestionsAndAnswers(
   arr.flashcardCount = result.flashcardCount;
   arr.mcqCount = result.mcqCount;
   arr.templateCounts = result.templateCounts;
+  arr.gradableCount = result.gradableCount;
+  arr.promptCount = result.promptCount;
+  arr.isGradable = result.isGradable;
   return arr;
 }
 
@@ -2494,6 +2607,7 @@ export function toQuestions(parsedList: ParsedQaItem[]): StoredQuestion[] {
     topicTag: item.chapter || "Extracted Exam",
     sourcePage: item.sourcePage || item.pageNumber,
     origin: "parsed_pdf",
+    questionType: item.questionType,
     reviewStatus:
       item.reviewStatus ||
       (item.isSuspicious ? "needs_review" : item.hasIncompleteAnswer ? "needs_review" : "verified"),
@@ -2502,21 +2616,24 @@ export function toQuestions(parsedList: ParsedQaItem[]): StoredQuestion[] {
 
 /**
  * Converts parsed Q&A items to Active Recall Flashcards.
+ * Excludes prompt-type questions and items needing review.
  */
 export function toFlashcards(parsedList: ParsedQaItem[]): Flashcard[] {
-  return parsedList.map((item) => {
-    const correctLetter = (item.correctLetter || "a").toUpperCase();
-    const correctChoiceText = item.options[item.correctIndex] || "";
+  return parsedList
+    .filter((item) => item.questionType !== "prompt" && item.correctIndex >= 0 && item.reviewStatus !== "needs_review")
+    .map((item) => {
+      const correctLetter = (item.correctLetter || "a").toUpperCase();
+      const correctChoiceText = item.options[item.correctIndex] || "";
 
-    const front = item.stem;
-    const back = `**Correct Answer:** Option ${correctLetter}: ${correctChoiceText}\n\n**Explanation:**\n${item.explanation}`;
+      const front = item.stem;
+      const back = `**Correct Answer:** Option ${correctLetter}: ${correctChoiceText}\n\n**Explanation:**\n${item.explanation}`;
 
-    return {
-      id: item.id || generateUUID(),
-      front,
-      back,
-      category: item.chapter || "Study Flashcards",
-      mastered: false,
-    };
-  });
+      return {
+        id: item.id || generateUUID(),
+        front,
+        back,
+        category: item.chapter || "Study Flashcards",
+        mastered: false,
+      };
+    });
 }

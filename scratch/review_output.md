@@ -1,8 +1,8 @@
 # Review Output: Question Import Modal Simulation
 
 ## Build & Source Metadata
-- **Git Commit Hash**: `61d18c57d0d6e755107acb16784ba838687a9b61`
-- **Git Branch**: `main`
+- **Git Commit Hash**: `f964d7abb1d8041dfc6503f422cd87afff7a889b`
+- **Git Branch**: `preview/reliability-fixes`
 - **Source File**: `tests/fixtures/Philippines_Code_of_Conduct_and_Ethical_Standards_for_Public_Officials_1989.pdf`
 - **Total Items Generated**: **87**
 
@@ -915,16 +915,16 @@ the year, render a performance report of the agency or office or co"
 **Stem (as displayed in Modal):**
 ```text
 Under RA 6713, which duty is defined as:
-"All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three"?
+"All official papers and documents must be processed and completed within a reasonable time from the Preparation thereof and must contain, as far as practicable, not more than three"?
 ```
 
 **Explanation:**  
 Recall: Process documents and papers expeditiously. Defined under Sec. 5 (Duties of public Officials and Employees): "(c) Process documents and papers expeditiously. - All official papers and
 documents must be processed and completed within a reasonable time from the
-preparation thereof and must contain, as far as practicable, not more than three"
+Preparation thereof and must contain, as far as practicable, not more than three"
 
 **Source Quote:**  
-> (c) Process documents and papers expeditiously. - All official papers and documents must be processed and completed within a reasonable time from the preparation thereof and must contain, as far as practicable, not more than three
+> (c) Process documents and papers expeditiously. - All official papers and documents must be processed and completed within a reasonable time from the Preparation thereof and must contain, as far as practicable, not more than three
 
 **Lint / Suspicious Reasons:** None (Clean)
 
