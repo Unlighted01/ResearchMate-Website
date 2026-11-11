@@ -1,8 +1,8 @@
 # Review Output: Question Import Modal Simulation
 
 ## Build & Source Metadata
-- **Git Commit Hash**: `f964d7abb1d8041dfc6503f422cd87afff7a889b`
-- **Git Branch**: `preview/reliability-fixes`
+- **Git Commit Hash**: `af5d320b6a65f095982fb2ebd9f9b4d73d002093`
+- **Git Branch**: `main`
 - **Source File**: `tests/fixtures/Philippines_Code_of_Conduct_and_Ethical_Standards_for_Public_Officials_1989.pdf`
 - **Total Items Generated**: **87**
 

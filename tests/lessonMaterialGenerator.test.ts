@@ -11,6 +11,11 @@ import {
   generateExerciseBlankPrompts,
 } from "../src/services/lessonMaterialGenerator";
 import { lintDistractorQuality, isEnemyItem } from "../src/services/distractorQualityService";
+import {
+  saveQuestionsToBank,
+  assembleExamFromBank,
+  clearQuestionBank,
+} from "../src/services/questionBankService";
 
 describe("Lesson Material Generator (Generic Rule-Based, Zero AI)", () => {
   let layout: FullPdfExtractionResult | null = null;
@@ -61,7 +66,7 @@ describe("Lesson Material Generator (Generic Rule-Based, Zero AI)", () => {
     expect(minusItem!.distractorReasons).toBeDefined();
     // Reversed order distractor check
     expect(minusItem!.options).toContain("4 – x");
-    expect(minusItem!.distractorReasons!["4 – x"]).toContain("Reversed order of terms");
+    expect(minusItem!.distractorReasons!["4 – x"]).toBe("'four fewer than x' means x - 4: the words come in reverse order");
 
     const divItem = phraseItems.find((it) => it.stem.includes("quotient of 7 and 4"));
     expect(divItem).toBeDefined();
@@ -270,6 +275,71 @@ describe("Lesson Material Generator (Generic Rule-Based, Zero AI)", () => {
       expect(sample.sourceQuote).toBeDefined();
       expect(sample.sourcePage).toBeGreaterThan(0);
     }
+  });
+
+  it("7. Prompts and cards have isGradable=false and never enter exam assembly", () => {
+    if (!layout) return;
+    const result = generateLessonMaterial(layout.pages);
+
+    // Verify gradable status
+    const modelCards = result.items.filter((it) => it.generatorType === "worked_model_card");
+    const keywordCards = result.items.filter((it) => it.generatorType === "keyword_operation_card");
+    const blankPrompts = result.items.filter((it) => it.generatorType === "exercise_blank_prompt");
+    const gradedMcqs = result.items.filter(
+      (it) => it.generatorType === "phrase_table_mcq" || it.generatorType === "incorrect_vs_correct_mcq"
+    );
+
+    for (const mc of modelCards) {
+      expect(mc.isGradable).toBe(false);
+    }
+    for (const kc of keywordCards) {
+      expect(kc.isGradable).toBe(false);
+    }
+    for (const bp of blankPrompts) {
+      expect(bp.isGradable).toBe(false);
+    }
+    for (const gm of gradedMcqs) {
+      expect(gm.isGradable).toBe(true);
+    }
+
+    // Verify matrix separation
+    expect(result.countsByType.gradedQuestionsTotal).toBe(20);
+    expect(result.countsByType.studyCardsTotal).toBe(32);
+    expect(result.countsByType.promptsTotal).toBe(24);
+    expect(result.countsByType.total).toBe(76);
+
+    // Verify that when imported into question bank, prompts and cards are excluded from assembleExamFromBank
+    clearQuestionBank();
+    const stored = result.items.map((it) => ({
+      id: it.id,
+      question: it.stem,
+      options: it.options,
+      correctIndex: it.correctIndex,
+      explanation: it.explanation,
+      topicTag: it.category,
+      origin: "parsed_pdf" as const,
+      questionType: it.questionType,
+      isGradable: it.isGradable,
+      reviewStatus: it.reviewStatus,
+    }));
+    saveQuestionsToBank(stored, "Word Problems Explained", "append", "pdf_import", 1, {
+      fileName: "Word_Problems_Explained.pdf",
+      sourceDocument: "Word Problems Explained",
+    });
+
+    const assembled = assembleExamFromBank(50);
+    // Assembled exam must only contain gradable MCQs
+    expect(assembled.selectedQuestions.length).toBeLessThanOrEqual(20);
+    expect(assembled.selectedQuestions.length).toBeGreaterThan(0);
+    for (const sq of assembled.selectedQuestions) {
+      expect(sq.isGradable).not.toBe(false);
+      expect(sq.questionType).toBe("mcq");
+      expect(sq.options.length).toBeGreaterThanOrEqual(2);
+      expect(["phrase_table_mcq", "incorrect_vs_correct_mcq"]).toContain(
+        result.items.find((i) => i.id === sq.id)?.generatorType
+      );
+    }
+    clearQuestionBank();
   });
 });
 

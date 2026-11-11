@@ -69,6 +69,7 @@ import {
 import {
   updateQuestionStatus,
   recordQuestionOptionPick,
+  saveQuestionsToBank,
 } from "../../../services/questionBankService";
 import MaterialScopeSelector, { MaterialScopeSelection } from "./MaterialScopeSelector";
 import { useNotifications } from "../../../context/NotificationContext";
@@ -510,7 +511,21 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       );
 
       if (generated.length > 0) {
-        startSeededExamSession(generated);
+        // AI-generated questions are ALWAYS written to the bank as needs_review
+        saveQuestionsToBank(
+          generated.map((q) => ({
+            ...q,
+            origin: "ai_generated",
+            reviewStatus: "needs_review",
+            suspiciousReasons: q.suspiciousReasons || ["AI-generated question: pending user review and verification"],
+          })),
+          topicInput.trim() || "AI Generated Simulation",
+          "append",
+          "ai_generated"
+        );
+
+        const aiTitle = `${topicInput.trim() || "Simulation"} (AI-generated, unreviewed)`;
+        startSeededExamSession(generated, undefined, undefined, aiTitle);
         showToast(`Successfully assembled ${generated.length}-question simulation! (Seed: ${activeSeed})`, "success");
       }
     } catch (err: any) {

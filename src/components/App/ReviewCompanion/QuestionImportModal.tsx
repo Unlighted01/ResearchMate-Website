@@ -34,6 +34,7 @@ import {
   importQuestionsToBank,
   computeImportPreview,
   sanitizeDefaultSubject,
+  getImportBatchesSync,
   RawImportQuestionItem,
 } from "../../../services/questionImportService";
 import AcademicMathView from "../../shared/AcademicMathView";
@@ -151,6 +152,19 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
       fileName || "Reviewer Document"
     );
   }, [rawQuestionsForImport, subjectName, fileName]);
+
+  const duplicateBatch = useMemo(() => {
+    if (!fileName) return null;
+    const cleanCurrent = fileName.trim().toLowerCase();
+    const batches = getImportBatchesSync();
+    return (
+      batches.find(
+        (b) =>
+          b.sourceFile?.trim().toLowerCase() === cleanCurrent ||
+          b.subject?.trim().toLowerCase() === cleanCurrent.replace(/\.[^/.]+$/, "")
+      ) || null
+    );
+  }, [fileName]);
 
   // Early return AFTER all hooks — hook count is now identical on every render.
   if (!isOpen) return null;
@@ -567,6 +581,18 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
           )}
         </div>
 
+        {/* Duplicate Import Notice Banner */}
+        {hasLoadedQuestions && duplicateBatch && (
+          <div className="mx-6 mt-3 px-4 py-2.5 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-3 animate-in fade-in shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>
+                <strong>Duplicate Import Notice:</strong> &quot;{duplicateBatch.sourceFile || duplicateBatch.subject}&quot; was already imported ({duplicateBatch.totalQuestions} items). Importing again will update existing questions and add any new items.
+              </span>
+            </div>
+          </div>
+        )}
+
         <input
           ref={fileInputRef}
           type="file"
@@ -873,6 +899,18 @@ Answers and Explanations
             </div>
           )}
         </div>
+
+        {/* Duplicate Import Notice Banner */}
+        {hasLoadedQuestions && duplicateBatch && (
+          <div className="mx-6 mt-3 px-4 py-2.5 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-3 animate-in fade-in shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>
+                <strong>Duplicate Import Notice:</strong> &quot;{duplicateBatch.sourceFile || duplicateBatch.subject}&quot; was already imported ({duplicateBatch.totalQuestions} items). Importing again will update existing questions and add any new items.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Import Error Banner */}
         {importError && (

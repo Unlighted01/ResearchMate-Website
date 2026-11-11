@@ -95,20 +95,35 @@ export async function extractAllPagesWithLayout(
       // Check if top-of-page banner/header items were emitted late in the content stream.
       // In many published books (e.g. LearningExpress), the top chapter banner is emitted at the end of the stream after the body.
       let pageRawText = "";
-      const bannerKeywordItems = items.filter(
-        (it) =>
-          it.str.length < 35 &&
-          !/[,\.;]$/.test(it.str.trim()) &&
-          !it.str.includes("::") &&
-          !it.str.includes("______") &&
-          !it.str.includes("?") &&
-          /\b(?:Practice|Review|Chapter|Section|Unit|Lesson|Set)\b/i.test(it.str) &&
-          it.y > 450
+      const bannerKeywordIndices = items
+        .map((it, idx) => ({ it, idx }))
+        .filter(
+          ({ it }) =>
+            it.str.length < 35 &&
+            !/[,\.;]$/.test(it.str.trim()) &&
+            !it.str.includes("::") &&
+            !it.str.includes("______") &&
+            !it.str.includes("?") &&
+            !/^\d{1,4}[\.\)]/.test(it.str.trim()) &&
+            !/^[a-eA-E][\.\)]/.test(it.str.trim()) &&
+            /\b(?:Practice|Review|Chapter|Section|Unit|Lesson|Set)\b/i.test(it.str) &&
+            it.y > 450
+        );
+
+      const hasLateEmittedBanner = bannerKeywordIndices.some(({ it, idx }) =>
+        items.slice(0, idx).some((prev) => prev.str.trim().length > 0 && prev.y < it.y - 30)
       );
-      if (bannerKeywordItems.length > 0) {
-        const bannerThreshold = Math.min(...bannerKeywordItems.map((it) => it.y)) - 5;
+
+      if (hasLateEmittedBanner && bannerKeywordIndices.length > 0) {
+        const bannerThreshold = Math.min(...bannerKeywordIndices.map(({ it }) => it.y)) - 5;
         const bannerItems = items.filter(
-          (it) => it.y >= bannerThreshold && !it.str.includes("::") && !it.str.includes("______") && !it.str.includes("?")
+          (it) =>
+            it.y >= bannerThreshold &&
+            !it.str.includes("::") &&
+            !it.str.includes("______") &&
+            !it.str.includes("?") &&
+            !/^\d{1,4}[\.\)]/.test(it.str.trim()) &&
+            !/^[a-eA-E][\.\)]/.test(it.str.trim())
         );
         const bodyItems = items.filter((it) => !bannerItems.includes(it));
         const bodyTextItems = bodyItems.filter((it) => it.str.trim().length > 0);

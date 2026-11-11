@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, it, expect } from "vitest";
 import fs from "fs";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import {
@@ -124,5 +124,11 @@ describe("1001 Math Problems Real PDF Audit", () => {
     } else {
       console.log("Question #990 was NOT found!");
     }
+
+    expect(result.items.length).toBe(1001);
+    expect(result.missingQuestionNumbers).toEqual([]);
+    expect(q1001).toBeDefined();
+    expect(q1001?.options.length).toBe(4);
+    expect(q1001?.correctLetter).toBe("a");
   }, 120000);
 });

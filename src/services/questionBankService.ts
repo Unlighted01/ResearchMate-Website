@@ -6,7 +6,16 @@
 // 100% Offline · $0 API Cost · Browser IndexedDB + LocalStorage fallback
 // ============================================
 
-import { Question, generateUUID } from "./examService";
+import {
+  Question,
+  generateUUID,
+  getLocalExams,
+  saveLocalExams,
+  getLocalAttempts,
+  getLocalFlashcardDecks,
+  saveLocalFlashcardDecks,
+  StoredExam,
+} from "./examService";
 import { setSyncStatus } from "./supabaseClient";
 import {
   OptionPickStats,
@@ -49,6 +58,7 @@ export interface StoredQuestion extends Question {
   importedAt?: number;
   origin?: QuestionOrigin;
   questionType?: QuestionType;
+  isGradable?: boolean;
   reviewStatus?: QuestionReviewStatus;
   suspiciousReasons?: string[];
   sourceQuote?: string;
@@ -536,6 +546,38 @@ export async function deleteImportBatch(batchId: string): Promise<{ deletedCount
   deleteQuestionsByBatchFromDb(batchId).catch(() => {});
   deleteBatchFromDb(batchId).catch(() => {});
 
+  // Clean up or orphan associated local exams and flashcard decks
+  try {
+    const exams = getLocalExams();
+    const attempts = getLocalAttempts();
+    const attemptedExamIds = new Set(attempts.map((a) => a.exam_id).filter(Boolean));
+
+    const updatedExams: StoredExam[] = [];
+    for (const exam of exams) {
+      if (exam.import_batch_id === batchId) {
+        if (attemptedExamIds.has(exam.id)) {
+          // Keep exam with attempts, but mark source as removed
+          updatedExams.push({
+            ...exam,
+            source_document_title: `[Source Removed] ${exam.source_document_title || exam.title}`,
+            import_batch_id: undefined,
+          });
+        }
+        // If not attempted, drop exam
+      } else {
+        updatedExams.push(exam);
+      }
+    }
+    saveLocalExams(updatedExams);
+
+    // Delete associated flashcard decks
+    const decks = getLocalFlashcardDecks();
+    const remainingDecks = decks.filter((d) => d.import_batch_id !== batchId);
+    saveLocalFlashcardDecks(remainingDecks);
+  } catch (err) {
+    console.warn("deleteImportBatch: error updating associated exams/decks", err);
+  }
+
   return { deletedCount };
 }
 
@@ -755,6 +797,12 @@ export function sampleSprintQuestions(
     preferredTopic && preferredTopic !== "All Topics"
       ? { topic: preferredTopic }
       : undefined
+  ).filter(
+    (q) =>
+      q.isGradable !== false &&
+      q.questionType !== "prompt" &&
+      q.questionType !== "free_response" &&
+      (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2))
   );
 
   if (pool.length === 0) return [];
@@ -800,7 +848,13 @@ export function assembleExamFromBank(
   rejectedQuestions: { item: StoredQuestion; reason: string }[];
 } {
   const verified = getVerifiedQuestions(filter);
-  const mcqs = verified.filter((q) => q.questionType === "mcq");
+  const mcqs = verified.filter(
+    (q) =>
+      q.isGradable !== false &&
+      q.questionType !== "prompt" &&
+      q.questionType !== "free_response" &&
+      (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2))
+  );
   const { selected, rejected } = filterEnemyItems(mcqs, count);
   return {
     selectedQuestions: selected,

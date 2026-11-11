@@ -35,12 +35,20 @@ describe("501 Word Analogy Questions Full Engine Audit", () => {
     expect(profileRes.profile.keyLocation).toBe("end_of_chapter");
 
     const result = parseTwoPassQuestionsAndAnswersDetailed(pages, { profile: profileRes.profile });
+    console.log("501 Needs Review count:", result.suspiciousCount);
+    const suspiciousItems = result.items.filter((it) => it.reviewStatus === "needs_review");
+    console.log("Suspicious items sample:", suspiciousItems.slice(0, 5).map((it) => ({ num: it.number, reasons: it.suspiciousReasons })));
 
     // 1. Total Item Count Verification: Exactly 501 questions
     expect(result.items.length).toBe(501);
     expect(result.gradableCount).toBe(501);
     expect(result.promptCount).toBe(0);
     expect(result.missingQuestionNumbers).toEqual([]);
+    expect(result.suspiciousCount).toBe(3);
+    const suspiciousNums = result.items
+      .filter((it) => it.reviewStatus === "needs_review")
+      .map((it) => it.number);
+    expect(suspiciousNums).toEqual([43, 407, 496]);
 
     // 2. Chapters Detected Verification: Exactly 13 chapters in sequential order
     expect(result.chaptersDetected.length).toBe(13);

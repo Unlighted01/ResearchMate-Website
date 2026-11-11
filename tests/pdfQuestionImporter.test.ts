@@ -500,4 +500,82 @@ Answers and Explanations
     expect(parsed[2].chapter).toBe("Chapter 3: The Contents of a Cell");
     expect(parsed[2].correctLetter).toBe("a");
   });
+
+  it("does not create chapters from sentences like 'set a goal', 'review a chapter', or 'Unit V of his test'", () => {
+    const docWithSentences = `
+Chapter 1: Principles of Study
+1. What is the best method to retain information?
+a. Active recall
+b. Passive reading
+c. Highlighting
+d. Re-reading
+
+You should set a goal before each session.
+Be sure to review a chapter each weekend.
+In Unit V of his test preparation manual, Dr. Smith emphasizes consistency.
+
+2. Which interval is recommended for spaced repetition?
+a. 1 day, 3 days, 1 week
+b. 1 hour, 2 hours, 3 hours
+c. 1 month, 2 months, 3 months
+d. Never review
+
+Answers and Explanations
+1. a. Active recall forces cognitive retrieval.
+2. a. Expanding intervals optimize retention.
+    `;
+
+    const detailed = parseTwoPassQuestionsAndAnswersDetailed(docWithSentences);
+    expect(detailed.items.length).toBe(2);
+    expect(detailed.chaptersDetected).toEqual(["Chapter 1: Principles of Study"]);
+    expect(detailed.chaptersDetected).not.toContain("set a goal");
+    expect(detailed.chaptersDetected).not.toContain("review a chapter");
+    expect(detailed.chaptersDetected).not.toContain("Unit V of his test");
+  });
+
+  it("handles a book with 30 front-matter pages without gating out questions", () => {
+    let docWith30FrontMatter = "";
+    // Pages 1 to 30: Front matter (Title, TOC, Preface, Introduction)
+    docWith30FrontMatter += "[Page 1]\nTable of Contents\nChapter 1 ........... Page 31\n";
+    for (let p = 2; p <= 15; p++) {
+      docWith30FrontMatter += `[Page ${p}]\nContents Continued\nTopic ${p} ........... Page ${p + 30}\n`;
+    }
+    for (let p = 16; p <= 30; p++) {
+      docWith30FrontMatter += `[Page ${p}]\nIntroduction and Study Guidelines\nWelcome to this comprehensive study guide. On page ${p}, we explore study habits.\n`;
+    }
+
+    // Page 31: Real questions start
+    docWith30FrontMatter += `
+[Page 31]
+Chapter 1: Number Systems
+1. What is the value of 2 to the power of 5?
+a. 16
+b. 32
+c. 64
+d. 128
+
+2. Which number is prime?
+a. 4
+b. 6
+c. 7
+d. 9
+
+[Page 32]
+Answers and Explanations
+1. b. 2 raised to 5 is 32.
+2. c. 7 has only two factors: 1 and 7.
+    `;
+
+    const parsed = parseTwoPassQuestionsAndAnswers(docWith30FrontMatter);
+    expect(parsed.length).toBe(2);
+    expect(parsed[0].number).toBe(1);
+    expect(parsed[0].chapter).toBe("Chapter 1: Number Systems");
+    expect(parsed[0].correctLetter).toBe("b");
+    expect(parsed[0].pageNumber).toBe(31);
+
+    expect(parsed[1].number).toBe(2);
+    expect(parsed[1].chapter).toBe("Chapter 1: Number Systems");
+    expect(parsed[1].correctLetter).toBe("c");
+    expect(parsed[1].pageNumber).toBeGreaterThanOrEqual(31);
+  });
 });

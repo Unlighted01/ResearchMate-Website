@@ -54,6 +54,9 @@ export interface LessonGenerationResult {
     workedModelCard: number;
     keywordOperationCard: number;
     exerciseBlankPrompt: number;
+    gradedQuestionsTotal?: number;
+    studyCardsTotal?: number;
+    promptsTotal?: number;
     total: number;
   };
   countsByFamily: Record<string, number>;
@@ -350,7 +353,7 @@ export function generatePhraseTableMcqs(pages: PdfPageWithLayout[]): LessonGener
         }
       } else if (row.family === "subtraction") {
         if (row.phrase.includes("fewer than") || row.phrase.includes("less than")) {
-          distractors.push({ text: "4 – x", reason: "Reversed order of terms: 'less/fewer than' places subtrahend first" });
+          distractors.push({ text: "4 – x", reason: "'four fewer than x' means x - 4: the words come in reverse order" });
           distractors.push({ text: "x + 4", reason: "Wrong operation: used addition instead of subtraction" });
           distractors.push({ text: "4x", reason: "Wrong operation: used multiplication instead of subtraction" });
         } else if (row.phrase.includes("decreased by")) {
@@ -657,7 +660,7 @@ export function generateWorkedModelCards(pages: PdfPageWithLayout[]): LessonGene
     reviewStatus: "verified",
     generatorType: "worked_model_card",
     templateType: "model_answer_card",
-    isGradable: true,
+    isGradable: false,
   }));
 }
 
@@ -710,7 +713,7 @@ export function generateKeywordOperationCards(pages: PdfPageWithLayout[]): Lesso
     reviewStatus: "verified",
     generatorType: "keyword_operation_card",
     templateType: "active_recall_flashcard",
-    isGradable: true,
+    isGradable: false,
   }));
 }
 
@@ -861,6 +864,9 @@ export function generateLessonMaterial(
       workedModelCard: workedModelCards.length,
       keywordOperationCard: keywordCards.length,
       exerciseBlankPrompt: exercisePrompts.length,
+      gradedQuestionsTotal: phraseMcqs.length + incorrectVsCorrectMcqs.length,
+      studyCardsTotal: workedModelCards.length + keywordCards.length,
+      promptsTotal: exercisePrompts.length,
       total: allItems.length,
     },
     countsByFamily,
