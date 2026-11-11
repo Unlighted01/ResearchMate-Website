@@ -237,10 +237,8 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
 
   if (checkingAuth) {
     return (
-      <div
-        className={`min-h-screen flex items-center justify-center ${authBackgroundClass}`}
-      >
-        <div className="w-8 h-8 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -248,22 +246,21 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
   // Forgot Password View
   if (showForgotPassword) {
     return (
-      <div className="theme-page min-h-screen flex items-center justify-center px-4 relative">
-        <div className={`fixed inset-0 z-0 ${authBackgroundClass}`} />
-        <div className="w-full max-w-sm">
+      <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 relative">
+        <div className="relative z-10 w-full max-w-sm">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
               <Mail className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
               Reset Password
             </h1>
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
               Enter your email to receive a reset link
             </p>
           </div>
 
-          <div className="theme-surface bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-xl shadow-slate-200/50 dark:shadow-black/50 border border-slate-200/80 dark:border-slate-800">
             <form onSubmit={handleForgotPassword} className="space-y-4">
               <Input
                 type="email"
@@ -275,7 +272,7 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
               />
               <button
                 type="submit"
-                className="theme-btn theme-btn-primary w-full py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-xl transition-all active:scale-[0.98]"
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition-all active:scale-[0.98] shadow-sm shadow-indigo-600/20 cursor-pointer"
               >
                 Send Reset Link
               </button>
@@ -284,7 +281,7 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
 
           <button
             onClick={() => setShowForgotPassword(false)}
-            className="flex items-center justify-center gap-2 w-full mt-6 text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
+            className="flex items-center justify-center gap-2 w-full mt-6 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Sign In
@@ -296,38 +293,37 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
 
   // Main Login View
   return (
-    <div className="theme-page min-h-screen flex items-center justify-center px-4 relative">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 relative">
       {/* OAuth Loading Overlay */}
       {oauthLoading && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
-          <div className="theme-surface bg-white dark:bg-[#1C1C1E] rounded-2xl p-8 shadow-2xl text-center max-w-sm mx-4">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 shadow-2xl text-center max-w-sm w-full border border-slate-200 dark:border-slate-800">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
               {oauthLoading === "google" ? <GoogleIcon /> : <GitHubIcon />}
             </div>
-            <div className="w-8 h-8 border-3 border-[#007AFF] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Signing in with {oauthLoading === "google" ? "Google" : "GitHub"}
-              ...
+            <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2 font-sans">
+              Signing in with {oauthLoading === "google" ? "Google" : "GitHub"}...
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
               Complete sign-in in the popup window
             </p>
             <button
               onClick={() => setOauthLoading(null)}
-              className="text-sm text-[#007AFF] hover:text-[#0066DD] font-medium"
+              className="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 font-medium cursor-pointer"
             >
               Cancel
             </button>
           </div>
         </div>
       )}
-      <div className={`fixed inset-0 z-0 ${authBackgroundClass}`} />
-      <div className="w-full max-w-sm">
+
+      <div className="relative z-10 w-full max-w-sm">
         {/* Back Link */}
         <div className="mb-4 text-left">
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#007AFF] transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Home</span>
@@ -339,164 +335,162 @@ const LoginPage: React.FC<LoginProps> = ({ useToast }) => {
           <Link to="/" className="inline-block mb-4 group">
             <ResearchMateLogo size={64} />
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 font-sans">
             Welcome back
           </h1>
-          <p className="text-gray-500 dark:text-gray-400">
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
             Sign in to continue to ResearchMate
           </p>
         </div>
 
         {/* Card */}
-        <div className="theme-surface bg-white dark:bg-[#1C1C1E] rounded-2xl p-6 shadow-xl shadow-gray-200/50 dark:shadow-black/50 border border-gray-200/50 dark:border-gray-800/50">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-7 shadow-xl shadow-slate-200/50 dark:shadow-black/50 border border-slate-200/80 dark:border-slate-800">
           {/* OAuth Buttons */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             <button
               onClick={() => handleOAuthLogin("google")}
               disabled={loading}
-              className="theme-btn theme-btn-secondary flex items-center justify-center gap-2 py-3 bg-gray-100 dark:bg-[#2C2C2E] hover:bg-gray-200 dark:hover:bg-[#3A3A3C] rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-all border border-slate-200/60 dark:border-slate-700/60 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
             >
               <GoogleIcon />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Google
-              </span>
+              <span className="text-sm font-medium">Google</span>
             </button>
             <button
               onClick={() => handleOAuthLogin("github")}
               disabled={loading}
-              className="theme-btn theme-btn-secondary flex items-center justify-center gap-2 py-3 bg-gray-100 dark:bg-[#2C2C2E] hover:bg-gray-200 dark:hover:bg-[#3A3A3C] rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-all border border-slate-200/60 dark:border-slate-700/60 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
             >
               <GitHubIcon />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                GitHub
-              </span>
+              <span className="text-sm font-medium">GitHub</span>
             </button>
           </div>
 
           {/* Divider */}
           <div className="relative flex items-center my-6">
-            <div className="flex-grow h-px bg-gray-200 dark:bg-gray-700" />
-            <span className="flex-shrink mx-4 text-xs text-gray-400 uppercase">
+            <div className="flex-grow h-px bg-slate-200 dark:bg-slate-800" />
+            <span className="flex-shrink mx-4 text-xs text-slate-400 uppercase tracking-wider font-medium">
               or
             </span>
-            <div className="flex-grow h-px bg-gray-200 dark:bg-gray-700" />
+            <div className="flex-grow h-px bg-slate-200 dark:bg-slate-800" />
           </div>
 
           {/* Form */}
           <div className="mb-4">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
               Or sign in with Email
             </h3>
             <form onSubmit={handleLogin} className="space-y-4">
-            <Input
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              icon={<Mail className="w-5 h-5" />}
-            />
-            <div>
               <Input
-                type={showPassword ? "text" : "password"}
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                type="email"
+                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
-                icon={<Lock className="w-5 h-5" />}
-                rightElement={
+                icon={<Mail className="w-5 h-5" />}
+              />
+              <div>
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  icon={<Lock className="w-5 h-5" />}
+                  rightElement={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="p-1 hover:text-slate-600 dark:hover:text-slate-200 transition-colors text-slate-400"
+                      tabIndex={-1}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-5 h-5" />
+                      ) : (
+                        <Eye className="w-5 h-5" />
+                      )}
+                    </button>
+                  }
+                />
+                <div className="text-right">
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="p-1 hover:text-gray-600 dark:hover:text-gray-200 transition-colors text-gray-400"
-                    tabIndex={-1}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    onClick={() => setShowForgotPassword(true)}
+                    className="text-xs text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 mt-2 transition-colors cursor-pointer"
                   >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
+                    Forgot password?
                   </button>
-                }
-              />
-              <button
-                type="button"
-                onClick={() => setShowForgotPassword(true)}
-                className="text-sm text-[#007AFF] hover:text-[#0066DD] mt-2 transition-colors"
-              >
-                Forgot password?
-              </button>
-            </div>
-
-            {/* Remember Me */}
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded-md peer-checked:border-[#007AFF] peer-checked:bg-[#007AFF] transition-colors" />
-                <svg
-                  className="absolute top-0.5 left-0.5 w-4 h-4 text-white opacity-0 peer-checked:opacity-100 transition-opacity"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={3}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
+                </div>
               </div>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                Keep me signed in
-              </span>
-            </label>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="theme-btn theme-btn-primary w-full py-3 bg-[#007AFF] hover:bg-[#0066DD] text-white font-medium rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                "Sign In"
-              )}
-            </button>
-          </form>
-        </div>
+              {/* Remember Me */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-5 h-5 border-2 border-slate-300 dark:border-slate-600 rounded-md peer-checked:border-indigo-600 peer-checked:bg-indigo-600 transition-colors" />
+                  <svg
+                    className="absolute top-0.5 left-0.5 w-4 h-4 text-white opacity-0 peer-checked:opacity-100 transition-opacity"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={3}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </div>
+                <span className="text-xs text-slate-600 dark:text-slate-400">
+                  Keep me signed in
+                </span>
+              </label>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-medium rounded-xl transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center cursor-pointer"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  "Sign In"
+                )}
+              </button>
+            </form>
+          </div>
 
           {/* Guest Mode */}
-          <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
+          <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
             <button
               onClick={() => {
                 localStorage.setItem("rm_guest_mode", "true");
                 showToast("Entering Guest Mode...", "info");
                 navigate("/app/dashboard");
               }}
-              className="w-full py-3 px-4 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 font-medium rounded-xl transition-all border border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-4 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium text-xs rounded-xl transition-all border border-slate-200/80 dark:border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Continue as Guest</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
-            <p className="text-center mt-3 text-[10px] text-gray-400 uppercase tracking-widest">
+            <p className="text-center mt-2.5 text-[10px] text-slate-400 uppercase tracking-widest">
               No account required
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <p className="text-center mt-6 text-sm text-gray-500">
+        <p className="text-center mt-6 text-sm text-slate-500">
           Don't have an account?{" "}
           <Link
             to="/signup"
-            className="text-[#007AFF] hover:text-[#0066DD] font-medium transition-colors"
+            className="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 font-medium transition-colors"
           >
             Sign up
           </Link>

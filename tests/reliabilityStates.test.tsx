@@ -12,6 +12,8 @@ import {
   getExamById,
   generateUUID,
   StoredExam,
+  backfillLegacyExamSeedRecord,
+  backfillLegacyExams,
 } from "../src/services/examService";
 import {
   getSyncStatus,
@@ -28,6 +30,7 @@ import {
   ExamSeedRecord,
   getExamRecord,
   getExamRecordBySeed,
+  rebuildExamFromSeedRecord,
 } from "../src/services/examSeedService";
 import { filterEnemyItems } from "../src/services/distractorQualityService";
 import MockExamEngine from "../src/components/App/ReviewCompanion/MockExamEngine";
@@ -729,6 +732,190 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
       selectSpy.mockRestore();
       authSpy.mockRestore();
       sessionSpy.mockRestore();
+    });
+
+    it("rebuilding an exam from seed_record and original bank questions reproduces stored questions, choice order and answer key exactly", () => {
+      const bankQuestions = [
+        {
+          id: "q-math-1",
+          question: "What is 2 + 2?",
+          options: ["1", "4", "5", "6"],
+          correctIndex: 1, // '4'
+          explanation: "Basic addition",
+          topicTag: "Arithmetic",
+        },
+        {
+          id: "q-math-2",
+          question: "What is the square root of 81?",
+          options: ["7", "8", "9", "10"],
+          correctIndex: 2, // '9'
+          explanation: "9 * 9 = 81",
+          topicTag: "Algebra",
+        },
+        {
+          id: "q-math-3",
+          question: "Which number is prime?",
+          options: ["4", "6", "8", "11"],
+          correctIndex: 3, // '11'
+          explanation: "11 has only 1 and itself as factors",
+          topicTag: "Number Theory",
+        },
+      ];
+
+      const { examRecord, orderedQuestions } = createSeededExam(
+        bankQuestions,
+        { totalQuestions: 3, choicesPerItem: 4 },
+        "REBUILD-DETERMINISTIC-SEED",
+        "exam-rebuild-uuid"
+      );
+
+      // Reconstruct questions using rebuildExamFromSeedRecord
+      const rebuiltQuestions = rebuildExamFromSeedRecord(bankQuestions, examRecord);
+
+      expect(rebuiltQuestions).toHaveLength(orderedQuestions.length);
+
+      for (let i = 0; i < orderedQuestions.length; i++) {
+        expect(rebuiltQuestions[i].id).toBe(orderedQuestions[i].id);
+        expect(rebuiltQuestions[i].question).toBe(orderedQuestions[i].question);
+        expect(rebuiltQuestions[i].options).toEqual(orderedQuestions[i].options);
+        expect(rebuiltQuestions[i].correctIndex).toBe(orderedQuestions[i].correctIndex);
+      }
+
+      // Reconstructed answer key must exactly match the stored seed record's answer key
+      const rebuiltKey = rebuiltQuestions.map((q) => q.correctIndex);
+      expect(rebuiltKey).toEqual(examRecord.answerKey);
+    });
+
+    it("calling saveExam with already-assembled questions plus their seed_record does not shuffle again", async () => {
+      const bankQuestions = [
+        {
+          id: "q-chem-1",
+          question: "What is the pH of pure water at 25C?",
+          options: ["5", "6", "7", "8"],
+          correctIndex: 2, // '7'
+          explanation: "Neutral pH is 7",
+          topicTag: "Chemistry",
+        },
+        {
+          id: "q-chem-2",
+          question: "Which gas is most abundant in Earth's atmosphere?",
+          options: ["Oxygen", "Nitrogen", "Carbon Dioxide", "Argon"],
+          correctIndex: 1, // 'Nitrogen'
+          explanation: "Nitrogen is ~78%",
+          topicTag: "Chemistry",
+        },
+      ];
+
+      const { examRecord, orderedQuestions } = createSeededExam(
+        bankQuestions,
+        { totalQuestions: 2, choicesPerItem: 4 },
+        "ASSEMBLE-NO-RESHUFFLE-SEED",
+        "exam-assembled-uuid"
+      );
+
+      // Save exam passing already-assembled questions AND seed_record
+      const saved = await saveExam({
+        id: "exam-assembled-uuid",
+        title: "Pre-Assembled Exam",
+        questions: orderedQuestions,
+        seed: examRecord.seed,
+        seed_record: examRecord,
+      });
+
+      // Assert question sequence, choice order, and correct indices remain IDENTICAL (no second shuffle)
+      expect(saved.questions).toHaveLength(orderedQuestions.length);
+      for (let i = 0; i < orderedQuestions.length; i++) {
+        expect(saved.questions[i].id).toBe(orderedQuestions[i].id);
+        expect(saved.questions[i].question).toBe(orderedQuestions[i].question);
+        expect(saved.questions[i].options).toEqual(orderedQuestions[i].options);
+        expect(saved.questions[i].correctIndex).toBe(orderedQuestions[i].correctIndex);
+      }
+
+      expect(saved.seed_record).toEqual(examRecord);
+      expect(saved.seed).toBe(examRecord.seed);
+    });
+
+    it("legacy exams: backfillLegacyExamSeedRecord builds identity seed record and is safe to run twice (idempotent)", async () => {
+      const legacyExamId = generateUUID();
+      const legacyExam: StoredExam = {
+        id: legacyExamId,
+        title: "Legacy Exam Saved Prior to Seed Records",
+        seed: "", // Empty seed in legacy format
+        seed_record: undefined, // Missing seed_record in legacy format
+        source_item_ids: [],
+        config: {
+          difficulty: "mixed",
+          timedMode: false,
+          benchmarkScore: 80,
+          sections: [{ name: "Old Section", questionCount: 2, mode: "grounded" }],
+        },
+        questions: [
+          {
+            id: "legacy-q1",
+            question: "Legacy question 1?",
+            options: ["Alpha", "Beta", "Gamma", "Delta"],
+            correctIndex: 1, // Beta
+            explanation: "Legacy explanation 1",
+            topicTag: "Legacy",
+          },
+          {
+            id: "legacy-q2",
+            question: "Legacy question 2?",
+            options: ["Red", "Green", "Blue", "Yellow"],
+            correctIndex: 2, // Blue
+            explanation: "Legacy explanation 2",
+            topicTag: "Legacy",
+          },
+        ],
+        version: 1,
+        visibility: "private",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+      };
+
+      // Run 1: First backfill pass
+      const pass1 = backfillLegacyExamSeedRecord(legacyExam);
+      expect(pass1.backfilled).toBe(true);
+      expect(pass1.exam.seed_record).toBeDefined();
+      expect(pass1.exam.seed_record?.isLegacy).toBe(true);
+      expect(pass1.exam.seed_record?.formatVersion).toBe(1);
+      expect(pass1.exam.seed).toContain("LEGACY-");
+      expect(pass1.exam.seed_record?.orderedQuestionIds).toEqual(["legacy-q1", "legacy-q2"]);
+
+      // Identity permutations verify choice order matches stored question options exactly
+      expect(pass1.exam.seed_record?.permutations["legacy-q1"]).toEqual({
+        questionId: "legacy-q1",
+        choiceOrder: [0, 1, 2, 3],
+        originalCorrectIndex: 1,
+        newCorrectIndex: 1,
+      });
+      expect(pass1.exam.seed_record?.permutations["legacy-q2"]).toEqual({
+        questionId: "legacy-q2",
+        choiceOrder: [0, 1, 2, 3],
+        originalCorrectIndex: 2,
+        newCorrectIndex: 2,
+      });
+      expect(pass1.exam.seed_record?.answerKey).toEqual([1, 2]);
+
+      // Seed record is retrievable via getExamRecord for OMR print & scanning
+      const cachedRecord = getExamRecord(legacyExamId);
+      expect(cachedRecord).not.toBeNull();
+      expect(cachedRecord?.answerKey).toEqual([1, 2]);
+
+      // Run 2: Second backfill pass (Idempotent test - safe to run twice)
+      const pass2 = backfillLegacyExamSeedRecord(pass1.exam);
+      expect(pass2.backfilled).toBe(false);
+      expect(pass2.exam).toEqual(pass1.exam);
+
+      // Batch backfill test across local exams
+      saveLocalExams([legacyExam]);
+      const { backfilledCount, updatedExams } = backfillLegacyExams();
+      expect(backfilledCount).toBe(1);
+      expect(updatedExams[0].seed_record?.isLegacy).toBe(true);
+
+      // Running batch backfill a second time backfills 0 rows (idempotent)
+      const pass2Batch = backfillLegacyExams();
+      expect(pass2Batch.backfilledCount).toBe(0);
     });
   });
 });

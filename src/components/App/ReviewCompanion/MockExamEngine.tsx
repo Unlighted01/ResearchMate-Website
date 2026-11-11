@@ -53,7 +53,7 @@ import {
   getAllExams,
   getExamById,
   deleteExam,
-  ExamRecord as FullExamRecord,
+  StoredExam,
 } from "../../../services/examService";
 import { recordExamAttempt } from "../../../services/examReadinessService";
 import AcademicMathView from "../../shared/AcademicMathView";
@@ -64,7 +64,7 @@ import {
   generateSeedCode,
   getExamRecord,
   getExamRecordBySeed,
-  ExamRecord,
+  ExamSeedRecord,
 } from "../../../services/examSeedService";
 import {
   updateQuestionStatus,
@@ -153,7 +153,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   const [viewMode, setViewMode] = useState<"stepper" | "list">("stepper");
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
   const [showSavedExamsModal, setShowSavedExamsModal] = useState(false);
-  const [savedExams, setSavedExams] = useState<FullExamRecord[]>([]);
+  const [savedExams, setSavedExams] = useState<StoredExam[]>([]);
 
   // Modals State
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -222,7 +222,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   const [activeExamId, setActiveExamId] = useState<string>(() => generateUUID());
   const [activeSeed, setActiveSeed] = useState<string>(() => generateSeedCode("SEED"));
   const [inputSeed, setInputSeed] = useState<string>("");
-  const [currentExamRecord, setCurrentExamRecord] = useState<ExamRecord | null>(null);
+  const [currentExamRecord, setCurrentExamRecord] = useState<ExamSeedRecord | null>(null);
   const [notFoundExamId, setNotFoundExamId] = useState<string | null>(null);
   const [dropNotice, setDropNotice] = useState<{ droppedCount: number; droppedReasons: string[] } | null>(null);
 

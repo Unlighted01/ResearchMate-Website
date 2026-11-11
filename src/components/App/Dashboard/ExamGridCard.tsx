@@ -6,10 +6,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Award, Play, Trash2, Calendar, FileText, CheckCircle2 } from "lucide-react";
-import { ExamRecord } from "../../../services/examService";
+import { StoredExam } from "../../../services/examService";
 
 interface ExamGridCardProps {
-  exam: ExamRecord;
+  exam: StoredExam;
   index: number;
   onDelete?: (id: string, e: React.MouseEvent) => void;
 }
