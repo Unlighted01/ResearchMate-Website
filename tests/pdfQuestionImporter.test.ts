@@ -451,4 +451,53 @@ Answers and Explanations
     expect(parsed[2].options[2]).toBe("Choice Three");
     expect(parsed[2].correctLetter).toBe("c");
   });
+
+  it("preserves questions when 'Introduction' or 'Contents' appears mid-book as a chapter or section title", () => {
+    const midBookDoc = `
+Chapter 1: Foundational Genetics
+1. What is the fundamental unit of heredity?
+a. Protein
+b. Gene
+c. Lipid
+d. Carbohydrate
+
+Answers and Explanations
+1. b. The gene is the basic physical and functional unit of heredity.
+
+Chapter 2: Introduction to Molecular Biology
+2. Which organelle is known as the powerhouse of the cell?
+a. Nucleus
+b. Mitochondria
+c. Ribosome
+d. Endoplasmic reticulum
+
+Answers and Explanations
+2. b. Mitochondria generate most of the chemical energy needed by the cell.
+
+Chapter 3: The Contents of a Cell
+3. What is the gel-like fluid that fills the cell called?
+a. Cytoplasm
+b. Nucleoplasm
+c. Plasma
+d. Vacuole
+
+Answers and Explanations
+3. a. Cytoplasm is the gel-like fluid inside the cell.
+    `;
+
+    const parsed = parseTwoPassQuestionsAndAnswers(midBookDoc);
+    expect(parsed.length).toBe(3);
+
+    expect(parsed[0].number).toBe(1);
+    expect(parsed[0].chapter).toBe("Chapter 1: Foundational Genetics");
+    expect(parsed[0].correctLetter).toBe("b");
+
+    expect(parsed[1].number).toBe(2);
+    expect(parsed[1].chapter).toBe("Chapter 2: Introduction to Molecular Biology");
+    expect(parsed[1].correctLetter).toBe("b");
+
+    expect(parsed[2].number).toBe(3);
+    expect(parsed[2].chapter).toBe("Chapter 3: The Contents of a Cell");
+    expect(parsed[2].correctLetter).toBe("a");
+  });
 });

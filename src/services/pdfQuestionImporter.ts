@@ -186,8 +186,20 @@ export const PROFILE_CONDENSED_GRID: ParserProfile = {
   endMarkers: [/^(?:Answers|Answer\s+Key)\b/i],
 };
 
+export const PROFILE_PRACTICE_DRILL: ParserProfile = {
+  id: "practice_drill",
+  name: "Practice Drill Book (LearningExpress Style)",
+  description: "Numbered practice drill sets (Practice 1 to Practice N) with end-of-chapter answer keys",
+  headingPattern: /^(?:(?:Practice|Review|Exercise|Unit|Lesson|Chapter|Section|Set)\s+(\d+|[IVXLCDM]+|[A-Z]\b)|(\d{1,2})\s+(?:[A-Za-z\s]+)?(?:Practice|Review|Test))\b[^\n]*/i,
+  keyLocation: "end_of_chapter",
+  choiceStyle: "letter_dot",
+  expectedChoicesPerItem: 4,
+  endMarkers: [/^(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/i],
+};
+
 export const SAVED_PARSER_PROFILES: Record<string, ParserProfile> = {
   standard_two_pass: PROFILE_STANDARD_TWO_PASS,
+  practice_drill: PROFILE_PRACTICE_DRILL,
   free_response: PROFILE_FREE_RESPONSE,
   "1001_math_problems": PROFILE_1001_MATH,
   inline_answer_key: PROFILE_INLINE_KEYS,
@@ -746,6 +758,13 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
     selectedProfile = { ...PROFILE_PAREN_5_CHOICE, keyLocation: detectedKeyLocation };
   } else if (detectedHeading.includes("Set")) {
     selectedProfile = { ...PROFILE_1001_MATH, choiceStyle: detectedChoiceStyle };
+  } else if (detectedHeading.includes("Practice")) {
+    selectedProfile = {
+      ...PROFILE_PRACTICE_DRILL,
+      choiceStyle: detectedChoiceStyle,
+      keyLocation: detectedKeyLocation,
+      expectedChoicesPerItem,
+    };
   } else {
     selectedProfile = {
       ...PROFILE_STANDARD_TWO_PASS,
@@ -899,7 +918,7 @@ export function splitStemAndOptions(
         .replace(/(?:\n|^|\s{2,})\s*(?:Section\s+\d+|Chapter\s+\d+|Set\s+\d+|Answers\b)[\s\S]*/i, "")
         .replace(/(?:[\s\n]+[A-F](?:[\s\t]+[A-F])*)+\s*$/g, "")
         .replace(/(?:\n|^)\s*[-–—\s]+[A-Za-z\s]{3,}[-–—\s]+\d{1,4}\s*$/g, "")
-        .replace(/(?:\n|^|\s{2,})\s*501\s+Word\s+Analogy\s+Questions[\s\S]*/i, "")
+        .replace(/(?:\n|^|\s{2,})\s*(?:\d{3,4}\s+[A-Za-z\s]+(?:Questions|Problems|Exercises))\b[\s\S]*/i, "")
         .replace(/\n\s*[\d\s]+$/g, "")
         .replace(/(?:\s+\d){2,4}\s*$/g, "")
         .trim();
@@ -1111,14 +1130,20 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         const pageNum = typeof p === "string" ? idx + 1 : p.pageNumber;
         let pageContent = typeof p === "string" ? p : p.text || "";
         if (typeof p !== "string" && p.items && p.items.length > 0) {
-          const hasBannerKeyword = p.items.some((it) => /\b(?:Practice|Analogy)\b/i.test(it.str) && it.y > 450);
-          if (hasBannerKeyword) {
+          const bannerKeywordItems = p.items.filter(
+            (it) =>
+              it.str.length < 35 &&
+              !/[,\.;]$/.test(it.str.trim()) &&
+              !it.str.includes("::") &&
+              !it.str.includes("______") &&
+              !it.str.includes("?") &&
+              /\b(?:Practice|Review|Chapter|Section|Unit|Lesson|Set)\b/i.test(it.str) &&
+              it.y > 450
+          );
+          if (bannerKeywordItems.length > 0) {
+            const bannerThreshold = Math.min(...bannerKeywordItems.map((it) => it.y)) - 5;
             const bannerItems = p.items.filter(
-              (it) =>
-                it.y > 450 &&
-                (/\b(?:Practice|Analogy|Targeted|Challenging|Chapter|Section)\b/i.test(it.str) ||
-                  (/^\d{1,2}$/.test(it.str.trim()) && it.y > 500) ||
-                  (it.str.trim() === "" && it.y > 500))
+              (it) => it.y >= bannerThreshold && !it.str.includes("::") && !it.str.includes("______") && !it.str.includes("?")
             );
             const bodyItems = p.items.filter((it) => !bannerItems.includes(it));
             const bodyTextItems = bodyItems.filter((it) => it.str.trim().length > 0);
@@ -1385,8 +1410,8 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       continue;
     }
 
-    // Track Table of Contents / Front Matter section
-    if (/(?:^|\s)(?:TABLE OF CONTENTS|CONTENTS|Library of Congress|Cataloging-in-Publication)\b/i.test(trimmed)) {
+    // Track Table of Contents / Front Matter section (only before any chapters have started)
+    if (!hasExplicitChapters && currentPage <= 15 && /(?:^|\s)(?:TABLE OF CONTENTS|CONTENTS|Library of Congress|Cataloging-in-Publication)\b/i.test(trimmed)) {
       inFrontMatter = true;
       if (/^(?:TABLE OF CONTENTS|CONTENTS)\b/i.test(trimmed)) {
         inContents = true;
@@ -1404,8 +1429,8 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       continue;
     }
 
-    // Track Introduction section
-    if (!hasExplicitChapters && /^(?:Introduction|Preface|About the Authors?)\b/i.test(trimmed)) {
+    // Track Introduction section (only in front matter before first chapter)
+    if (!hasExplicitChapters && currentPage <= 15 && /^(?:Introduction|Preface|About the Authors?)\b/i.test(trimmed)) {
       inIntroduction = true;
       inFrontMatter = true;
       continue;
@@ -1446,7 +1471,14 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
           lookaheadIdx++;
         }
 
-        if (isPracticeHeading && titleParts.length > 0) {
+        const isSentenceText = titleParts.some(
+          (p) =>
+            /[,\.;]/.test(p) ||
+            /\b(?:of his|so he|to go|the test|was|were|which|has|have|had|is|are|he|she|it|they)\b/i.test(p) ||
+            p.length > 50
+        );
+
+        if (isPracticeHeading && titleParts.length > 0 && !isSentenceText) {
           flush();
           if (currentRunMap.size > 0) {
             questionRuns.push(currentRunMap);
@@ -1521,7 +1553,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     // Check D: Detect chapter headings using profile.headingPattern or general Chapter/Section line
     const isChHeading =
       profile.headingPattern.test(trimmed) ||
-      /^(?:CHAPTER|SECTION)\s+[-—–\w\s]+/i.test(trimmed) ||
+      /^(?:CHAPTER|SECTION)\s+(?:(?:\d+|[IVXLCDM]+|[A-Z]\b)[^\n]*|[-—–]\s*[^\n]+)/i.test(trimmed) ||
       /^PART\s+(?:\d+|[IVXLCDM]+|[A-Z]\b|[-—–])/i.test(trimmed);
 
     if (isChHeading) {
@@ -1534,7 +1566,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       if (!isSentence) {
         const chMatch =
           trimmed.match(profile.headingPattern) ||
-          trimmed.match(/^(?:CHAPTER|SECTION)\s+[-—–\w\s]+/i) ||
+          trimmed.match(/^(?:CHAPTER|SECTION)\s+(?:(?:\d+|[IVXLCDM]+|[A-Z]\b)[^\n]*|[-—–]\s*[^\n]+)/i) ||
           trimmed.match(/^PART\s+(?:\d+|[IVXLCDM]+|[A-Z]\b|[-—–])/i);
 
         if (chMatch) {

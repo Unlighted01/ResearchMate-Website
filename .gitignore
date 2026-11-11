@@ -48,6 +48,12 @@ reports/
 CLAUDE.md
 CLAUDE_CODE_SETUP.md
 api/AGENTS.md
+
+# Commercial / copyrighted PDFs (never commit)
+tests/fixtures/*.pdf
+!tests/fixtures/Philippines_Code_of_Conduct_and_Ethical_Standards_for_Public_Officials_1989.pdf
+tests/fixtures/*.json
+!tests/fixtures/layouts/*.json
 src/components/AGENTS.md
 src/services/AGENTS.md
 

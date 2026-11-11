@@ -95,18 +95,26 @@ export async function extractAllPagesWithLayout(
       // Check if top-of-page banner/header items were emitted late in the content stream.
       // In many published books (e.g. LearningExpress), the top chapter banner is emitted at the end of the stream after the body.
       let pageRawText = "";
-      const hasBannerKeyword = items.some((it) => /\b(?:Practice|Analogy)\b/i.test(it.str) && it.y > 450);
-      if (hasBannerKeyword) {
+      const bannerKeywordItems = items.filter(
+        (it) =>
+          it.str.length < 35 &&
+          !/[,\.;]$/.test(it.str.trim()) &&
+          !it.str.includes("::") &&
+          !it.str.includes("______") &&
+          !it.str.includes("?") &&
+          /\b(?:Practice|Review|Chapter|Section|Unit|Lesson|Set)\b/i.test(it.str) &&
+          it.y > 450
+      );
+      if (bannerKeywordItems.length > 0) {
+        const bannerThreshold = Math.min(...bannerKeywordItems.map((it) => it.y)) - 5;
         const bannerItems = items.filter(
-          (it) =>
-            it.y > 450 &&
-            (/\b(?:Practice|Analogy|Targeted|Challenging|Chapter|Section)\b/i.test(it.str) ||
-              (/^\d{1,2}$/.test(it.str.trim()) && it.y > 500))
+          (it) => it.y >= bannerThreshold && !it.str.includes("::") && !it.str.includes("______") && !it.str.includes("?")
         );
         const bodyItems = items.filter((it) => !bannerItems.includes(it));
-        if (bannerItems.length > 0 && bodyItems.length > 0) {
+        const bodyTextItems = bodyItems.filter((it) => it.str.trim().length > 0);
+        if (bannerItems.length > 0 && bodyTextItems.length > 0) {
           const minBannerY = Math.min(...bannerItems.map((it) => it.y));
-          const maxBodyY = Math.max(...bodyItems.map((it) => it.y));
+          const maxBodyY = Math.max(...bodyTextItems.map((it) => it.y));
 
           if (minBannerY - maxBodyY > 15) {
             const bannerSorted = [...bannerItems].sort((a, b) => {
