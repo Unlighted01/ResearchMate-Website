@@ -44,6 +44,7 @@ export interface Question {
   correctIndex: number; // 0, 1, 2, 3
   explanation: string;
   topicTag: string;
+  sourceQuote?: string;
   reviewStatus?: "verified" | "needs_review" | "flagged";
   suspiciousReasons?: string[];
 }
@@ -639,7 +640,7 @@ export async function getExamAttempts(examId?: string): Promise<ExamAttemptRecor
 // ============================================
 
 export async function saveFlashcardDeck(
-  deckData: Partial<FlashcardDeckRecord> & { title: string; cards: Flashcard[] }
+  deckData: Partial<FlashcardDeckRecord> & { title: string; cards: Flashcard[]; batch_id?: string }
 ): Promise<WriteSyncResult<FlashcardDeckRecord>> {
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
@@ -656,7 +657,7 @@ export async function saveFlashcardDeck(
     description: deckData.description || "",
     source_item_ids: deckData.source_item_ids || [],
     source_document_title: deckData.source_document_title || "",
-    import_batch_id: deckData.import_batch_id || "",
+    import_batch_id: deckData.import_batch_id || deckData.batch_id || "",
     cards: deckData.cards,
     version: (deckData.version || 0) + 1,
     visibility: deckData.visibility || "private",
@@ -698,6 +699,7 @@ export async function saveFlashcardDeck(
         cards: record.cards,
         version: record.version,
         visibility: record.visibility,
+        created_at: record.created_at || now,
         updated_at: now,
       })
       .select()
@@ -1017,7 +1019,8 @@ REQUIREMENTS:
    - Do NOT leak content words or key terms from the correct answer into the question stem.
 4. In "explanation", provide a step-by-step academic derivation AND a one-line reason why each distractor is incorrect.
 5. Provide a concise topicTag (e.g. "${slice.sectionName}").
-6. CRITICAL: Output ONLY a valid raw JSON array of objects. Do NOT include markdown introduction, reasoning text, or commentary outside the JSON array.
+6. Provide an exact verbatim "sourceQuote" from the context text that directly supports the correct answer.
+7. CRITICAL: Output ONLY a valid raw JSON array of objects. Do NOT include markdown introduction, reasoning text, or commentary outside the JSON array.
 
 [
   {
@@ -1025,6 +1028,7 @@ REQUIREMENTS:
     "options": ["Option A", "Option B", "Option C", "Option D"],
     "correctIndex": 0,
     "explanation": "Step-by-step derivation or rationale.",
+    "sourceQuote": "Exact verbatim quote from the text above",
     "topicTag": "${slice.sectionName}"
   }
 ]`;
@@ -1066,8 +1070,20 @@ REQUIREMENTS:
             // AI-generated questions stay needs_review by default until verified
             const reviewStatus: "needs_review" = "needs_review";
             const suspiciousReasons = !lint.passed
-              ? lint.reasons
+              ? [...lint.reasons]
               : ["AI-generated question: pending user review and verification"];
+
+            // Grounding source-quote check
+            const rawQuote = (q.sourceQuote || "").trim();
+            if (slice.mode === "grounded" && contextCorpus) {
+              const normCorpus = contextCorpus.toLowerCase().replace(/\s+/g, " ");
+              const normQuote = rawQuote.toLowerCase().replace(/\s+/g, " ");
+              if (!rawQuote || rawQuote.length < 10 || !normCorpus.includes(normQuote)) {
+                suspiciousReasons.push(
+                  "Unverified grounding: source quote was not found in the grounding text chunk (potential AI hallucination)"
+                );
+              }
+            }
 
             return {
               id: generateUUID(),
@@ -1076,6 +1092,7 @@ REQUIREMENTS:
               correctIndex,
               explanation: sanitizeCurrencyAndMath(q.explanation || "Identified based on study materials."),
               topicTag: q.topicTag || slice.sectionName,
+              sourceQuote: rawQuote || undefined,
               reviewStatus,
               suspiciousReasons,
             };

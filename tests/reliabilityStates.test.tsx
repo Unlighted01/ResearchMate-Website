@@ -15,6 +15,7 @@ import {
   backfillLegacyExamSeedRecord,
   backfillLegacyExams,
 } from "../src/services/examService";
+import * as supabaseClient from "../src/services/supabaseClient";
 import {
   getSyncStatus,
   setSyncStatus,
@@ -134,6 +135,79 @@ describe("Reliability & Sync Fixes Unit and Component Tests", () => {
 
       expect(deck.syncStatus).toBe("local-only");
       expect(deck.id).toMatch(UUID_REGEX);
+    });
+
+    it("saveFlashcardDeck sends the exact expected 11 payload keys without cards_count, and maps batch_id -> import_batch_id", async () => {
+      let capturedPayload: any = null;
+      const fakeDeckRecord = {
+        id: "d4b3b2a1-0000-4000-8000-000000000001",
+        user_id: "user-123",
+        title: "Deck 1",
+        description: "Test description",
+        source_item_ids: ["a1b2c3d4-1111-4000-8000-000000000001"],
+        source_document_title: "Chapter 1 Doc",
+        import_batch_id: "batch-xyz",
+        cards: [{ id: "c1", front: "Term", back: "Def", category: "General" }],
+        version: 1,
+        visibility: "private",
+        created_at: "2026-11-11T00:00:00.000Z",
+        updated_at: "2026-11-11T00:00:00.000Z",
+      };
+
+      const fromSpy = vi.spyOn(supabase, "from").mockImplementation((table: string) => {
+        if (table === "flashcard_decks") {
+          return {
+            upsert: (payload: any) => {
+              capturedPayload = payload;
+              return {
+                select: () => ({
+                  single: async () => ({ data: { ...payload, ...fakeDeckRecord }, error: null }),
+                }),
+              };
+            },
+          } as any;
+        }
+        return {} as any;
+      });
+
+      const authSpy = vi.spyOn(supabaseClient, "isAuthenticated").mockResolvedValue(true);
+      const userSpy = vi.spyOn(supabaseClient, "getCurrentUser").mockResolvedValue({ id: "user-123" } as any);
+
+      const res = await saveFlashcardDeck({
+        id: "d4b3b2a1-0000-4000-8000-000000000001",
+        title: "Deck 1",
+        description: "Test description",
+        batch_id: "batch-xyz",
+        source_document_title: "Chapter 1 Doc",
+        source_item_ids: ["a1b2c3d4-1111-4000-8000-000000000001"],
+        cards: [{ id: "c1", front: "Term", back: "Def", category: "General" }],
+      });
+
+      expect(res.syncStatus).toBe("synced");
+      expect(capturedPayload).not.toBeNull();
+
+      const expectedKeys = [
+        "id",
+        "user_id",
+        "title",
+        "description",
+        "source_item_ids",
+        "source_document_title",
+        "import_batch_id",
+        "cards",
+        "version",
+        "visibility",
+        "created_at",
+        "updated_at",
+      ];
+      expect(Object.keys(capturedPayload).sort()).toEqual(expectedKeys.sort());
+      expect(capturedPayload.import_batch_id).toBe("batch-xyz");
+      expect((capturedPayload as any).cards_count).toBeUndefined();
+      expect((capturedPayload as any).batch_id).toBeUndefined();
+
+      fromSpy.mockRestore();
+      authSpy.mockRestore();
+      userSpy.mockRestore();
     });
 
     it("executeWithBackoff only retries transient errors (network failure, 5xx, 429) up to maxRetries", async () => {

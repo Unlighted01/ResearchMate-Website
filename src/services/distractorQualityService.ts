@@ -48,7 +48,13 @@ export const STOPWORDS = new Set([
   "your", "yours", "yourself", "yourselves",
   // Common generic exam instructions (domain nouns like "public" or "officials" are NOT excluded)
   "which", "following", "defined", "under", "term", "section", "rule", "provision", "stated", "act",
-  "refers", "means", "shall", "order"
+  "refers", "means", "shall", "order",
+  // Common measurement units and standard mathematical labels (prevents false stem-leaks on shared units)
+  "hours", "hour", "minutes", "minute", "seconds", "second", "pounds", "pound", "ounces", "ounce",
+  "feet", "foot", "inches", "inch", "yards", "yard", "miles", "mile", "meters", "meter",
+  "centimeters", "centimeter", "kilometers", "kilometer", "liters", "liter", "gallons", "gallon",
+  "grams", "gram", "kilograms", "kilogram", "degrees", "degree", "percent", "percentage",
+  "dollars", "dollar", "cents", "cent", "units", "unit"
 ]);
 
 export const NUMBER_WORD_TO_DIGIT: Record<string, number> = {
@@ -94,13 +100,26 @@ export interface DistractorLintResult {
 
 /**
  * Normalizes text for comparison (strips markdown, math wrappers, and extra whitespace).
+ * Preserves negative signs, math operators, and strips digit thousands commas.
  */
 export function normalizeOptionText(text: string): string {
   return (text || "")
     .toLowerCase()
     .replace(/\\text\{([^}]+)\}/g, "$1")
     .replace(/[$*_`~]/g, "")
-    .replace(/[^\w\s.%-]/g, " ")
+    // Normalize unicode minus, en-dash, em-dash to ascii hyphen
+    .replace(/[\u2212\u2013\u2014]/g, "-")
+    // Normalize unicode multiplication and division
+    .replace(/[×·]/g, "*")
+    .replace(/[÷]/g, "/")
+    // Remove PDF fraction delimiters \u0004, \u0005
+    .replace(/[\u0004\u0005]/g, " ")
+    // Convert vertical fractions "1\n8" or "3\n4" to "1/8"
+    .replace(/(\d+)\s*\n\s*(\d+)/g, "$1/$2")
+    // Remove comma between digits (e.g. 1,500 -> 1500)
+    .replace(/(\d),(\d)/g, "$1$2")
+    // Keep letters, digits, whitespace, period, percent, minus, and math operators
+    .replace(/[^\w\s.%+\-*/^=]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -111,16 +130,41 @@ export interface ParsedNumericOption {
 }
 
 /**
- * Parses numeric options like "15 days", "25 %", "₱5,000", "$60 km/h",
+ * Checks if an option is numeric, a number word (e.g. "zero"), or has a numeric quantity.
+ */
+export function isNumericOrNumberWord(text: string): boolean {
+  const norm = normalizeOptionText(text);
+  if (!norm) return false;
+  if (NUMBER_WORD_TO_DIGIT[norm] !== undefined) return true;
+  const num = parseNumericOption(text);
+  if (num !== null) return true;
+  return /^[\d.,\s$%/\-:+*^=]+$/.test(norm);
+}
+
+/**
+ * Parses numeric options like "15 days", "25 %", "₱5,000", "$60 km/h", "-12", "1/2",
  * or phrased numeric options like "Under 18 years of age", "Within 15 days".
  */
 export function parseNumericOption(text: string): ParsedNumericOption | null {
   const norm = normalizeOptionText(text);
 
-  // 1. Leading number: "$ 15.5", "15 days", "25 %"
-  const leadingMatch = norm.match(/^[\$€£₱]?\s*(\d+(?:\.\d+)?)\s*(.*)$/i);
+  // 1. Fractions: e.g. "1/2", "-3/4", "5/8 inches"
+  const fractionMatch = norm.match(/^([+-]?\s*\d+)\s*\/\s*(\d+)\s*(.*)$/i);
+  if (fractionMatch) {
+    const num = parseFloat(fractionMatch[1].replace(/\s+/g, ""));
+    const den = parseFloat(fractionMatch[2]);
+    if (!isNaN(num) && !isNaN(den) && den !== 0) {
+      return {
+        value: num / den,
+        unit: (fractionMatch[3] || "").trim().toLowerCase(),
+      };
+    }
+  }
+
+  // 2. Leading signed number: "$ 15.5", "-12", "15 days", "25 %", "1500 cubic inches"
+  const leadingMatch = norm.match(/^[\$€£₱]?\s*([+-]?\s*\d+(?:\.\d+)?)\s*(.*)$/i);
   if (leadingMatch) {
-    const val = parseFloat(leadingMatch[1]);
+    const val = parseFloat(leadingMatch[1].replace(/\s+/g, ""));
     if (!isNaN(val)) {
       return {
         value: val,
@@ -129,8 +173,8 @@ export function parseNumericOption(text: string): ParsedNumericOption | null {
     }
   }
 
-  // 2. Embedded numeric quantity within template: "under 18 years of age"
-  const embeddedMatch = norm.match(/^(.*?)\b(\d+(?:\.\d+)?)\b\s*(.*)$/i);
+  // 3. Embedded numeric quantity within template: "under 18 years of age"
+  const embeddedMatch = norm.match(/^(.*?)\b([+-]?\d+(?:\.\d+)?)\b\s*(.*)$/i);
   if (embeddedMatch) {
     const val = parseFloat(embeddedMatch[2]);
     if (!isNaN(val)) {
@@ -147,7 +191,7 @@ export function parseNumericOption(text: string): ParsedNumericOption | null {
 
 /**
  * Compares two options for duplicate detection.
- * If both options are numeric with distinct numbers (e.g. "15 days" vs "25 days"),
+ * If both options are numeric with distinct numbers (e.g. "15 days" vs "25 days" or "-12" vs "12"),
  * they are mathematically distinct and return 0.0 similarity.
  */
 export function compareOptionDuplicateSimilarity(optA: string, optB: string): number {
@@ -164,9 +208,37 @@ export function compareOptionDuplicateSimilarity(optA: string, optB: string): nu
     if (Math.abs(numA.value - numB.value) > 1e-6) {
       return 0.0;
     }
-    // Same number: compare units (e.g. "15 days" vs "15 working days")
+    // Same number: check if the unit remainder contains different numbers or math operators
     if (numA.unit === numB.unit) return 1.0;
+    const unitNumsA = (numA.unit.match(/\d+/g) || []).map(Number);
+    const unitNumsB = (numB.unit.match(/\d+/g) || []).map(Number);
+    if (unitNumsA.length > 0 && unitNumsB.length > 0) {
+      if (unitNumsA.length !== unitNumsB.length || unitNumsA.some((v, idx) => v !== unitNumsB[idx])) {
+        return 0.0;
+      }
+    }
+    const hasMathUnitA = /[\+\-\*\/\^\=]/.test(numA.unit);
+    const hasMathUnitB = /[\+\-\*\/\^\=]/.test(numB.unit);
+    if (hasMathUnitA || hasMathUnitB) {
+      return numA.unit === numB.unit ? 1.0 : 0.0;
+    }
     return computeStringSimilarity(numA.unit, numB.unit);
+  }
+
+  // Extract all numbers: if both options contain numbers and they differ (e.g. "1 pound 12 ounces" vs "1 pound 2 ounces")
+  const numsA = (normA.match(/[+-]?\d+(?:\.\d+)?/g) || []).map(Number);
+  const numsB = (normB.match(/[+-]?\d+(?:\.\d+)?/g) || []).map(Number);
+  if (numsA.length > 0 && numsB.length > 0) {
+    if (numsA.length !== numsB.length || numsA.some((val, idx) => Math.abs(val - numsB[idx]) > 1e-6)) {
+      return 0.0;
+    }
+  }
+
+  // If either contains mathematical expressions/operators (+, -, *, /, ^, =), check exact equality rather than string similarity
+  const hasMathA = /[\+\-\*\/\^\=]/.test(normA);
+  const hasMathB = /[\+\-\*\/\^\=]/.test(normB);
+  if (hasMathA || hasMathB) {
+    return normA === normB ? 1.0 : 0.0;
   }
 
   return computeStringSimilarity(normA, normB);
@@ -577,9 +649,9 @@ export function lintDistractorQuality(
     });
   }
 
-  // Numeric vs Text format disparity
-  const isCorrectNumeric = /^[\d.,\s$%/\-:]+$/.test(correctOpt.trim());
-  const distNumericCount = distractorOpts.filter((d) => /^[\d.,\s$%/\-:]+$/.test(d.trim())).length;
+  // Numeric vs Text format disparity (number words like "zero" are recognized)
+  const isCorrectNumeric = isNumericOrNumberWord(correctOpt.trim());
+  const distNumericCount = distractorOpts.filter((d) => isNumericOrNumberWord(d.trim())).length;
   if (!isCorrectNumeric && distNumericCount === distractorOpts.length && distractorOpts.length >= 3) {
     issues.push({
       rule: "format-outlier",

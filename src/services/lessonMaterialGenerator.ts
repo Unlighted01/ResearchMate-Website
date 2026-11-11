@@ -361,7 +361,7 @@ export function generatePhraseTableMcqs(pages: PdfPageWithLayout[]): LessonGener
           distractors.push({ text: "7 + 4", reason: "Wrong operation: used addition instead of subtraction" });
           distractors.push({ text: "7 × 4", reason: "Wrong operation: used multiplication instead of subtraction" });
         } else {
-          distractors.push({ text: "4 – 7", reason: "Reversed order of terms in difference" });
+          distractors.push({ text: "4 – 7", reason: "'the difference of 7 and 4' means 7 - 4: the first named number comes first. Writing 4 - 7 reverses the terms" });
           distractors.push({ text: "7 + 4", reason: "Wrong operation: used addition instead of subtraction" });
           distractors.push({ text: "7 ÷ 4", reason: "Wrong operation: used division instead of subtraction" });
         }
@@ -381,7 +381,7 @@ export function generatePhraseTableMcqs(pages: PdfPageWithLayout[]): LessonGener
         }
       } else if (row.family === "division") {
         if (row.phrase.includes("quotient")) {
-          distractors.push({ text: "4 ÷ 7", reason: "Reversed dividend and divisor: first named number is the dividend" });
+          distractors.push({ text: "4 ÷ 7", reason: "Reversed dividend and divisor: 'the quotient of 7 and 4' means 7 ÷ 4 (first named number is the dividend and second is the divisor). Writing 4 ÷ 7 reverses the quotient order" });
           distractors.push({ text: "7 × 4", reason: "Wrong operation: used multiplication instead of division" });
           distractors.push({ text: "7 – 4", reason: "Wrong operation: used subtraction instead of division" });
         } else if (row.phrase.includes("equal pieces")) {
@@ -403,7 +403,7 @@ export function generatePhraseTableMcqs(pages: PdfPageWithLayout[]): LessonGener
           distractors.push({ text: "4 + (n + 5)", reason: "Wrong operation: added 4 instead of multiplying by 4" });
           distractors.push({ text: "(4 + n) • 5", reason: "Incorrect grouping: added 4 and n before multiplying by 5" });
         } else {
-          distractors.push({ text: "3 – (x + 7)", reason: "Incorrect grouping: comma indicates subtracting the number first before adding seven" });
+          distractors.push({ text: "3 – (x + 7)", reason: "Extra parentheses around (x + 7): the comma indicates subtracting the number first before adding seven; grouping (x + 7) subtracts the sum instead" });
           distractors.push({ text: "(3 + x) + 7", reason: "Wrong operation: added x instead of subtracting" });
           distractors.push({ text: "(x – 3) + 7", reason: "Reversed order of subtraction within parentheses" });
         }

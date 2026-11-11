@@ -16,7 +16,7 @@ import {
   saveLocalFlashcardDecks,
   StoredExam,
 } from "./examService";
-import { setSyncStatus } from "./supabaseClient";
+import { setSyncStatus, isAuthenticated, supabase } from "./supabaseClient";
 import {
   OptionPickStats,
   recordOptionPickAndAnalyze,
@@ -59,6 +59,8 @@ export interface StoredQuestion extends Question {
   origin?: QuestionOrigin;
   questionType?: QuestionType;
   isGradable?: boolean;
+  answerKey?: string;
+  correctAnswer?: string;
   reviewStatus?: QuestionReviewStatus;
   suspiciousReasons?: string[];
   sourceQuote?: string;
@@ -391,6 +393,8 @@ export function saveQuestionsToBank(
     formatted.push({
       ...q,
       id: q.id || generateUUID(),
+      isGradable: (q as any).isGradable ?? (q as any).gradable ?? (qType !== "prompt"),
+      answerKey: (q as any).answerKey || (q as any).correctAnswer,
       subject: q.subject || defaultSubject,
       topic: q.topic || q.topicTag || "General Review",
       topicTag: q.topicTag || q.topic || "General Review",
@@ -551,29 +555,81 @@ export async function deleteImportBatch(batchId: string): Promise<{ deletedCount
     const exams = getLocalExams();
     const attempts = getLocalAttempts();
     const attemptedExamIds = new Set(attempts.map((a) => a.exam_id).filter(Boolean));
+    const isAuth = await isAuthenticated();
 
     const updatedExams: StoredExam[] = [];
     for (const exam of exams) {
-      if (exam.import_batch_id === batchId) {
-        if (attemptedExamIds.has(exam.id)) {
-          // Keep exam with attempts, but mark source as removed
-          updatedExams.push({
-            ...exam,
-            source_document_title: `[Source Removed] ${exam.source_document_title || exam.title}`,
-            import_batch_id: undefined,
-          });
-        }
-        // If not attempted, drop exam
-      } else {
+      const isLinkedToBatch = exam.import_batch_id === batchId || (exam as any).importBatchId === batchId;
+      if (!isLinkedToBatch) {
         updatedExams.push(exam);
+        continue;
+      }
+
+      // Never delete exams that contain questions from more than one batch or were assembled by the user
+      const hasQuestionsFromOtherBatches = (exam.questions || []).some(
+        (q: any) => q.importBatchId && q.importBatchId !== batchId
+      );
+      const isUserAssembled =
+        (exam as any).origin === "assembled" ||
+        (exam as any).isUserAssembled === true ||
+        hasQuestionsFromOtherBatches ||
+        (exam.questions && exam.questions.length > 0 && !exam.title.toLowerCase().includes("practice set"));
+
+      const hasAttempts = attemptedExamIds.has(exam.id);
+
+      if (hasAttempts || isUserAssembled) {
+        // Keep exam: update title and unlink import_batch_id
+        const cleanTitle = exam.title.replace(/^\[Source Removed\]\s*/i, "");
+        const updatedExam: StoredExam = {
+          ...exam,
+          title: `[Source Removed] ${cleanTitle}`,
+          source_document_title: `[Source Removed] ${exam.source_document_title || cleanTitle}`,
+          import_batch_id: undefined,
+        };
+        updatedExams.push(updatedExam);
+
+        if (isAuth) {
+          (async () => {
+            try {
+              await supabase
+                .from("exams")
+                .update({
+                  title: updatedExam.title,
+                  source_document_title: updatedExam.source_document_title,
+                  import_batch_id: null,
+                })
+                .eq("id", exam.id);
+            } catch {}
+          })();
+        }
+      } else {
+        // Only delete unattempted, purely single-batch practice sets
+        if (isAuth) {
+          (async () => {
+            try {
+              await supabase.from("exams").delete().eq("id", exam.id);
+            } catch {}
+          })();
+        }
       }
     }
     saveLocalExams(updatedExams);
 
     // Delete associated flashcard decks
     const decks = getLocalFlashcardDecks();
-    const remainingDecks = decks.filter((d) => d.import_batch_id !== batchId);
+    const remainingDecks = decks.filter(
+      (d) => d.import_batch_id !== batchId && (d as any).batch_id !== batchId
+    );
     saveLocalFlashcardDecks(remainingDecks);
+
+    if (isAuth) {
+      (async () => {
+        try {
+          await supabase.from("flashcard_decks").delete().eq("import_batch_id", batchId);
+          await supabase.from("exam_questions").delete().eq("import_batch_id", batchId);
+        } catch {}
+      })();
+    }
   } catch (err) {
     console.warn("deleteImportBatch: error updating associated exams/decks", err);
   }
@@ -797,13 +853,20 @@ export function sampleSprintQuestions(
     preferredTopic && preferredTopic !== "All Topics"
       ? { topic: preferredTopic }
       : undefined
-  ).filter(
-    (q) =>
-      q.isGradable !== false &&
-      q.questionType !== "prompt" &&
-      q.questionType !== "free_response" &&
-      (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2))
-  );
+  ).filter((q) => {
+    if (q.isGradable === false || q.questionType === "prompt") return false;
+    // Multiple-choice questions with 2+ choices
+    if (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2)) return true;
+    // Free-response items that DO have a verified key (e.g. Age Problems)
+    if (q.questionType === "free_response") {
+      return Boolean(
+        (q.explanation && q.explanation.length > 5 && !q.explanation.toLowerCase().includes("not explicitly indexed")) ||
+        (q as any).correctAnswer ||
+        (q as any).answerKey
+      );
+    }
+    return false;
+  });
 
   if (pool.length === 0) return [];
 
@@ -842,20 +905,25 @@ export function sampleSprintQuestions(
  */
 export function assembleExamFromBank(
   count: number = 20,
-  filter?: { subject?: string; topic?: string }
+  filter?: { subject?: string; topic?: string; allowFreeResponse?: boolean }
 ): {
   selectedQuestions: StoredQuestion[];
   rejectedQuestions: { item: StoredQuestion; reason: string }[];
 } {
   const verified = getVerifiedQuestions(filter);
-  const mcqs = verified.filter(
-    (q) =>
-      q.isGradable !== false &&
-      q.questionType !== "prompt" &&
-      q.questionType !== "free_response" &&
-      (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2))
-  );
-  const { selected, rejected } = filterEnemyItems(mcqs, count);
+  const eligible = verified.filter((q) => {
+    if (q.isGradable === false || q.questionType === "prompt") return false;
+    if (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2)) return true;
+    if (filter?.allowFreeResponse && q.questionType === "free_response") {
+      return Boolean(
+        (q.explanation && q.explanation.length > 5 && !q.explanation.toLowerCase().includes("not explicitly indexed")) ||
+        (q as any).correctAnswer ||
+        (q as any).answerKey
+      );
+    }
+    return false;
+  });
+  const { selected, rejected } = filterEnemyItems(eligible, count);
   return {
     selectedQuestions: selected,
     rejectedQuestions: rejected,

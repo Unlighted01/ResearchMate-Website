@@ -13,8 +13,16 @@ import {
   clearQuestionBank,
   hashNormalizedText,
   computeReviewStatus,
+  deleteImportBatch,
+  assembleExamFromBank,
 } from "../src/services/questionBankService";
-import { Question } from "../src/services/examService";
+import {
+  Question,
+  StoredExam,
+  saveLocalExams,
+  getLocalExams,
+  saveLocalAttempts,
+} from "../src/services/examService";
 
 describe("questionBankService", () => {
   beforeEach(() => {
@@ -178,5 +186,139 @@ describe("questionBankService", () => {
     expect(sprintSample.length).toBe(2);
     const hasMissed = sprintSample.some((q) => q.id === "q-1");
     expect(hasMissed).toBe(true);
+  });
+
+  it("deleteImportBatch removes questions, deletes unattempted practice sets, and preserves attempted or custom exams with '[Source Removed]'", async () => {
+    // 1. Setup questions with importBatchId
+    const batchId = "batch-101";
+    const q1: Question = {
+      id: "q-batch-1",
+      question: "Question in batch 1?",
+      options: ["A", "B", "C", "D"],
+      correctIndex: 0,
+      importBatchId: batchId,
+      topicTag: "General",
+    };
+    const q2: Question = {
+      id: "q-batch-2",
+      question: "Second question in batch 1?",
+      options: ["A", "B", "C", "D"],
+      correctIndex: 1,
+      importBatchId: batchId,
+      topicTag: "General",
+    };
+    saveQuestionsToBank([q1, q2], "BatchDoc.pdf", "append", "parsed_pdf", batchId);
+    expect(getUserQuestions().length).toBe(2);
+
+    // 2. Setup 3 exams:
+    // Exam A: unattempted practice set generated directly from batch
+    const examA: StoredExam = {
+      id: "exam-practice-set",
+      title: "BatchDoc Practice Set",
+      source_document_title: "BatchDoc.pdf",
+      import_batch_id: batchId,
+      questions: [q1, q2],
+      version: 1,
+      visibility: "private",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // Exam B: attempted exam from batch
+    const examB: StoredExam = {
+      id: "exam-attempted",
+      title: "BatchDoc Midterm Exam",
+      source_document_title: "BatchDoc.pdf",
+      import_batch_id: batchId,
+      questions: [q1],
+      version: 1,
+      visibility: "private",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // Exam C: user-assembled custom exam containing a question from batch
+    const examC: StoredExam = {
+      id: "exam-custom",
+      title: "My Custom Final Exam",
+      source_document_title: "Custom Assembly",
+      import_batch_id: batchId,
+      origin: "assembled",
+      questions: [q2],
+      version: 1,
+      visibility: "private",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    saveLocalExams([examA, examB, examC]);
+    saveLocalAttempts([
+      {
+        id: "attempt-1",
+        exam_id: "exam-attempted",
+        score: 100,
+        total_questions: 1,
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        answers: {},
+      },
+    ]);
+
+    // 3. Delete batch
+    const result = await deleteImportBatch(batchId);
+    expect(result.deletedCount).toBe(2);
+    expect(getUserQuestions().length).toBe(0);
+
+    // 4. Verify exams state
+    const remainingExams = getLocalExams();
+    // examA should be deleted
+    expect(remainingExams.find((e) => e.id === "exam-practice-set")).toBeUndefined();
+
+    // examB (attempted) should be preserved and marked [Source Removed]
+    const preservedB = remainingExams.find((e) => e.id === "exam-attempted");
+    expect(preservedB).toBeDefined();
+    expect(preservedB?.title).toContain("[Source Removed]");
+    expect(preservedB?.import_batch_id).toBeUndefined();
+
+    // examC (user-assembled) should be preserved and marked [Source Removed]
+    const preservedC = remainingExams.find((e) => e.id === "exam-custom");
+    expect(preservedC).toBeDefined();
+    expect(preservedC?.title).toContain("[Source Removed]");
+    expect(preservedC?.import_batch_id).toBeUndefined();
+  });
+
+  it("allows gradable free-response items with verified key in sprint and exam assembly while excluding ungradable prompts", () => {
+    const freeRespItem: Question = {
+      id: "fr-1",
+      question: "A father is 3 times as old as his son. In 14 years he will be twice as old. Find son's age.",
+      options: [],
+      correctIndex: 0,
+      answerKey: "14",
+      questionType: "free_response",
+      gradable: true,
+      topicTag: "Algebra",
+    };
+
+    const promptItem: Question = {
+      id: "prompt-1",
+      question: "Write an essay discussing the themes of honesty in governance.",
+      options: [],
+      correctIndex: 0,
+      questionType: "prompt",
+      gradable: false,
+      topicTag: "Essay",
+    };
+
+    saveQuestionsToBank([freeRespItem, promptItem], "Math_and_Prompts.pdf");
+
+    // Sprint sampling: free response item should be included, prompt item excluded
+    const sprint = sampleSprintQuestions(5);
+    expect(sprint.some((q) => q.id === "fr-1")).toBe(true);
+    expect(sprint.some((q) => q.id === "prompt-1")).toBe(false);
+
+    // Exam assembly: free response item should be included, prompt item excluded
+    const assembled = assembleExamFromBank(5, { allowFreeResponse: true });
+    expect(assembled.selectedQuestions.some((q) => q.id === "fr-1")).toBe(true);
+    expect(assembled.selectedQuestions.some((q) => q.id === "prompt-1")).toBe(false);
   });
 });

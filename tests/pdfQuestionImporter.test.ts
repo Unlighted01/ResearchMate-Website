@@ -578,4 +578,80 @@ Answers and Explanations
     expect(parsed[1].correctLetter).toBe("c");
     expect(parsed[1].pageNumber).toBeGreaterThanOrEqual(31);
   });
+
+  it("recognizes structured headings ('Chapter 4: What Is Heredity?', 'Lesson 2: Take-Home Practice', 'Unit 3 : Algebra') while rejecting prose phrases", () => {
+    const text = [
+      "Chapter 4: What Is Heredity?",
+      "1. What is the fundamental unit of heredity?",
+      "a. Gene",
+      "b. Protein",
+      "c. Lipid",
+      "d. Carbohydrate",
+      "Be sure to set a goal before moving forward.",
+      "Please review a chapter before taking this practice test.",
+      "Lesson 2: Take-Home Practice",
+      "2. Which molecule carries genetic instructions?",
+      "a. DNA",
+      "b. ATP",
+      "c. Glucose",
+      "d. Hemoglobin",
+      "Unit 3 : Algebra",
+      "3. What is the solution to 2x = 10?",
+      "a. 3",
+      "b. 4",
+      "c. 5",
+      "d. 6",
+      "Answers and Explanations",
+      "1. a. The gene is the basic physical and functional unit of heredity.",
+      "2. a. DNA carries genetic instructions.",
+      "3. c. x = 10 / 2 = 5.",
+    ].join("\n");
+
+    const result = parseTwoPassQuestionsAndAnswersDetailed(text);
+    expect(result.items.length).toBe(3);
+    expect(result.chaptersDetected).toContain("Chapter 4: What Is Heredity?");
+    expect(result.chaptersDetected).toContain("Lesson 2: Take-Home Practice");
+    expect(result.chaptersDetected).toContain("Unit 3 : Algebra");
+    expect(result.chaptersDetected.some((c) => c.includes("set a goal"))).toBe(false);
+    expect(result.chaptersDetected.some((c) => c.includes("review a chapter"))).toBe(false);
+  });
+
+  it("auto-detects end_of_book profile on synthetic fixture with sectioned answer sets without 1001-specific rules", () => {
+    const syntheticPages = [
+      {
+        pageNumber: 1,
+        text: "Chapter 1: Arithmetic Basics\n1. What is 5 + 7?\na. 10\nb. 11\nc. 12\nd. 13",
+      },
+      {
+        pageNumber: 2,
+        text: "2. What is 9 × 3?\na. 27\nb. 24\nc. 21\nd. 18",
+      },
+      {
+        pageNumber: 3,
+        text: "Chapter 2: Fractions and Ratios\n3. What is 1/2 + 1/4?\na. 2/6\nb. 3/4\nc. 1/3\nd. 5/8",
+      },
+      {
+        pageNumber: 4,
+        text: "4. What is the ratio 4 to 8 simplified?\na. 1:3\nb. 2:3\nc. 1:2\nd. 1:4",
+      },
+      {
+        pageNumber: 5,
+        text: "Answers and Explanations\nSection 1 Answers\n1. c. 5 + 7 = 12.\n2. a. 9 × 3 = 27.",
+      },
+      {
+        pageNumber: 6,
+        text: "Section 2 Answers\n3. b. 1/2 + 1/4 = 3/4.\n4. c. 4/8 reduces to 1/2.",
+      },
+    ];
+
+    const detected = detectParserProfile(syntheticPages as any);
+    expect(detected.detectedKeyLocation).toBe("end_of_book");
+
+    const parsed = parseTwoPassQuestionsAndAnswersDetailed(syntheticPages as any);
+    expect(parsed.items.length).toBe(4);
+    expect(parsed.items.map((it) => it.correctLetter)).toEqual(["c", "a", "b", "c"]);
+    expect(parsed.missingQuestionNumbers).toEqual([]);
+    expect(parsed.items[0].explanation).toContain("5 + 7 = 12");
+    expect(parsed.items[3].explanation).toContain("reduces to 1/2");
+  });
 });

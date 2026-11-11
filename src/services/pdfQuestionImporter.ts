@@ -122,7 +122,7 @@ export const PROFILE_STANDARD_TWO_PASS: ParserProfile = {
   name: "Standard Chapter Q&A (Two-Pass)",
   description: "Numbered chapters or sections with questions followed by chapter-end or section-end answers",
   headingPattern:
-    /^(?:(?:CHAPTER|SECTION|SET|UNIT|LESSON)\s+(?:(?:\d+|[IVXLCDM]+)\b(?:\s*[:\-–—]\s*[^\n]+)?|[:\-–—]\s*[^\n]+)|PART\s+(?:(?:\d+|[IVXLCDM]+)\b|[-—–]\s*[^\n]+)|(\d{1,2})\s+(?:[A-Za-z\s]+)?Practice)\b/i,
+    /^(?:(?:CHAPTER|SECTION|SET|UNIT|LESSON)\s+(?:(?:\d+|[IVXLCDM]+)\b(?:\s*[:\-–—]\s*[^\n]+)?|[:\-–—]\s*[^\n]+)|PART\s+(?:(?:\d+|[IVXLCDM]+)\b|[-—–]\s*[^\n]+)|(\d{1,2})\s+(?:[A-Za-z\s]+)?Practice)/i,
   keyLocation: "end_of_chapter",
   choiceStyle: "letter_dot",
   expectedChoicesPerItem: 4,
@@ -192,7 +192,7 @@ export const PROFILE_PRACTICE_DRILL: ParserProfile = {
   id: "practice_drill",
   name: "Practice Drill Book (LearningExpress Style)",
   description: "Numbered practice drill sets (Practice 1 to Practice N) with end-of-chapter answer keys",
-  headingPattern: /^(?:(?:Practice|Review|Exercise|Unit|Lesson|Chapter|Section|Set)\s+(?:(?:\d+|[IVXLCDM]+)\b(?:\s*[:\-–—]\s*[^\n]+)?|[:\-–—]\s*[^\n]+)|(\d{1,2})\s+(?:[A-Za-z\s]+)?(?:Practice|Review|Test))\b/i,
+  headingPattern: /^(?:(?:Practice|Review|Exercise|Unit|Lesson|Chapter|Section|Set)\s+(?:(?:\d+|[IVXLCDM]+)\b(?:\s*[:\-–—]\s*[^\n]+)?|[:\-–—]\s*[^\n]+)|(\d{1,2})\s+(?:[A-Za-z\s]+)?(?:Practice|Review|Test)\b)/i,
   keyLocation: "end_of_chapter",
   choiceStyle: "letter_dot",
   expectedChoicesPerItem: 4,
@@ -717,13 +717,33 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
   const questionNumberCount = (sampleText.match(/(?:^|\n)\s*\d{1,4}[\.\)]\s+/g) || []).length;
   const expectedChoicesPerItem = (eChoiceCount >= 2 || (eChoiceCount > 0 && eChoiceCount >= questionNumberCount * 0.3)) ? 5 : 4;
 
-  // 3. Detect Answer Key Location
+  // 3. Detect Answer Key Location (generic structural analysis)
   const inlineAnswerMatches = (sampleText.match(/(?:^|\n)\s*(?:Answer|Ans|Correct Answer)\s*:\s*[a-eA-E]\b/gi) || []).length;
   const answerSectionMatches = (sampleText.match(/^(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/gim) || []).length;
 
   let detectedKeyLocation: AnswerKeyLocation = "end_of_chapter";
   if (inlineAnswerMatches >= 4) {
     detectedKeyLocation = "inline";
+  } else if (Array.isArray(pagesOrText) && pagesOrText.length > 2) {
+    // If answer headers only appear in the latter portion of the document and not in the first 40%,
+    // it is an end_of_book architecture (questions upfront, sectioned answers at the back)
+    const splitIndex = Math.max(2, Math.floor(pagesOrText.length * 0.4));
+    const earlyPages = pagesOrText.slice(0, splitIndex);
+    const latePages = pagesOrText.slice(splitIndex);
+
+    const earlyText = earlyPages.map((p) => (typeof p === "string" ? p : p.text || "")).join("\n");
+    const lateText = latePages.map((p) => (typeof p === "string" ? p : p.text || "")).join("\n");
+
+    const answerHeadersEarly = (earlyText.match(/^(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/gim) || []).length;
+    const answerHeadersLate = (lateText.match(/^(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/gim) || []).length;
+
+    if (answerHeadersEarly === 0 && answerHeadersLate > 0) {
+      detectedKeyLocation = "end_of_book";
+    } else if (answerHeadersEarly > 0) {
+      detectedKeyLocation = "end_of_chapter";
+    } else if (answerSectionMatches === 1) {
+      detectedKeyLocation = "end_of_book";
+    }
   } else if (answerSectionMatches === 1) {
     detectedKeyLocation = "end_of_book";
   } else if (answerSectionMatches > 1) {
@@ -759,7 +779,7 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
   } else if (expectedChoicesPerItem === 5 && detectedChoiceStyle === "paren_letter") {
     selectedProfile = { ...PROFILE_PAREN_5_CHOICE, keyLocation: detectedKeyLocation };
   } else if (detectedHeading.includes("Set")) {
-    selectedProfile = { ...PROFILE_1001_MATH, choiceStyle: detectedChoiceStyle };
+    selectedProfile = { ...PROFILE_1001_MATH, keyLocation: detectedKeyLocation, choiceStyle: detectedChoiceStyle };
   } else if (detectedHeading.includes("Practice")) {
     selectedProfile = {
       ...PROFILE_PRACTICE_DRILL,
@@ -770,10 +790,10 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
   } else {
     selectedProfile = {
       ...PROFILE_STANDARD_TWO_PASS,
+      headingPattern,
       choiceStyle: detectedChoiceStyle,
       keyLocation: detectedKeyLocation,
       expectedChoicesPerItem,
-      headingPattern,
     };
   }
 
@@ -1595,23 +1615,38 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       // Check D: Detect chapter headings using profile.headingPattern or general Chapter/Section line
       const isChHeading =
         profile.headingPattern.test(trimmed) ||
-        /^(?:CHAPTER|SECTION)\s+(?:(?:\d+|[IVXLCDM]+)\b(?:\s*[:\-–—]\s*[^\n]+)?|[-—–]\s*[^\n]+)/i.test(trimmed) ||
+        /^(?:CHAPTER|SECTION|SET|UNIT|LESSON)\s+(?:(?:\d+|[IVXLCDM]+)\b(?:\s*[:\-–—]\s*[^\n]+)?|[-—–]\s*[^\n]+)/i.test(trimmed) ||
         /^PART\s+(?:(?:\d+|[IVXLCDM]+)\b|[-—–]\s*[^\n]+)/i.test(trimmed);
 
       if (isChHeading) {
-        const isSentence =
-          trimmed.length > 80 ||
-          /[,\.\?;]$/.test(trimmed) ||
-          trimmed.includes("::") ||
-          trimmed.includes("______") ||
-          /\b[a-z]+\s*:\s*[a-z]+\b/.test(trimmed) ||
-          /\b(?:which\s+contains|contains|don't\s+miss|is\s+made\s+up|part\s+of\s+the|part\s+of\s+a|of\s+his|of\s+her|of\s+their|of\s+the|his\s+test|review\s+a|set\s+a\s+goal)\b/i.test(trimmed) ||
-          (/\s+\d{1,4}$/.test(trimmed) && !/^(?:CHAPTER|SECTION|PART|SET|UNIT|LESSON)\s+\d+$/i.test(trimmed));
+        // Structured headings have a formal: Keyword + Number/Roman + Separator + Title (e.g. "Chapter 4: What Is Heredity?", "Lesson 2: Take-Home Practice", "Unit 3 : Algebra")
+        const isStructuredHeading =
+          /^(?:CHAPTER|SECTION|SET|UNIT|LESSON|PART|PRACTICE|REVIEW|EXERCISE)\s+(?:\d+|[IVXLCDM]+)\s*[:\-–—]\s*\S+/i.test(trimmed);
+
+        const isSentence = isStructuredHeading
+          ? (
+              // For structured headings, allow question marks in titles but reject analogy stems or running heads
+              trimmed.length > 120 ||
+              trimmed.includes("::") ||
+              trimmed.includes("______") ||
+              /\b[a-z]+\s*:\s*[a-z]+\b/.test(trimmed) ||
+              (/\s+\d{1,4}$/.test(trimmed) && !/^(?:CHAPTER|SECTION|PART|SET|UNIT|LESSON)\s+\d+$/i.test(trimmed))
+            )
+          : (
+              // For lines without number+separator+title, apply strict prose filters:
+              trimmed.length > 80 ||
+              /[,\.\?;]$/.test(trimmed) ||
+              trimmed.includes("::") ||
+              trimmed.includes("______") ||
+              /\b[a-z]+\s*:\s*[a-z]+\b/.test(trimmed) ||
+              /\b(?:which\s+contains|contains|don't\s+miss|is\s+made\s+up|part\s+of\s+the|part\s+of\s+a|of\s+his|of\s+her|of\s+their|of\s+the|his\s+test|review\s+a|set\s+a\s+goal)\b/i.test(trimmed) ||
+              (/\s+\d{1,4}$/.test(trimmed) && !/^(?:CHAPTER|SECTION|PART|SET|UNIT|LESSON)\s+\d+$/i.test(trimmed))
+            );
 
         if (!isSentence) {
           const chMatch =
             trimmed.match(profile.headingPattern) ||
-            trimmed.match(/^(?:CHAPTER|SECTION)\s+(?:(?:\d+|[IVXLCDM]+)\b(?:\s*[:\-–—]\s*[^\n]+)?|[-—–]\s*[^\n]+)/i) ||
+            trimmed.match(/^(?:CHAPTER|SECTION|SET|UNIT|LESSON)\s+(?:(?:\d+|[IVXLCDM]+)\b(?:\s*[:\-–—]\s*[^\n]+)?|[-—–]\s*[^\n]+)/i) ||
             trimmed.match(/^PART\s+(?:(?:\d+|[IVXLCDM]+)\b|[-—–]\s*[^\n]+)/i);
 
           if (chMatch) {

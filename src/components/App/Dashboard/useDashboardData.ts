@@ -215,11 +215,24 @@ export function useDashboardData(
 
   const deleteBatchAsset = useCallback(async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!window.confirm("Are you sure you want to delete this question bank batch? This will remove its questions.")) return;
+    const batch = batches.find((b) => b.id === id);
+    const batchName = batch?.sourceFile || batch?.subject || id;
+    const qCount = batch?.totalQuestions ?? 0;
+
+    const message = [
+      `Are you sure you want to delete the question bank batch "${batchName}"?`,
+      `• ${qCount} question(s) will be removed from your Question Bank`,
+      `• Unattempted practice sets created exclusively from this batch will be removed`,
+      `• Attempted exams and custom user-assembled exams will be KEPT and marked "[Source Removed]"`,
+      `• Associated flashcard decks will be deleted`,
+      `\nProceed with removal?`,
+    ].join("\n");
+
+    if (!window.confirm(message)) return;
     await deleteImportBatch(id);
     setBatches((prev) => prev.filter((b) => b.id !== id));
-    showToast("Question bank batch deleted.", "info");
-  }, [showToast]);
+    showToast(`Batch "${batchName}" removed.`, "info");
+  }, [batches, showToast]);
 
   // Initial load of multi-engine assets
   useEffect(() => {

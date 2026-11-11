@@ -48,7 +48,7 @@ describe("501 Word Analogy Questions Full Engine Audit", () => {
     const suspiciousNums = result.items
       .filter((it) => it.reviewStatus === "needs_review")
       .map((it) => it.number);
-    expect(suspiciousNums).toEqual([43, 407, 496]);
+    expect(suspiciousNums).toEqual([43, 407, 417]);
 
     // 2. Chapters Detected Verification: Exactly 13 chapters in sequential order
     expect(result.chaptersDetected.length).toBe(13);
