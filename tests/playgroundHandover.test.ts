@@ -58,4 +58,20 @@ describe("Playground PDF Handover and 10-Question In-Memory Sandbox", () => {
     retrieved = await getPlaygroundPendingPdf();
     expect(retrieved).toBeNull();
   });
+
+  it("handles atomic clear before asynchronous ingestion to prevent duplicate loops", async () => {
+    const file = new File(["test data"], "LoopGuard.pdf", { type: "application/pdf" });
+    await savePlaygroundPendingPdf(file, [{ id: "q1", stem: "Sample stem" }]);
+
+    // Simulated handover worker 1
+    const pending1 = await getPlaygroundPendingPdf();
+    expect(pending1).not.toBeNull();
+    // Worker 1 pops/clears immediately
+    await clearPlaygroundPendingPdf();
+
+    // Simulated handover worker 2 (e.g. from an effect re-run)
+    const pending2 = await getPlaygroundPendingPdf();
+    // Worker 2 sees nothing to process
+    expect(pending2).toBeNull();
+  });
 });

@@ -208,18 +208,23 @@ export async function extractPdfContent(
     }
 
     // 3. Multi-Page Scanned PDF OCR Fallback:
-    // If the PDF contains sparse/scanned pages, run Math Vision OCR across those pages!
-    // Supports up to maxOcrPages (default 15 pages) with rate-limiting and circuit breaker
+    // Only execute Math Vision OCR if the document is genuinely scanned or image-based
+    // (i.e. zero or negligible extracted text across the document, e.g. < 20% of pages have selectable text).
+    // Never run OCR on standard digital textbooks where sparse pages are simply blanks/section dividers.
+    const textPageCount = pagesData.filter((p) => p.text.length >= 40).length;
+    const isScannedDocument =
+      textPageCount === 0 || (maxPages >= 3 && textPageCount / maxPages < 0.2);
+
     const maxOcrPages = options?.maxOcrPages ?? 15;
-    const pagesToOcr = sparsePageNumbers.slice(0, maxOcrPages);
+    const pagesToOcr = isScannedDocument ? sparsePageNumbers.slice(0, maxOcrPages) : [];
 
     if (pagesToOcr.length > 0 && typeof document !== "undefined") {
-      console.log(`🔍 Detected ${pagesToOcr.length} scanned/sparse pages. Executing Vision OCR...`);
+      console.log(`🔍 Detected genuinely scanned document (${pagesToOcr.length} sparse pages). Executing Vision OCR...`);
       let consecutiveOcrFailures = 0;
 
       for (let i = 0; i < pagesToOcr.length; i++) {
-        // Circuit breaker: if 3 consecutive OCR calls fail (e.g. rate limit or offline), break early
-        if (consecutiveOcrFailures >= 3) {
+        // Circuit breaker: if 2 consecutive OCR calls fail or rate limited, break early
+        if (consecutiveOcrFailures >= 2) {
           console.warn("Stopping Vision OCR fallback early due to consecutive upstream failures.");
           break;
         }
@@ -250,6 +255,11 @@ export async function extractPdfContent(
             const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
             const ocr = await runMathOcr(dataUrl);
 
+            if (!ocr.ok || ocr.error?.includes("429")) {
+              console.warn(`Vision OCR rate limited or failed for page ${pageNum}. Aborting fallback OCR.`);
+              break;
+            }
+
             const ocrContent = [ocr.latex, ocr.explanation].filter(Boolean).join("\n\n").trim();
             if (ocrContent) {
               const targetSlot = pagesData.find((p) => p.pageNum === pageNum);
@@ -259,15 +269,20 @@ export async function extractPdfContent(
               }
               hasVisualMath = true;
               consecutiveOcrFailures = 0;
+            } else {
+              consecutiveOcrFailures++;
             }
           }
         } catch (ocrErr: any) {
           consecutiveOcrFailures++;
           console.warn(`Vision OCR fallback bypassed for page ${pageNum}:`, ocrErr?.message || ocrErr);
+          if (String(ocrErr?.message).includes("429")) {
+            break;
+          }
         }
 
-        // 200ms yield between OCR API calls to prevent API rate-limiting
-        await new Promise((r) => setTimeout(r, 200));
+        // 300ms yield between OCR API calls to prevent API rate-limiting
+        await new Promise((r) => setTimeout(r, 300));
       }
     }
   } catch (pdfErr) {

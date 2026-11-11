@@ -23,6 +23,7 @@ import {
   Database,
   FileText,
   ArrowRight,
+  X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Modal } from "../../shared/ui";
@@ -81,7 +82,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   const data = useDashboardData(showToast);
 
   // ---------- PART 3B: ACTIONS HOOK ----------
-  const { batch, ingestFiles } = useIngestion();
+  const { batch, ingestFiles, dismiss } = useIngestion();
   const [readinessStats, setReadinessStats] = React.useState<ExamReadinessStats>(() => getReadinessStats());
   const [isSprintModalOpen, setIsSprintModalOpen] = React.useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
@@ -90,15 +91,29 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
   // ---------- AUTOMATIC PLAYGROUND PDF HANDOVER ----------
   // If a guest tested a PDF on the landing page playground and then logged in / registered,
   // automatically ingest that document and import all its parsed questions into their dashboard!
+  const hasHandledHandoverRef = React.useRef(false);
+  const fetchItemsRef = React.useRef(data.fetchItems);
+  fetchItemsRef.current = data.fetchItems;
+  const ingestFilesRef = React.useRef(ingestFiles);
+  ingestFilesRef.current = ingestFiles;
+  const showToastRef = React.useRef(showToast);
+  showToastRef.current = showToast;
+
   React.useEffect(() => {
+    if (hasHandledHandoverRef.current) return;
+
     let isMounted = true;
     const checkPlaygroundHandover = async () => {
       try {
         const pending = await getPlaygroundPendingPdf();
-        if (!pending || !isMounted) return;
+        if (!pending || !isMounted || hasHandledHandoverRef.current) return;
+        hasHandledHandoverRef.current = true;
+
+        // Atomically clear pending store immediately so re-renders or concurrent runs never double-ingest!
+        await clearPlaygroundPendingPdf();
 
         // Ingest document into library
-        await ingestFiles([pending.file]);
+        await ingestFilesRef.current([pending.file]);
 
         // If questions were parsed from the document, also populate question bank with ALL questions
         if (pending.allParsedQuestions && pending.allParsedQuestions.length > 0) {
@@ -119,16 +134,14 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
           }
         }
 
-        // Clean up temporary playground store so it only runs once
-        await clearPlaygroundPendingPdf();
-
-        showToast(
-          `🎉 "${pending.file.name}" from your playground preview was added to your dashboard with all full features unlocked!`,
-          "success"
-        );
-
-        // Refresh items list
-        data.fetchItems();
+        if (isMounted) {
+          showToastRef.current(
+            `🎉 "${pending.file.name}" from your playground preview was added to your dashboard with all full features unlocked!`,
+            "success"
+          );
+          // Refresh items list
+          fetchItemsRef.current?.();
+        }
       } catch (err) {
         console.error("Failed to complete playground handover:", err);
       }
@@ -139,7 +152,7 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
     return () => {
       isMounted = false;
     };
-  }, [ingestFiles, showToast, data]);
+  }, []);
   const actions = useDashboardActions({
     items: data.items,
     setItems: data.setItems,
@@ -290,9 +303,18 @@ const Dashboard: React.FC<DashboardProps> = ({ useToast }) => {
                   : `Ingesting Material ${batch.completedCount + 1} of ${batch.totalFiles}`}
               </span>
             </div>
-            <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
-              {batch.overallPercent}%
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                {batch.overallPercent}%
+              </span>
+              <button
+                onClick={dismiss}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/40 transition-colors"
+                title="Dismiss banner"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="w-full bg-indigo-100 dark:bg-indigo-900/60 h-2 rounded-full overflow-hidden">

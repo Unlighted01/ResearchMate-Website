@@ -114,6 +114,16 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
         return { successCount: 0, errors: [] };
       }
 
+      // Concurrency guard: avoid launching duplicate parallel extraction jobs for files already processing
+      if (batch.isActive && !batch.isCompleted) {
+        const currentlyProcessing = new Set(batch.files.map((f) => f.name));
+        const duplicateFiles = files.filter((f) => currentlyProcessing.has(f.name));
+        if (duplicateFiles.length === files.length) {
+          console.warn("Requested file(s) are already actively ingesting; ignoring duplicate launch.", files.map((f) => f.name));
+          return { successCount: 0, errors: [] };
+        }
+      }
+
       if (dismissTimerRef.current) {
         clearTimeout(dismissTimerRef.current);
         dismissTimerRef.current = null;

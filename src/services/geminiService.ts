@@ -569,16 +569,29 @@ export async function runMathOcr(imageSrc: string): Promise<MathOcrResult> {
       };
     }
 
+    if (response.status === 429) {
+      console.warn("OCR API rate limited (429).");
+      return {
+        ok: false,
+        latex: "",
+        explanation: "",
+        error: "429: Rate limit exceeded",
+      };
+    }
+
+    const errJson = await response.json().catch(() => ({}));
     return {
-      ok: true,
-      latex: "\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}",
-      explanation: "Gaussian integral derivation synthesized from visual scan.",
+      ok: false,
+      latex: "",
+      explanation: "",
+      error: errJson.error || `OCR failed with HTTP ${response.status}`,
     };
   } catch (err: any) {
     return {
-      ok: true,
-      latex: "\\nabla \\times \\mathbf{B} = \\mu_0 \\mathbf{J} + \\mu_0 \\epsilon_0 \\frac{\\partial \\mathbf{E}}{\\partial t}",
-      explanation: "Maxwell's Ampère law formula transcribed from camera visual input.",
+      ok: false,
+      latex: "",
+      explanation: "",
+      error: err?.message || "Network error during OCR",
     };
   }
 }
