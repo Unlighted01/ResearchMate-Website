@@ -50,7 +50,7 @@ export const ExamsWorkspacePage: React.FC<ExamsWorkspacePageProps> = ({ useToast
                 </span>
               </h1>
               <p className="text-xs text-slate-500 font-mono mt-0.5">
-                Deterministic Seeded Shuffling • Zero-Leak Enemy Filtering • OMR Sheet Planning
+                Deterministic Seeded Shuffling • Anti-Leak Enemy Filtering • OMR Sheet Planning
               </p>
             </div>
           </div>

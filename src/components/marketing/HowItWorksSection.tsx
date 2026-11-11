@@ -40,7 +40,7 @@ const USE_CASES = [
     icon: Scale,
     title: "Bar, Board & Civil Service Candidates",
     desc: "Simulate high-stakes exam conditions with deterministic seed codes, balanced choices, and physical A4/Letter OMR bubble sheets with camera grading.",
-    perks: ["Printable 50/100 OMR sheets", "Zero-leak enemy filtering", "Two-pass book parser ($0 AI cost)"],
+    perks: ["Printable 50/100 OMR sheets", "Anti-leak enemy filtering", "Two-pass book parser (zero AI cost for structured PDFs)"],
   },
   {
     icon: FileCode,

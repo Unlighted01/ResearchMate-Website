@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   FileText,
   RotateCw,
-  QrCode,
+  Hash,
   ArrowRight,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -54,7 +54,7 @@ const FeaturesSection: React.FC = () => {
             </div>
 
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed max-w-[55ch]">
-              Generate reproducible practice exams powered by Mulberry32 PRNG seed codes (`EXAM-xxx`). Automatically filters out enemy items so question stems never leak answers, and prints standard A4/Letter OMR bubble sheets with QR code matching.
+              Generate reproducible practice exams powered by Mulberry32 PRNG seed codes (`EXAM-xxx`). Automatically filters out enemy items to prevent stem answer leaks, and prints standard A4/Letter OMR bubble sheets.
             </p>
           </div>
 
@@ -62,8 +62,8 @@ const FeaturesSection: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
               <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 mb-1">
-                <QrCode className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                QR Seed Codes
+                <Hash className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                PRNG Seed Codes
               </span>
               <p className="text-[11px] text-slate-500">Every exam is deterministic & retakeable anywhere.</p>
             </div>
@@ -73,7 +73,7 @@ const FeaturesSection: React.FC = () => {
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 Enemy Item Filter
               </span>
-              <p className="text-[11px] text-slate-500">Zero duplicate quotes or answer leakage across items.</p>
+              <p className="text-[11px] text-slate-500">Automated filtering prevents duplicate quotes or stem answer leakage.</p>
             </div>
 
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
@@ -174,19 +174,19 @@ const FeaturesSection: React.FC = () => {
                 </h3>
               </div>
               <span className="text-[11px] font-mono text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-200/50">
-                $0 AI Cost • In-Browser
+                Zero AI Cost for Structured PDFs
               </span>
             </div>
 
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed max-w-[55ch]">
-              Ingest full PDF textbooks (e.g. 1001 Math Problems, Bar & Board reviewers) completely inside your browser. Our 2-pass parser extracts stems, choices, and correlated chapter answer keys without cloud API costs, with full provenance and 1-click batch rollbacks.
+              Ingest full PDF textbooks (e.g. 1001 Math Problems, Bar & Board reviewers) completely inside your browser. Our 2-pass parser extracts stems, choices, and correlated chapter answer keys with zero AI cost for structured PDFs, with full provenance and 1-click batch rollbacks.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
               <p className="font-semibold text-slate-900 dark:text-slate-100 mb-0.5">Two-Pass Client Parser</p>
-              <p className="text-[11px] text-slate-500">Correlates chapter answer keys and masks answer leakage.</p>
+              <p className="text-[11px] text-slate-500">Correlates chapter answer keys and filters enemy items.</p>
             </div>
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
               <p className="font-semibold text-slate-900 dark:text-slate-100 mb-0.5">One-Click Rollbacks</p>

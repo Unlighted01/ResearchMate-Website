@@ -28,7 +28,7 @@ const PRODUCTS: Product[] = [
     name: "Seeded Mock Exam Engine",
     tagline: "Deterministic Simulated Testing & OMR Sheets",
     description:
-      "Generate verifiable, reproducible practice exams with PRNG seed codes. Automatically filters enemy items to prevent stem answer leaks and outputs printable physical OMR bubble sheets with QR code matching.",
+      "Generate verifiable, reproducible practice exams with PRNG seed codes. Automatically filters enemy items to prevent stem answer leaks and outputs printable physical OMR bubble sheets.",
     icon: GraduationCap,
     status: "Version 2.0",
     features: [
@@ -62,9 +62,9 @@ const PRODUCTS: Product[] = [
   {
     id: "question_bank",
     name: "Question Bank & Ingestion Studio",
-    tagline: "100% In-Browser Ingestion • $0 AI Cost",
+    tagline: "100% In-Browser Ingestion • Zero AI Cost for Structured PDFs",
     description:
-      "Ingest full textbook PDFs, past bar/board reviewers, and question banks completely in your browser. Our 2-pass parser extracts stems, choices, and correlated chapter answer keys with zero cloud API cost.",
+      "Ingest full textbook PDFs, past bar/board reviewers, and question banks completely in your browser. Our 2-pass parser extracts stems, choices, and correlated chapter answer keys with zero AI cost for structured PDFs.",
     icon: Database,
     status: "Client-Side Engine",
     features: [

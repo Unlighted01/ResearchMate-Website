@@ -624,7 +624,7 @@ const HeroSection: React.FC = () => {
               {parseProgress || "Extracting text coordinates, choices, and chapter answer keys..."}
             </p>
             <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/50">
-              100% Client-Side Privacy • Zero API Cost • File Never Leaves Device
+              100% Client-Side Privacy • Zero AI Cost for Structured PDFs • File Never Leaves Device
             </span>
           </div>
         )}
@@ -940,7 +940,7 @@ const HeroSection: React.FC = () => {
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 text-[11px] text-slate-500">
                         <p>
-                          💡 Mobile camera pen grading reads QR code to reconstruct key without internet access.
+                          💡 Printable standard bubble sheets allow offline pen-and-paper practice with reproducible answer keys.
                         </p>
                         {!uploadedFileName ? (
                           <Link
