@@ -1602,7 +1602,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         const globalKey = `${currentNum}`;
         const answerData = {
           number: currentNum,
-          letter: "a",
+          letter: "",
           textAnswer,
           explanation: explanation || `Answer: ${textAnswer}`,
           chapter: effectiveChapter,
