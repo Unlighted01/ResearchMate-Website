@@ -1,0 +1,7 @@
+{
+  "questionCount": 40,
+  "spotChecks": [
+    { "n": 1, "key": "free_response" },
+    { "n": 40, "key": "free_response" }
+  ]
+}

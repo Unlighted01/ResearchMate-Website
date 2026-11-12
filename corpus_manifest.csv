@@ -1,0 +1,24 @@
+folder_substring,expected_kind
+SCOPE OF EXAMINATION,non_question
+105 VOCABULARY WORDS,non_question
+Abstract Reasoning,figure_based
+Application Form,non_question
+Clerical,lesson_notes
+FAQS,non_question
+General Info,lesson_notes
+Grammar,lesson_notes
+Key Words Used in Word Problems,non_question
+Logic,figure_based
+Math Formulas,non_question
+Math topics,keyed_mcq
+Math Word Problems,keyed_mcq
+MSA Book Reviewer,keyed_mcq
+MUST READ,non_question
+Numerical Reasoning,keyed_mcq
+Practice Tests with Answer Keys,keyed_mcq
+QUESTIONS FROM PAST EXAMS PT.1,keyed_mcq
+QUESTIONS FROM PAST EXAMS PT.2,keyed_mcq
+Statements and Conclusions,figure_based
+STUDY SCHEDULE,non_question
+Vocabulary,keyed_mcq
+Word analogy,keyed_mcq

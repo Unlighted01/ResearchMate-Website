@@ -1,0 +1,9 @@
+{
+  "questionCount": 1001,
+  "spotChecks": [
+    { "n": 1, "key": "a" },
+    { "n": 18, "key": "b" },
+    { "n": 990, "key": "b" },
+    { "n": 1001, "key": "a" }
+  ]
+}
