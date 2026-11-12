@@ -142,8 +142,8 @@ export const PROFILE_FREE_RESPONSE: ParserProfile = {
 
 export const PROFILE_1001_MATH: ParserProfile = {
   id: "1001_math_problems",
-  name: "1001 Math Problems (LearningExpress Style)",
-  description: "Numbered sections and chapters with mixed letter-dot/paren choices and detailed answer explanations",
+  name: "Sectioned Numerical Drill (End-of-Book Keys)",
+  description: "Numbered sections and sets with mixed choices and consolidated end-of-book answer keys",
   headingPattern: /^(?:SECTION\s+(\d+):?\s*[A-Za-z\s\-]+|CHAPTER\s+(\d+):?\s*[A-Za-z\s\-]+|Set\s+(\d+))\b/i,
   keyLocation: "end_of_book",
   choiceStyle: "mixed",
@@ -190,8 +190,8 @@ export const PROFILE_CONDENSED_GRID: ParserProfile = {
 
 export const PROFILE_PRACTICE_DRILL: ParserProfile = {
   id: "practice_drill",
-  name: "Practice Drill Book (LearningExpress Style)",
-  description: "Numbered practice drill sets (Practice 1 to Practice N) with end-of-chapter answer keys",
+  name: "Chapter Practice Drill (End-of-Chapter Keys)",
+  description: "Numbered practice sets with answers immediately following each chapter/section",
   headingPattern: /^(?:(?:Practice|Review|Exercise|Unit|Lesson|Chapter|Section|Set)\s+(?:(?:\d+|[IVXLCDM]+)\b(?:\s*[:\-–—]\s*[^\n]+)?|[:\-–—]\s*[^\n]+)|(\d{1,2})\s+(?:[A-Za-z\s]+)?(?:Practice|Review|Test)\b)/i,
   keyLocation: "end_of_chapter",
   choiceStyle: "letter_dot",
@@ -202,8 +202,10 @@ export const PROFILE_PRACTICE_DRILL: ParserProfile = {
 export const SAVED_PARSER_PROFILES: Record<string, ParserProfile> = {
   standard_two_pass: PROFILE_STANDARD_TWO_PASS,
   practice_drill: PROFILE_PRACTICE_DRILL,
+  chapter_practice_drill: PROFILE_PRACTICE_DRILL,
   free_response: PROFILE_FREE_RESPONSE,
   "1001_math_problems": PROFILE_1001_MATH,
+  sectioned_numerical_drill: PROFILE_1001_MATH,
   inline_answer_key: PROFILE_INLINE_KEYS,
   paren_5_choice: PROFILE_PAREN_5_CHOICE,
   condensed_grid: PROFILE_CONDENSED_GRID,
@@ -634,6 +636,108 @@ export function reconstructStackedFractions(items: PdfLayoutItem[]): string {
     .replace(/⅞/g, "$\\frac{7}{8}$");
 }
 
+export type DocumentKind =
+  | "exam_review_book"
+  | "statute_code"
+  | "dictionary_thesaurus"
+  | "form"
+  | "lesson_notes"
+  | "textbook_with_few_exercises";
+
+export interface DocumentClassification {
+  kind: DocumentKind;
+  confidence: number;
+  reason: string;
+}
+
+/**
+ * Structural document-type classifier that runs before Q&A extraction.
+ * Classifies document using paragraph length, question-number density, headword patterns,
+ * section ratios, and form markers so non-question documents never produce graded questions.
+ */
+export function classifyDocumentType(pagesOrText: PdfPageWithLayout[] | string): DocumentClassification {
+  let sampleText = "";
+  let pageCount = 1;
+  if (Array.isArray(pagesOrText)) {
+    pageCount = pagesOrText.length;
+    sampleText = pagesOrText.map((p) => (typeof p === "string" ? p : p.text || "")).join("\n");
+  } else {
+    sampleText = pagesOrText;
+    const pageMarkers = (sampleText.match(/\[Page\s+\d+\]/gi) || []).length;
+    if (pageMarkers > 0) pageCount = pageMarkers;
+  }
+
+  const totalLength = sampleText.length;
+  if (totalLength < 100) {
+    return { kind: "lesson_notes", confidence: 50, reason: "Insufficient text content" };
+  }
+
+  // Count structural features
+  const questionNumberCount = (sampleText.match(/(?:^|\n)\s*\d{1,4}[\.\)]\s+[A-Za-z]/g) || []).length;
+  const choiceTokenCount = (sampleText.match(/(?:^|\n|\s{2,})[a-eA-E][\.\)]\s+/g) || []).length;
+  const answerSectionMatches = (sampleText.match(/(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/gim) || []).length;
+  const sectionRatio = (sampleText.match(/\b(?:Section|Sec\.)\s+\d+\b/gi) || []).length / Math.max(1, pageCount);
+  const statuteMatches = (sampleText.match(/\b(?:Republic\s+Act|Executive\s+Order|Presidential\s+Decree|Article\s+[IVXLCDM\d]+)\b/gi) || []).length;
+  const formMarkerMatches = (sampleText.match(/\b(?:APPLICATION\s+(?:FORM|NO)|PERSONAL\s+DATA|CIVIL\s+SERVICE\s+COMMISSION|CS\s+Form|EXAMINATION\s+ANNOUNCEMENT|PLEASE\s+PRINT|DO\s+NOT\s+FILL|SIGNATURE\s+OF\s+APPLICANT|APPLICANT['’]S\s+NAME|COLLECTING\s+OFFICER|O\.R\.\s+NO|ACTION\s+TAKEN:\s*(?:APPROVED|DISAPPROVED))\b/gi) || []).length;
+  const dictionaryHeadwords = (sampleText.match(/^[A-Z][a-z\-]+(?:\s+\([a-z\.]+\))?:\s+/gm) || []).length;
+
+  // 1. Form detection (e.g. APPLICATION FORM / PERSONAL DATA)
+  if (formMarkerMatches >= 2 && pageCount <= 6 && answerSectionMatches === 0) {
+    return {
+      kind: "form",
+      confidence: 90,
+      reason: `Application form detected (${formMarkerMatches} form markers, ${pageCount} pages, no answer keys)`,
+    };
+  }
+
+  // 2. Statute / Legal Code detection (e.g. RA 6713)
+  if ((sectionRatio >= 0.8 || statuteMatches >= 3) && choiceTokenCount < 5 && answerSectionMatches === 0) {
+    return {
+      kind: "statute_code",
+      confidence: 90,
+      reason: `Statute / legal code detected (${statuteMatches} statutory markers, ${sectionRatio.toFixed(1)} sections/page, no MCQ answer keys)`,
+    };
+  }
+
+  // 3. Dictionary / Thesaurus detection
+  if (dictionaryHeadwords >= 15 && choiceTokenCount < 5 && answerSectionMatches === 0) {
+    return {
+      kind: "dictionary_thesaurus",
+      confidence: 85,
+      reason: `Dictionary / thesaurus detected (${dictionaryHeadwords} headwords, no MCQ answer keys)`,
+    };
+  }
+
+  // 4. Textbook with few exercises (high text volume, very low question density, no answer keys)
+  const paragraphs = sampleText.split(/\n\s*\n/).filter((p) => p.trim().length > 50);
+  const avgParaLength = paragraphs.length > 0 ? totalLength / paragraphs.length : 0;
+  const questionDensity = questionNumberCount / Math.max(1, pageCount);
+
+  if (pageCount >= 8 && avgParaLength > 350 && questionDensity < 0.3 && answerSectionMatches === 0 && choiceTokenCount < 5) {
+    return {
+      kind: "textbook_with_few_exercises",
+      confidence: 80,
+      reason: `Textbook reading material with few or no exercises (${avgParaLength.toFixed(0)} avg chars/paragraph, ${questionDensity.toFixed(2)} Qs/page)`,
+    };
+  }
+
+  // 5. Lesson notes (study schedule, keywords, general notes)
+  if (questionNumberCount < 3 && choiceTokenCount < 3 && answerSectionMatches === 0) {
+    return {
+      kind: "lesson_notes",
+      confidence: 75,
+      reason: `Lesson or study notes (insufficient Q&A density: ${questionNumberCount} question marks, ${choiceTokenCount} choices)`,
+    };
+  }
+
+  // 6. Exam review book
+  return {
+    kind: "exam_review_book",
+    confidence: 85,
+    reason: `Structured Q&A review book (${questionNumberCount} questions detected, ${choiceTokenCount} choices, ${answerSectionMatches} answer keys)`,
+  };
+}
+
 /**
  * Detects if a document has high likelihood of being a structured Q&A exam review book.
  */
@@ -770,7 +874,7 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
     detectedHeading = "Practice - [Name] / Exercise";
   }
 
-  // Select profile
+  // Select profile by features:
   let selectedProfile: ParserProfile;
   if (isFreeResponse) {
     selectedProfile = PROFILE_FREE_RESPONSE;
@@ -779,7 +883,7 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
   } else if (expectedChoicesPerItem === 5 && detectedChoiceStyle === "paren_letter") {
     selectedProfile = { ...PROFILE_PAREN_5_CHOICE, keyLocation: detectedKeyLocation };
   } else if (detectedHeading.includes("Set")) {
-    selectedProfile = { ...PROFILE_1001_MATH, keyLocation: detectedKeyLocation, choiceStyle: detectedChoiceStyle };
+    selectedProfile = { ...PROFILE_1001_MATH, keyLocation: detectedKeyLocation, choiceStyle: detectedChoiceStyle, expectedChoicesPerItem };
   } else if (detectedHeading.includes("Practice")) {
     selectedProfile = {
       ...PROFILE_PRACTICE_DRILL,
@@ -1044,7 +1148,7 @@ export function evaluateSuspiciousItem(
   }
 
   // Check 1: Missing answer key or prompt
-  if (item.hasIncompleteAnswer || item.questionType === "prompt" || (item.correctIndex !== undefined && item.correctIndex < 0)) {
+  if (item.hasIncompleteAnswer || item.questionType === "prompt" || (item.correctIndex !== undefined && item.correctIndex < 0 && item.questionType !== "free_response")) {
     reasons.push("Item has no verified answer key (self-check prompt, ungradable)");
   }
 
@@ -1131,6 +1235,43 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
 ): ParseTwoPassResult {
   const config = options?.config || DEFAULT_IMPORTER_CONFIG;
   const profile = options?.profile || detectParserProfile(pagesOrText).profile;
+
+  // Step 0: Document-Type Classification BEFORE parsing (Item 3)
+  const docClass = classifyDocumentType(pagesOrText);
+  if (docClass.kind === "form") {
+    return {
+      items: [],
+      missingQuestionNumbers: [],
+      chaptersDetected: [],
+      suspiciousCount: 0,
+      gradableCount: 0,
+      promptCount: 0,
+      isGradable: false,
+      totalExpected: 0,
+      profileUsed: profile,
+      coverageSummary: `Form document detected (${docClass.reason}): 0 questions produced.`,
+    };
+  }
+
+  if (docClass.kind === "statute_code") {
+    return generateQuestionsFromLegalOrUnstructuredText(pagesOrText, options);
+  }
+
+  if (docClass.kind === "dictionary_thesaurus" || docClass.kind === "lesson_notes" || docClass.kind === "textbook_with_few_exercises") {
+    const res = generateQuestionsFromLegalOrUnstructuredText(pagesOrText, options);
+    // Non-question documents: ensure any generated items are demoted to self-check prompts, never graded
+    for (const it of res.items) {
+      if (it.questionType === "mcq") {
+        it.questionType = "prompt";
+        it.correctIndex = -1;
+        it.correctLetter = "";
+        it.hasIncompleteAnswer = true;
+      }
+    }
+    res.gradableCount = 0;
+    res.isGradable = false;
+    return res;
+  }
 
   // Step 1: Detect repeating running headers/footers by frequency
   let repeatingHeaders = new Set<string>();
@@ -1272,7 +1413,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
 
     // 1. Check if it's an answer key block (only valid in an answer section or if marked as answer mode)
     const isAnswerContext = isAnswerMode || /Answers\b/i.test(currentChapter);
-    const isFreeResponseContext = isAnswerContext || profile.id === "free_response";
+    const isFreeResponseContext = profile.id === "free_response";
     let ansMatch = isAnswerContext
       ? block.match(/^(?:(?:Choice\s+|Option\s+)\s*([a-eA-E])\b|\(?([a-eA-E])(?:[\.\)\:\-\]]|\s+is\s+correct\b|\s+|$))\s*([\s\S]*)/i)
       : null;
@@ -1862,11 +2003,11 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
 
     if (ans) {
       if ((ans as any).textAnswer) {
-        // Free-response answer
+        // Free-response answer (no placeholder "A" or 0)
         explanation = (ans as any).textAnswer;
         questionType = "free_response";
-        correctLetter = "a";
-        correctIndex = 0;
+        correctLetter = "";
+        correctIndex = -1;
       } else {
         correctLetter = ans.letter.toLowerCase();
         correctIndex = ["a", "b", "c", "d", "e"].indexOf(correctLetter);
@@ -1908,6 +2049,19 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       suspiciousReasons.push("Diagram-based or unparseable choices (requires manual review)");
     }
 
+    // Item 2: Stem length cap (1,200 chars) for graded items
+    if (finalStem.length > (config.maxStemLength || 1200)) {
+      questionType = "prompt";
+      correctIndex = -1;
+      correctLetter = "";
+      hasIncompleteAnswer = true;
+      isSuspicious = true;
+      reviewStatus = "needs_review";
+      if (!suspiciousReasons.includes(`Question stem abnormally long (> ${config.maxStemLength || 1200} characters)`)) {
+        suspiciousReasons.push(`Question stem abnormally long (> ${config.maxStemLength || 1200} characters)`);
+      }
+    }
+
     items.push({
       id: generateUUID(),
       number: q.number,
@@ -1930,12 +2084,55 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   // Sort items by question number
   items.sort((a, b) => a.number - b.number);
 
-  // Compute missing question numbers in sequence
+  // Item 1: Key gate skew check
+  // If more than 60% of keys in a file are one letter (n >= 10), demote the whole file's items to prompts + needs_review
+  const letteredItems = items.filter(
+    (it) => it.correctLetter && ["a", "b", "c", "d", "e"].includes(it.correctLetter.toLowerCase())
+  );
+  if (letteredItems.length >= 10) {
+    const counts: Record<string, number> = { a: 0, b: 0, c: 0, d: 0, e: 0 };
+    for (const it of letteredItems) {
+      counts[it.correctLetter!.toLowerCase()] = (counts[it.correctLetter!.toLowerCase()] || 0) + 1;
+    }
+    let maxLetter = "a";
+    let maxCount = 0;
+    for (const [ltr, cnt] of Object.entries(counts)) {
+      if (cnt > maxCount) {
+        maxCount = cnt;
+        maxLetter = ltr;
+      }
+    }
+    if (maxCount / letteredItems.length > 0.60) {
+      const skewMsg = `Answer keys look unreliable: >60% of items assigned choice ${maxLetter.toUpperCase()} (${maxCount}/${letteredItems.length})`;
+      for (const it of items) {
+        it.questionType = "prompt";
+        it.reviewStatus = "needs_review";
+        it.isSuspicious = true;
+        it.hasIncompleteAnswer = true;
+        it.correctIndex = -1;
+        it.correctLetter = "";
+        if (!it.suspiciousReasons) it.suspiciousReasons = [];
+        if (!it.suspiciousReasons.includes(skewMsg)) {
+          it.suspiciousReasons.push(skewMsg);
+        }
+      }
+    }
+  }
+
+  // Item 4: Missing numbers calculation
+  // Ignore numbers above plausible range (> 1500) or that look like years (1900-2099)
+  const plausibleItems = items.filter((it) => {
+    if (it.number >= 1900 && it.number <= 2099) return false;
+    if (it.number > 1500) return false;
+    return true;
+  });
+
   const missingQuestionNumbers: number[] = [];
-  if (items.length > 0) {
-    const minNum = items[0].number;
-    const maxNum = items[items.length - 1].number;
-    const itemNumberSet = new Set(items.map((it) => it.number));
+  if (plausibleItems.length > 0) {
+    const itemNumbers = plausibleItems.map((it) => it.number).sort((a, b) => a - b);
+    const minNum = itemNumbers[0] <= 5 ? itemNumbers[0] : 1;
+    const maxNum = itemNumbers[itemNumbers.length - 1];
+    const itemNumberSet = new Set(itemNumbers);
 
     for (let num = minNum; num <= maxNum; num++) {
       if (!itemNumberSet.has(num)) {
@@ -1946,9 +2143,14 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
 
   const suspiciousCount = items.filter((it) => it.isSuspicious).length;
   const gradableCount = items.filter(
-    (it) => it.questionType !== "prompt" && it.correctIndex >= 0 && !it.hasIncompleteAnswer
+    (it) =>
+      it.questionType !== "prompt" &&
+      (it.correctIndex >= 0 || (it.questionType === "free_response" && !it.hasIncompleteAnswer)) &&
+      !it.hasIncompleteAnswer
   ).length;
-  const promptCount = items.filter((it) => it.questionType === "prompt" || it.correctIndex < 0).length;
+  const promptCount = items.filter(
+    (it) => it.questionType === "prompt" || (it.correctIndex < 0 && it.questionType !== "free_response")
+  ).length;
   const isGradable = gradableCount > 0;
 
   return {

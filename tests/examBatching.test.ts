@@ -209,6 +209,26 @@ Let's make sure the options are balanced:
     expect(parsed![1].question).toContain("Question 2");
   });
 
+  it("repairs raw unescaped newlines and tabs inside JSON string literals", () => {
+    // Literal multiline string with unescaped newline and tab inside JSON property values
+    const rawWithNewlines = `[
+  {
+    "question": "Line 1
+Line 2 with \ttab?",
+    "options": ["A", "B", "C", "D"],
+    "correctIndex": 0,
+    "explanation": "Multi-line
+step by step derivation."
+  }
+]`;
+
+    const parsed = extractJsonQuestions(rawWithNewlines);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.length).toBe(1);
+    expect(parsed![0].question).toContain("Line 1");
+    expect(parsed![0].explanation).toContain("Multi-line");
+  });
+
   it("immediately halts and throws when AbortSignal is cancelled", async () => {
     const controller = new AbortController();
     controller.abort();

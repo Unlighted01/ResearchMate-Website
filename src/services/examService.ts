@@ -926,6 +926,23 @@ export function repairJsonString(input: string): string {
       continue;
     }
 
+    // Raw unescaped control characters inside JSON string literals:
+    if (ch === '\n') {
+      out += "\\n";
+      i++;
+      continue;
+    }
+    if (ch === '\r') {
+      out += "\\r";
+      i++;
+      continue;
+    }
+    if (ch === '\t') {
+      out += "\\t";
+      i++;
+      continue;
+    }
+
     if (ch === '\\') {
       const next = input[i + 1];
       if (next === undefined) {

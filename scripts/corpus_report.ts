@@ -21,15 +21,20 @@ if (!fs.existsSync(reportsDir)) {
 
 // CLI Argument parsing
 const args = process.argv.slice(2);
-let corpusRoot = "C:\\Users\\netne\\Documents\\CSC REVIEWER 2027\\📝 2027 CSE Reviewer";
+let corpusRoot =
+  process.env.CORPUS_ROOT ||
+  "C:\\Users\\netne\\Documents\\CSC REVIEWER 2027\\📝 2027 CSE Reviewer";
 let onlyFilter: string | null = null;
 let excludeFilter: string | null = null;
+let freshRun = false;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--only" && args[i + 1]) {
     onlyFilter = args[++i].toLowerCase();
   } else if (args[i] === "--exclude" && args[i + 1]) {
     excludeFilter = args[++i].toLowerCase();
+  } else if (args[i] === "--fresh") {
+    freshRun = true;
   } else if (!args[i].startsWith("--")) {
     corpusRoot = args[i];
   }
@@ -83,6 +88,7 @@ function getExpectedKind(folderPath: string): ManifestRule["expectedKind"] {
 // Sidecar types
 interface SidecarExpectation {
   questionCount?: number;
+  cardCount?: number;
   spotChecks?: Array<{ n: number; key: string }>;
 }
 
@@ -127,6 +133,7 @@ export interface CorpusReportRow {
   folder: string;
   file: string;
   pages: number;
+  textPages: string; // e.g. "120/121"
   hasTextLayer: boolean;
   detectedProfile: string;
   profileConfidence: number;
@@ -138,7 +145,7 @@ export interface CorpusReportRow {
   answerDistribution: string;
   longestStem: string;
   expectedKind: string;
-  status: "PASS" | "FAIL";
+  status: "PASS" | "WARN" | "FAIL" | "UNVERIFIED";
   statusReason?: string;
   error?: string;
   elapsedMs: number;
@@ -153,6 +160,7 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
 
   let pages: PdfPageWithLayout[] = [];
   let pageCount = 0;
+  let textPages = "0/0";
   let hasTextLayer = false;
   let detectedProfile = "None";
   let profileConfidence = 0;
@@ -164,7 +172,7 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
   let answerDistribution = "-";
   let longestStem = "-";
   let errorMsg = "-";
-  let status: "PASS" | "FAIL" = "PASS";
+  let status: "PASS" | "WARN" | "FAIL" | "UNVERIFIED" = "PASS";
   let statusReason = "";
 
   try {
@@ -180,9 +188,10 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
     pages = layout.pages;
     pageCount = layout.pageCount;
 
-    // Check for text layer
-    const totalChars = pages.reduce((acc, p) => acc + (p.text?.length || 0), 0);
-    hasTextLayer = totalChars > 50;
+    // Per-page text layer count
+    const pagesWithText = pages.filter((p) => (p.text?.trim()?.length || 0) > 20).length;
+    textPages = `${pagesWithText}/${pageCount}`;
+    hasTextLayer = pagesWithText > 0;
 
     if (hasTextLayer) {
       // Profile Detection
@@ -201,13 +210,13 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
       gradedCount =
         result.gradableCount ??
         result.items.filter(
-          (it) => it.questionType !== "prompt" && it.questionType !== "flashcard" && it.correctIndex >= 0 && !it.hasIncompleteAnswer
+          (it) => it.questionType !== "prompt" && it.correctIndex >= 0 && !it.hasIncompleteAnswer
         ).length;
 
       promptsCards =
         (result.promptCount || 0) +
         (result.flashcardCount || 0) ||
-        result.items.filter((it) => it.questionType === "prompt" || it.questionType === "flashcard").length;
+        result.items.filter((it) => it.questionType === "prompt").length;
 
       needsReview =
         result.suspiciousCount ??
@@ -242,18 +251,29 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
       const maxStem = stems.length > 0 ? Math.max(...stems) : 0;
       longestStem = maxStem > 0 ? `${maxStem} chars` : "-";
 
+      // Check for key skew warning in items
+      const hasSkewWarning = result.items.some((it) =>
+        (it.suspiciousReasons || []).some((r) => r.includes("Answer keys look unreliable"))
+      );
+
       // Validation logic:
       if (sidecar) {
         // Compare against sidecar
         if (typeof sidecar.questionCount === "number") {
           const expectedQ = sidecar.questionCount;
-          // If expected 0, gradedCount must be 0
           if (expectedQ === 0 && gradedCount !== 0) {
             status = "FAIL";
             statusReason = `Expected 0 graded Qs but found ${gradedCount}`;
           } else if (expectedQ > 0 && gradedCount !== expectedQ && questionsFound !== expectedQ) {
             status = "FAIL";
             statusReason = `Expected ${expectedQ} questions but found ${gradedCount} graded (${questionsFound} total)`;
+          }
+        }
+
+        if (status === "PASS" && typeof sidecar.cardCount === "number") {
+          if (promptsCards < sidecar.cardCount) {
+            status = "WARN";
+            statusReason = `Expected ${sidecar.cardCount} cards, got ${promptsCards}`;
           }
         }
 
@@ -277,9 +297,13 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
         }
       } else {
         // Validation without sidecar
-        if (expectedKind === "non_question" && gradedCount > 0) {
-          status = "FAIL";
-          statusReason = `non_question file produced ${gradedCount} graded questions`;
+        if (expectedKind === "non_question") {
+          if (gradedCount > 0) {
+            status = "FAIL";
+            statusReason = `non_question file produced ${gradedCount} graded questions`;
+          } else {
+            status = "PASS";
+          }
         } else if (expectedKind === "figure_based") {
           const unverified = result.items.filter(
             (it) => it.questionType !== "prompt" && (it.reviewStatus === "needs_review" || !it.correctLetter)
@@ -287,6 +311,29 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
           if (unverified.length > 0) {
             status = "FAIL";
             statusReason = `figure_based file has ${unverified.length} unverified question keys`;
+          } else {
+            status = "PASS";
+          }
+        } else if (expectedKind === "lesson_notes") {
+          if (gradedCount > 0) {
+            status = "WARN";
+            statusReason = `lesson_notes produced ${gradedCount} graded items (expected notes/cards only)`;
+          } else {
+            status = "PASS";
+          }
+        } else {
+          // keyed_mcq
+          if (hasSkewWarning) {
+            status = "WARN";
+            statusReason = "Answer keys look unreliable (>60% single choice, demoted to prompts)";
+          } else if (gradedCount === 0 && questionsFound > 0) {
+            status = "WARN";
+            statusReason = `All ${questionsFound} items parsed as prompts/ungradable`;
+          } else if (missingNumbers !== "0") {
+            status = "WARN";
+            statusReason = `Sequence gap: ${missingNumbers}`;
+          } else {
+            status = "PASS";
           }
         }
       }
@@ -298,8 +345,10 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
         status = "FAIL";
         statusReason = `Sidecar expected ${sidecar.questionCount} questions, but PDF has no text layer (scanned)`;
       } else if (expectedKind === "keyed_mcq") {
-        status = "FAIL";
-        statusReason = `Scanned PDF (No text layer) in keyed_mcq folder`;
+        status = "UNVERIFIED";
+        statusReason = `Scanned PDF (${textPages} pages with text layer) in keyed_mcq folder`;
+      } else {
+        status = "PASS";
       }
     }
   } catch (err: any) {
@@ -314,6 +363,7 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
     folder: relFolder,
     file: fileName,
     pages: pageCount,
+    textPages,
     hasTextLayer,
     detectedProfile,
     profileConfidence,
@@ -350,19 +400,59 @@ async function main() {
 
   console.log(`Found ${allPdfs.length} total PDFs in corpus (${targetPdfs.length} matched active filters).\n`);
 
+  // Resumable JSONL
+  const jsonlPath = path.resolve(reportsDir, "corpus_report.jsonl");
+  const completedRows = new Map<string, CorpusReportRow>();
+
+  if (!freshRun && fs.existsSync(jsonlPath)) {
+    const lines = fs.readFileSync(jsonlPath, "utf-8").split("\n");
+    for (const line of lines) {
+      if (line.trim()) {
+        try {
+          const row: CorpusReportRow = JSON.parse(line);
+          const key = path.join(row.folder, row.file);
+          completedRows.set(key, row);
+        } catch (e) {}
+      }
+    }
+    console.log(`Resuming: loaded ${completedRows.size} previously scanned results from corpus_report.jsonl\n`);
+  } else if (freshRun && fs.existsSync(jsonlPath)) {
+    fs.unlinkSync(jsonlPath);
+  }
+
   const rows: CorpusReportRow[] = [];
   let index = 0;
 
   for (const pdfPath of targetPdfs) {
     index++;
-    const relName = path.relative(corpusRoot, pdfPath);
-    process.stdout.write(`[${index}/${targetPdfs.length}] Scanning "${relName}"... `);
+    const fileName = path.basename(pdfPath);
+    const relFolder = path.relative(corpusRoot, path.dirname(pdfPath)) || ".";
+    const fileKey = path.join(relFolder, fileName);
+
+    if (completedRows.has(fileKey)) {
+      const existing = completedRows.get(fileKey)!;
+      rows.push(existing);
+      console.log(`[${index}/${targetPdfs.length}] Cached "${fileKey}" -> ${existing.status}`);
+      continue;
+    }
+
+    process.stdout.write(`[${index}/${targetPdfs.length}] Scanning "${fileKey}"... `);
 
     const row = await processSinglePdf(pdfPath);
     rows.push(row);
 
-    const badge = row.status === "PASS" ? "✅ PASS" : "❌ FAIL";
-    console.log(`${badge} (${row.pages} pages, ${row.questionsFound} Qs, ${row.elapsedMs}ms)${row.statusReason ? ` - ${row.statusReason}` : ""}`);
+    // Append to JSONL immediately
+    fs.appendFileSync(jsonlPath, JSON.stringify(row) + "\n", "utf-8");
+
+    const badge =
+      row.status === "PASS"
+        ? "✅ PASS"
+        : row.status === "WARN"
+        ? "⚠️ WARN"
+        : row.status === "UNVERIFIED"
+        ? "❓ UNVERIFIED"
+        : "❌ FAIL";
+    console.log(`${badge} (${row.textPages} text pgs, ${row.questionsFound} Qs, ${row.elapsedMs}ms)${row.statusReason ? ` - ${row.statusReason}` : ""}`);
   }
 
   // Generate Reports
@@ -377,26 +467,36 @@ async function main() {
   mdLines.push(`- **Corpus Root**: \`${corpusRoot}\``);
   mdLines.push(`- **Total Files Scanned**: ${rows.length}`);
   const passCount = rows.filter((r) => r.status === "PASS").length;
+  const warnCount = rows.filter((r) => r.status === "WARN").length;
+  const unverCount = rows.filter((r) => r.status === "UNVERIFIED").length;
   const failCount = rows.filter((r) => r.status === "FAIL").length;
   mdLines.push(`- **Overall Pass Rate**: ${passCount} / ${rows.length} (${Math.round((passCount / rows.length) * 100) || 0}%)`);
-  mdLines.push(`- **Passes**: ${passCount}`);
-  mdLines.push(`- **Failures / Flaws**: ${failCount}\n`);
+  mdLines.push(`- **✅ PASS**: ${passCount}`);
+  mdLines.push(`- **⚠️ WARN**: ${warnCount}`);
+  mdLines.push(`- **❓ UNVERIFIED**: ${unverCount}`);
+  mdLines.push(`- **❌ FAIL**: ${failCount}\n`);
 
   mdLines.push("## Summary Table\n");
   mdLines.push(
-    "| # | Folder | File | Pgs | Text Layer | Detected Profile | Found | Graded | Cards/Prompts | Needs Rev | Missing #s | Dist | Longest Stem | Status | Notes / Errors |"
+    "| # | Folder | File | Pgs | Text Pgs | Detected Profile | Found | Graded | Cards/Prompts | Needs Rev | Missing #s | Dist | Longest Stem | Status | Notes / Errors |"
   );
   mdLines.push(
     "|---|---|---|---|:---:|---|:---:|:---:|:---:|:---:|:---:|---|:---:|:---:|---|"
   );
 
   rows.forEach((r, idx) => {
-    const textLayerBadge = r.hasTextLayer ? "Yes" : "**No**";
     const profileCell = `${r.detectedProfile}${r.profileConfidence > 0 ? ` (${r.profileConfidence}%)` : ""}`;
-    const statusCell = r.status === "PASS" ? "✅ PASS" : "❌ FAIL";
+    const statusBadge =
+      r.status === "PASS"
+        ? "✅ PASS"
+        : r.status === "WARN"
+        ? "⚠️ WARN"
+        : r.status === "UNVERIFIED"
+        ? "❓ UNVERIFIED"
+        : "❌ FAIL";
     const noteCell = r.statusReason || r.error || "-";
     mdLines.push(
-      `| ${idx + 1} | ${r.folder} | ${r.file} | ${r.pages} | ${textLayerBadge} | ${profileCell} | ${r.questionsFound} | ${r.gradedCount} | ${r.promptsCards} | ${r.needsReview} | ${r.missingNumbers} | ${r.answerDistribution} | ${r.longestStem} | ${statusCell} | ${noteCell} |`
+      `| ${idx + 1} | ${r.folder} | ${r.file} | ${r.pages} | ${r.textPages} | ${profileCell} | ${r.questionsFound} | ${r.gradedCount} | ${r.promptsCards} | ${r.needsReview} | ${r.missingNumbers} | ${r.answerDistribution} | ${r.longestStem} | ${statusBadge} | ${noteCell} |`
     );
   });
 
