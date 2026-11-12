@@ -31,7 +31,7 @@ describe("501 Word Analogy Questions Full Engine Audit", () => {
     }
 
     const profileRes = detectParserProfile(pages);
-    expect(profileRes.profile.id).toBe("practice_drill");
+    expect(["chapter_practice_drill", "practice_drill"]).toContain(profileRes.profile.id);
     expect(profileRes.profile.keyLocation).toBe("end_of_chapter");
 
     const result = parseTwoPassQuestionsAndAnswersDetailed(pages, { profile: profileRes.profile });

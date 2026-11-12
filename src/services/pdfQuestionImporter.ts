@@ -140,8 +140,8 @@ export const PROFILE_FREE_RESPONSE: ParserProfile = {
   endMarkers: [/^(?:(?:\d+\.\d+\s+)?Answers\s*[-–—]?\s*[\w\s]+|Answer\s+Key)\b/i],
 };
 
-export const PROFILE_1001_MATH: ParserProfile = {
-  id: "1001_math_problems",
+export const PROFILE_SECTIONED_NUMERICAL_DRILL: ParserProfile = {
+  id: "sectioned_numerical_drill",
   name: "Sectioned Numerical Drill (End-of-Book Keys)",
   description: "Numbered sections and sets with mixed choices and consolidated end-of-book answer keys",
   headingPattern: /^(?:SECTION\s+(\d+):?\s*[A-Za-z\s\-]+|CHAPTER\s+(\d+):?\s*[A-Za-z\s\-]+|Set\s+(\d+))\b/i,
@@ -154,6 +154,7 @@ export const PROFILE_1001_MATH: ParserProfile = {
     /^Answers\s+\d+$/i,
   ],
 };
+export const PROFILE_1001_MATH = PROFILE_SECTIONED_NUMERICAL_DRILL;
 
 export const PROFILE_INLINE_KEYS: ParserProfile = {
   id: "inline_answer_key",
@@ -188,8 +189,8 @@ export const PROFILE_CONDENSED_GRID: ParserProfile = {
   endMarkers: [/^(?:Answers|Answer\s+Key)\b/i],
 };
 
-export const PROFILE_PRACTICE_DRILL: ParserProfile = {
-  id: "practice_drill",
+export const PROFILE_CHAPTER_PRACTICE_DRILL: ParserProfile = {
+  id: "chapter_practice_drill",
   name: "Chapter Practice Drill (End-of-Chapter Keys)",
   description: "Numbered practice sets with answers immediately following each chapter/section",
   headingPattern: /^(?:(?:Practice|Review|Exercise|Unit|Lesson|Chapter|Section|Set)\s+(?:(?:\d+|[IVXLCDM]+)\b(?:\s*[:\-–—]\s*[^\n]+)?|[:\-–—]\s*[^\n]+)|(\d{1,2})\s+(?:[A-Za-z\s]+)?(?:Practice|Review|Test)\b)/i,
@@ -198,14 +199,15 @@ export const PROFILE_PRACTICE_DRILL: ParserProfile = {
   expectedChoicesPerItem: 4,
   endMarkers: [/^(?:Answers\s+and\s+Explanations|Answers\s+&\s+Explanations|Answer\s+Explanations|Answers|Solutions|Answer\s+Key)\b/i],
 };
+export const PROFILE_PRACTICE_DRILL = PROFILE_CHAPTER_PRACTICE_DRILL;
 
 export const SAVED_PARSER_PROFILES: Record<string, ParserProfile> = {
   standard_two_pass: PROFILE_STANDARD_TWO_PASS,
-  practice_drill: PROFILE_PRACTICE_DRILL,
-  chapter_practice_drill: PROFILE_PRACTICE_DRILL,
+  chapter_practice_drill: PROFILE_CHAPTER_PRACTICE_DRILL,
+  practice_drill: PROFILE_CHAPTER_PRACTICE_DRILL,
   free_response: PROFILE_FREE_RESPONSE,
-  "1001_math_problems": PROFILE_1001_MATH,
-  sectioned_numerical_drill: PROFILE_1001_MATH,
+  sectioned_numerical_drill: PROFILE_SECTIONED_NUMERICAL_DRILL,
+  "1001_math_problems": PROFILE_SECTIONED_NUMERICAL_DRILL,
   inline_answer_key: PROFILE_INLINE_KEYS,
   paren_5_choice: PROFILE_PAREN_5_CHOICE,
   condensed_grid: PROFILE_CONDENSED_GRID,
@@ -919,7 +921,7 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
   const isFreeResponse = maxStyleCount < 2 && (answerSectionMatches > 0 || /(?:Answers\s*[-–—]?\s*Age|Practice\s*[-–—]?\s*Age)/i.test(sampleText));
 
   if (/\bSet\s+\d+\b/i.test(sampleText)) {
-    headingPattern = PROFILE_1001_MATH.headingPattern;
+    headingPattern = PROFILE_SECTIONED_NUMERICAL_DRILL.headingPattern;
     detectedHeading = "Set \\d+ / Section \\d+";
   } else if (/\b(?:Practice\s+\d+|\d+\s+(?:[A-Za-z\s]+)?Practice)\b/i.test(sampleText)) {
     headingPattern = PROFILE_STANDARD_TWO_PASS.headingPattern;
@@ -941,10 +943,10 @@ export function detectParserProfile(pagesOrText: PdfPageWithLayout[] | string): 
   } else if (expectedChoicesPerItem === 5 && detectedChoiceStyle === "paren_letter") {
     selectedProfile = { ...PROFILE_PAREN_5_CHOICE, keyLocation: detectedKeyLocation };
   } else if (detectedHeading.includes("Set")) {
-    selectedProfile = { ...PROFILE_1001_MATH, keyLocation: detectedKeyLocation, choiceStyle: detectedChoiceStyle, expectedChoicesPerItem };
+    selectedProfile = { ...PROFILE_SECTIONED_NUMERICAL_DRILL, keyLocation: detectedKeyLocation, choiceStyle: detectedChoiceStyle, expectedChoicesPerItem };
   } else if (detectedHeading.includes("Practice")) {
     selectedProfile = {
-      ...PROFILE_PRACTICE_DRILL,
+      ...PROFILE_CHAPTER_PRACTICE_DRILL,
       choiceStyle: detectedChoiceStyle,
       keyLocation: detectedKeyLocation,
       expectedChoicesPerItem,
