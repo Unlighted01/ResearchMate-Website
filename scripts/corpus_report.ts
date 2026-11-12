@@ -508,7 +508,11 @@ async function main() {
   console.log("\n" + mdLines.join("\n"));
 }
 
-main().catch((err) => {
-  console.error("Fatal error running corpus report:", err);
-  process.exit(1);
-});
+export { main as runCorpusScan };
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch((err) => {
+    console.error("Fatal error running corpus report:", err);
+    process.exit(1);
+  });
+}
