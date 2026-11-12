@@ -1032,6 +1032,18 @@ export function extractJsonQuestions(raw: string): any[] | null {
 
   // Helper to try parsing with clean trailing commas and backslash repairs
   const tryParse = (str: string): any[] | null => {
+    // Attempt 0: If string contains LaTeX commands that collide with JSON control escapes (\f, \t, \n, \r, \b),
+    // repair them first so JSON.parse does not eat them into control characters (\x0C, \t, etc.)
+    const hasLatexCollision = /\\[ftnrb](?:rac|ext|imes|heta|au|an|eta|ar|egin|f|inom|ho|ight|m|oot|eg|eq|abla|u|e)\b/i.test(str);
+    if (hasLatexCollision) {
+      try {
+        const repaired = repairJsonString(str.replace(/,\s*([\]}])/g, "$1"));
+        const p = JSON.parse(repaired);
+        const arr = getArrayFromParsed(p);
+        if (arr) return arr;
+      } catch {}
+    }
+
     // Attempt 1: Direct JSON.parse
     try {
       const p = JSON.parse(str);

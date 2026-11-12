@@ -168,8 +168,7 @@ export function parsePlainTextQuestions(rawText: string, defaultTopic = "General
     }
 
     if (correctIndex === -1) {
-      warnings.push("No correct answer key specified (defaulted to A).");
-      correctIndex = 0;
+      warnings.push("No correct answer key specified (ungraded).");
     }
 
     if (!explanation) {
@@ -185,14 +184,14 @@ export function parsePlainTextQuestions(rawText: string, defaultTopic = "General
       id: generateUUID(),
       question: sanitizeCurrencyAndMath(questionStem),
       options: options.slice(0, 4).map((opt) => sanitizeCurrencyAndMath(opt)),
-      correctIndex: Math.min(Math.max(correctIndex, 0), 3),
+      correctIndex: correctIndex >= 0 ? Math.min(Math.max(correctIndex, 0), 3) : -1,
       explanation: sanitizeCurrencyAndMath(explanation),
       topicTag: topicTag || defaultTopic,
     };
 
     parsedItems.push({
       question: finalQuestion,
-      isValid: Boolean(questionStem && options.length >= 2),
+      isValid: Boolean(questionStem && options.length >= 2 && correctIndex >= 0),
       warnings,
     });
   }

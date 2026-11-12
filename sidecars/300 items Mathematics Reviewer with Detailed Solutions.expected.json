@@ -1,0 +1,11 @@
+{
+  "questionCount": 300,
+  "spotChecks": [
+    { "n": 1, "key": "c" },
+    { "n": 7, "key": "c" },
+    { "n": 15, "key": "d" },
+    { "n": 22, "key": "d" },
+    { "n": 45, "key": "a" },
+    { "n": 50, "key": "e" }
+  ]
+}

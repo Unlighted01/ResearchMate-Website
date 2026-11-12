@@ -42,7 +42,7 @@ export type QuestionOrigin =
   | "migrated";
 
 export type QuestionReviewStatus = "verified" | "needs_review" | "flagged";
-export type QuestionType = "mcq" | "free_response" | "prompt";
+export type QuestionType = "mcq" | "free_response" | "prompt" | "figure_based";
 
 export interface StoredQuestion extends Question {
   subject?: string;

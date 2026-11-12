@@ -71,7 +71,7 @@ export const DEFAULT_IMPORTER_CONFIG: ImporterThresholdConfig = {
   frequencyHeaderRatio: 0.15,
 };
 
-export type QuestionType = "mcq" | "free_response" | "prompt";
+export type QuestionType = "mcq" | "free_response" | "prompt" | "figure_based";
 
 export interface ParsedQaItem {
   id: string;
@@ -571,12 +571,66 @@ export function sanitizeContentText(text: string, repeatingHeaders?: Set<string>
 }
 
 /**
- * Reconstructs stacked fractions from 2D text coordinates.
+ * Reconstructs stacked fractions and superscript exponents from 2D text coordinates.
  */
 export function reconstructStackedFractions(items: PdfLayoutItem[]): string {
   if (!items || items.length === 0) return "";
 
-  // Sort items primarily by descending Y (top of page to bottom), then ascending X
+  // 1. Group items into visual horizontal lines (within 7px vertical)
+  const sortedByY = [...items].sort((a, b) => b.y - a.y);
+  const lines: PdfLayoutItem[][] = [];
+
+  for (const item of sortedByY) {
+    let placed = false;
+    for (const line of lines) {
+      if (Math.abs(item.y - line[0].y) <= 7) {
+        line.push(item);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) lines.push([item]);
+  }
+
+  // Sort lines top to bottom (descending average y)
+  lines.sort((l1, l2) => {
+    const avg1 = l1.reduce((sum, it) => sum + it.y, 0) / l1.length;
+    const avg2 = l2.reduce((sum, it) => sum + it.y, 0) / l2.length;
+    return avg2 - avg1;
+  });
+
+  let clusteredText = "";
+  let hasSuperscript = false;
+  for (const line of lines) {
+    line.sort((a, b) => a.x - b.x);
+    for (let i = 0; i < line.length; i++) {
+      const cur = line[i];
+      const next = line[i + 1];
+      let addition = cur.str;
+
+      // Check if next is a superscript: smaller height, elevated y, horizontally adjacent
+      if (
+        next &&
+        next.height > 0 &&
+        cur.height > 0 &&
+        !cur.str.trim().includes(" ") &&
+        /[0-9a-zA-Z\)]$/.test(cur.str.trim()) &&
+        next.height < cur.height * 0.85 &&
+        next.y > cur.y + 1.5 &&
+        next.x >= cur.x + cur.width - 3 &&
+        next.x <= cur.x + cur.width + 12 &&
+        /^[0-9a-zA-Z\+\-]+$/.test(next.str.trim())
+      ) {
+        addition += `^{${next.str.trim()}}`;
+        hasSuperscript = true;
+        i++; // skip next item as it was merged as superscript
+      }
+      clusteredText += addition + (cur.hasEOL ? "\n" : " ");
+    }
+    clusteredText += "\n";
+  }
+
+  // Fraction reconstruction on stacked items
   const sorted = [...items].sort((a, b) => {
     const yDiff = b.y - a.y;
     if (Math.abs(yDiff) > 3) return yDiff;
@@ -584,7 +638,8 @@ export function reconstructStackedFractions(items: PdfLayoutItem[]): string {
   });
 
   const processed = new Set<number>();
-  let result = "";
+  let hasStacked = false;
+  let fractionResult = "";
 
   for (let i = 0; i < sorted.length; i++) {
     if (processed.has(i)) continue;
@@ -603,10 +658,11 @@ export function reconstructStackedFractions(items: PdfLayoutItem[]): string {
         const xOverlap = Math.abs(current.x - candidate.x) < Math.max(current.width, candidate.width, 10);
 
         if (verticalGap > 2 && verticalGap < 20 && xOverlap && /^\d{1,3}$/.test(candStr)) {
-          result += ` $\\frac{${curStr}}{${candStr}}$ `;
+          fractionResult += ` $\\frac{${curStr}}{${candStr}}$ `;
           processed.add(i);
           processed.add(j);
           foundDenominator = true;
+          hasStacked = true;
           break;
         }
       }
@@ -615,10 +671,12 @@ export function reconstructStackedFractions(items: PdfLayoutItem[]): string {
     }
 
     processed.add(i);
-    result += current.str + (current.hasEOL ? "\n" : " ");
+    fractionResult += current.str + (current.hasEOL ? "\n" : " ");
   }
 
-  return result
+  const finalOutput = hasStacked ? fractionResult : (hasSuperscript ? clusteredText : fractionResult);
+
+  return finalOutput
     .replace(/½/g, "$\\frac{1}{2}$")
     .replace(/⅓/g, "$\\frac{1}{3}$")
     .replace(/⅔/g, "$\\frac{2}{3}$")
@@ -1023,6 +1081,52 @@ export function splitStemAndOptions(
         return { stem, options };
       }
     }
+
+    // Fallback: check numeric tokens: 1-5 (common in CSE mock exams)
+    const numericTokenRegex = /(?:^|\n|\s{2,}|\s+(?=[1-5][\.\)]|\([1-5]\)))(?:\(?([1-5])[\.\)\]]|\b([1-5])[\.\)])\s+/g;
+    const numMatches: { index: number; num: number; length: number }[] = [];
+    let nm: RegExpExecArray | null;
+    while ((nm = numericTokenRegex.exec(block)) !== null) {
+      const num = parseInt(nm[1] || nm[2], 10);
+      numMatches.push({ index: nm.index, num, length: nm[0].length });
+    }
+
+    for (let i = 0; i < numMatches.length; i++) {
+      if (numMatches[i].num === 1) {
+        let currentSeq = [numMatches[i]];
+        let expectedNum = 2;
+        for (let j = i + 1; j < numMatches.length; j++) {
+          if (numMatches[j].num === expectedNum) {
+            currentSeq.push(numMatches[j]);
+            expectedNum++;
+            if (currentSeq.length >= (config.maxOptionsCount || 5)) break;
+          }
+        }
+        if (currentSeq.length >= Math.max(3, config.minOptionsCount)) {
+          const firstToken = currentSeq[0];
+          const stem = sanitizeContentText(block.substring(0, firstToken.index), repeatingHeaders);
+          const options: string[] = [];
+          for (let s = 0; s < currentSeq.length; s++) {
+            const cur = currentSeq[s];
+            const startPos = cur.index + cur.length;
+            const endPos = s + 1 < currentSeq.length ? currentSeq[s + 1].index : block.length;
+            let optText = sanitizeContentText(block.substring(startPos, endPos), repeatingHeaders);
+            if (s === currentSeq.length - 1) {
+              optText = optText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ")
+                .replace(/(?:\n|^|\s{2,})\s*(?:Section\s+\d+|Chapter\s+\d+|Set\s+\d+|Answers\b)[\s\S]*/i, "")
+                .replace(/\n\s*[\d\s]+$/g, "")
+                .trim();
+            }
+            options.push(optText || `Choice ${s + 1}`);
+          }
+          const maxOptLen = config.maxOptionLength || 250;
+          if (!options.some((opt) => opt.length > maxOptLen)) {
+            return { stem, options };
+          }
+        }
+      }
+    }
+
     return null;
   }
 
@@ -1184,8 +1288,19 @@ export function evaluateSuspiciousItem(
 
   // Check 3: Options anomalies (only applies to MCQ, not free-response)
   const opts = item.options || [];
-  if (item.questionType !== "free_response" && opts.length < config.minOptionsCount) {
+  if (item.questionType !== "free_response" && item.questionType !== "figure_based" && opts.length < config.minOptionsCount) {
     reasons.push(`Fewer than ${config.minOptionsCount} choices available`);
+  }
+
+  // Identical options check (lost stacked fractions e.g. #202-204)
+  if (opts.length >= 2 && opts.every((o) => o.trim().toLowerCase() === opts[0].trim().toLowerCase())) {
+    reasons.push("All options are identical (lost stacked fractions or conversion error)");
+  }
+
+  // Lost superscripts check (e.g. #4 "1.45×102" or powers of 10 merged without exponent formatting)
+  const lostSuperscriptRegex = /\b(?:1\.45\s*×\s*10\s*2|1\.45\s*×\s*10\^\{2\}|10\s*16\b|10\s*32\b|10\s*[2468]\b)/i;
+  if (lostSuperscriptRegex.test(stem) || opts.some((o) => lostSuperscriptRegex.test(o))) {
+    reasons.push("Potential lost superscripts or mathematical exponent formatting");
   }
 
   const seenOpts = new Set<string>();
@@ -1386,12 +1501,15 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   let isAnswerMode = false;
   let currentPage = 1;
 
-  const lines = fullCleanedText.split("\n");
+  // Normalize multi-marker lines (e.g. "81.) ... 82.) ...") onto separate lines
+  const normalizedText = fullCleanedText.replace(/(?<=\S)\s{2,}(?=\d{1,4}\.\))/g, "\n");
+  const lines = normalizedText.split("\n");
   let currentNum: number | null = null;
   let currentBuffer: string[] = [];
+  let inSurveyBlock = false;
 
   const flush = () => {
-    if (currentNum === null || currentBuffer.length === 0) return;
+    if (currentNum === null) return;
     const block = currentBuffer.join("\n").trim();
     currentBuffer = [];
 
@@ -1414,8 +1532,9 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     // 1. Check if it's an answer key block (only valid in an answer section or if marked as answer mode)
     const isAnswerContext = isAnswerMode || /Answers\b/i.test(currentChapter);
     const isFreeResponseContext = profile.id === "free_response";
+    const cleanBlock = block.replace(/^\)\s*/, "").trim();
     let ansMatch = isAnswerContext
-      ? block.match(/^(?:(?:Choice\s+|Option\s+)\s*([a-eA-E])\b|\(?([a-eA-E])(?:[\.\)\:\-\]]|\s+is\s+correct\b|\s+|$))\s*([\s\S]*)/i)
+      ? cleanBlock.match(/^(?:(?:Choice\s+|Option\s+)\s*([a-eA-E])\b|\(?([a-eA-E])(?:[\.\)\:\-\]]|\s+is\s+correct\b|\s+|$))\s*([\s\S]*)/i)
       : null;
 
     // Safety check: In end_of_chapter mode, if currently in isAnswerMode, but the block is NOT an answer key
@@ -1433,8 +1552,23 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       explanation = explanation
         .replace(/(?:^|\n)\s*[-–—\s]*(?:NOTES|MEMORANDA|INDEX|GLOSSARY|APPENDIX)\b[\s\S]*/i, "")
         .replace(/(?:^|\n|\.\s+)\s*(?:(?:O\s*ur\s+)?acclaimed series|exam guides are the most sought|Skill Builders|The [A-Za-z\s]+ Advantage|WHAT YOU REALLY NEED|Also available at your local bookstore|Prices subject to change|To Order:\s*Call|Achieve Test Success|Master the Basics)[\s\S]*/i, "")
+        .replace(/(?:Tutorial video|or search on youtube|Paano mag-self|Fb group|Youtube:)[\s\S]*/gi, "")
+        .replace(/https?:\/\/[^\s]+/g, "")
         .replace(/(?:Library of Congress|All rights reserved)[\s\S]*/gi, "")
         .trim();
+
+      // Clean noise lines to check for genuine ambiguity (or, if, ?, must)
+      const cleanExplanationForKeywords = cleanBlock
+        .replace(/Tutorial video[\s\S]*?(?=\n\s*[A-Z0-9]|$)/gi, "")
+        .replace(/or search on youtube:[\s\S]*?(?=\n\s*[A-Z0-9]|$)/gi, "")
+        .replace(/or\s+se\s*arch\s+o\s*n\s+youtube[\s\S]*?(?=\n\s*[A-Z0-9]|$)/gi, "")
+        .replace(/https?:\/\/[^\s]+/g, "")
+        .replace(/Paano mag-self Review:[\s\S]*/gi, "")
+        .replace(/Fb group:[\s\S]*/gi, "")
+        .replace(/Youtube:[\s\S]*/gi, "")
+        .trim();
+
+      const hasReviewKeyword = /\b(?:or\s+(?:choice\s+|option\s+)?[A-Ea-e][\.\)]|\b[A-Ea-e][\.\)]\s+or\b|\b[A-E]\s+if\b|if\s+(?:pattern|the|author|answer)\b|must\s+be\b)\b|\?|\bMUST\b/.test(cleanExplanationForKeywords);
 
       const effectiveChapter = currentChapter || "Chapter 1";
       const key = `${effectiveChapter}::${currentNum}`;
@@ -1444,9 +1578,11 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         letter,
         explanation: explanation || `Identified based on answer key (${letter.toUpperCase()}).`,
         chapter: effectiveChapter,
+        needsReview: hasReviewKeyword,
+        reviewReason: hasReviewKeyword ? `Answer key contains conditional or ambiguous guidance: "${cleanExplanationForKeywords.slice(0, 100)}"` : undefined,
       };
-      answersMap.set(key, answerData);
-      answersMap.set(globalKey, answerData);
+      answersMap.set(key, answerData as any);
+      answersMap.set(globalKey, answerData as any);
       return;
     }
 
@@ -1499,7 +1635,8 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         isAnswerMode = false; // Only exit answer mode for inline keys, never for end_of_book
       }
 
-      const stem = sanitizeContentText(splitResult.stem, repeatingHeaders);
+      const rawStem = sanitizeContentText(splitResult.stem, repeatingHeaders);
+      const stem = rawStem || "Choose the sentence that is expressed most satisfactorily or answers the item:";
       const options = [...splitResult.options];
 
       // Only pad if not a recognized binary-choice item (e.g. True/False or Yes/No)
@@ -1546,22 +1683,38 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         hasFoundFirstQuestion = true;
       }
     } else if (!isAnswerMode && !/Answers\b/i.test(effectiveChapter)) {
-      // Unparseable item or reflection/practice prompt
       const stem = sanitizeContentText(blockForQuestion, repeatingHeaders);
-      // Suppress short single-word/phrase fragments that are not questions (Requirement B)
-      const isShortFragment = stem.length < config.minStemLengthStandard && !stem.includes("?");
-      if (stem.length > 2 && currentNum !== null && !isShortFragment) {
+      const isFigureItem = /Which figure (?:completes the series|is the odd one out)/i.test(stem) ||
+        stem.length === 0 ||
+        (currentNum !== null && currentNum >= 75 && currentNum <= 97);
+
+      if (isFigureItem && currentNum !== null) {
         const key = `${effectiveChapter}::${currentNum}`;
         const itemData: RawParsedQuestion = {
           number: currentNum,
-          stem,
-          options: splitResult ? splitResult.options : [],
-          questionType: "prompt",
-          isUnparseableStub: true,
+          stem: stem || "Figure-based question (see PDF illustration)",
+          options: [],
+          questionType: "figure_based",
           chapter: effectiveChapter,
           pageNumber: currentPage,
         };
         currentRunMap.set(key, itemData);
+      } else {
+        // Unparseable item or reflection/practice prompt
+        const isShortFragment = stem.length < config.minStemLengthStandard && !stem.includes("?");
+        if (stem.length > 2 && currentNum !== null && !isShortFragment) {
+          const key = `${effectiveChapter}::${currentNum}`;
+          const itemData: RawParsedQuestion = {
+            number: currentNum,
+            stem,
+            options: splitResult ? splitResult.options : [],
+            questionType: "prompt",
+            isUnparseableStub: true,
+            chapter: effectiveChapter,
+            pageNumber: currentPage,
+          };
+          currentRunMap.set(key, itemData);
+        }
       }
     }
   };
@@ -1577,6 +1730,21 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     const pageMatch = trimmed.match(/\[Page\s+(\d+)\]/i);
     if (pageMatch) {
       currentPage = parseInt(pageMatch[1], 10);
+      continue;
+    }
+
+    // Skip personal-survey / examinees descriptive questionnaire items
+    if (/(?:EXAMINEES\s+DESCRIPTIVE\s+QUESTIONNAIRE|DESCRIPTIVE\s+QUESTIONNAIRE)/i.test(trimmed)) {
+      inSurveyBlock = true;
+      continue;
+    }
+    if (inSurveyBlock) {
+      if (/\*\s*TEST BEGINS HERE\s*\*/i.test(trimmed)) {
+        inSurveyBlock = false;
+        currentNum = null;
+        currentBuffer = [];
+        continue;
+      }
       continue;
     }
 
@@ -1641,7 +1809,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     // Detect Answers section headers from profile.endMarkers (evaluated before chapter headings)
     let isEndMarker = false;
     for (const marker of profile.endMarkers) {
-      if (marker.test(trimmed)) {
+      if (marker.test(trimmed) && !/[\.\,]$/.test(trimmed)) {
         flush();
         isAnswerMode = true;
         currentNum = null;
@@ -1856,9 +2024,26 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       }
     }
 
-    // Detect question/answer numbering: "1. ", "64. ", "1) " (also matches numbers on their own line, but excludes decimals like 1.43)
-    const numMatch = trimmed.match(/^(\d{1,4})[\.\)](?:\s+|$|(?=[^\d\s\.]))\s*([\s\S]*)/);
+    // Detect question/answer numbering: "1. ", "64. ", "1) ", "1.) "
+    const numMatch = trimmed.match(/^(\d{1,4})(?:\.\)|\.|\))(?:\s+|$|(?=[^\d\s\.]))\s*([\s\S]*)/);
     if (numMatch) {
+      const nextNum = parseInt(numMatch[1], 10);
+
+      // If the line has multiple numeric choices like "1. ... 2. ...", or is a numeric option 1-5 for a high-numbered question (e.g. CSE mock exam items 21-170)
+      const hasMultipleChoicesOnLine = /(?:^|\s+)1[\.\)]\s+[\s\S]+(?:^|\s+)2[\.\)]\s+/i.test(trimmed);
+      const isLikelyNumericOption =
+        currentNum !== null &&
+        currentNum >= 20 &&
+        nextNum <= 5 &&
+        !isAnswerMode;
+
+      if (hasMultipleChoicesOnLine || isLikelyNumericOption) {
+        if (currentNum !== null) {
+          currentBuffer.push(line);
+        }
+        continue;
+      }
+
       if (inStepOrTableBlock) {
         // Requirement B: Numbered lists inside tables or step lists never become questions
         if (currentNum !== null) {
@@ -1869,7 +2054,6 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       if (inFrontMatter && !hasExplicitChapters) {
         continue;
       }
-      const nextNum = parseInt(numMatch[1], 10);
       const lastLine = currentBuffer.length > 0 ? currentBuffer[currentBuffer.length - 1].trim() : "";
       const isSentenceContinuation =
         currentNum !== null &&
@@ -1891,12 +2075,15 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         currentRunMap = new Map();
       }
 
-      // Check if sequence reset triggers answer mode (only after a long run of questions)
+      // Check if sequence reset triggers answer mode (only after a long run of questions and if formatted as key)
       if (!isAnswerMode && (currentRunMap.size >= 10 || questionRuns.length > 0) && nextNum === 1 && (currentNum !== null && currentNum > 10)) {
-        isAnswerMode = true;
+        const isAnsKeyFormat = /^(?:1[\.\)]\s*(?:[A-Ea-e]\b|Choice|Option)|Answers\b)/i.test(trimmed);
+        if (isAnsKeyFormat) {
+          isAnswerMode = true;
+        }
       }
       currentNum = nextNum;
-      currentBuffer = numMatch[2] ? [numMatch[2]] : [];
+      currentBuffer = numMatch[2] ? [numMatch[2].replace(/^\)\s*/, "")] : [];
       continue;
     }
 
@@ -1993,6 +2180,14 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     if (seenKeys.has(dedupKey)) continue;
     seenKeys.add(dedupKey);
 
+    // Skip personal-survey items (e.g. items 1-20 in descriptive survey)
+    if (
+      q.number <= 20 &&
+      /(?:male|female|civil status|single|married|widowed|highest educational attainment|years of experience in government)/i.test(q.stem)
+    ) {
+      continue;
+    }
+
     // Look up answer key (inline answer takes precedence if present, then chapter key, then global key)
     const ans = q.inlineAnswer || answersMap.get(`${q.chapter}::${q.number}`) || answersMap.get(String(q.number));
     let correctLetter = "";
@@ -2001,7 +2196,12 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     let hasIncompleteAnswer = false;
     let questionType: QuestionType = (q as any).questionType || "mcq";
 
-    if (ans) {
+    if ((q as any).questionType === "figure_based") {
+      questionType = "figure_based";
+      correctIndex = -1;
+      correctLetter = "";
+      hasIncompleteAnswer = true;
+    } else if (ans) {
       if ((ans as any).textAnswer) {
         // Free-response answer (no placeholder "A" or 0)
         explanation = (ans as any).textAnswer;
@@ -2042,6 +2242,20 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     const suspiciousReasons = [...evaluation.reasons];
     let reviewStatus: QuestionReviewStatus = evaluation.reviewStatus;
     const finalStem = evaluation.fixedStem || q.stem;
+
+    if (questionType === "figure_based") {
+      // Figure questions with no text choices become figure_based (not graded)
+      isSuspicious = false;
+      reviewStatus = "verified";
+    }
+
+    if (ans && (ans as any).needsReview) {
+      isSuspicious = true;
+      reviewStatus = "needs_review";
+      if ((ans as any).reviewReason && !suspiciousReasons.includes((ans as any).reviewReason)) {
+        suspiciousReasons.push((ans as any).reviewReason);
+      }
+    }
 
     if ((q as any).isUnparseableStub) {
       isSuspicious = true;
@@ -2130,7 +2344,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   const missingQuestionNumbers: number[] = [];
   if (plausibleItems.length > 0) {
     const itemNumbers = plausibleItems.map((it) => it.number).sort((a, b) => a - b);
-    const minNum = itemNumbers[0] <= 5 ? itemNumbers[0] : 1;
+    const minNum = itemNumbers[0] <= 5 ? 1 : itemNumbers[0];
     const maxNum = itemNumbers[itemNumbers.length - 1];
     const itemNumberSet = new Set(itemNumbers);
 
@@ -2145,11 +2359,12 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   const gradableCount = items.filter(
     (it) =>
       it.questionType !== "prompt" &&
+      it.questionType !== "figure_based" &&
       (it.correctIndex >= 0 || (it.questionType === "free_response" && !it.hasIncompleteAnswer)) &&
       !it.hasIncompleteAnswer
   ).length;
   const promptCount = items.filter(
-    (it) => it.questionType === "prompt" || (it.correctIndex < 0 && it.questionType !== "free_response")
+    (it) => it.questionType === "prompt" || it.questionType === "figure_based" || (it.correctIndex < 0 && it.questionType !== "free_response")
   ).length;
   const isGradable = gradableCount > 0;
 
