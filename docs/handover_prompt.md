@@ -1,403 +1,233 @@
-# ResearchMate — AI Handover Document
+# ResearchMate — Master AI Handover & Architecture Document
 
-> Last updated: April 10, 2026
-> Read root `CLAUDE.md` first for coding conventions, design system, and PART sectioning rules.
-
----
-
-## Project Overview
-
-**ResearchMate** — A multi-platform research management ecosystem.
-- **Web Dashboard** (React/TypeScript/Vite) — hosted on Vercel
-- **Chrome Extension** — calls the same Vercel API endpoints
-- **Smart Pen** (ESP32-S3 Hardware) — routes through Supabase Edge Function to Vercel API
-
-**Tech Stack:** React 18, TypeScript, Vite, Supabase (auth + DB + storage + Edge Functions), Vanilla CSS with CSS custom properties, Vercel Serverless Functions, TipTap v3 (ProseMirror-based rich text editor).
-
-**Repo:** `Unlighted01/ResearchMate-Website` on GitHub. Vercel auto-deploys from `main`.
+> **Last Updated**: November 12, 2026  
+> **Status**: Review Companion / Exam Engine Hardening & Corpus Generalization Milestone  
+> **Test Suite**: 43 test files, 320 unit/integration tests passing (0 failures)  
+> **Primary Rule**: Strictly local Git commits on `main`. Never push to `origin/main`.
 
 ---
 
-## Vercel Serverless Functions (12/12 — FULL)
+## 📋 QUICK-START PROMPT FOR NEW AI AGENTS
+*(Copy and paste the block below into any new AI assistant — Claude, GPT-4, DeepSeek, Cursor, etc. — to give it full instant context without uploading the codebase)*
 
-Vercel Hobby plan allows **max 12 serverless functions**. We are now at the cap after Phase 5.
+```markdown
+You are assisting on ResearchMate, a multi-platform research management and exam preparation ecosystem built with React 18, TypeScript, Vite, Tailwind CSS, Supabase (Auth/DB/Storage), and Vercel Serverless Functions (`api/`).
 
-| # | Endpoint | Purpose | Model | Fallback Chain |
-|---|----------|---------|-------|----------------|
-| 1 | `api/chat.ts` | Academic chat assistant | gemini-2.5-flash | Gemini -> OpenRouter -> Groq |
-| 2 | `api/cite.ts` | ISBN/DOI/YouTube lookup | N/A (data only) | OpenLibrary -> Google Books / CrossRef / oEmbed |
-| 3 | `api/extract-citation.ts` | URL -> citation metadata | gemini-2.5-flash | DOI/Crossref/Semantic Scholar + AI |
-| 4 | `api/generate-tags.ts` | Auto-tagging | gemini-2.5-flash | Gemini -> OpenRouter -> Groq |
-| 5 | `api/identify-source.ts` | Source identification | gemini-2.5-flash | — |
-| 6 | `api/insights.ts` | Key insights extraction | gemini-2.5-flash | Gemini -> OpenRouter -> Groq |
-| 7 | `api/ocr.ts` | Image text extraction | gemini-2.5-flash | OpenRouter -> Gemini -> Claude |
-| 8 | `api/rss.ts` | **RSS/Atom feed proxy** (Phase 4) | N/A | SSRF-guarded fetch + regex XML parser |
-| 9 | `api/search.ts` | Unified search (academic + books) | N/A (API calls) | `type:"academic"` -> S2+ArXiv+PubMed; `type:"books"` -> Google Books+CrossRef+OMDB |
-| 10 | `api/set-custom-key.ts` | BYOK key management | N/A | — |
-| 11 | `api/summarize.ts` | Unified summarization | gemini-2.5-flash | Full: Gemini->OpenRouter->Groq; Item (when `itemId` present): OpenRouter->Gemini->Claude + writes to DB |
-| 12 | `api/transcribe.ts` | **Audio/Video/YouTube transcription** (Phase 5) | gemini-2.5-flash | Inline audio: Gemini -> Groq Whisper (whisper-large-v3); YouTube: Gemini only via `fileData.fileUri`. 3 credits/call, 18 MB cap |
+### Current Goal & Focus
+We are building and hardening the **Review Companion & Universal PDF Question Importer** (`src/services/pdfQuestionImporter.ts` and `src/components/App/ReviewCompanion/QuestionImportModal.tsx`). The importer parses complex review books, multi-chapter PDFs, practice tests, and legal reviewers (e.g. Philippine Civil Service Exam / CSE 2027 reviewer corpus) into structured, graded multiple-choice questions (MCQs), flashcards, and study prompts with rendered KaTeX formulas.
 
-**Also:** `api/_utils/auth.ts` (shared auth + credit system — underscore prefix means Vercel ignores it).
+### Critical Invariants & Rules
+1. **Strictly Local Git**: Always commit locally (`git commit`). NEVER run `git push origin main`.
+2. **Generic Rules Only**: Never hard-code regex or logic tuned to a single filename. Every parser addition must be generic, feature-based, and backed by automated tests.
+3. **Zero Regressions**: Core passing files must never worsen:
+   - `1001 Math Problems` (1001 Qs, 991 graded)
+   - `501 Word Analogy Questions` (501 Qs graded)
+   - `501 Math Word Problems` (500 Qs graded)
+   - `501 Synonym and Antonym Questions` (501 Qs graded)
+   - `Age Problems` (40 Qs graded)
+   - `Republic Act No. 6713` (20 graded MCQs, 45/67 study cards)
+   - `300 items Mathematics Reviewer with Detailed Solutions` (300 items parsed, key distribution A:65 B:60 C:74 D:63 E:13)
+   - `CSE MOCK EXAM` (0 graded items, 144 study prompts; survey items skipped)
+4. **Strict Key Gate**: A question CANNOT be graded unless its question number matches an explicit key entry in an identified answer key region. Never use default or fallback keys (missing keys must set `correctIndex = -1`). If >60% of resolved keys in a file evaluate to a single letter (for n >= 10), the file is demoted to ungradable prompts (`reviewStatus = "needs_review"`) with "Answer keys look unreliable".
+5. **Stem Cap**: Question stems longer than 1,200 characters are demoted to ungradable prompts (`reviewStatus = "needs_review"`).
+6. **Pre-Parse Document Classifier**: Non-question documents (statutes, dictionaries, application forms) are classified before parsing via structural features and routed to study notes or 0 items, never graded questions.
+7. **Execution Environment**: Windows PowerShell. Use `.cmd` commands (e.g. `npm.cmd test`, `npx.cmd vitest run`).
 
-**Test file:** `tests/ocr.integration.test.ts` — moved OUT of `api/` to avoid counting as a function. Run with `npx vitest run tests/ocr.integration.test.ts`.
-
-**Merges completed (April 2026):**
-- `summarize.ts` + `summarize-item.ts` -> `summarize.ts` — if `itemId` is in the request body, uses short prompt + writes to DB; otherwise uses full summarization with mode selection
-- `search-academic.ts` + `search-books.ts` -> `search.ts` — `type: "academic"` (default) or `type: "books"` in request body
-- Frontend updated: `geminiService.ts` points both functions at `/api/summarize`; `DiscoverPage.tsx` calls `/api/search`
-- Chrome extension will need to update calls from `/api/search-books` to `/api/search` with `type: "books"`
-
----
-
-## Endpoint Merges (COMPLETED April 2026)
-
-Both merges are done. We went from 12 -> 10 functions, freeing 2 slots.
-
-### Merge 1: `summarize.ts` absorbed `summarize-item.ts`
-- If `itemId` is in request body -> short 2-4 sentence summary, writes to DB via service role key, fallback: OpenRouter -> Gemini -> Claude
-- If no `itemId` -> full summarization with `mode` (ultra-short/standard/detailed), fallback: Gemini -> OpenRouter -> Groq
-- `geminiService.ts` updated: both `summarizeText()` and `generateItemSummary()` now call `/api/summarize`
-
-### Merge 2: `search.ts` absorbed `search-academic.ts` + `search-books.ts`
-- `type: "academic"` (default) -> Semantic Scholar + ArXiv + PubMed, with ArXiv ID and DOI direct lookup
-- `type: "books"` -> Google Books + CrossRef + OMDB
-- `DiscoverPage.tsx` calls `/api/search` with `type: "academic"`
-- **Chrome extension needs updating** to call `/api/search` with `type: "books"` instead of `/api/search-books`
+### Where We Are Right Now
+- 58-file corpus audit complete via `scripts/corpus_report.ts`: 43 PASS, 13 WARN, 1 UNVERIFIED (scanned PDF), 1 FAIL.
+- Under-yield analysis complete for 6 files (`CSE MOCK EXAM`, `Civil Service Exam Reviewer with Answers`, `Professional and Sub-Professional Practice Test (1)`, `255 item Mathematics Reviewer`, `250 MATH Problems`, and `501 Algebra Questions`).
+- 4 generic enhancements are designed and awaiting implementation:
+  1. Space-padded line-initial digits (`2 0. )` -> `20.)`)
+  2. Condensed 5-letter block keys (`1 to 5: DABDA`)
+  3. Parenthesized numeric keys (`8. (1) 198`)
+  4. In-page top/bottom split Q&A (questions on top, step-by-step solutions with `<- Ans` on bottom)
+```
 
 ---
 
-## Feature Roadmap (9 Phases)
+## 1. System Architecture & Tech Stack
 
-All phases were planned and approved by user (Kian) in April 2026.
+```
++---------------------------------------------------------------------------------+
+|                                RESEARCHMATE                                     |
++---------------------------------------------------------------------------------+
+|  WEB APP: React 18 + TypeScript + Vite + Tailwind CSS + Lucide Icons + KaTeX     |
+|  STATE: React Context (Theme, Ingestion) + IndexedDB Cache + Custom Hooks        |
+|  BACKEND: Supabase (PostgreSQL, RLS, Storage Buckets, Auth)                      |
+|  SERVERLESS: 12 Vercel Functions in api/ (LLM Orchestration: Gemini/Groq/OpenRouter)|
+|  TESTING: Vitest (43 test files, 320 tests, fast isolated execution)            |
++---------------------------------------------------------------------------------+
+```
 
-| Phase | Feature | Status | Needs API? |
-|-------|---------|--------|------------|
-| 1 | Dynamic Bibliography + LaTeX Export | DONE | No |
-| 2 | Academic Database Search (Discover) | DONE | Yes (search-academic.ts) |
-| 3 | PDF Reader & Annotator | DONE (⚠ text selection bug — see Known Issues) | No (client-side pdfjs-dist) |
-| 4 | RSS Feeds (ArXiv/PubMed new paper alerts) | DONE | Yes (api/rss.ts — CORS proxy, no credits) |
-| 5 | Media Transcription (audio/video -> text) | DONE | Yes (api/transcribe.ts — Gemini native + Groq Whisper fallback) |
-| 6 | Knowledge Graph (concept maps) | DONE (3D) | No (client-side Three.js / react-force-graph-3d) |
-| 7 | Paper Citation Graph | NOT STARTED | No (Semantic Scholar API from client) |
-| 8 | Kanban Board (project workflow) | NOT STARTED | No (direct Supabase) |
-| 9 | Shared Collections (collaboration) | NOT STARTED | No (Supabase RLS) |
-
-**Next up:** Phases 6–9 are all client-side — Knowledge Graph, Paper Citation Graph, Kanban Board, Shared Collections.
-
----
-
-## What Was Built Recently (April & May 2026 Sessions)
-
-### Phase 6: Knowledge Graph (May 11, 2026)
-
-A fully interactive 3D "Galaxy Map" for visualizing relationships between saved items.
-
-**Files modified/created:**
-- `src/components/App/KnowledgeGraph/KnowledgeGraphPage.tsx` — Completely rewritten to use `react-force-graph-3d`, generating `THREE.SphereGeometry` for nodes and `SpriteText` for labels in a dark galaxy-themed scene with 3,000 particle stars.
-- `package.json` — Installed `react-force-graph-3d` and `three-spritetext`.
-
-**Features:**
-- **Auto-Linking NLP Engine:** Uses client-side keyword extraction to automatically draw "Topic Links" between items that share keywords, avoiding the need for manual tags.
-- **Source Links:** Connects items clipped from the same URL/Website.
-- **Interactivity:** 3D rotation, zooming, neighborhood highlighting (dimming distant nodes), and hovering links to see exactly why items are connected.
-
-
-
-### Phase 5: Media Transcription (April 11, 2026)
-
-Upload audio/video files or paste a YouTube URL → get a full transcript, AI summary, and auto-tags. Optionally save the result as a regular research item. Costs 3 credits per transcription.
-
-**Files created:**
-- `api/transcribe.ts` — Vercel function #12 (fills the last slot). Accepts `{ audioBase64, mimeType, fileName? }` OR `{ youtubeUrl }`. Primary: Gemini 2.5 Flash (native audio/video + YouTube URLs via `fileData.fileUri`). Fallback: Groq `whisper-large-v3` (audio only — no video, no YouTube). Deducts 3 credits upfront, refunds on total failure. 18 MB inline cap. Returns strict JSON `{ transcript, summary, tags, provider, source }`.
-- `src/services/transcribeService.ts` — Client service. `transcribeFile(file)` and `transcribeYoutube(url)`, plus helpers `isYoutubeUrl`, `isAcceptedMedia`. Converts File → base64 via `FileReader.readAsDataURL`. Validates MIME + size client-side.
-- `src/components/App/Transcribe/TranscribePage.tsx` — Two-mode UI (File / YouTube tabs), drag-and-drop file zone, transcription result card with AI summary + auto-tags + word count + Copy / Save to Library / Clear actions. Saves as item with `deviceSource: "transcription"`.
-- `src/components/App/Transcribe/index.ts` — barrel.
-
-**Files modified:**
-- `src/types.ts` — Added `"transcription"` to `DeviceSource` union + `DEVICE_SOURCES` map (Mic icon).
-- `src/services/storageService.ts` — Added `transcription: 0` to the `bySource` stats record to keep TS happy.
-- `src/App.tsx` — Added `/app/transcribe` route + import.
-- `src/components/shared/DashboardLayout.tsx` — Added `Mic` icon + `{ icon: Mic, label: "Transcribe", path: "/app/transcribe" }` nav item (between PDF Reader and Collections).
-
-**No migration needed.** Transcriptions are saved as regular `items` rows using the existing schema — full transcript goes in `text`, AI summary in `ai_summary`, topical tags in `tags`, and `deviceSource = "transcription"` so they can be filtered out.
-
-**Key design decisions:**
-- **Inline base64 (not Supabase Storage).** Reliability over payload size. Vercel's 4.5 MB body limit is the real bottleneck — base64 inflates ~33%, so a 3 MB audio file sends as a ~4 MB payload. Cap is 18 MB decoded to match Gemini's 20 MB inline limit with safety margin. If users hit that wall, they'll trim the file (most podcasts/lectures compress to well under 18 MB as MP3).
-- **YouTube goes direct to Gemini via `fileData.fileUri`** — no download, no yt-dlp, no legal grey zone. Gemini 2.5 Flash handles YouTube URLs natively. This is why YouTube has no fallback: only Gemini knows how to read them.
-- **Groq Whisper fallback for inline audio only.** If Gemini is down / rate-limited, we retry with `whisper-large-v3` through Groq's free OpenAI-compatible endpoint. Whisper doesn't return a summary, so we synthesize a truncated first-20-words one and tag `["transcription", "audio"]`.
-- **3 credits per call** vs 1 for summarize/tags — transcription is the most expensive single operation we expose, and users are likely to run it once per artifact rather than per paragraph.
-
-### Phase 4: RSS Feeds (April 10, 2026)
-
-On-demand RSS/Atom feed subscriptions. Items open externally (no reader view), per-user cap of 20 feeds, no credit cost.
-
-**Files created:**
-- `api/rss.ts` — CORS proxy + parser. Auth via `authenticateUser()` (no credit deduction). Content-sniffs RSS 2.0 vs Atom, regex-based XML parse (no new deps). SSRF guard blocks `localhost`/private IP ranges. Limits: 5 MB feed size, 10 s timeout, max 50 items per feed. Returns normalized `RssFeedResponse { title, description, link, items, fetchedAt, source }`.
-- `supabase/migrations/20260410_rss_feeds.sql` — `rss_feeds` table (id, user_id, title, url, category, last_fetched_at, last_item_date, timestamps), `UNIQUE(user_id, url)`, RLS policies (view/insert/update/delete own), auto-bump `updated_at` trigger.
-- `src/services/rssFeedsService.ts` — CRUD + `MAX_FEEDS_PER_USER = 20` + `CURATED_FEEDS` array (8 presets: arXiv cs.AI, cs.LG, cs.CL, stat.ML, cs.CV, Nature, Science, PubMed). Exposes `getAllRssFeeds`, `createRssFeed` (enforces cap + URL validation), `deleteRssFeed`, `touchRssFeed`, `fetchRssFeed(url)` (calls `/api/rss` with auth header).
-- `src/components/App/Feeds/FeedsPage.tsx` — Two-column UI (subscribed list + items panel). Curated starter grid when empty, "More suggestions" strip when feeds exist. Add Custom Feed modal (URL/Title/Category), per-feed refresh, search within feed, item cards with title/authors/pubDate/summary/categories, delete with confirm.
-- `src/components/App/Feeds/index.ts` — barrel export.
-
-**Files modified:**
-- `src/App.tsx` — added `/app/feeds` route.
-- `src/components/shared/DashboardLayout.tsx` — added `Rss` icon + `{ icon: Rss, label: "Feeds", path: "/app/feeds" }` between Discover and PDF Reader.
-
-**Deployment steps:**
-1. Run `supabase/migrations/20260410_rss_feeds.sql` in Supabase SQL Editor — creates `rss_feeds` table + RLS. No secrets, no Edge Function changes. (Completed April 10, 2026.)
-2. Push to `main` → Vercel auto-deploys `api/rss.ts` (function #8).
-
-### Phase 1: Dynamic Bibliography + LaTeX Export
-
-Generates formatted reference sections from cited items in the Document Editor and exports documents as `.tex` files.
-
-**Files created/modified:**
-- `src/components/App/DocumentEditor/extensions/bibliography.ts` — TipTap extension adding `dataBibliography` attribute to heading nodes
-- `src/components/App/DocumentEditor/bibliographyUtils.ts` — Pure functions: `buildCitationDataFromItem()`, `generateBibliographyNodes()`, `removeBibliographyFromDoc()`, `insertBibliography()`
-- `src/components/App/DocumentEditor/latexExportUtils.ts` — Full TipTap JSON -> LaTeX conversion with `\begin{thebibliography}` section
-- `src/components/App/DocumentEditor/useDocumentEditor.ts` — Added `citedItemIds` state tracking (stored as sibling key in TipTap JSON content — TipTap ignores unknown keys)
-- `src/components/App/DocumentEditor/ItemImportDrawer.tsx` — Added `onItemInserted` callback
-- `src/components/App/DocumentEditor/DocumentEditor.tsx` — Orchestrates bibliography insertion + LaTeX export
-- `src/components/App/DocumentEditor/EditorToolbar.tsx` — Bibliography dropdown (5 formats: APA/MLA/Chicago/Harvard/IEEE) + Export dropdown (docx/pdf/tex)
-
-**How citedItemIds works:** When a user inserts a research item into the editor, its ID is tracked in `citedItemIds` array. This array is stored alongside TipTap content in the same Supabase jsonb column: `{ type: "doc", content: [...], citedItemIds: ["id1", "id2"] }`. TipTap ignores the extra key. No schema migration needed.
-
-### Phase 2: Academic Database Search (Discover Page)
-
-Search papers across Semantic Scholar, ArXiv, and PubMed. Save directly to library.
-
-**Files created/modified:**
-- `api/search-academic.ts` — Vercel serverless endpoint. Queries 3 sources in parallel via `Promise.allSettled`. Features:
-  - Direct ArXiv ID lookup (detects `2604.06234` or `arXiv:2604.06234` patterns) — bypasses slow ArXiv search index for brand new papers
-  - Direct DOI lookup via Semantic Scholar
-  - Title-specific ArXiv search (`ti:` field) for long queries, sorted by `submittedDate`
-  - Semantic Scholar title-match fallback (year-filtered) when main search returns few results
-  - Deduplication by DOI or normalized title
-- `src/components/App/Discover/DiscoverPage.tsx` — Search UI with source filter tabs (All/Semantic Scholar/ArXiv/PubMed), paper cards with title/authors/year/venue/abstract/citations, expandable abstracts, View/PDF/DOI links, Save to library button
-- `src/components/App/Discover/index.ts` — Barrel export
-- `src/App.tsx` — Added `/app/discover` route
-- `src/components/shared/DashboardLayout.tsx` — Added "Discover" nav item with `GraduationCap` icon (2nd position in sidebar)
-
-**Known limitation:** ArXiv's search API takes days/weeks to index new papers. That's why the direct ArXiv ID lookup was added — if you know the ID, it fetches instantly. Title search for very new papers (< 1 week old) may not return results from ArXiv.
-
-### Document Editor Toolbar (Earlier in April 2026)
-
-Full Google Docs-style toolbar for TipTap editor.
-
-**Files created:**
-- `src/components/App/DocumentEditor/extensions/fontSize.ts` — Custom TipTap extension for fontSize on textStyle mark
-- `src/components/App/DocumentEditor/extensions/indent.ts` — Custom TipTap extension for paragraph/heading indent (0-8 levels, Tab/Shift-Tab)
-
-**Files heavily modified:**
-- `EditorToolbar.tsx` — Complete rewrite with all formatting buttons. Key patterns:
-  - `useForceUpdate()` hook + `editor.on("transaction", forceUpdate)` for reactive toolbar state
-  - `useClickOutside()` hook for dropdown dismissal
-  - `onMouseDown={e => e.preventDefault()}` on ALL buttons to prevent editor blur
-  - Insert and Bibliography are icon-only buttons (compact) to prevent toolbar overflow
-- `EditorCanvas.tsx` — Registered 10 new TipTap extensions (TextStyle, Color, Highlight, TextAlign, Subscript, Superscript, FontFamily, FontSize, Indent, Bibliography). Disabled drag-and-drop via `handleDOMEvents`.
-- `exportUtils.ts` — Added DOCX export support for all new marks (color, fontFamily, fontSize, highlight, subscript, superscript, textAlign, indent)
-
-**Bugs fixed:**
-- Dropdowns not working (buttons stealing focus from editor)
-- Font size +/- not responsive (toolbar not re-rendering on selection changes)
-- Text draggable anywhere (ProseMirror default drag-and-drop disabled)
-- Export dropdown z-index issues
-- Toolbar wrapping / Export button cutoff
-- "Saving..." layout shift (fixed-width opacity toggle)
-- Dropdowns hidden behind editor (z-index layering)
+### Core Product Modules
+1. **Research Workspace**:
+   - **TipTap v3 Rich Text Editor**: Document editor with APA/MLA/IEEE dynamic bibliographies, DOCX export, and LaTeX export (`\begin{thebibliography}`).
+   - **Discover & Search**: Academic paper search across Semantic Scholar, arXiv, and PubMed via `api/search.ts`.
+   - **RSS Feeds**: On-demand subscriptions to arXiv/PubMed feeds via `api/rss.ts` with SSRF protection.
+   - **Media Transcription**: Audio, video, and YouTube transcription via `api/transcribe.ts` (Gemini 2.5 Flash + Groq Whisper fallback).
+   - **3D Knowledge Graph**: Interactive Three.js / `react-force-graph-3d` galaxy visualization connecting research items by extracted semantic keywords.
+2. **Review Companion & Exam Engine**:
+   - **Mock Exam Engine** (`src/services/mockExamEngine.ts`, `src/services/examService.ts`): Timed exams, sectional pacing (`practicePacer.ts`), question batching (`examBatching.ts`), and seed record recovery.
+   - **Question Bank** (`src/services/questionBankService.ts`): Ingestion, duplicate detection, topic categorization, and distractor quality linting (`distractorQuality.ts`).
+   - **Offline-First Sync**: IndexedDB caching with backoff retry logic, JWT session refresh guards, and sync queue persistence (`indexedDbCache.ts`, `reliabilityService.ts`).
+3. **Universal PDF Question Importer**:
+   - Client-side PDF layout extraction (`src/services/pdfService.ts` via `pdfjs-dist/legacy`) extracting coordinates, fonts, and bounding boxes.
+   - Multi-chapter two-pass parsing engine (`src/services/pdfQuestionImporter.ts`) with profile auto-detection, fraction/superscript math reconstruction, column uncurling, and strict key gating.
+   - Visual import modal (`src/components/App/ReviewCompanion/QuestionImportModal.tsx`) with preview, chapter selection, KaTeX rendering, and flashcard export.
 
 ---
 
-## Project Structure (Current)
+## 2. Serverless API Architecture (`api/`)
+
+Vercel Hobby plan enforces a **strict limit of 12 serverless functions**. All 12 slots are fully allocated:
+
+| # | Endpoint | Description | Primary Engine | Fallback Chain |
+|---|---|---|---|---|
+| 1 | `api/chat.ts` | Academic chat & exam generator | Gemini 2.5 Flash | Gemini $\to$ OpenRouter $\to$ Groq |
+| 2 | `api/cite.ts` | ISBN, DOI, YouTube citation lookup | Data APIs | OpenLibrary $\to$ Google Books / CrossRef |
+| 3 | `api/extract-citation.ts` | URL to bibliographic metadata | Gemini 2.5 Flash | Semantic Scholar / CrossRef + AI |
+| 4 | `api/generate-tags.ts` | Research item auto-tagging | Gemini 2.5 Flash | Gemini $\to$ OpenRouter $\to$ Groq |
+| 5 | `api/identify-source.ts` | Source identification & metadata | Gemini 2.5 Flash | — |
+| 6 | `api/insights.ts` | Key insights & extract synthesis | Gemini 2.5 Flash | Gemini $\to$ OpenRouter $\to$ Groq |
+| 7 | `api/ocr.ts` | Canvas & image OCR transcription | Gemini Vision | OpenRouter $\to$ Gemini $\to$ Claude |
+| 8 | `api/rss.ts` | CORS proxy & RSS/Atom parser | SSRF-guarded fetch | Regex-based XML streaming |
+| 9 | `api/search.ts` | Unified academic + books search | Multi-API | Semantic Scholar + ArXiv + PubMed / Google Books |
+| 10 | `api/set-custom-key.ts` | BYOK key encryption & storage | Supabase Vault | — |
+| 11 | `api/summarize.ts` | Unified full & item summarization | Gemini 2.5 Flash | Gemini $\to$ OpenRouter $\to$ Groq |
+| 12 | `api/transcribe.ts` | Audio, video & YouTube transcription | Gemini 2.5 Flash | Gemini (YouTube/media) $\to$ Groq Whisper (audio) |
+
+Shared utilities live in `api/_utils/auth.ts` (prefixed with `_` so Vercel does not count it as a serverless function).
+
+---
+
+## 3. Directory Map & File Responsibilities
 
 ```
 ResearchMate Website/
-+-- CLAUDE.md                        # Coding conventions, design system
-+-- docs/
-|   +-- handover_prompt.md           # You are here
-|   +-- CLAUDE.md                    # Session context (needs updating too)
-|   +-- extension-mirror-prompt.md   # Chrome extension feature parity
-+-- api/                             # Vercel Serverless Functions (12/12 — FULL)
-|   +-- _utils/auth.ts              # Shared auth + credit system
-|   +-- chat.ts
-|   +-- cite.ts
-|   +-- extract-citation.ts
-|   +-- generate-tags.ts
-|   +-- identify-source.ts
-|   +-- insights.ts
-|   +-- ocr.ts
-|   +-- rss.ts                      # NEW (Phase 4) — RSS/Atom proxy, SSRF-guarded
-|   +-- search.ts                   # MERGED: academic + books search
-|   +-- set-custom-key.ts
-|   +-- summarize.ts                # MERGED: full + item summaries
-|   +-- transcribe.ts               # NEW (Phase 5) — Gemini + Groq Whisper audio/video/YouTube
-+-- tests/
-|   +-- ocr.integration.test.ts     # Moved from api/ to avoid function limit
-+-- src/
-|   +-- App.tsx                      # Router + OAuthPopupHandler
-|   +-- context/
-|   |   +-- ThemeContext.tsx          # theme (light/dark/system) + visualTheme (minimalist/bubble/glass)
-|   |   +-- NotificationContext.tsx
-|   +-- services/
-|   |   +-- supabaseClient.ts
-|   |   +-- geminiService.ts         # Frontend AI service — calls /api/summarize and /api/summarize-item
-|   |   +-- storageService.ts        # CRUD for research items (StorageItem type)
-|   |   +-- collectionsService.ts
-|   +-- components/
-|       +-- App/
-|       |   +-- Dashboard/           # Refactored into sub-components
-|       |   +-- Discover/            # Phase 2
-|       |   |   +-- DiscoverPage.tsx
-|       |   |   +-- index.ts
-|       |   +-- Feeds/               # Phase 4
-|       |   |   +-- FeedsPage.tsx
-|       |   |   +-- index.ts
-|       |   +-- Transcribe/          # NEW (Phase 5)
-|       |   |   +-- TranscribePage.tsx
-|       |   |   +-- index.ts
-|       |   +-- PdfReader/           # Phase 3
-|       |   |   +-- PdfReader.tsx
-|       |   +-- DocumentEditor/      # TipTap-based rich text editor
-|       |   |   +-- DocumentEditor.tsx
-|       |   |   +-- EditorToolbar.tsx
-|       |   |   +-- EditorCanvas.tsx
-|       |   |   +-- DocumentSidebar.tsx
-|       |   |   +-- ItemImportDrawer.tsx
-|       |   |   +-- useDocumentEditor.ts
-|       |   |   +-- exportUtils.ts
-|       |   |   +-- bibliographyUtils.ts   # NEW (Phase 1)
-|       |   |   +-- latexExportUtils.ts    # NEW (Phase 1)
-|       |   |   +-- extensions/
-|       |   |       +-- fontSize.ts
-|       |   |       +-- indent.ts
-|       |   |       +-- bibliography.ts    # NEW (Phase 1)
-|       |   +-- Citations/
-|       |   +-- Settings/
-|       |   +-- AIAssistant.tsx
-|       |   +-- Statistics.tsx
-|       |   +-- SmartPenGallery.tsx
-|       |   +-- PairSmartPen.tsx
-|       +-- shared/
-|       |   +-- DashboardLayout.tsx   # Sidebar nav + header
-|       |   +-- MarketingLayout.tsx
-|       |   +-- GlassBubble.tsx       # DO NOT TOUCH
-|       |   +-- BubbleBackground.tsx
-|       +-- marketing/
-|           +-- MarketingHome.tsx
-|           +-- FloatingOrbs.tsx      # DO NOT TOUCH
-+-- supabase/
-|   +-- functions/
-|       +-- smart-pen/               # Edge Function for ESP32 hardware
-+-- index.css                        # Global styles + all 3 UI theme CSS
+├── api/                                      # 12 Vercel serverless endpoints + _utils
+├── corpus_manifest.csv                       # Classification rules for 58-file reviewer corpus
+├── docs/                                     # Architecture & handover documentation
+│   ├── CLAUDE.md                             # AI context & development conventions
+│   └── handover_prompt.md                    # THIS FILE: Master handover document
+├── reports/                                  # Generated audit reports
+│   ├── corpus_report.md                      # Complete 58-file Markdown audit table
+│   └── corpus_report.jsonl                   # Resumable JSONL test scanner cache
+├── scripts/                                  # Operational scripts
+│   └── corpus_report.ts                      # Corpus test scanner & generator
+├── sidecars/                                 # Ground-truth assertion sidecars (*.expected.json)
+│   ├── 1001 Math Problems.expected.json
+│   ├── 300 items Mathematics Reviewer with Detailed Solutions.expected.json
+│   ├── 501 Word Analogy Questions.expected.json
+│   ├── Age Problems.expected.json
+│   ├── CSE MOCK EXAM.expected.json
+│   ├── Philippines Code of Conduct...expected.json
+│   └── Republic Act No. 6713.expected.json
+├── src/
+│   ├── components/
+│   │   ├── App/
+│   │   │   ├── Dashboard/                    # Main research dashboard
+│   │   │   ├── Discover/                     # Academic search UI
+│   │   │   ├── DocumentEditor/               # TipTap v3 rich text editor + bibliographies
+│   │   │   ├── Feeds/                        # RSS feed reader
+│   │   │   ├── KnowledgeGraph/               # 3D Three.js Galaxy concept map
+│   │   │   ├── ReviewCompanion/              # CSE Exam & Question Prep suite
+│   │   │   │   ├── QuestionImportModal.tsx   # PDF Question Ingestion Modal
+│   │   │   │   ├── MockExamEngine.tsx        # Timed exam interface
+│   │   │   │   ├── PracticePacer.tsx         # Pacing & stopwatch tracker
+│   │   │   │   └── MaterialsWorkspacePage.tsx# Ingested study materials
+│   │   │   └── Transcribe/                   # Audio/video/YouTube transcription
+│   │   └── shared/                           # Shell layouts, navigation, theme orbs
+│   └── services/
+│       ├── pdfService.ts                     # pdfjs-dist layout extraction & OCR fallback
+│       ├── pdfQuestionImporter.ts            # CORE: Multi-chapter two-pass parser
+│       ├── examService.ts                    # Exam generation, JSON repair, slicing
+│       ├── mockExamEngine.ts                 # Exam session state, scoring, analysis
+│       ├── questionBankService.ts            # Question deduplication & Supabase persistence
+│       ├── distractorQuality.ts              # Distractor quality linter & auto-fixing
+│       └── indexedDbCache.ts                 # Offline-first caching & reliability sync
+└── tests/                                    # 43 Vitest integration & regression test suites
+    ├── reviewer_triage_audit.test.ts         # Triage invariants for 300 Math & CSE Mock
+    ├── audit_1001.test.ts                    # 1001 Math Problems full audit
+    ├── audit_501_word_analogy.test.ts        # 501 Word Analogy full audit
+    ├── audit_word_problems.test.ts           # 501 Math Word Problems full audit
+    ├── modalQuestionImport.test.ts           # End-to-end import modal pipeline test
+    ├── distractorQuality.test.ts             # Distractor linter audit
+    └── corpus_scan.test.ts                   # 58-file corpus scanner test runner
 ```
 
 ---
 
-## Sidebar Navigation Order (DashboardLayout.tsx)
+## 4. Current Milestone: Review Companion & PDF Importer Hardening
 
-```typescript
-const NAV_ITEMS = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
-  { icon: GraduationCap, label: "Discover", path: "/app/discover" },
-  { icon: Rss, label: "Feeds", path: "/app/feeds" },                      // Phase 4
-  { icon: BookOpen, label: "PDF Reader", path: "/app/pdf-reader" },       // Phase 3
-  { icon: Mic, label: "Transcribe", path: "/app/transcribe" },            // NEW (Phase 5)
-  { icon: FolderOpen, label: "Collections", path: "/app/collections" },
-  { icon: MessageSquare, label: "AI Assistant", path: "/app/ai-assistant" },
-  { icon: Quote, label: "Citations", path: "/app/citations" },
-  { icon: FileEdit, label: "Editor", path: "/app/editor" },
-  { icon: PenTool, label: "Smart Pen", path: "/app/smart-pen" },
-  { icon: BarChart2, label: "Statistics", path: "/app/statistics" },
-];
-```
+### The Challenge
+The user is assembling a preparation platform for the **2027 Philippine Civil Service Examination (CSE)**. The source material consists of a large, messy corpus of 58 PDFs located at `C:\Users\netne\Documents\CSC REVIEWER 2027\📝 2027 CSE Reviewer`. These documents vary wildly in typography, publisher conventions, and structure:
+- **Massive LearningExpress drill books** (*1001 Math Problems*, *501 Word Analogy Questions*, *501 Synonym and Antonym Questions*) with multi-page sets and consolidated end-of-chapter or end-of-book answer keys.
+- **Dense local reviewers** (*300 items Mathematics Reviewer*, *255 item Mathematics Reviewer*, *250 MATH Problems*) featuring 2-column interleaved keys, YouTube link noise, space-padded digits (`2 0. )`), and inline solutions ending with `<- Ans`.
+- **Statutes and Legal Codes** (*Republic Act No. 6713*, *1987 Philippine Constitution*, *Labor Code*) with legal sections that must become study cards and structured notes, not spurious MCQs.
+- **Examinations without keys** (*CSE MOCK EXAM*, *Professional and Sub-Professional Practice Test (1)*) that must produce 0 graded questions and import strictly as self-check prompts/flashcards.
+- **Scanned documents** (*Sample Answer Sheet*, *MSA Training Program*) with zero digital text layers.
 
----
-
-## Supabase Configuration
-
-- **Free tier** — 100 Edge Functions, 500K invocations/mo, 500MB DB, 1GB Storage, pg_cron available
-- Auth: email/password + Google OAuth (popup flow)
-- `items` table: stores all research items (text, tags, citations, OCR data, AI summaries)
-- `documents` table: stores TipTap editor documents as jsonb (includes `citedItemIds` array)
-- RLS enabled — all queries scoped to `auth.uid()`
-- Edge Function: `supabase/functions/smart-pen/` for ESP32 hardware pairing + OCR routing
-
----
-
-## User Preferences (Kian)
-
-- Likes concise, actionable responses with tables
-- NEVER push to git without explicit permission
-- Uses the PART sectioning system — no exceptions
-- Apple-inspired design aesthetic with `#007AFF` blue accent
-- Currently testing on deployed Vercel URL (not localhost — local `vite dev` can't serve API routes)
-- Humor welcome when things go wrong
+### Completed Hardening Invariants
+1. **Key Gate & Anti-Guessing Invariant**:
+   - `correctIndex = -1` when an item has no explicit matching key in the identified answer key region.
+   - If $>60\%$ of resolved keys in a document evaluate to a single letter ($n \ge 10$), the file is demoted to ungradable prompts (`reviewStatus = "needs_review"`) with `"Answer keys look unreliable"`.
+   - Free-response items carry `letter: ""` and `correctIndex = -1` (removed legacy placeholder `"a"`).
+2. **Stem Character Cap**:
+   - Question stems exceeding 1,200 characters are demoted to ungradable study prompts (`reviewStatus = "needs_review"`).
+3. **Pre-Parse Document Classifier**:
+   - `classifyDocumentType()` inspects paragraph lengths, question-number density, headwords, and section patterns before parsing begins.
+   - Statutes $\to$ legal notes/flashcards; dictionaries $\to$ self-check prompts; forms $\to$ 0 items.
+4. **Missing Numbers Calculation**:
+   - Sequence gap calculations ignore numbers $> 1,500$ and calendar years ($1900 \le n \le 2099$).
+5. **Generic Feature Profiles**:
+   - Replaced book-specific profile names with structural feature profiles:
+     - `PROFILE_SECTIONED_NUMERICAL_DRILL` (`id: "sectioned_numerical_drill"`, `"Sectioned Numerical Drill (End-of-Book Keys)"`)
+     - `PROFILE_CHAPTER_PRACTICE_DRILL` (`id: "chapter_practice_drill"`, `"Chapter Practice Drill (End-of-Chapter Keys)"`)
+6. **KaTeX Math Reconstruction**:
+   - Superscript exponents reconstructed via layout font size and horizontal line clustering (`^{exponent}`).
+   - Stacked horizontal fractions reconstructed into clean LaTeX `\frac{numerator}{denominator}`.
+   - JSON string repair preserves valid LaTeX escape sequences (`\frac`, `\times`, `\neq`, `\right`, `\beta`).
 
 ---
 
-## Do Not Touch
+## 5. Under-Yield Investigation & Proposed Next Steps
 
-- `src/components/shared/GlassBubble.tsx` — Three.js cursor, working
-- `src/components/marketing/FloatingOrbs.tsx` — Ambient orbs, fine
-- `src/context/ThemeContext.tsx` + theme CSS in `index.css` — Theme system stable
-- `parse_pdf.cjs` / `parse_pdf.mjs` — Untracked utility scripts in repo root, not part of the app
+Detailed analysis of the 6 under-yield target files from the corpus:
 
----
+### Findings
+1. **`CSE MOCK EXAM.pdf` (24 pages)**: No answer key exists anywhere in the PDF. Expected: 0 graded, 144 study prompt cards (items 21–170). Items 1–20 are personal survey demographics and are cleanly skipped. **Status: ✅ PASS**.
+2. **`Civil Service Exam Reviewer with Answers.pdf` (62 pages)**: Questions restart at `1.` across multiple subjects (English, Analogy, Reading, Numerical Reasoning). End-of-book keys on pp. 58–62 use parenthesized numeric choices: `8. (1) 198 – explanation`.
+3. **`Professional and Sub-Professional Practice Test (1).pdf` (160 pages)**: No answer keys exist. The skew gate correctly demotes all 75 items to ungradable prompt cards. **Status: ⚠️ WARN**.
+4. **`255 item Mathematics Reviewer with Detailed Solutions.pdf` (29 pages)**: Split-page layout. Every page features questions on the upper half and step-by-step solutions ending with `<- Ans` on the lower half. Items 175 and 181–185 are free-response word problems without options A–E.
+5. **`250 MATH Problems with links for tutorial VIDEOS.pdf` (26 pages)**: Questions use space-split numbers (`2 0. )`, `2 1. )`). Answer keys for items 1–30 are formatted as 5-letter condensed blocks (`1 to 5: DABDA`), while items 31–250 use `3 1. c. Explanation`.
+6. **`501 Algebra Questions (LearningExpress)` (285 pages)**: Pure free-response algebraic exercises without options A–E, followed by step-by-step solutions. All 455 items correctly parse as free-response study cards. **Status: ⚠️ WARN**.
 
-## Known Issues
-
-### ⚠ PDF Reader — Text Selection Broken (Phase 3)
-
-**Status:** Deferred — Phase 3 shipped, but click+drag text selection inside the rendered PDF does not highlight anything. All other features work: continuous scroll, prev/next buttons, zoom, fit-to-width, upload, Discover-to-reader linking, 200+ page PDFs render fine.
-
-**What was tried (all committed, none fully solved it):**
-1. `pdfjs-dist` v5 `TextLayer` class with `streamTextContent` + manual fallback using `Util.transform` (commit `f0817f5`)
-2. Force `pointer-events: auto` / `user-select: text` on `.textLayer` + `pointer-events: none` on canvas (commit `f9be2bb`)
-3. Escape `.bubble-container` click trap — `.bubble { pointer-events: none }` + PDF viewport `relative z-20 isolation:isolate` (commit `bda6315`)
-4. Set pdfjs v5 required CSS vars `--scale-factor`, `--user-unit`, `--total-scale-factor` on wrapper + textLayer container (commit `50b18d7`)
-
-**Current theory (most likely):** `TextLayer.render()` builds divs whose dimensions come from CSS `calc(var(--total-scale-factor) * ...)`. The CSS vars ARE now being set, but possibly:
-- They need to be on `html` or `body`, not the per-page wrapper
-- Or the inlined `.textLayer` CSS in `index.css` is overriding dimensions that pdfjs wants to set via `style` attribute
-- Or the manual fallback is firing but the spans are invisible because the text layer's `::selection` rule has `color: transparent` and the spans have `color: transparent`, preventing selection from showing
-
-**Where to start debugging:**
-1. Open DevTools in the deployed PDF reader, inspect a rendered page's `.textLayer` div
-2. Check if it has any `<span>` children at all — if not, the TextLayer ctor is silently failing and the manual fallback is not running
-3. If spans exist, check their computed `width` / `height` — if zero, the CSS var chain is still broken
-4. Try: set `--scale-factor` on `document.documentElement` instead of the wrapper
-5. Consider: import `pdfjs-dist/web/pdf_viewer.css` directly instead of our hand-rolled minimal copy in `index.css`
-6. Consider: upgrade/downgrade `pdfjs-dist` — v5.4.624 is recent; maybe try v4.x which has more online examples
-
-**Relevant files:**
-- `src/components/App/PdfReader/PdfReader.tsx` — `renderPage()` function
-- `index.css` — `.textLayer` / `.pdf-page` CSS block (search for `PDF.js Text Layer`)
-
-**Not blocking other phases** — users can still read PDFs, just not highlight. Fix it when someone has time to actually step through the TextLayer source in `node_modules/pdfjs-dist`.
+### 4 Proposed Generic Parser Enhancements (Awaiting User Go-Ahead)
+1. **Space-Padded Digits Normalization**: Normalize `\b(\d)\s+(\d)\b` inside line-initial markers (e.g. `2 0. )` $\to$ `20.)`, `3 1. c.` $\to$ `31. c.`) $\to$ benefits `250 MATH Problems`, `255 item Mathematics Reviewer`, `300 items Mathematics Reviewer`.
+2. **Condensed 5-Letter Block Key Parser**: Support range keys formatted as `(\d+)\s+to\s+(\d+)\s*:\s*([A-Ea-e]{2,10})` by indexing each character offset to its item number $\to$ benefits `250 MATH Problems`, `Civil Service Exam Reviewer with Answers`.
+3. **Parenthesized Numeric Key Matching**: Match `(\d+)[\.\)]\s*\(([1-5])\)` as choice index `int(group) - 1` when questions use `1.` through `5.` $\to$ benefits `Civil Service Exam Reviewer with Answers`.
+4. **In-Page Top/Bottom Split Q&A Profile**: For pages partitioned with horizontal rules/headers (`Questions ... Answers`), parse upper questions as stems and lower entries ending with `<- Ans` as solutions $\to$ benefits `255 item Mathematics Reviewer with Detailed Solutions`.
 
 ---
 
-## What To Do Next (In Order)
+## 6. How to Run Tests & Verify
 
-1. ~~**Phase 3: PDF Reader & Annotator**~~ — DONE (see Known Issues for deferred text-selection bug)
-2. ~~**Phase 4: RSS Feeds**~~ — DONE (api/rss.ts, migration applied)
-3. ~~**Phase 5: Media Transcription**~~ — DONE (api/transcribe.ts — Gemini + Groq Whisper, full 12/12 slots)
-4. ~~**Phase 6: Knowledge Graph**~~ — DONE (3D React Force Graph)
-5. **Phases 7-9** — all client-side (Paper Graph, Kanban, Shared Collections) — NEXT
+Run from project root (`C:\Users\netne\ReserachMate\Researchmate Website`):
 
-> **Note:** All 12 Vercel slots are full. Adding any new serverless endpoint now requires either upgrading to Pro, merging two existing endpoints, or moving one to a Supabase Edge Function.
+```powershell
+# Run the complete test suite (43 files, ~9 seconds)
+npm.cmd test
 
----
+# Run a single targeted test file
+npx.cmd vitest run tests/reviewer_triage_audit.test.ts
+npx.cmd vitest run tests/modalQuestionImport.test.ts
+npx.cmd vitest run tests/audit_1001.test.ts
+npx.cmd vitest run tests/audit_501_word_analogy.test.ts
 
-## Git History (Recent)
+# Run the full 58-file corpus scanner
+npx.cmd vitest run tests/corpus_scan.test.ts
 
-```
-7f71871 fix: improve title-based search with ArXiv ti: field and S2 fallback
-375f36e fix: add direct ArXiv ID and DOI lookup for new/exact papers
-9f32734 fix: move test file out of api/ to avoid Vercel 12-function limit
-c3eb3e4 feat: add Academic Paper Search (Discover page)
-63e01f1 fix: toolbar Export button cutoff — compact Insert/Bibliography to icons
-79e28e4 feat: add Dynamic Bibliography generation and LaTeX export
-72688aa fix: toolbar dropdowns hidden behind editor + saving layout shift
-7d2c5da fix: resolve critical Document Editor toolbar bugs
-5a5ec36 feat: add Document Editor with Google Docs-style toolbar
+# Check git status (always keep commits local, never push)
+git status
+git log -n 5 --oneline
 ```
