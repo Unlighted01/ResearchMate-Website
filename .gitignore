@@ -40,7 +40,7 @@ lerna-debug.log*
 *.sln
 *.sw?
 
-# AI Agent configs (local tooling — do NOT push)
+# AI Agent configs & Local AI 2nd Brain (NEVER push to git)
 .agents/
 .claude/
 scratch/
@@ -48,6 +48,15 @@ reports/
 CLAUDE.md
 CLAUDE_CODE_SETUP.md
 api/AGENTS.md
+ai_team_*
+ai_war_room*
+*warroom*
+*war_room*
+*_bridge.py
+*bridge*.py
+local_ai/
+.local_ai/
+ollama_scripts/
 
 # Commercial / copyrighted PDFs (never commit)
 tests/fixtures/*.pdf
@@ -68,3 +77,9 @@ coverage
 .cache
 .temp
 .tmp
+
+# Local AI War Room staging folder
+.warroom-workspace/
+
+# Local corpus audit report; keep in docs without publishing it
+/docs/corpus_round3_report.md
