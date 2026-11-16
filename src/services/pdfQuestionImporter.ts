@@ -111,6 +111,7 @@ export interface ParseTwoPassResult {
   promptCount?: number;
   isGradable?: boolean;
   templateCounts?: Record<string, number>;
+  droppedOversizedStemCount?: number;
 }
 
 // ============================================
@@ -485,7 +486,7 @@ export function normalizeLetterSpacingAndGlyphs(text: string): string {
   res = res.replace(/d\s+emonstr\s+A\s+te\s+y\s+our\s+u\s+nderst\s+A\s+nding/gi, "Demonstrate Your Understanding");
 
   // Finally replace remaining isolated control chars or replacement glyphs with space
-  res = res.replace(/[\x18\u2191\u25AF\uFFFD]+/g, " ");
+  res = res.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x18\u2191\u25AF\uFFFD]+/g, " ");
 
   return res;
 }
@@ -533,6 +534,12 @@ export function cleanPageText(rawText: string, repeatingHeaders?: Set<string>): 
   // Strip glued page numbers and footnote numbers at breaks
   cleaned = stripGluedPageNumbers(cleaned);
 
+  // Condition 9(a): Padded digits only inside a line-start marker followed by . or ), never in number series
+  cleaned = cleaned.replace(/(^|\n)([ \t]*)(\d)(?:[ \t]+(\d)){1,2}[ \t]*([.)])(?=[ \t]+\S)/gm, (match, boundary, indent, _first, _last, punct) => {
+    const digits = match.slice(boundary.length + indent.length).match(/\d/g)?.join("") || "";
+    return digits.startsWith("0") ? `${boundary}${indent}${digits}${punct}` : match;
+  });
+
   // If frequency-detected repeating headers are provided, strip matching lines
   if (repeatingHeaders && repeatingHeaders.size > 0) {
     const lines = cleaned.split("\n");
@@ -575,6 +582,23 @@ export function sanitizeContentText(text: string, repeatingHeaders?: Set<string>
 /**
  * Reconstructs stacked fractions and superscript exponents from 2D text coordinates.
  */
+function restoreElevatedPowers(text: string, items: PdfLayoutItem[]): string {
+  const confirmedExponents = new Set<string>();
+  for (let i = 1; i < items.length; i++) {
+    const exponent = items[i];
+    const base = items[i - 1];
+    if (/^[1-9]\d?$/.test(exponent.str.trim()) && /[×x*]\s*10$/.test(base.str.trim()) &&
+        exponent.y - base.y >= 3 && exponent.y - base.y <= 9 &&
+        exponent.x >= base.x + base.width - 4 && exponent.x <= base.x + base.width + 8) {
+      confirmedExponents.add(exponent.str.trim());
+    }
+  }
+  for (const exponent of confirmedExponents) {
+    text = text.replace(new RegExp(`([×x*]\\s*10)\\s+${exponent}\\b`, "g"), `$1^{${exponent}}`);
+  }
+  return text;
+}
+
 export function reconstructStackedFractions(items: PdfLayoutItem[]): string {
   if (!items || items.length === 0) return "";
 
@@ -676,7 +700,8 @@ export function reconstructStackedFractions(items: PdfLayoutItem[]): string {
     fractionResult += current.str + (current.hasEOL ? "\n" : " ");
   }
 
-  const finalOutput = hasStacked ? fractionResult : (hasSuperscript ? clusteredText : fractionResult);
+  let finalOutput = hasStacked ? fractionResult : (hasSuperscript ? clusteredText : fractionResult);
+  finalOutput = restoreElevatedPowers(finalOutput, items);
 
   return finalOutput
     .replace(/½/g, "$\\frac{1}{2}$")
@@ -1147,7 +1172,9 @@ export function splitStemAndOptions(
     if (i === validSequence.length - 1) {
       optText = optText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ");
       optText = optText
-        .replace(/(?:\n|^|\s{2,})\s*(?:Section\s+\d+|Chapter\s+\d+|Set\s+\d+|Answers\b)[\s\S]*/i, "")
+        .replace(/(?:\n|^|\s{2,})\s*(?:READ\s+these\s+INSPIRATIONAL\s+QUOTES|INSPIRATIONAL\s+QUOTES|GRAMMAR\s+IQ\s+(?:FINAL\s+EXAM|PRE-TEST)|END\s+OF\s+(?:TEST|EXAM|SECTION)|STOP\s*[\.\!]|DO\s+NOT\s+GO\s+ON)[\s\S]*/i, "")
+        .replace(/(?:\n|^|\s{2,}|\s+(?=\d+\s+(?:Antonyms|Synonyms|Analogies|Vocabulary)\b))\s*(?:Section\s+\d+|Chapter\s+\d+|Set\s+\d+|Answers\b|\d+\s+(?:Antonyms|Synonyms|Analogies|Vocabulary)\b)[\s\S]*/i, "")
+        .replace(/(?:\n|^|\s{2,}|\s+(?=(?:Which\s+(?:of\s+these\s+)?words?\s+is|Select\s+the\s+word)\b))(?:Which\s+(?:of\s+these\s+)?words?\s+is|Select\s+the\s+word)[\s\S]*/i, "")
         .replace(/(?:[\s\n]+[A-F](?:[\s\t]+[A-F])*)+\s*$/g, "")
         .replace(/(?:\n|^)\s*[-–—\s]+[A-Za-z\s]{3,}[-–—\s]+\d{1,4}\s*$/g, "")
         .replace(/(?:\n|^|\s{2,})\s*(?:\d{3,4}\s+[A-Za-z\s]+(?:Questions|Problems|Exercises))\b[\s\S]*/i, "")
@@ -1272,8 +1299,12 @@ export function evaluateSuspiciousItem(
 
   const hasParsedChoices = (item.options || []).length >= (item.questionType === "free_response" ? 0 : 2);
   const isValidShortMathStem = hasMathOrEquation && hasParsedChoices && stem.length >= 3;
+  // Vocabulary/analogy drill questions have single headwords/phrases as stems (e.g. "remote", "detest") with word choices
+  const isVocabHeadwordStem = hasParsedChoices && !hasMathOrEquation &&
+    /^[\p{L}\s\-'’]{2,25}$/u.test(stem) && !/^(?:and|or|the|a|an|of|to|in|who|what|when|where|why|how)$/i.test(stem.trim()) &&
+    (item.options || []).every((opt) => /^[\p{L}][\p{L}\s\-'’]+$/u.test(opt.trim()) && opt.trim().split(/\s+/).length <= 4);
 
-  if (stem.length < minStemLen && !isValidShortMathStem) {
+  if (stem.length < minStemLen && !isValidShortMathStem && !isVocabHeadwordStem) {
     reasons.push(`Question stem suspiciously short (< ${minStemLen} characters)`);
   } else if (stem.length > config.maxStemLength) {
     reasons.push(`Question stem abnormally long (> ${config.maxStemLength} characters)`);
@@ -1299,8 +1330,8 @@ export function evaluateSuspiciousItem(
     reasons.push("All options are identical (lost stacked fractions or conversion error)");
   }
 
-  // Lost superscripts check (e.g. #4 "1.45×102" or powers of 10 merged without exponent formatting)
-  const lostSuperscriptRegex = /\b(?:1\.45\s*×\s*10\s*2|1\.45\s*×\s*10\^\{2\}|10\s*16\b|10\s*32\b|10\s*[2468]\b)/i;
+  // Lost superscripts check (e.g. #4 "1.45×102" or powers of 10 with space-separated or missing exponent formatting)
+  const lostSuperscriptRegex = /(?:(?:\d+\.?\d*|[a-zA-Z])\s*[×x*]\s*10\s*[-−]?[1-9]\d*|\b10\s+[-−]?[2-9]\b|\b10\s+[-−]?[1-9]\d+\b)/i;
   if (lostSuperscriptRegex.test(stem) || opts.some((o) => lostSuperscriptRegex.test(o))) {
     reasons.push("Potential lost superscripts or mathematical exponent formatting");
   }
@@ -1471,6 +1502,9 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         if (!pageContent && typeof p !== "string" && p.items) {
           pageContent = reconstructStackedFractions(p.items);
         }
+        if (typeof p !== "string" && p.items) {
+          pageContent = restoreElevatedPowers(pageContent, p.items);
+        }
         return `\n[Page ${pageNum}]\n` + cleanPageText(pageContent, repeatingHeaders);
       })
       .join("\n");
@@ -1507,8 +1541,10 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   const normalizedText = fullCleanedText.replace(/(?<=\S)\s{2,}(?=\d{1,4}\.\))/g, "\n");
   const lines = normalizedText.split("\n");
   let currentNum: number | null = null;
+  let currentNumPage = 1;
   let currentBuffer: string[] = [];
   let inSurveyBlock = false;
+  const numericKeyPages = new Map<number, Array<{ number: number; letter: string; explanation: string; chapter: string }>>();
 
   const flush = () => {
     if (currentNum === null) return;
@@ -1538,6 +1574,17 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     let ansMatch = isAnswerContext
       ? cleanBlock.match(/^(?:(?:Choice\s+|Option\s+)\s*([a-eA-E])\b|\(?([a-eA-E])(?:[\.\)\:\-\]]|\s+is\s+correct\b|\s+|$))\s*([\s\S]*)/i)
       : null;
+    const numericAnsMatch = isAnswerContext ? cleanBlock.match(/^\(([1-5])\)\s*([\s\S]*)/) : null;
+
+    if (numericAnsMatch && (isAnswerMode || /Answers\b/i.test(currentChapter))) {
+      const optIdx = parseInt(numericAnsMatch[1], 10) - 1;
+      const letter = String.fromCharCode(97 + optIdx);
+      const explanation = sanitizeContentText(numericAnsMatch[2] || "", repeatingHeaders);
+      const pageKeys = numericKeyPages.get(currentNumPage) || [];
+      pageKeys.push({ number: currentNum, letter, explanation: explanation || `Answer: Option (${numericAnsMatch[1]}) / ${letter.toUpperCase()}.`, chapter: currentChapter || "Chapter 1" });
+      numericKeyPages.set(currentNumPage, pageKeys);
+      return;
+    }
 
     // Safety check: In end_of_chapter mode, if currently in isAnswerMode, but the block is NOT an answer key
     // and splitStemAndOptions finds valid options, then we have entered a new questions section!
@@ -1559,7 +1606,8 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         .replace(/(?:Library of Congress|All rights reserved)[\s\S]*/gi, "")
         .trim();
 
-      // Clean noise lines to check for genuine ambiguity (or, if, ?, must)
+      // Only explicit alternative-key guidance is ambiguous. Explanatory questions,
+      // conditional arithmetic, and "must be" describe ordinary worked solutions.
       const cleanExplanationForKeywords = cleanBlock
         .replace(/Tutorial video[\s\S]*?(?=\n\s*[A-Z0-9]|$)/gi, "")
         .replace(/or search on youtube:[\s\S]*?(?=\n\s*[A-Z0-9]|$)/gi, "")
@@ -1570,7 +1618,8 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         .replace(/Youtube:[\s\S]*/gi, "")
         .trim();
 
-      const hasReviewKeyword = /\b(?:or\s+(?:choice\s+|option\s+)?[A-Ea-e][\.\)]|\b[A-Ea-e][\.\)]\s+or\b|\b[A-E]\s+if\b|if\s+(?:pattern|the|author|answer)\b|must\s+be\b)\b|\?|\bMUST\b/.test(cleanExplanationForKeywords);
+      const hasReviewKeyword = /\b(?:answer|choice|option)\s+(?:may|might|could)\s+(?:also\s+)?be\b|\b(?:both|either)\s+(?:answer|choice|option)\s+[A-E]\s+(?:and|or)\s+[A-E]\b|\bif\s+(?:(?:the\s+)?(?:author|key)\s+(?:intended|meant|chose)|pattern\b)/i.test(cleanExplanationForKeywords) ||
+        /\b(?:the\s+)?answer\s+is\s+[A-E]\b|\bor\s+[A-E][.)]\s*\d+\s*\?/.test(cleanExplanationForKeywords);
 
       const effectiveChapter = currentChapter || "Chapter 1";
       const key = `${effectiveChapter}::${currentNum}`;
@@ -2024,6 +2073,33 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         }
         continue;
       }
+
+      // Condition 9(b): Block keys require letter count == range length, else reject
+      const blockMatches = Array.from(trimmed.matchAll(/(?:^|\s+)(\d{1,4})\s*(?:to|-)\s*(\d{1,4})\s*:\s*([A-Ea-e]{2,20})\b/g));
+      if (blockMatches.length > 0) {
+        flush();
+        for (const bm of blockMatches) {
+          const startNum = parseInt(bm[1], 10);
+          const endNum = parseInt(bm[2], 10);
+          const letters = bm[3];
+          const rangeLength = endNum - startNum + 1;
+          if (letters.length === rangeLength && rangeLength > 1) {
+            for (let idx = 0; idx < letters.length; idx++) {
+              const num = startNum + idx;
+              const letter = letters[idx].toLowerCase();
+              const answerData = {
+                number: num,
+                letter,
+                explanation: `Verified block key: Option ${letter.toUpperCase()}.`,
+                chapter: currentChapter,
+              };
+              answersMap.set(`${currentChapter}::${num}`, answerData);
+              answersMap.set(String(num), answerData);
+            }
+          }
+        }
+        continue;
+      }
     }
 
     // Detect question/answer numbering: "1. ", "64. ", "1) ", "1.) "
@@ -2085,6 +2161,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
         }
       }
       currentNum = nextNum;
+      currentNumPage = currentPage;
       currentBuffer = numMatch[2] ? [numMatch[2].replace(/^\)\s*/, "")] : [];
       continue;
     }
@@ -2154,6 +2231,20 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     questionsToProcess = Array.from(questionRuns[0].values());
   }
 
+  // Numeric key pages are independent. A page is accepted only when every key
+  // number advances by one and has a matching question in the selected run.
+  for (const pageKeys of numericKeyPages.values()) {
+    if (pageKeys.length < 2 || pageKeys.some((entry, index) =>
+      (index > 0 && entry.number !== pageKeys[index - 1].number + 1) ||
+      !questionsToProcess.some((question) => question.number === entry.number && question.options.length > 0)
+    )) continue;
+    for (const data of pageKeys) {
+      const answerData = { number: data.number, letter: data.letter, explanation: data.explanation, chapter: data.chapter };
+      answersMap.set(`${data.chapter}::${data.number}`, answerData);
+      answersMap.set(String(data.number), answerData);
+    }
+  }
+
   // If no questions found at all, check if this is an unstructured law or study text (e.g. RA 6713)
   if (questionsToProcess.length === 0) {
     return generateQuestionsFromLegalOrUnstructuredText(pagesOrText, options);
@@ -2162,6 +2253,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
   // De-duplicate questions by chapter and number (or global number in end_of_book)
   const seenKeys = new Set<string>();
   const items: ParsedQaItem[] = [];
+  let droppedOversizedStemCount = 0;
 
   // Check if question numbering restarts at 1 across chapters (e.g. Chapter 1: Q1, Chapter 2: Q1)
   const num1Count = questionsToProcess.filter((item) => item.number === 1).length;
@@ -2227,6 +2319,23 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       explanation = "Answer key not explicitly indexed in this section.";
     }
 
+    // A printed key cannot grade choices whose distinguishing glyphs are absent
+    // from the PDF text layer (often vector-drawn fraction numerators).
+    const extractedOptions = q.options.filter((option) => !/^Choice [A-E]$/.test(option.trim()));
+    const choicesCollapsed = extractedOptions.length >= 2 &&
+      extractedOptions.every((option) => option.replace(/\s+/g, " ").trim() === extractedOptions[0].replace(/\s+/g, " ").trim());
+    if (choicesCollapsed && correctIndex >= 0) {
+      questionType = "prompt";
+      correctIndex = -1;
+      correctLetter = "";
+      hasIncompleteAnswer = true;
+    }
+    if (questionType === "prompt") {
+      correctIndex = -1;
+      correctLetter = "";
+      hasIncompleteAnswer = true;
+    }
+
     // Evaluate if item is suspicious (including distractor quality lint)
     const evaluation = evaluateSuspiciousItem(
       {
@@ -2242,6 +2351,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
 
     let isSuspicious = evaluation.isSuspicious;
     const suspiciousReasons = [...evaluation.reasons];
+    if (choicesCollapsed) suspiciousReasons.push("Choices indistinguishable after PDF text extraction; verify against page image");
     let reviewStatus: QuestionReviewStatus = evaluation.reviewStatus;
     const finalStem = evaluation.fixedStem || q.stem;
 
@@ -2265,17 +2375,10 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       suspiciousReasons.push("Diagram-based or unparseable choices (requires manual review)");
     }
 
-    // Item 2: Stem length cap (1,200 chars) for graded items
+    // Condition 5: Stem length cap (1,200 chars) for graded items: do not import as prompts; drop them
     if (finalStem.length > (config.maxStemLength || 1200)) {
-      questionType = "prompt";
-      correctIndex = -1;
-      correctLetter = "";
-      hasIncompleteAnswer = true;
-      isSuspicious = true;
-      reviewStatus = "needs_review";
-      if (!suspiciousReasons.includes(`Question stem abnormally long (> ${config.maxStemLength || 1200} characters)`)) {
-        suspiciousReasons.push(`Question stem abnormally long (> ${config.maxStemLength || 1200} characters)`);
-      }
+      droppedOversizedStemCount++;
+      continue;
     }
 
     items.push({
@@ -2320,6 +2423,30 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     }
     if (maxCount / letteredItems.length > 0.60) {
       const skewMsg = `Answer keys look unreliable: >60% of items assigned choice ${maxLetter.toUpperCase()} (${maxCount}/${letteredItems.length})`;
+      for (const it of items) {
+        it.questionType = "prompt";
+        it.reviewStatus = "needs_review";
+        it.isSuspicious = true;
+        it.hasIncompleteAnswer = true;
+        it.correctIndex = -1;
+        it.correctLetter = "";
+        if (!it.suspiciousReasons) it.suspiciousReasons = [];
+        if (!it.suspiciousReasons.includes(skewMsg)) {
+          it.suspiciousReasons.push(skewMsg);
+        }
+      }
+    }
+  } else if (letteredItems.length >= 1) {
+    // Condition 6: Skew rule: also demote small-n all-one-letter files when the other items in the file are prompts (e.g. Math Reviewer for Civil Service Exam)
+    const counts: Record<string, number> = { a: 0, b: 0, c: 0, d: 0, e: 0 };
+    for (const it of letteredItems) {
+      counts[it.correctLetter!.toLowerCase()] = (counts[it.correctLetter!.toLowerCase()] || 0) + 1;
+    }
+    const maxCount = Math.max(...Object.values(counts));
+    const nonLetteredCount = items.length - letteredItems.length;
+    if (maxCount === letteredItems.length && nonLetteredCount >= letteredItems.length) {
+      const singleLetter = Object.keys(counts).find((k) => counts[k] === maxCount)!.toUpperCase();
+      const skewMsg = `Answer keys look unreliable: small-n (${letteredItems.length}) all choice ${singleLetter} while remaining ${nonLetteredCount} items are prompts`;
       for (const it of items) {
         it.questionType = "prompt";
         it.reviewStatus = "needs_review";
@@ -2381,6 +2508,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     totalExpected: items.length + missingQuestionNumbers.length,
     profileUsed: profile,
     repeatingHeadersStripped: Array.from(repeatingHeaders),
+    droppedOversizedStemCount,
   };
 }
 
@@ -3327,6 +3455,7 @@ export function parseTwoPassQuestionsAndAnswers(
   promptCount?: number;
   isGradable?: boolean;
   templateCounts?: Record<string, number>;
+  droppedOversizedStemCount?: number;
 } {
   const result = parseTwoPassQuestionsAndAnswersDetailed(pagesOrText, options);
   const arr = [...result.items] as ParsedQaItem[] & {

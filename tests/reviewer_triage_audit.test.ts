@@ -32,7 +32,8 @@ describe("Reviewer Triage Audit & Importer Hardening", () => {
       const result = parseTwoPassQuestionsAndAnswersDetailed(layout.pages);
 
       // Total questions
-      expect(result.items.length).toBe(300);
+      expect(result.items.length).toBe(299);
+      expect(result.droppedOversizedStemCount).toBe(1);
       expect(result.missingQuestionNumbers).toEqual([]);
 
       // Spot-checks: 1=C, 7=C, 15=D, 22=D, 45=A, 50=E
@@ -96,10 +97,17 @@ describe("Reviewer Triage Audit & Importer Hardening", () => {
       expect(item202?.reviewStatus).toBe("needs_review");
       expect(item203?.reviewStatus).toBe("needs_review");
       expect(item204?.reviewStatus).toBe("needs_review");
+      for (const item of [item202, item203, item204]) {
+        expect(item?.questionType).toBe("prompt");
+        expect(item?.correctIndex).toBe(-1);
+        expect(item?.correctLetter).toBe("");
+      }
 
       // Lost superscripts (#4) go to needs_review
       const item4 = result.items.find((it) => it.number === 4);
-      expect(item4?.reviewStatus).toBe("needs_review");
+      expect(item4?.reviewStatus).toBe("verified");
+      expect(item4?.stem).toContain("×10^{2}");
+      expect(item4?.options[3]).toContain("×10^{8}");
     });
   });
 

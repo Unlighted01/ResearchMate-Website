@@ -50,6 +50,18 @@ describe("Phase 3: Zero-Cost No-AI PDF Question Importer", () => {
     expect(reconstructed).toContain("$\\frac{1}{2}$");
   });
 
+  it("reconstructs elevated powers of ten without changing a number series", () => {
+    const items: PdfLayoutItem[] = [
+      { str: "4.) 1.45", x: 10, y: 100, width: 40, height: 11 },
+      { str: "×10", x: 50, y: 100, width: 18, height: 11 },
+      { str: "2", x: 68, y: 105, width: 5, height: 11 },
+      { str: " 2 4 6 8", x: 78, y: 100, width: 45, height: 11 },
+    ];
+    const reconstructed = reconstructStackedFractions(items);
+    expect(reconstructed).toContain("×10^{2}");
+    expect(reconstructStackedFractions([{ str: "2 4 6 8", x: 10, y: 100, width: 45, height: 11 }])).toContain("2 4 6 8");
+  });
+
   it("detects Q&A book likelihood with question and option density heuristics", () => {
     const qaSample = `
       1. What is the derivative of x^2?

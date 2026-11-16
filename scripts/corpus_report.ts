@@ -52,7 +52,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, msg: string): Promise<T
 // Load manifest
 interface ManifestRule {
   folderSubstring: string;
-  expectedKind: "keyed_mcq" | "lesson_notes" | "figure_based" | "non_question";
+  expectedKind: "keyed_mcq" | "lesson_notes" | "figure_based" | "non_question" | "mixed_practice" | "free_response_practice";
 }
 
 function loadManifest(): ManifestRule[] {
@@ -76,9 +76,10 @@ function loadManifest(): ManifestRule[] {
 
 const manifestRules = loadManifest();
 
-function getExpectedKind(folderPath: string): ManifestRule["expectedKind"] {
+function getExpectedKind(folderPath: string, fileName: string = ""): ManifestRule["expectedKind"] {
+  const combined = `${folderPath}/${fileName}`.toLowerCase();
   for (const rule of manifestRules) {
-    if (folderPath.toLowerCase().includes(rule.folderSubstring.toLowerCase())) {
+    if (combined.includes(rule.folderSubstring.toLowerCase())) {
       return rule.expectedKind;
     }
   }
@@ -89,6 +90,8 @@ function getExpectedKind(folderPath: string): ManifestRule["expectedKind"] {
 interface SidecarExpectation {
   questionCount?: number;
   cardCount?: number;
+  sourceGap?: string;
+  missingNumbers?: number[];
   spotChecks?: Array<{ n: number; key: string }>;
 }
 
@@ -144,6 +147,7 @@ export interface CorpusReportRow {
   missingNumbers: string;
   answerDistribution: string;
   longestStem: string;
+  droppedOversizedStems: number;
   expectedKind: string;
   status: "PASS" | "WARN" | "FAIL" | "UNVERIFIED";
   statusReason?: string;
@@ -155,7 +159,7 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
   const startTime = Date.now();
   const fileName = path.basename(pdfPath);
   const relFolder = path.relative(corpusRoot, path.dirname(pdfPath)) || ".";
-  const expectedKind = getExpectedKind(relFolder);
+  const expectedKind = getExpectedKind(relFolder, fileName);
   const sidecar = loadSidecar(pdfPath, fileName);
 
   let pages: PdfPageWithLayout[] = [];
@@ -171,6 +175,7 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
   let missingNumbers = "0";
   let answerDistribution = "-";
   let longestStem = "-";
+  let droppedOversizedStems = 0;
   let errorMsg = "-";
   let status: "PASS" | "WARN" | "FAIL" | "UNVERIFIED" = "PASS";
   let statusReason = "";
@@ -246,10 +251,13 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
         answerDistribution = "-";
       }
 
-      // Longest Stem
-      const stems = result.items.map((it) => (it.stem || "").length);
-      const maxStem = stems.length > 0 ? Math.max(...stems) : 0;
-      longestStem = maxStem > 0 ? `${maxStem} chars` : "-";
+      // Longest Graded Stem (Condition 5)
+      const gradedStems = result.items
+        .filter((it) => it.questionType !== "prompt" && it.correctIndex >= 0)
+        .map((it) => (it.stem || "").length);
+      const maxGradedStem = gradedStems.length > 0 ? Math.max(...gradedStems) : 0;
+      longestStem = maxGradedStem > 0 ? `${maxGradedStem} chars` : "-";
+      droppedOversizedStems = result.droppedOversizedStemCount || 0;
 
       // Check for key skew warning in items
       const hasSkewWarning = result.items.some((it) =>
@@ -264,17 +272,26 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
           if (expectedQ === 0 && gradedCount !== 0) {
             status = "FAIL";
             statusReason = `Expected 0 graded Qs but found ${gradedCount}`;
-          } else if (expectedQ > 0 && gradedCount !== expectedQ && questionsFound !== expectedQ) {
+          } else if (expectedQ > 0 && gradedCount !== expectedQ && questionsFound + droppedOversizedStems !== expectedQ) {
             status = "FAIL";
             statusReason = `Expected ${expectedQ} questions but found ${gradedCount} graded (${questionsFound} total)`;
           }
         }
 
         if (status === "PASS" && typeof sidecar.cardCount === "number") {
-          if (promptsCards < sidecar.cardCount) {
+          if (sidecar.sourceGap && promptsCards !== sidecar.cardCount) {
+            status = "FAIL";
+            statusReason = `Expected exactly ${sidecar.cardCount} prompts, got ${promptsCards}`;
+          } else if (promptsCards < sidecar.cardCount) {
             status = "WARN";
             statusReason = `Expected ${sidecar.cardCount} cards, got ${promptsCards}`;
           }
+        }
+
+        if (status === "PASS" && sidecar.missingNumbers &&
+          JSON.stringify(result.missingQuestionNumbers || []) !== JSON.stringify(sidecar.missingNumbers)) {
+          status = "FAIL";
+          statusReason = `Source numbering gap differs from sidecar: expected ${sidecar.sourceGap || sidecar.missingNumbers.join(",")}`;
         }
 
         if (status === "PASS" && sidecar.spotChecks && sidecar.spotChecks.length > 0) {
@@ -321,6 +338,9 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
           } else {
             status = "PASS";
           }
+        } else if (expectedKind === "mixed_practice" || expectedKind === "free_response_practice") {
+          status = questionsFound > 0 ? "PASS" : "WARN";
+          if (status === "WARN") statusReason = `Expected practice items, found none`;
         } else {
           // keyed_mcq
           if (hasSkewWarning) {
@@ -374,6 +394,7 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
     missingNumbers,
     answerDistribution,
     longestStem,
+    droppedOversizedStems,
     expectedKind,
     status,
     statusReason: statusReason || undefined,
@@ -478,10 +499,10 @@ async function main() {
 
   mdLines.push("## Summary Table\n");
   mdLines.push(
-    "| # | Folder | File | Pgs | Text Pgs | Detected Profile | Found | Graded | Cards/Prompts | Needs Rev | Missing #s | Dist | Longest Stem | Status | Notes / Errors |"
+    "| # | Folder | File | Pgs | Text Pgs | Detected Profile | Found | Graded | Cards/Prompts | Needs Rev | Missing #s | Dist | Longest Graded Stem | Dropped Long Stems | Status | Notes / Errors |"
   );
   mdLines.push(
-    "|---|---|---|---|:---:|---|:---:|:---:|:---:|:---:|:---:|---|:---:|:---:|---|"
+    "|---|---|---|---|:---:|---|:---:|:---:|:---:|:---:|:---:|---|:---:|:---:|:---:|---|"
   );
 
   rows.forEach((r, idx) => {
@@ -496,7 +517,7 @@ async function main() {
         : "❌ FAIL";
     const noteCell = r.statusReason || r.error || "-";
     mdLines.push(
-      `| ${idx + 1} | ${r.folder} | ${r.file} | ${r.pages} | ${r.textPages} | ${profileCell} | ${r.questionsFound} | ${r.gradedCount} | ${r.promptsCards} | ${r.needsReview} | ${r.missingNumbers} | ${r.answerDistribution} | ${r.longestStem} | ${statusBadge} | ${noteCell} |`
+      `| ${idx + 1} | ${r.folder} | ${r.file} | ${r.pages} | ${r.textPages} | ${profileCell} | ${r.questionsFound} | ${r.gradedCount} | ${r.promptsCards} | ${r.needsReview} | ${r.missingNumbers} | ${r.answerDistribution} | ${r.longestStem} | ${r.droppedOversizedStems} | ${statusBadge} | ${noteCell} |`
     );
   });
 

@@ -118,8 +118,8 @@ export function normalizeOptionText(text: string): string {
     .replace(/(\d+)\s*\n\s*(\d+)/g, "$1/$2")
     // Remove comma between digits (e.g. 1,500 -> 1500)
     .replace(/(\d),(\d)/g, "$1$2")
-    // Keep letters, digits, whitespace, period, percent, minus, and math operators
-    .replace(/[^\w\s.%+\-*/^=]/g, " ")
+    // Keep letters, digits, whitespace, period, percent, minus, math and inequality operators
+    .replace(/[^\w\s.%+\-*/^=<>≤≥≠π()]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -161,8 +161,8 @@ export function parseNumericOption(text: string): ParsedNumericOption | null {
     }
   }
 
-  // 2. Leading signed number: "$ 15.5", "-12", "15 days", "25 %", "1500 cubic inches"
-  const leadingMatch = norm.match(/^[\$€£₱]?\s*([+-]?\s*\d+(?:\.\d+)?)\s*(.*)$/i);
+  // 2. Leading signed number: "$ 15.5", "-12", "15 days", "25 %", "1500 cubic inches", ".05 %"
+  const leadingMatch = norm.match(/^[\$€£₱]?\s*([+-]?\s*(?:\d+(?:\.\d+)?|\.\d+))\s*(.*)$/i);
   if (leadingMatch) {
     const val = parseFloat(leadingMatch[1].replace(/\s+/g, ""));
     if (!isNaN(val)) {
@@ -173,8 +173,8 @@ export function parseNumericOption(text: string): ParsedNumericOption | null {
     }
   }
 
-  // 3. Embedded numeric quantity within template: "under 18 years of age"
-  const embeddedMatch = norm.match(/^(.*?)\b([+-]?\d+(?:\.\d+)?)\b\s*(.*)$/i);
+  // 3. Embedded numeric quantity within template: "under 18 years of age", "under .5 inches"
+  const embeddedMatch = norm.match(/^(.*?)\b([+-]?(?:\d+(?:\.\d+)?|\.\d+))\b\s*(.*)$/i);
   if (embeddedMatch) {
     const val = parseFloat(embeddedMatch[2]);
     if (!isNaN(val)) {
@@ -200,6 +200,18 @@ export function compareOptionDuplicateSimilarity(optA: string, optB: string): nu
   if (normA === normB) return 1.0;
   if (!normA || !normB) return 0.0;
 
+  // Permutation / Ordering choices: e.g. "Betty, John, Mike, Susan" vs "Susan, Mike, John, Betty"
+  // If options contain the exact same tokens in a different sequence, they are distinct permutations!
+  const tokensA = normA.split(/\s+/).filter(Boolean);
+  const tokensB = normB.split(/\s+/).filter(Boolean);
+  if (tokensA.length >= 2 && tokensA.length === tokensB.length) {
+    const sortedA = [...tokensA].sort().join(" ");
+    const sortedB = [...tokensB].sort().join(" ");
+    if (sortedA === sortedB && normA !== normB) {
+      return 0.0;
+    }
+  }
+
   const numA = parseNumericOption(optA);
   const numB = parseNumericOption(optB);
 
@@ -212,13 +224,13 @@ export function compareOptionDuplicateSimilarity(optA: string, optB: string): nu
     if (numA.unit === numB.unit) return 1.0;
     const unitNumsA = (numA.unit.match(/\d+/g) || []).map(Number);
     const unitNumsB = (numB.unit.match(/\d+/g) || []).map(Number);
-    if (unitNumsA.length > 0 && unitNumsB.length > 0) {
+    if (unitNumsA.length > 0 || unitNumsB.length > 0) {
       if (unitNumsA.length !== unitNumsB.length || unitNumsA.some((v, idx) => v !== unitNumsB[idx])) {
         return 0.0;
       }
     }
-    const hasMathUnitA = /[\+\-\*\/\^\=]/.test(numA.unit);
-    const hasMathUnitB = /[\+\-\*\/\^\=]/.test(numB.unit);
+    const hasMathUnitA = /[\+\-\*\/\^\=<>≤≥≠π()]/.test(numA.unit);
+    const hasMathUnitB = /[\+\-\*\/\^\=<>≤≥≠π()]/.test(numB.unit);
     if (hasMathUnitA || hasMathUnitB) {
       return numA.unit === numB.unit ? 1.0 : 0.0;
     }
@@ -226,17 +238,17 @@ export function compareOptionDuplicateSimilarity(optA: string, optB: string): nu
   }
 
   // Extract all numbers: if both options contain numbers and they differ (e.g. "1 pound 12 ounces" vs "1 pound 2 ounces")
-  const numsA = (normA.match(/[+-]?\d+(?:\.\d+)?/g) || []).map(Number);
-  const numsB = (normB.match(/[+-]?\d+(?:\.\d+)?/g) || []).map(Number);
+  const numsA = (normA.match(/[+-]?(?:\d+(?:\.\d+)?|\.\d+)/g) || []).map(Number);
+  const numsB = (normB.match(/[+-]?(?:\d+(?:\.\d+)?|\.\d+)/g) || []).map(Number);
   if (numsA.length > 0 && numsB.length > 0) {
     if (numsA.length !== numsB.length || numsA.some((val, idx) => Math.abs(val - numsB[idx]) > 1e-6)) {
       return 0.0;
     }
   }
 
-  // If either contains mathematical expressions/operators (+, -, *, /, ^, =), check exact equality rather than string similarity
-  const hasMathA = /[\+\-\*\/\^\=]/.test(normA);
-  const hasMathB = /[\+\-\*\/\^\=]/.test(normB);
+  // If either contains mathematical expressions/operators (+, -, *, /, ^, =, inequalities, pi, parens), check exact equality rather than string similarity
+  const hasMathA = /[\+\-\*\/\^\=<>≤≥≠π()]/.test(normA);
+  const hasMathB = /[\+\-\*\/\^\=<>≤≥≠π()]/.test(normB);
   if (hasMathA || hasMathB) {
     return normA === normB ? 1.0 : 0.0;
   }
@@ -400,18 +412,40 @@ export function lintDistractorQuality(
       const normA = normalizeOptionText(optA);
       const normB = normalizeOptionText(optB);
 
+      const rawA = optA.trim();
+      const rawB = optB.trim();
+      const isPunctuationOrCaseVariant =
+        /^[\p{L}\s'’.,;:!?-]+$/u.test(rawA) &&
+        /^[\p{L}\s'’.,;:!?-]+$/u.test(rawB) &&
+        rawA !== rawB &&
+        rawA.toLowerCase().replace(/[^\p{L}\s]/gu, "") === rawB.toLowerCase().replace(/[^\p{L}\s]/gu, "");
+
+      if (isPunctuationOrCaseVariant) {
+        // Distractors intentionally differ in punctuation, capitalization, or spacing (e.g. grammar/punctuation drills)
+        continue;
+      }
+
       if (normA === normB) {
         issues.push({
           rule: "duplicate-option",
           message: `Duplicate option detected: "${optA}" and "${optB}"`,
         });
       } else {
-        const sim = compareOptionDuplicateSimilarity(optA, optB);
-        if (sim >= cfg.nearDuplicateThreshold) {
-          issues.push({
-            rule: "duplicate-option",
-            message: `Near-duplicate option detected (${Math.round(sim * 100)}% similar): "${optA}" vs "${optB}"`,
-          });
+        // Near-duplicate lint must not fire on intentional word-vs-word options (e.g. vocabulary choices or analogy items)
+        const isWordVsWord = [optA, optB].every((option) =>
+          !/\d|[+*/^=<>()]/.test(option) &&
+          !/^Choice [A-E]$/i.test(option.trim()) &&
+          (option.match(/\p{L}/gu) || []).length >= 2 &&
+          option.trim().split(/\s+/).length <= 3
+        );
+        if (!isWordVsWord) {
+          const sim = compareOptionDuplicateSimilarity(optA, optB);
+          if (sim >= cfg.nearDuplicateThreshold) {
+            issues.push({
+              rule: "duplicate-option",
+              message: `Near-duplicate option detected (${Math.round(sim * 100)}% similar): "${optA}" vs "${optB}"`,
+            });
+          }
         }
       }
     }
@@ -637,31 +671,39 @@ export function lintDistractorQuality(
   const allDistNoPeriod = distEndsPeriod.every((b) => !b);
   const allDistHasPeriod = distEndsPeriod.every((b) => b);
 
-  if (correctEndsPeriod && allDistNoPeriod && distractorOpts.length >= 3) {
+  const intentionalWordChoices = item.options.every((option) =>
+    !/\d|[+*/^=<>()]/.test(option) &&
+    !/^Choice [A-E]$/i.test(option.trim()) &&
+    (option.match(/\p{L}/gu) || []).length >= 2 &&
+    option.trim().split(/\s+/).length <= 3
+  );
+  if (!intentionalWordChoices && correctEndsPeriod && allDistNoPeriod && distractorOpts.length >= 3) {
     issues.push({
       rule: "format-outlier",
       message: "Format outlier: correct option ends with period while all distractors do not",
     });
-  } else if (!correctEndsPeriod && allDistHasPeriod && distractorOpts.length >= 3) {
+  } else if (!intentionalWordChoices && !correctEndsPeriod && allDistHasPeriod && distractorOpts.length >= 3) {
     issues.push({
       rule: "format-outlier",
       message: "Format outlier: correct option lacks ending period while all distractors have one",
     });
   }
 
-  // Numeric vs Text format disparity (number words like "zero" are recognized)
-  const isCorrectNumeric = isNumericOrNumberWord(correctOpt.trim());
-  const distNumericCount = distractorOpts.filter((d) => isNumericOrNumberWord(d.trim())).length;
-  if (!isCorrectNumeric && distNumericCount === distractorOpts.length && distractorOpts.length >= 3) {
-    issues.push({
-      rule: "format-outlier",
-      message: "Format outlier: correct option is verbal text while all distractors are purely numeric",
-    });
-  } else if (isCorrectNumeric && distNumericCount === 0 && distractorOpts.length >= 3) {
-    issues.push({
-      rule: "format-outlier",
-      message: "Format outlier: correct option is purely numeric while all distractors are verbal text",
-    });
+  // Numeric vs Text format disparity: only evaluate when options actually contain digits
+  if (item.options.some((o) => /\d/.test(o))) {
+    const isCorrectNumeric = isNumericOrNumberWord(correctOpt.trim());
+    const distNumericCount = distractorOpts.filter((d) => isNumericOrNumberWord(d.trim())).length;
+    if (!isCorrectNumeric && distNumericCount === distractorOpts.length && distractorOpts.length >= 3) {
+      issues.push({
+        rule: "format-outlier",
+        message: "Format outlier: correct option is verbal text while all distractors are purely numeric",
+      });
+    } else if (isCorrectNumeric && distNumericCount === 0 && distractorOpts.length >= 3) {
+      issues.push({
+        rule: "format-outlier",
+        message: "Format outlier: correct option is purely numeric while all distractors are verbal text",
+      });
+    }
   }
 
   // -------------------------------------------------------------

@@ -1,5 +1,7 @@
 {
   "questionCount": 0,
-  "cardCount": 140,
+  "cardCount": 144,
+  "sourceGap": "61-66",
+  "missingNumbers": [61, 62, 63, 64, 65, 66],
   "spotChecks": []
 }
