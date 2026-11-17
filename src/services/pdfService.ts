@@ -22,6 +22,8 @@ export interface ExtractedPdfResult {
   pageCount: number;
   processedPageCount: number;
   pendingOcrPages: number[];
+  blankOcrPages: number[];
+  sourceFingerprint?: string;
   hasVisualMath: boolean;
   coverImageUrl?: string;
 }
@@ -60,14 +62,44 @@ export function assemblePdfSourceText(pages: PdfPageWithLayout[]): string {
   ).join("\n\n");
 }
 
+function parsePageMarkedText(text: string): Map<number, string> {
+  const matches = [...text.matchAll(/^\[Page (\d+)\]\r?\n/gm)];
+  const pages = new Map<number, string>();
+  for (let index = 0; index < matches.length; index++) {
+    const marker = matches[index];
+    const pageNumber = Number(marker[1]);
+    const start = marker.index! + marker[0].length;
+    const end = matches[index + 1]?.index ?? text.length;
+    if (pages.has(pageNumber)) throw new Error(`Duplicate page marker ${pageNumber} in prior OCR text`);
+    pages.set(pageNumber, text.slice(start, end).trim());
+  }
+  return pages;
+}
+
+export function assertSamePdfFingerprint(expected: string, actual: string): void {
+  if (expected !== actual) throw new Error("A different PDF was selected; select the original file to continue OCR.");
+}
+
+export function applyResumedOcrText(pages: PdfPageWithLayout[], priorText: string): void {
+  const priorPages = parsePageMarkedText(priorText);
+  for (const page of pages) {
+    const prior = priorPages.get(page.pageNumber);
+    if (page.text.trim().length < 40 && prior) {
+      page.text = prior;
+      page.extractionMethod = "ocr";
+    }
+  }
+}
+
 export function planOcrPages(pages: PdfPageWithLayout[], maxOcrPages: number = 15): {
   selected: number[];
   pending: number[];
 } {
-  const substantiveTextPages = pages.filter((page) => page.text.trim().length >= 40).length;
-  const scannedDocument = substantiveTextPages === 0 || (pages.length >= 3 && substantiveTextPages / pages.length < 0.2);
+  const substantiveTextPages = pages.filter((page) => page.extractionMethod !== "ocr" && page.text.trim().length >= 40).length;
+  const scannedDocument = pages.some((page) => page.extractionMethod === "ocr") || substantiveTextPages === 0 ||
+    (pages.length >= 3 && substantiveTextPages / pages.length < 0.2);
   if (!scannedDocument) return { selected: [], pending: [] };
-  const sparse = pages.filter((page) => page.text.trim().length < 40).map((page) => page.pageNumber);
+  const sparse = pages.filter((page) => page.extractionMethod !== "ocr" && page.text.trim().length < 40).map((page) => page.pageNumber);
   const limit = Math.max(0, maxOcrPages);
   return { selected: sparse.slice(0, limit), pending: sparse.slice(limit) };
 }
@@ -274,15 +306,27 @@ export async function extractPdfContent(
   options?: {
     maxPages?: number;
     maxOcrPages?: number;
+    resume?: { text: string; fingerprint: string; blankPages?: number[] };
     onProgress?: (page: number, total: number, message?: string) => void;
   }
 ): Promise<ExtractedPdfResult> {
   const arrayBuffer = await file.arrayBuffer();
+  const sourceFingerprint = globalThis.crypto?.subtle
+    ? Array.from(new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", arrayBuffer)))
+        .map((byte) => byte.toString(16).padStart(2, "0")).join("")
+    : undefined;
+  if (options?.resume) {
+    if (!sourceFingerprint) throw new Error("Secure PDF fingerprinting is unavailable; OCR cannot safely resume.");
+    assertSamePdfFingerprint(options.resume.fingerprint, sourceFingerprint);
+  }
+  const priorPages = options?.resume ? parsePageMarkedText(options.resume.text) : new Map<number, string>();
+  const blankOcrPages = new Set((options?.resume?.blankPages || []).filter((page) => Number.isInteger(page) && page > 0));
   let pageCount = 0;
   let hasVisualMath = false;
   let coverImageUrl: string | undefined;
   let processedPageCount = 0;
   let isScannedDocument = false;
+  let textLayerPageCount = 0;
   const pagesData: { pageNum: number; text: string; isScanned?: boolean }[] = [];
   const sparsePageNumbers: number[] = [];
 
@@ -334,14 +378,17 @@ export async function extractPdfContent(
 
       // Detect pages with negligible text (scanned page, handwriting, diagram, formula sheet)
       const isSparse = pageText.length < 40;
-      if (isSparse) {
+      if (!isSparse) textLayerPageCount++;
+      const priorOcrText = isSparse ? priorPages.get(pageNum) : undefined;
+      if (priorOcrText) pageText = priorOcrText;
+      if (isSparse && !priorOcrText && !blankOcrPages.has(pageNum)) {
         sparsePageNumbers.push(pageNum);
       }
 
       pagesData.push({
         pageNum,
         text: pageText,
-        isScanned: isSparse,
+        isScanned: isSparse && !priorOcrText && !blankOcrPages.has(pageNum),
       });
 
       if (options?.onProgress) {
@@ -354,11 +401,10 @@ export async function extractPdfContent(
     // Only execute Math Vision OCR if the document is genuinely scanned or image-based
     // (i.e. zero or negligible extracted text across the document, e.g. < 20% of pages have selectable text).
     // Never run OCR on standard digital textbooks where sparse pages are simply blanks/section dividers.
-    const textPageCount = pagesData.filter((p) => p.text.length >= 40).length;
     isScannedDocument =
-      textPageCount === 0 || (maxPages >= 3 && textPageCount / maxPages < 0.2);
+      textLayerPageCount === 0 || (maxPages >= 3 && textLayerPageCount / maxPages < 0.2);
 
-    const maxOcrPages = options?.maxOcrPages ?? 15;
+    const maxOcrPages = Math.max(0, Math.floor(options?.maxOcrPages ?? 15));
     const pagesToOcr = isScannedDocument ? sparsePageNumbers.slice(0, maxOcrPages) : [];
 
     if (pagesToOcr.length > 0 && typeof document !== "undefined") {
@@ -405,6 +451,11 @@ export async function extractPdfContent(
                 targetSlot.isScanned = false; // Successfully transcribed
               }
               hasVisualMath = hasVisualMath || /\\(?:frac|sqrt|sum|int)\b|[=^×÷]/.test(ocrContent);
+              consecutiveOcrFailures = 0;
+            } else if (ocr.ocrConfidence === 0) {
+              const targetSlot = pagesData.find((p) => p.pageNum === pageNum);
+              if (targetSlot) targetSlot.isScanned = false;
+              blankOcrPages.add(pageNum);
               consecutiveOcrFailures = 0;
             } else {
               consecutiveOcrFailures++;
@@ -464,6 +515,8 @@ export async function extractPdfContent(
     pageCount,
     processedPageCount,
     pendingOcrPages,
+    blankOcrPages: [...blankOcrPages].sort((a, b) => a - b),
+    sourceFingerprint,
     hasVisualMath,
     coverImageUrl,
   };

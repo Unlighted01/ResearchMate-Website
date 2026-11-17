@@ -155,9 +155,13 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
             text: extracted.text,
             aiSummary: extracted.summary,
             deviceSource: "web",
-            tags: extracted.pendingOcrPages.length > 0 || extracted.processedPageCount < extracted.pageCount
-              ? ["pdf", "review-material", "partial-ocr"]
-              : ["pdf", "review-material"],
+            tags: [
+              "pdf",
+              "review-material",
+              ...(extracted.sourceFingerprint ? [`pdf-sha256:${extracted.sourceFingerprint}`] : []),
+              ...(extracted.blankOcrPages.length > 0 ? [`pdf-blank-pages:${extracted.blankOcrPages.join(",")}`] : []),
+              ...(extracted.pendingOcrPages.length > 0 || extracted.processedPageCount < extracted.pageCount ? ["partial-ocr"] : []),
+            ],
           });
           if (extracted.pendingOcrPages.length > 0) {
             partialCount++;

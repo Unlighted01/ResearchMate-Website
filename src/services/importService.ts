@@ -78,9 +78,13 @@ export async function importPdfFile(
     aiSummary: extracted.summary,
     imageUrl: extracted.coverImageUrl,
     deviceSource: "web",
-    tags: extracted.pendingOcrPages.length > 0 || extracted.processedPageCount < extracted.pageCount
-      ? ["pdf", "imported-source", "partial-ocr"]
-      : ["pdf", "imported-source"],
+    tags: [
+      "pdf",
+      "imported-source",
+      ...(extracted.sourceFingerprint ? [`pdf-sha256:${extracted.sourceFingerprint}`] : []),
+      ...(extracted.blankOcrPages.length > 0 ? [`pdf-blank-pages:${extracted.blankOcrPages.join(",")}`] : []),
+      ...(extracted.pendingOcrPages.length > 0 || extracted.processedPageCount < extracted.pageCount ? ["partial-ocr"] : []),
+    ],
   });
 
   return item;
