@@ -67,12 +67,14 @@ import {
   ExamSeedRecord,
 } from "../../../services/examSeedService";
 import {
+  updateQuestion,
   updateQuestionStatus,
   recordQuestionOptionPick,
   saveQuestionsToBank,
 } from "../../../services/questionBankService";
 import MaterialScopeSelector, { MaterialScopeSelection } from "./MaterialScopeSelector";
 import { useNotifications } from "../../../context/NotificationContext";
+import { getGradableQuestions } from "../../../services/examQuestionPolicy";
 
 export interface MockExamEngineProps {
   items: StorageItem[];
@@ -167,6 +169,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [isDraftMode, setIsDraftMode] = useState(false);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   const [twinQuestions, setTwinQuestions] = useState<Record<string, {
     loading: boolean;
@@ -379,10 +382,11 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     customExamId?: string,
     customTitle?: string
   ) => {
-    const verifiedOnly = rawQuestions.filter(
-      (q) => q.reviewStatus !== "needs_review" && q.reviewStatus !== "flagged"
-    );
-    const questionsToUse = verifiedOnly.length > 0 ? verifiedOnly : rawQuestions;
+    const questionsToUse = getGradableQuestions(rawQuestions);
+    if (questionsToUse.length === 0) {
+      showToast("No reviewed questions with verified answers are ready for a graded exam.", "info");
+      return null;
+    }
 
     const seed = seedToUse?.trim() || generateSeedCode("SEED");
     const examId = customExamId || generateUUID();
@@ -411,6 +415,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     setActiveSeed(seed);
     setActiveExamId(examId);
     setQuestions(orderedQuestions);
+    setIsDraftMode(false);
     setIsSubmitted(false);
     setUserAnswers({});
     setFlaggedIds(new Set());
@@ -506,6 +511,9 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
     setBatchProgress(null);
     setGenerationError(null);
     setQuestions([]); // Clear any previous questions so fresh batches stream in
+    setIsDraftMode(true);
+    setCurrentExamRecord(null);
+    setSecondsRemaining(null);
     setGenerationPhase("Initializing multi-batch question synthesis...");
 
     const controller = new AbortController();
@@ -544,9 +552,8 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
           "ai_generated"
         );
 
-        const aiTitle = `${topicInput.trim() || "Simulation"} (AI-generated, unreviewed)`;
-        startSeededExamSession(generated, undefined, undefined, aiTitle);
-        showToast(`Successfully assembled ${generated.length}-question simulation! (Seed: ${activeSeed})`, "success");
+        setQuestions(generated);
+        showToast(`Generated ${generated.length} draft questions. Review their source and answers before starting a scored exam.`, "info");
       }
     } catch (err: any) {
       if (err.message?.includes("aborted")) {
@@ -565,7 +572,7 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
         // Preserve any partial batches synthesized so far as a draft; NEVER fallback to the 5-question starter pool
         setQuestions((prevQuestions) => {
           if (prevQuestions && prevQuestions.length > 0) {
-            showToast(`Generation failed: ${errMsg}. Preserved ${prevQuestions.length} draft question(s) ready to practice.`, "info");
+            showToast(`Generation failed: ${errMsg}. Preserved ${prevQuestions.length} draft question(s) for review.`, "info");
             return prevQuestions;
           }
           showToast(`Exam generation failed: ${errMsg}. Click Retry to attempt again.`, "error");
@@ -607,7 +614,10 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
         difficulty
       );
       setQuestions((prev) => [...prev, ...extraQuestions]);
-      showToast(`Appended +${extraQuestions.length} new questions to your active exam!`, "success");
+      setIsDraftMode(true);
+      setCurrentExamRecord(null);
+      setSecondsRemaining(null);
+      showToast(`Added ${extraQuestions.length} draft questions for review.`, "info");
     } catch {
       showToast("Failed to generate additional questions.", "error");
     } finally {
@@ -632,6 +642,15 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
 
   // CRUD: Save question from QuestionEditorModal
   const handleSaveQuestion = (updatedQ: Question) => {
+    updateQuestion(updatedQ.id, {
+      question: updatedQ.question,
+      options: updatedQ.options,
+      correctIndex: updatedQ.correctIndex,
+      explanation: updatedQ.explanation,
+      topicTag: updatedQ.topicTag,
+      reviewStatus: updatedQ.reviewStatus,
+      suspiciousReasons: updatedQ.suspiciousReasons,
+    });
     setQuestions((prev) => {
       const idx = prev.findIndex((q) => q.id === updatedQ.id);
       if (idx >= 0) {
@@ -700,6 +719,10 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
 
   const handleSubmitExam = async (isAutoSubmit = false) => {
     if (questions.length === 0) return;
+    if (isDraftMode || getGradableQuestions(questions).length !== questions.length) {
+      showToast("Review every answer before submitting a graded exam.", "info");
+      return;
+    }
     setIsSubmitted(true);
     if (timerRef.current) clearInterval(timerRef.current);
 
@@ -1130,12 +1153,13 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                   type="button"
                   onClick={() => {
                     setGenerationError(null);
-                    startSeededExamSession(questions);
+                    setIsDraftMode(true);
+                    setActiveQuestionIdx(0);
                   }}
                   className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
                   <Play className="w-3.5 h-3.5" />
-                  <span>Practice Draft ({questions.length} Questions)</span>
+                  <span>Review Draft ({questions.length} Questions)</span>
                 </button>
               )}
 
@@ -1335,23 +1359,12 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
               />
             </div>
 
-            {/* Progressive Start: Student doesn't have to wait for all 160 */}
+            {/* Generated items remain drafts until their answers are reviewed. */}
             {batchProgress?.isFirstBatchReady && (
-              <div className="flex items-center justify-between pt-1">
+              <div className="pt-1">
                 <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
-                  ✓ {batchProgress.completedQuestions} questions ready! You can start answering immediately while the rest stream in.
+                  {batchProgress.completedQuestions} draft questions generated. Review their answers before a scored exam.
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGenerating(false);
-                    setActiveQuestionIdx(0);
-                    showToast(`Started exam session with ${batchProgress.completedQuestions} questions ready! Background questions will stream in.`, "info");
-                  }}
-                  className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
-                >
-                  Start Answering Now (Q1–Q{batchProgress.completedQuestions}) &rarr;
-                </button>
               </div>
             )}
           </div>
@@ -1363,6 +1376,21 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
       {/* ------------------------------------------------------------- */}
       {questions.length > 0 && (
         <div className="space-y-4">
+          {isDraftMode && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-950 dark:text-amber-100 text-xs">
+              <span>
+                <strong>Draft review:</strong> {getGradableQuestions(questions).length} of {questions.length} questions have reviewed answers. Edit a question and confirm its source and answer to make it eligible for grading.
+              </span>
+              <button
+                type="button"
+                disabled={isGenerating || getGradableQuestions(questions).length === 0}
+                onClick={() => startSeededExamSession(questions)}
+                className="px-3 py-2 rounded-lg bg-indigo-600 text-white font-semibold disabled:opacity-40 shrink-0"
+              >
+                Start reviewed questions
+              </button>
+            </div>
+          )}
           {/* Top Exam Navigation & Status Bar */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs">
             <div className="flex items-center gap-3">
@@ -1770,10 +1798,11 @@ export const MockExamEngine: React.FC<MockExamEngineProps> = ({
                 </div>
                 <button
                   onClick={() => handleSubmitExam(false)}
+                  disabled={isDraftMode || isGenerating}
                   className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer w-full sm:w-auto justify-center"
                 >
                   <Check className="w-4 h-4" />
-                  <span>Submit & Grade Exam</span>
+                  <span>{isDraftMode ? "Review answers before grading" : "Submit & Grade Exam"}</span>
                 </button>
               </div>
             )}

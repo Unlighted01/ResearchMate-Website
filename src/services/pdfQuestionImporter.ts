@@ -3514,13 +3514,18 @@ export function toQuestions(parsedList: ParsedQaItem[]): StoredQuestion[] {
  */
 export function toFlashcards(parsedList: ParsedQaItem[]): Flashcard[] {
   return parsedList
-    .filter((item) => item.questionType !== "prompt" && item.correctIndex >= 0 && item.reviewStatus !== "needs_review")
+    .filter((item) =>
+      item.reviewStatus !== "needs_review" && item.reviewStatus !== "flagged" &&
+      item.stem.trim().length > 0 && item.explanation.trim().length > 0 &&
+      (item.questionType === "free_response"
+        ? item.reviewStatus === "verified"
+        : item.questionType !== "prompt" && item.correctIndex >= 0 && item.correctIndex < item.options.length)
+    )
     .map((item) => {
-      const correctLetter = (item.correctLetter || "a").toUpperCase();
-      const correctChoiceText = item.options[item.correctIndex] || "";
-
       const front = item.stem;
-      const back = `**Correct Answer:** Option ${correctLetter}: ${correctChoiceText}\n\n**Explanation:**\n${item.explanation}`;
+      const back = item.questionType === "free_response"
+        ? item.explanation
+        : `**Correct Answer:** Option ${String.fromCharCode(65 + item.correctIndex)}: ${item.options[item.correctIndex]}\n\n**Explanation:**\n${item.explanation}`;
 
       return {
         id: item.id || generateUUID(),

@@ -52,6 +52,16 @@ describe("Unified Question Import Service & Batches", () => {
     );
   });
 
+  it("keeps a missing answer key ungraded after import", async () => {
+    const result = await importQuestionsToBank({
+      sourceFile: "unkeyed.pdf",
+      rawQuestions: [{ stem: "Which option is supported?", options: ["one", "two", "three", "four"], explanation: "Source has no key." }],
+    });
+    const [question] = getQuestionsByBatchId(result.batchId);
+    expect(question.correctIndex).toBe(-1);
+    expect(question.reviewStatus).toBe("needs_review");
+  });
+
   it("imports questions into Question Bank with distinct subject vs topic and full metadata", async () => {
     const rawQuestions = [
       {

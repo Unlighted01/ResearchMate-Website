@@ -9,47 +9,14 @@
 import { supabase } from "./supabaseClient";
 import { addItem, StorageItem } from "./storageService";
 import { extractPdfContent } from "./pdfService";
+import { imageMimeFromSignature } from "./materialFileType";
+import { runOcr } from "./ocrService";
+export { runOcr } from "./ocrService";
+export type { OcrResult } from "./ocrService";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
 // ============================================
-
-export interface OcrResult {
-  ocrText: string;
-  ocrConfidence?: number;
-  aiSummary?: string;
-  ocrProvider?: string;
-}
-
-// ============================================
-// PART 3: OCR SERVICE
-// ============================================
-
-/**
- * Run OCR on a base64 data URL image via the /api/ocr endpoint.
- */
-export async function runOcr(
-  imageDataUrl: string,
-  includeSummary: boolean = false,
-  mode: "standard" | "math" = "standard",
-): Promise<OcrResult> {
-  const token = (await supabase.auth.getSession()).data.session?.access_token;
-  const response = await fetch("/api/ocr", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ image: imageDataUrl, includeSummary, mode }),
-  });
-
-  if (!response.ok) {
-    const errData = await response.json();
-    throw new Error(errData.error || "Failed to extract text from image");
-  }
-
-  return response.json();
-}
 
 // ============================================
 // PART 4: FILE IMPORT FUNCTIONS
@@ -58,12 +25,14 @@ export async function runOcr(
 /**
  * Read a File as a base64 data URL.
  */
-export function readFileAsDataUrl(file: File): Promise<string> {
+export async function readFileAsDataUrl(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const mime = file.type || imageMimeFromSignature(bytes) || "application/octet-stream";
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => reject(new Error("Failed to read image file"));
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(file.type ? file : new Blob([file], { type: mime }));
   });
 }
 
@@ -99,6 +68,9 @@ export async function importPdfFile(
   onProgress?: (page: number, total: number, message?: string) => void,
 ): Promise<StorageItem> {
   const extracted = await extractPdfContent(file, { onProgress });
+  if (!extracted.text.trim()) {
+    throw new Error("No readable source text was found. Run OCR or review the scanned pages before generating study material.");
+  }
 
   const item = await addItem({
     sourceTitle: file.name.replace(/\.pdf$/i, ""),
@@ -106,7 +78,9 @@ export async function importPdfFile(
     aiSummary: extracted.summary,
     imageUrl: extracted.coverImageUrl,
     deviceSource: "web",
-    tags: ["pdf", "imported-source"],
+    tags: extracted.pendingOcrPages.length > 0 || extracted.processedPageCount < extracted.pageCount
+      ? ["pdf", "imported-source", "partial-ocr"]
+      : ["pdf", "imported-source"],
   });
 
   return item;

@@ -179,7 +179,7 @@ export async function importQuestionsToBank(
       question: stem,
       stem,
       options,
-      correctIndex: typeof item.correctIndex === "number" ? item.correctIndex : 0,
+      correctIndex: typeof item.correctIndex === "number" ? item.correctIndex : -1,
       correctLetter: item.correctLetter,
       explanation: item.explanation || "",
       subject,

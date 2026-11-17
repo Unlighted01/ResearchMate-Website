@@ -15,6 +15,7 @@ import React, {
 } from "react";
 import { addItem, StorageItem } from "../services/storageService";
 import { importPdfFile } from "../services/importService";
+import { detectMaterialKind } from "../services/materialFileType";
 import { useNotifications } from "./NotificationContext";
 
 export type IngestionFileStatus =
@@ -155,6 +156,7 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
       });
 
       let successCount = 0;
+      let partialCount = 0;
       const errors: string[] = [];
 
       for (let i = 0; i < files.length; i++) {
@@ -180,8 +182,9 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
 
         try {
           let savedItem: StorageItem | null = null;
+          const materialKind = await detectMaterialKind(file);
 
-          if (lowerName.endsWith(".pdf") || file.type === "application/pdf") {
+          if (materialKind === "pdf") {
             // PDF with page-by-page progress reporting
             savedItem = await importPdfFile(file, undefined, (curr, tot, msg) => {
               const filePercent = tot > 0 ? Math.round((curr / tot) * 100) : 0;
@@ -215,7 +218,7 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
                 };
               });
             });
-          } else if (lowerName.endsWith(".docx")) {
+          } else if (materialKind === "docx") {
             // Word document via Mammoth
             setBatch((prev) => ({
               ...prev,
@@ -230,6 +233,7 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
             const mammoth = await import("mammoth");
             const result = await mammoth.extractRawText({ arrayBuffer });
             const rawText = result.value.trim();
+            if (!rawText) throw new Error("No readable text found in Word document.");
 
             setBatch((prev) => ({
               ...prev,
@@ -250,12 +254,12 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
 
             savedItem = await addItem({
               sourceTitle: file.name.replace(/\.docx$/i, ""),
-              text: rawText || `Word Document: ${file.name}`,
+              text: rawText,
               aiSummary: summary,
               deviceSource: options?.deviceSource || "web",
               tags: options?.tags || ["word", "imported-source"],
             });
-          } else if (file.type.startsWith("image/")) {
+          } else if (materialKind === "image") {
             // Image / OCR scan
             setBatch((prev) => ({
               ...prev,
@@ -284,7 +288,7 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
               ocrConfidence: data.ocrConfidence ?? null,
               tags: options?.tags || ["image", "ocr", "imported-source"],
             });
-          } else if (lowerName.endsWith(".txt") || lowerName.endsWith(".md")) {
+          } else if (materialKind === "text") {
             // Text or Markdown
             setBatch((prev) => ({
               ...prev,
@@ -296,19 +300,22 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
             }));
 
             const text = await file.text();
+            if (!text.trim()) throw new Error("No readable text found in file.");
             savedItem = await addItem({
               sourceTitle: file.name.replace(/\.(txt|md)$/i, ""),
-              text: text.trim() || `Document: ${file.name}`,
+              text: text.trim(),
               deviceSource: options?.deviceSource || "web",
               tags: options?.tags || [lowerName.endsWith(".md") ? "markdown" : "text", "imported-source"],
             });
-          } else if (lowerName.endsWith(".json")) {
+          } else if (materialKind === "json") {
             const { importJsonFile } = await import("../services/importService");
             await importJsonFile(file);
           } else {
             throw new Error("Unsupported format");
           }
 
+          const needsMoreOcr = savedItem?.tags.includes("partial-ocr") || false;
+          if (needsMoreOcr) partialCount++;
           successCount++;
           if (savedItem && options?.onItemSuccess) {
             options.onItemSuccess(savedItem);
@@ -322,7 +329,7 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
                     ...f,
                     status: "completed" as IngestionFileStatus,
                     percent: 100,
-                    statusMessage: "Imported successfully",
+                    statusMessage: needsMoreOcr ? "Imported with OCR pages still pending" : "Imported successfully",
                   }
                 : f
             );
@@ -367,6 +374,8 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
         isCompleted: true,
         statusMessage: hasErrors
           ? `Ingested ${successCount} of ${totalCount} file(s) with ${errors.length} issue(s)`
+          : partialCount > 0
+          ? `Ingested ${successCount} material(s); ${partialCount} still need OCR pages`
           : `Successfully ingested all ${successCount} study material(s)!`,
       }));
 
@@ -382,7 +391,7 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       // Auto-dismiss cleanly after 5 seconds if completely successful
-      if (!hasErrors) {
+      if (!hasErrors && partialCount === 0) {
         dismissTimerRef.current = setTimeout(() => {
           dismiss();
         }, 5000);

@@ -25,6 +25,16 @@ import layout3 from "./fixtures/layouts/layout3_paren_choices_end_grid.json";
 import layout4 from "./fixtures/layouts/layout4_5choices_short_stems.json";
 
 describe("Phase 3: Zero-Cost No-AI PDF Question Importer", () => {
+  it("exports sourced free-response answers as flashcards without inventing a choice key", () => {
+    const cards = toFlashcards([
+      { id: "defined-term", number: 1, stem: "Define public interest.", options: [], correctIndex: -1, explanation: "The source defines public interest as the public good.", sourceQuote: "public good", questionType: "free_response", reviewStatus: "verified" },
+      { id: "unanswered", number: 2, stem: "Discuss the rule.", options: [], correctIndex: -1, explanation: "", questionType: "prompt", reviewStatus: "needs_review" },
+    ]);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].front).toBe("Define public interest.");
+    expect(cards[0].back).toContain("public good");
+    expect(cards[0].back).not.toContain("Option A");
+  });
   it("cleans ligatures, drops running headers, and escapes currency collisions", () => {
     const raw = "Page 12\nIf a book costs $15.50 and has a speci\uFB01c discount, calculate the \uFB02oat.";
     const cleaned = cleanPageText(raw);

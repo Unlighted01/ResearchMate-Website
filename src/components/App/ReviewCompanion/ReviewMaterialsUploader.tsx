@@ -25,6 +25,9 @@ import {
 import { addItem } from "../../../services/storageService";
 import { runMathOcr, generateSummary } from "../../../services/geminiService";
 import { extractPdfContent } from "../../../services/pdfService";
+import { readFileAsDataUrl } from "../../../services/importService";
+import { runOcr } from "../../../services/ocrService";
+import { detectMaterialKind } from "../../../services/materialFileType";
 import { detectQaBookLikelihood } from "../../../services/pdfQuestionImporter";
 import LatexRenderer from "../../shared/LatexRenderer";
 import { useNotifications } from "../../../context/NotificationContext";
@@ -96,16 +99,16 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
 
     setIsProcessing(true);
     let successCount = 0;
+    let partialCount = 0;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const filename = file.name;
-      const extension = filename.split(".").pop()?.toLowerCase();
-
       setStatusText(`Processing ${filename}...`);
 
       try {
-        if (extension === "docx") {
+        const materialKind = await detectMaterialKind(file);
+        if (materialKind === "docx") {
           // Word document extraction via mammoth
           setStatusText(`Parsing Word document: ${filename}...`);
           const arrayBuffer = await file.arrayBuffer();
@@ -133,9 +136,10 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
             tags: ["word-doc", "review-material"],
           });
           successCount++;
-        } else if (extension === "pdf") {
+        } else if (materialKind === "pdf") {
           setStatusText(`Parsing PDF text & formulas from ${filename}...`);
           const extracted = await extractPdfContent(file);
+          if (!extracted.text.trim()) throw new Error("No readable text found in PDF.");
 
           const qaCheck = detectQaBookLikelihood(extracted.text);
           if (qaCheck.isLikelyQa) {
@@ -151,53 +155,44 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
             text: extracted.text,
             aiSummary: extracted.summary,
             deviceSource: "web",
-            tags: ["pdf", "review-material"],
+            tags: extracted.pendingOcrPages.length > 0 || extracted.processedPageCount < extracted.pageCount
+              ? ["pdf", "review-material", "partial-ocr"]
+              : ["pdf", "review-material"],
+          });
+          if (extracted.pendingOcrPages.length > 0) {
+            partialCount++;
+            showToast(`${filename}: ${extracted.pendingOcrPages.length} scanned page(s) still need OCR. Study content is incomplete.`, "info");
+          }
+          successCount++;
+        } else if (materialKind === "image") {
+          // Image / diagram / formula photo
+          setStatusText(`Extracting text from visual note: ${filename}...`);
+          const imageUrl = await readFileAsDataUrl(file);
+          const ocr = await runOcr(imageUrl, false);
+          if (!ocr.ocrText?.trim()) throw new Error("No readable text found in image.");
+          await addItem({
+            sourceTitle: filename.replace(/\.[^/.]+$/, ""),
+            text: ocr.ocrText.trim(),
+            ocrText: ocr.ocrText.trim(),
+            imageUrl,
+            deviceSource: "web",
+            ocrConfidence: ocr.ocrConfidence ?? null,
+            tags: ["image-scan", "ocr"],
           });
           successCount++;
-        } else if (["png", "jpg", "jpeg", "webp", "gif", "avif"].includes(extension || "") || file.type.startsWith("image/")) {
-          // Image / diagram / formula photo
-          setStatusText(`Analyzing visual study note: ${filename}...`);
-          const reader = new FileReader();
-          await new Promise<void>((resolve, reject) => {
-            reader.onload = async () => {
-              try {
-                const base64 = reader.result as string;
-                let ocrLatex = "";
-                let ocrExplanation = "";
-                try {
-                  const ocr = await runMathOcr(base64);
-                  ocrLatex = ocr.latex;
-                  ocrExplanation = ocr.explanation;
-                } catch {}
-
-                await addItem({
-                  sourceTitle: filename.replace(/\.[^/.]+$/, ""),
-                  text: ocrLatex || `Visual study note from ${filename}`,
-                  ocrText: ocrLatex,
-                  aiSummary: ocrExplanation,
-                  imageUrl: base64,
-                  deviceSource: "web",
-                  tags: ["image-scan", "math-ocr"],
-                });
-                successCount++;
-                resolve();
-              } catch (err) {
-                reject(err);
-              }
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          });
-        } else {
+        } else if (materialKind === "text") {
           // Markdown / plain text
           const text = await file.text();
+          if (!text.trim()) throw new Error("No readable text found in file.");
           await addItem({
             sourceTitle: filename,
-            text,
+            text: text.trim(),
             deviceSource: "web",
             tags: ["plain-notes", "review-material"],
           });
           successCount++;
+        } else {
+          throw new Error("Unsupported format");
         }
       } catch (err: any) {
         console.error("Upload error:", err);
@@ -210,11 +205,11 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
     if (fileInputRef.current) fileInputRef.current.value = "";
 
     if (successCount > 0) {
-      showToast(`Ingested ${successCount} study material(s) into review corpus.`, "success");
+      showToast(`Ingested ${successCount} study material(s)${partialCount ? `; ${partialCount} still need OCR pages` : ""}.`, partialCount ? "info" : "success");
       addNotification({
         type: "ocr_job",
         title: "Materials Ingested",
-        message: `Indexed ${successCount} document(s) into review corpus. Ready for mock exams.`,
+        message: `Indexed ${successCount} document(s) into your study library. Review their available study outputs.`,
         actionUrl: "/app/review",
         actionLabel: "Review Hub",
       });
@@ -294,6 +289,7 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
 
     try {
       const ocr = await runMathOcr(base64);
+      if (!ocr.latex?.trim()) throw new Error("No readable formula found in image.");
       setOcrResult({
         latex: ocr.latex,
         explanation: ocr.explanation,
@@ -454,7 +450,7 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,image/*"
+              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.1,.2,.3,image/*"
               onChange={handleFileChange}
               className="hidden"
             />

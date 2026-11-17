@@ -36,6 +36,7 @@ import {
   FlashcardDeckRecord,
 } from "../../../services/examService";
 import { sanitizeCurrencyAndMath } from "../../../services/examParser";
+import { selectGroundedFlashcards, GeneratedFlashcardCandidate } from "../../../services/studyOutputPolicy";
 import AcademicMathView from "../../shared/AcademicMathView";
 import MaterialScopeSelector, { MaterialScopeSelection } from "./MaterialScopeSelector";
 
@@ -207,6 +208,9 @@ export const FlashcardsDeck: React.FC<FlashcardsDeckProps> = ({
         targetTopic,
         countToGenerate <= 10 ? 8 : 14
       );
+      if (targetScopeItems.length > 0 && !contextCorpus.trim()) {
+        throw new Error("Selected material has no readable text. Complete OCR before generating cards.");
+      }
 
       // 2. Formulary Injection
       const relevantFormularies = findRelevantFormulary(`${targetTopic} ${contextCorpus.slice(0, 2000)}`);
@@ -218,35 +222,43 @@ export const FlashcardsDeck: React.FC<FlashcardsDeckProps> = ({
 Target Topic / Subject: "${targetTopic}"
 ${formularyPrompt}
 Available Course Materials:
-${contextCorpus || "Generate essential review flashcards for " + targetTopic}
+${contextCorpus || "No uploaded material selected. Generate general review flashcards for " + targetTopic}
 
 REQUIREMENTS:
-1. Generate EXACTLY ${countToGenerate} high-yield active-recall flashcard pairs based STRICTLY on the provided course material excerpts.
+1. Generate UP TO ${countToGenerate} high-yield active-recall flashcard pairs. Return fewer when the available material supports fewer distinct cards; never invent facts to fill a quota.
 2. Grounded Conceptual Contrast: Test distinctions, governing conditions, common exam traps, and specific mechanisms explained in the source text—never superficial dictionary definitions.
 3. Front: Focused, thought-provoking prompt, boundary condition inquiry, or conceptual comparison (e.g. "Under what conditions does Theorem X fail?", "What is the physical meaning of [Variable] in [Context]?").
 4. Back: Authoritative, step-by-step explanation or formula. Explicitly highlight the core intuition and frequent student misconceptions.
 5. LaTeX Standard: Render all mathematical equations, variables, chemical symbols, and units in standard LaTeX ($...$).
 6. Assign a concise category tag (e.g. "Calculus", "Physics", "Discrete Logic").
+7. When source material is provided, include an exact verbatim sourceQuote supporting each back. If a back cannot be supported, omit that card.
 
 Respond ONLY with a valid raw JSON array of objects:
 [
   {
     "front": "Prompt with LaTeX ($...$)?",
     "back": "Concise answer with LaTeX ($...$).",
-    "category": "Topic Name"
+    "category": "Topic Name",
+    "sourceQuote": "Exact supporting excerpt from the source, or empty for general review"
   }
 ]`;
 
       const response = await generateAiResponse(prompt);
       const cleanJson = response.replace(/```json/gi, "").replace(/```/gi, "").trim();
-      const parsed: Array<{ front: string; back: string; category?: string }> = JSON.parse(cleanJson);
+      const parsed: GeneratedFlashcardCandidate[] = JSON.parse(cleanJson);
 
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const normalized: Flashcard[] = parsed.map((c) => ({
+        const validCards = targetScopeItems.length > 0
+          ? selectGroundedFlashcards(parsed, contextCorpus)
+          : parsed.filter((card) => typeof card.front === "string" && card.front.trim() && typeof card.back === "string" && card.back.trim());
+        if (validCards.length === 0) throw new Error("No generated cards included source-backed answers.");
+        const normalized: Flashcard[] = validCards.map((c) => ({
           id: generateUUID(),
-          front: sanitizeCurrencyAndMath(c.front || ""),
-          back: sanitizeCurrencyAndMath(c.back || ""),
+          front: sanitizeCurrencyAndMath(c.front),
+          back: sanitizeCurrencyAndMath(c.back),
           category: c.category || targetTopic,
+          sourceQuote: c.sourceQuote,
+          reviewStatus: "needs_review",
         }));
 
         if (appendCount) {
@@ -279,11 +291,7 @@ Respond ONLY with a valid raw JSON array of objects:
       }
     } catch (err: any) {
       console.error("Flashcards generation error:", err);
-      showToast("Loaded ready universal study deck.", "info");
-      if (!appendCount) {
-        setCards(UNIVERSAL_STARTER_DECK);
-        setMasteredIds(new Set());
-      }
+      showToast(err?.message || "Flashcard generation failed. Review the source and retry.", "error");
     } finally {
       setIsGenerating(false);
     }
@@ -555,9 +563,14 @@ Respond ONLY with a valid raw JSON array of objects:
             </div>
 
             <div className="flex items-center justify-center text-xs text-slate-400 font-sans">
-              <span>{isFlipped ? "Showing verified explanation" : "Click anywhere to reveal solution"}</span>
+              <span>{isFlipped
+                ? currentCard.reviewStatus === "needs_review" ? "AI draft: check this answer against the source" : "Showing answer"
+                : "Click anywhere to reveal answer"}</span>
             </div>
           </div>
+          {isFlipped && currentCard.sourceQuote && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 px-2">Source excerpt: {currentCard.sourceQuote}</p>
+          )}
 
           {/* Flipper Controls Bar */}
           <div className="flex items-center justify-between gap-2 sm:gap-4 p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">

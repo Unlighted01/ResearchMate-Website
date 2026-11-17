@@ -6,7 +6,9 @@ import {
   parseTwoPassQuestionsAndAnswersDetailed,
   detectParserProfile,
   ParsedQaItem,
+  toFlashcards,
 } from "../src/services/pdfQuestionImporter";
+import { recommendStudyOutput, StudyOutputRoute } from "../src/services/studyOutputPolicy";
 
 // Directory setup
 const __filename = fileURLToPath(import.meta.url);
@@ -14,6 +16,12 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const reportsDir = path.resolve(projectRoot, "reports");
 const sidecarsDir = path.resolve(projectRoot, "sidecars");
+const frozenHeldoutFiles = new Set([
+  "Express Review Guides - Vocabulary.pdf",
+  "Vocabulary for Civil Service Exam.pdf",
+  "Newton P., Bristoll H. - Complete Set of Practice Tests for Numerical Reasoning.pdf",
+  "English Verb Drills.pdf",
+]);
 
 if (!fs.existsSync(reportsDir)) {
   fs.mkdirSync(reportsDir, { recursive: true });
@@ -26,7 +34,7 @@ let corpusRoot =
   "C:\\Users\\netne\\Documents\\CSC REVIEWER 2027\\📝 2027 CSE Reviewer";
 let onlyFilter: string | null = null;
 let excludeFilter: string | null = null;
-let freshRun = false;
+let freshRun = process.env.CORPUS_FRESH === "1";
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--only" && args[i + 1]) {
@@ -142,6 +150,9 @@ export interface CorpusReportRow {
   profileConfidence: number;
   questionsFound: number;
   gradedCount: number;
+  verifiedQuestionCount?: number;
+  verifiedCardCount?: number;
+  recommendedOutput?: StudyOutputRoute;
   promptsCards: number;
   needsReview: number;
   missingNumbers: string;
@@ -170,6 +181,8 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
   let profileConfidence = 0;
   let questionsFound = 0;
   let gradedCount = 0;
+  let verifiedQuestionCount = 0;
+  let verifiedCardCount = 0;
   let promptsCards = 0;
   let needsReview = 0;
   let missingNumbers = "0";
@@ -217,6 +230,12 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
         result.items.filter(
           (it) => it.questionType !== "prompt" && it.correctIndex >= 0 && !it.hasIncompleteAnswer
         ).length;
+      verifiedQuestionCount = result.items.filter((item) =>
+        item.reviewStatus === "verified" && item.questionType !== "prompt" &&
+        item.questionType !== "figure_based" && !item.hasIncompleteAnswer &&
+        item.correctIndex >= 0 && item.correctIndex < item.options.length
+      ).length;
+      verifiedCardCount = toFlashcards(result.items).length;
 
       promptsCards =
         (result.promptCount || 0) +
@@ -389,6 +408,15 @@ async function processSinglePdf(pdfPath: string): Promise<CorpusReportRow> {
     profileConfidence,
     questionsFound,
     gradedCount,
+    verifiedQuestionCount,
+    verifiedCardCount,
+    recommendedOutput: recommendStudyOutput({
+      hasReadableText: hasTextLayer,
+      isReferenceOnly: expectedKind === "non_question",
+      verifiedQuestions: verifiedQuestionCount,
+      verifiedCards: verifiedCardCount,
+      ungradedPrompts: promptsCards,
+    }),
     promptsCards,
     needsReview,
     missingNumbers,
@@ -425,6 +453,16 @@ async function main() {
   const jsonlPath = path.resolve(reportsDir, "corpus_report.jsonl");
   const completedRows = new Map<string, CorpusReportRow>();
 
+  // Frozen held-outs are counts-only. Reuse prior report rows even on a fresh scan.
+  const priorReportPath = path.resolve(reportsDir, "corpus_report.json");
+  const frozenRows = new Map<string, CorpusReportRow>();
+  if (fs.existsSync(priorReportPath)) {
+    const priorRows = JSON.parse(fs.readFileSync(priorReportPath, "utf-8")) as CorpusReportRow[];
+    for (const row of priorRows) {
+      if (frozenHeldoutFiles.has(row.file)) frozenRows.set(path.join(row.folder, row.file), row);
+    }
+  }
+
   if (!freshRun && fs.existsSync(jsonlPath)) {
     const lines = fs.readFileSync(jsonlPath, "utf-8").split("\n");
     for (const line of lines) {
@@ -449,6 +487,14 @@ async function main() {
     const fileName = path.basename(pdfPath);
     const relFolder = path.relative(corpusRoot, path.dirname(pdfPath)) || ".";
     const fileKey = path.join(relFolder, fileName);
+
+    if (frozenHeldoutFiles.has(fileName)) {
+      const frozenRow = frozenRows.get(fileKey) || completedRows.get(fileKey);
+      if (!frozenRow) throw new Error(`Frozen held-out counts are unavailable for ${fileName}; refusing to open its PDF`);
+      rows.push(frozenRow);
+      console.log(`[${index}/${targetPdfs.length}] Frozen counts only "${fileKey}" -> ${frozenRow.status}`);
+      continue;
+    }
 
     if (completedRows.has(fileKey)) {
       const existing = completedRows.get(fileKey)!;
@@ -496,13 +542,14 @@ async function main() {
   mdLines.push(`- **⚠️ WARN**: ${warnCount}`);
   mdLines.push(`- **❓ UNVERIFIED**: ${unverCount}`);
   mdLines.push(`- **❌ FAIL**: ${failCount}\n`);
+  mdLines.push(`- **Output routing**: ${Array.from(new Set(rows.map((row) => row.recommendedOutput).filter(Boolean))).map((route) => `${route}: ${rows.filter((row) => row.recommendedOutput === route).length}`).join(", ")} (frozen held-outs: cached counts only)\n`);
 
   mdLines.push("## Summary Table\n");
   mdLines.push(
-    "| # | Folder | File | Pgs | Text Pgs | Detected Profile | Found | Graded | Cards/Prompts | Needs Rev | Missing #s | Dist | Longest Graded Stem | Dropped Long Stems | Status | Notes / Errors |"
+    "| # | Folder | File | Pgs | Text Pgs | Detected Profile | Found | Graded | Verified Questions | Verified Card Candidates | Recommended Output | Cards/Prompts | Needs Rev | Missing #s | Dist | Longest Graded Stem | Dropped Long Stems | Status | Notes / Errors |"
   );
   mdLines.push(
-    "|---|---|---|---|:---:|---|:---:|:---:|:---:|:---:|:---:|---|:---:|:---:|:---:|---|"
+    "|---|---|---|---|:---:|---|:---:|:---:|:---:|:---:|---|:---:|:---:|:---:|---|:---:|---|:---:|:---:|:---:|---|"
   );
 
   rows.forEach((r, idx) => {
@@ -517,7 +564,7 @@ async function main() {
         : "❌ FAIL";
     const noteCell = r.statusReason || r.error || "-";
     mdLines.push(
-      `| ${idx + 1} | ${r.folder} | ${r.file} | ${r.pages} | ${r.textPages} | ${profileCell} | ${r.questionsFound} | ${r.gradedCount} | ${r.promptsCards} | ${r.needsReview} | ${r.missingNumbers} | ${r.answerDistribution} | ${r.longestStem} | ${r.droppedOversizedStems} | ${statusBadge} | ${noteCell} |`
+      `| ${idx + 1} | ${r.folder} | ${r.file} | ${r.pages} | ${r.textPages} | ${profileCell} | ${r.questionsFound} | ${r.gradedCount} | ${r.verifiedQuestionCount ?? "-"} | ${r.verifiedCardCount ?? "-"} | ${r.recommendedOutput ?? "heldout_counts_only"} | ${r.promptsCards} | ${r.needsReview} | ${r.missingNumbers} | ${r.answerDistribution} | ${r.longestStem} | ${r.droppedOversizedStems} | ${statusBadge} | ${noteCell} |`
     );
   });
 

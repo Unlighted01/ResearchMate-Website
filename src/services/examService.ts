@@ -17,6 +17,7 @@ import { findRelevantFormulary } from "./formularyService";
 import { sanitizeCurrencyAndMath } from "./examParser";
 import { StorageItem } from "./storageService";
 import { lintDistractorQuality } from "./distractorQualityService";
+import { assertPublicExamReady, assertPublicFlashcardsReady } from "./examQuestionPolicy";
 import {
   ExamSeedRecord,
   createSeededExam,
@@ -47,6 +48,8 @@ export interface Question {
   sourceQuote?: string;
   reviewStatus?: "verified" | "needs_review" | "flagged";
   suspiciousReasons?: string[];
+  publicationRights?: "original" | "licensed";
+  rightsEvidence?: string;
 }
 
 export interface ExamSectionConfig {
@@ -101,6 +104,10 @@ export interface Flashcard {
   front: string;
   back: string;
   category: string;
+  sourceQuote?: string;
+  reviewStatus?: "verified" | "needs_review";
+  publicationRights?: "original" | "licensed";
+  rightsEvidence?: string;
   mastered?: boolean;
 }
 
@@ -222,6 +229,7 @@ export function saveLocalFlashcardDecks(decks: FlashcardDeckRecord[]): void {
 export async function saveExam(
   examData: Partial<StoredExam> & { title: string; questions: Question[] }
 ): Promise<WriteSyncResult<StoredExam>> {
+  assertPublicExamReady(examData.questions, examData.visibility);
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
   const now = new Date().toISOString();
@@ -642,6 +650,7 @@ export async function getExamAttempts(examId?: string): Promise<ExamAttemptRecor
 export async function saveFlashcardDeck(
   deckData: Partial<FlashcardDeckRecord> & { title: string; cards: Flashcard[]; batch_id?: string }
 ): Promise<WriteSyncResult<FlashcardDeckRecord>> {
+  assertPublicFlashcardsReady(deckData.cards, deckData.visibility);
   const isAuth = await isAuthenticated();
   const user = await getCurrentUser();
   const now = new Date().toISOString();
@@ -1138,6 +1147,9 @@ export async function generateExamInBatches(
       );
     }
   }
+  if (sourceItems.length > 0 && sections.some((section) => section.mode === "grounded") && allItemChunks.length === 0) {
+    throw new Error("Selected material has no readable source text. Complete OCR or review the source before generating questions.");
+  }
 
   // Helper to execute a single slice
   const executeSingleBatch = async (slice: BatchSlice, bIdx: number): Promise<Question[]> => {
@@ -1193,7 +1205,7 @@ ${formularyBlock}
 ${dedupePrompt}
 
 REQUIREMENTS:
-1. Generate EXACTLY ${slice.count} high-yield, exam-quality questions based on the provided material.
+1. Generate UP TO ${slice.count} high-yield questions supported by the provided material. Return fewer when the source lacks enough distinct facts; never fill a quota with invented content.
 2. Every mathematical formula, equation, or variable MUST be enclosed in standard LaTeX dollar signs (e.g. $x^2 + y^2 = r^2$, $\\int_0^1 x dx$, $\\neg P \\lor Q$, $9.81\\text{ m/s}^2$).
 3. For every question, provide 4 distinct multiple-choice options (labeled A, B, C, D):
    - Distractors MUST reflect realistic common student misconceptions or wrong-path calculation steps, NOT obvious nonsense.
@@ -1238,12 +1250,16 @@ REQUIREMENTS:
         const parsed = extractJsonQuestions(rawResponse);
 
         if (Array.isArray(parsed) && parsed.length > 0) {
-          batchQuestions = parsed.map((q: any) => {
+          batchQuestions = parsed.filter((q: any) =>
+            typeof q?.question === "string" && q.question.trim().length > 0 &&
+            Array.isArray(q.options) && q.options.length === 4 &&
+            q.options.every((option: unknown) => typeof option === "string" && option.trim().length > 0) &&
+            Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < 4 &&
+            typeof q.explanation === "string" && q.explanation.trim().length > 0
+          ).map((q: any) => {
             const rawStem = sanitizeCurrencyAndMath(q.question || "");
-            const rawOptions = Array.isArray(q.options) && q.options.length >= 4
-              ? q.options.slice(0, 4).map((o: any) => sanitizeCurrencyAndMath(String(o)))
-              : ["A", "B", "C", "D"];
-            const correctIndex = typeof q.correctIndex === "number" ? Math.min(Math.max(q.correctIndex, 0), 3) : 0;
+            const rawOptions = q.options.map((o: string) => sanitizeCurrencyAndMath(o));
+            const correctIndex = q.correctIndex as number;
 
             // Apply distractor quality lint
             const lint = lintDistractorQuality({
@@ -1284,6 +1300,9 @@ REQUIREMENTS:
               suspiciousReasons,
             };
           });
+          if (batchQuestions.length === 0) {
+            throw new Error("Model response contained no complete questions with explicit answer keys");
+          }
         } else {
           throw new Error("Model response was not a valid JSON question array");
         }

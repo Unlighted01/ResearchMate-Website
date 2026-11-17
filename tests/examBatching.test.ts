@@ -135,6 +135,28 @@ describe("Phase 4: Multi-Batch Exam Generation & Slicing", () => {
     expect(questions[0].question).toBe("Recovered question");
   });
 
+  it("retries an AI item with no answer key instead of assigning option A", async () => {
+    (generateAiResponse as any)
+      .mockResolvedValueOnce(JSON.stringify([{ question: "Unkeyed item", options: ["One", "Two", "Three", "Four"], explanation: "Missing answer" }]))
+      .mockResolvedValueOnce(JSON.stringify([{ question: "Incomplete choices", options: ["One"], correctIndex: 0, explanation: "Missing choices" }]))
+      .mockResolvedValueOnce(JSON.stringify([{ question: "Verified shape", options: ["One", "Two", "Three", "Four"], correctIndex: 1, explanation: "Two is supported" }]));
+
+    const questions = await generateExamInBatches([], [{ name: "Safety", questionCount: 1, mode: "grounded" }]);
+    expect(questions).toHaveLength(1);
+    expect(questions[0].question).toBe("Verified shape");
+    expect(questions[0].correctIndex).toBe(1);
+    expect(questions[0].reviewStatus).toBe("needs_review");
+    expect(generateAiResponse).toHaveBeenCalledTimes(3);
+  });
+
+  it("refuses source-grounded generation when the selected material has no readable text", async () => {
+    await expect(generateExamInBatches(
+      [{ text: "", ocrText: "", aiSummary: "" } as any],
+      [{ name: "Scanned notes", questionCount: 5, mode: "grounded" }]
+    )).rejects.toThrow(/readable source text/i);
+    expect(generateAiResponse).not.toHaveBeenCalled();
+  });
+
   it("extracts and repairs JSON containing unescaped LaTeX math formulas", () => {
     // Single backslashes in math formulas like \sqrt, \int, \frac, \times, \pm
     const rawAiMathOutput = `Here are your questions:

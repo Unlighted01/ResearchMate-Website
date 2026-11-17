@@ -38,6 +38,8 @@ import {
   RawImportQuestionItem,
 } from "../../../services/questionImportService";
 import AcademicMathView from "../../shared/AcademicMathView";
+import { recommendStudyOutput } from "../../../services/studyOutputPolicy";
+import { getGradableQuestions } from "../../../services/examQuestionPolicy";
 
 interface QuestionImportModalProps {
   isOpen: boolean;
@@ -124,9 +126,11 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
         stem: item.stem,
         options: item.options,
         correctIndex: item.correctIndex,
+        correctLetter: item.correctLetter,
         explanation: item.explanation,
         chapter: item.chapter,
         sourcePage: item.sourcePage,
+        sourceQuote: item.sourceQuote,
         questionType: item.questionType,
         reviewStatus: item.reviewStatus,
         suspiciousReasons: item.suspiciousReasons,
@@ -152,6 +156,13 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
       fileName || "Reviewer Document"
     );
   }, [rawQuestionsForImport, subjectName, fileName]);
+  const sourceBackedCardCount = useMemo(() => toFlashcards(parsedQaList).length, [parsedQaList]);
+  const recommendedOutput = recommendStudyOutput({
+    hasReadableText: Boolean(parseResult?.totalParsed),
+    verifiedQuestions: previewSummary.gradableCount,
+    verifiedCards: sourceBackedCardCount,
+    ungradedPrompts: previewSummary.promptCount,
+  });
 
   const duplicateBatch = useMemo(() => {
     if (!fileName) return null;
@@ -202,14 +213,33 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
     try {
       const layoutResult = await extractAllPagesWithLayout(file, (curr, tot) => {
         setPdfProgress({ current: curr, total: tot });
-      });
+      }, { ocrSparsePages: true });
 
       const parsed = parseTwoPassQuestionsAndAnswers(layoutResult.pages);
+      const ocrPageSet = new Set(layoutResult.ocrPages || []);
+      parsed.forEach((item) => {
+        if (item.sourcePage !== undefined && ocrPageSet.has(item.sourcePage)) {
+          item.reviewStatus = "needs_review";
+          item.isSuspicious = true;
+          item.suspiciousReasons = [...(item.suspiciousReasons || []), "OCR source page: verify question text and answer against the image"];
+        }
+      });
+      if (layoutResult.pendingOcrPages?.length) {
+        setImportError(`${layoutResult.pendingOcrPages.length} scanned pages still need OCR. This is a partial extraction; review the original PDF before importing.`);
+      } else if (layoutResult.unreadablePages?.length && layoutResult.ocrPages?.length) {
+        setImportError(`${layoutResult.unreadablePages.length} pages remained unreadable after OCR. Review the original PDF before importing.`);
+      } else if (!layoutResult.fullText.trim()) {
+        setImportError("No readable text was found. Review the scanned pages before importing questions.");
+      } else if (parsed.length === 0) {
+        setImportError("No structured questions were found. Upload this PDF to Materials to generate study cards from its concepts.");
+      } else {
+        setImportError(null);
+      }
       setParsedQaList(parsed);
 
       if (parsed.length > 0) {
         const gradableCount = parsed.filter(
-          (p) => p.questionType !== "prompt" && p.correctIndex >= 0 && !p.hasIncompleteAnswer
+          (p) => p.questionType !== "prompt" && p.correctIndex >= 0 && !p.hasIncompleteAnswer && p.reviewStatus === "verified"
         ).length;
         setParseResult({
           items: parsed.map((item) => ({
@@ -221,14 +251,14 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
               explanation: item.explanation,
               topicTag: item.chapter || defaultTopic,
             },
-            isValid: item.options.length >= 2 && item.correctIndex >= 0,
+            isValid: item.options.length >= 2 && item.correctIndex >= 0 && item.reviewStatus === "verified",
             warnings: item.hasIncompleteAnswer || item.questionType === "prompt"
               ? ["Answer key not explicitly indexed in section (self-check prompt, ungradable)"]
               : [],
           })),
           totalParsed: parsed.length,
           validCount: gradableCount,
-          warningCount: parsed.filter((p) => p.hasIncompleteAnswer || p.questionType === "prompt" || p.correctIndex < 0).length,
+          warningCount: parsed.filter((p) => p.hasIncompleteAnswer || p.questionType === "prompt" || p.correctIndex < 0 || p.reviewStatus !== "verified").length,
         });
       } else {
         // Fallback: parse plain text if two-pass format not detected
@@ -319,19 +349,21 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
 
       const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const gradableRaw = rawQuestionsForImport.filter(
-        (q) => q.questionType !== "prompt" && typeof q.correctIndex === "number" && q.correctIndex >= 0 && q.reviewStatus !== "needs_review"
+        (q) => q.questionType !== "prompt" && typeof q.correctIndex === "number" && q.correctIndex >= 0 && q.reviewStatus !== "needs_review" && q.reviewStatus !== "flagged"
       );
 
       // Capped at 50 verified gradable items, chosen BEFORE running enemy filter (Part 2 requirement)
       const cappedForExam = gradableRaw.slice(0, 50);
-      const validQuestions: Question[] = cappedForExam.map((q) => ({
+      const validQuestions: Question[] = getGradableQuestions(cappedForExam.map((q) => ({
         id: q.id && UUID_REGEX.test(q.id) ? q.id : generateUUID(),
         question: q.stem || "",
         options: q.options || [],
         correctIndex: q.correctIndex as number,
         explanation: q.explanation || "",
         topicTag: q.chapter || subjectName,
-      }));
+        reviewStatus: q.reviewStatus,
+        sourceQuote: q.sourceQuote,
+      })));
 
       const docCleanTitle = (fileName || subjectName || "Imported Material").replace(/\.[^/.]+$/, "").trim();
 
@@ -403,7 +435,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
   };
 
   const handleExportFlashcards = async () => {
-    if (!parseResult || parseResult.validCount === 0) return;
+    if (!parseResult) return;
     setIsSavingFlashcards(true);
 
     try {
@@ -419,6 +451,11 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
               category: q.topicTag || defaultTopic,
             };
           });
+
+      if (cards.length === 0) {
+        setImportError("No source-backed answers are ready for flashcards. Review the material or generate cards from readable source notes.");
+        return;
+      }
 
       const deckTitle = fileName ? `${fileName.replace(/\.[^/.]+$/, "")} Study Deck` : `${defaultTopic} Study Deck`;
       await saveFlashcardDeck({
@@ -500,6 +537,16 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
                       {previewSummary.promptCount} Practice Prompts
                     </span>
                   )}
+
+                  {sourceBackedCardCount > 0 && (
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
+                      {sourceBackedCardCount} Card Candidates
+                    </span>
+                  )}
+
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-mono text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                    Suggested: {recommendedOutput === "exam_or_quiz" ? "Exam or quiz" : recommendedOutput === "flashcards" ? "Flashcards" : "Review prompts"}
+                  </span>
 
                   {chapters.length > 1 && (
                     <span className="px-2.5 py-1 rounded-lg text-xs font-mono text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">

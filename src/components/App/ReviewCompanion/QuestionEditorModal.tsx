@@ -26,8 +26,9 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
 }) => {
   const [statement, setStatement] = useState("");
   const [options, setOptions] = useState<string[]>(["", "", "", ""]);
-  const [correctIndex, setCorrectIndex] = useState<number>(0);
+  const [correctIndex, setCorrectIndex] = useState<number>(-1);
   const [explanation, setExplanation] = useState("");
+  const [confirmedAnswer, setConfirmedAnswer] = useState(false);
   const [topicTag, setTopicTag] = useState(defaultTopic);
   const [previewMode, setPreviewMode] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -38,18 +39,19 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
       const opts = [...questionToEdit.options];
       while (opts.length < 4) opts.push("");
       setOptions(opts.slice(0, 4));
-      setCorrectIndex(questionToEdit.correctIndex ?? 0);
+      setCorrectIndex(questionToEdit.correctIndex ?? -1);
       setExplanation(questionToEdit.explanation || "");
       setTopicTag(questionToEdit.topicTag || defaultTopic);
     } else {
       setStatement("");
       setOptions(["", "", "", ""]);
-      setCorrectIndex(0);
+      setCorrectIndex(-1);
       setExplanation("");
       setTopicTag(defaultTopic);
     }
     setPreviewMode(false);
     setErrorMsg(null);
+    setConfirmedAnswer(false);
   }, [questionToEdit, isOpen, defaultTopic]);
 
   if (!isOpen) return null;
@@ -74,23 +76,33 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
       return;
     }
 
-    if (!filledOptions[correctIndex]) {
-      setErrorMsg("The selected correct answer cannot be empty.");
+    if (correctIndex < 0 || !filledOptions[correctIndex]) {
+      setErrorMsg("Select a supported correct answer before saving.");
       return;
     }
 
-    // Ensure 4 choices exist (pad if needed)
-    while (filledOptions.length < 4) {
-      filledOptions.push(`[Option ${String.fromCharCode(65 + filledOptions.length)}]`);
+    const finalCorrectIndex = filledOptions.slice(0, correctIndex).filter(Boolean).length;
+    const finalOptions = filledOptions.filter(Boolean);
+    const needsSourceReview = questionToEdit?.reviewStatus === "needs_review";
+    if (new Set(finalOptions.map((option) => option.toLowerCase())).size !== finalOptions.length) {
+      setErrorMsg("Answer choices must be distinct.");
+      return;
+    }
+    if (!explanation.trim()) {
+      setErrorMsg("Add a supported explanation before saving.");
+      return;
     }
 
     const finalQuestion: Question = {
       id: questionToEdit?.id || generateUUID(),
       question: statement.trim(),
-      options: filledOptions.slice(0, 4),
-      correctIndex,
-      explanation: explanation.trim() || "Identified based on study materials and syllabus review.",
+      options: finalOptions,
+      correctIndex: finalCorrectIndex,
+      explanation: explanation.trim(),
       topicTag: topicTag.trim() || defaultTopic,
+      sourceQuote: questionToEdit?.sourceQuote,
+      reviewStatus: needsSourceReview && !confirmedAnswer ? "needs_review" : "verified",
+      suspiciousReasons: needsSourceReview && confirmedAnswer ? [] : questionToEdit?.suspiciousReasons,
     };
 
     onSave(finalQuestion);
@@ -264,6 +276,18 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
                 />
               </div>
             </div>
+          </div>
+        )}
+
+        {questionToEdit?.reviewStatus === "needs_review" && (
+          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs space-y-2">
+            {questionToEdit.sourceQuote && (
+              <p className="text-amber-900 dark:text-amber-200">Source excerpt: {questionToEdit.sourceQuote}</p>
+            )}
+            <label className="flex items-start gap-2 text-amber-950 dark:text-amber-100 cursor-pointer">
+              <input type="checkbox" checked={confirmedAnswer} onChange={(event) => setConfirmedAnswer(event.target.checked)} />
+              <span>I checked the source material, the correct choice, and the explanation. Mark this question reviewed.</span>
+            </label>
           </div>
         )}
 
