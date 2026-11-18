@@ -34,6 +34,7 @@ import {
 } from "./questionBankDb";
 
 export type QuestionOrigin =
+  | "ocr_import"
   | "pdf_import"
   | "parsed_pdf"
   | "rule_generated"

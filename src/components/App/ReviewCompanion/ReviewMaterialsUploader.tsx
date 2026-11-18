@@ -25,8 +25,7 @@ import {
 import { addItem } from "../../../services/storageService";
 import { runMathOcr, generateSummary } from "../../../services/geminiService";
 import { extractPdfContent } from "../../../services/pdfService";
-import { readFileAsDataUrl } from "../../../services/importService";
-import { runOcr } from "../../../services/ocrService";
+import { importImageFile } from "../../../services/importService";
 import { detectMaterialKind } from "../../../services/materialFileType";
 import { detectQaBookLikelihood } from "../../../services/pdfQuestionImporter";
 import LatexRenderer from "../../shared/LatexRenderer";
@@ -170,18 +169,10 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
           successCount++;
         } else if (materialKind === "image") {
           // Image / diagram / formula photo
-          setStatusText(`Extracting text from visual note: ${filename}...`);
-          const imageUrl = await readFileAsDataUrl(file);
-          const ocr = await runOcr(imageUrl, false);
-          if (!ocr.ocrText?.trim()) throw new Error("No readable text found in image.");
-          await addItem({
-            sourceTitle: filename.replace(/\.[^/.]+$/, ""),
-            text: ocr.ocrText.trim(),
-            ocrText: ocr.ocrText.trim(),
-            imageUrl,
+          setStatusText(`Saving visual note on this device: ${filename}...`);
+          await importImageFile(file, {
             deviceSource: "web",
-            ocrConfidence: ocr.ocrConfidence ?? null,
-            tags: ["image-scan", "ocr"],
+            tags: ["image-scan", "review-material"],
           });
           successCount++;
         } else if (materialKind === "text") {

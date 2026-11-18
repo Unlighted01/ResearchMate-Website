@@ -35,21 +35,41 @@ async function repeat() {
   },
   async firstRun() {
     if (!OCR_B1_ENABLED) throw new Error("Acceptance build must enable B1 explicitly");
-    const entries = []; for (let i = 1; i <= 20; i++) entries.push(await makeImage(i));
+    const samples: string[] = await (await fetch("/fixtures.json")).json();
+    const entries = [];
+    for (let i = 1; i <= 20; i++) {
+      if (samples.length) {
+        const blob = await (await fetch(`/fixtures/${i - 1}`)).blob();
+        const asset = await saveLocalImage(blob, samples[i - 1]);
+        entries.push({ sourceHash: asset.hash, pageNumber: 1, language: "eng" as const, preprocess: "original" as const });
+      } else entries.push(await makeImage(i));
+    }
     localStorage.setItem("acceptance-jobs", JSON.stringify(entries));
     const queue = new LocalOcrQueue(); entries.forEach((job) => queue.enqueue(job));
     let prompts = 0; let maxDelayMs = 0; let previous = performance.now();
+    let pageStart = 0; const pageTimesMs: number[] = []; const started = performance.now();
     const timer = setInterval(() => { const now = performance.now(); maxDelayMs = Math.max(maxDelayMs, now - previous - 50); previous = now; }, 50);
     try {
       const result = await queue.run({ confirmDownload: async () => { prompts++; return true; }, onProgress: (event) => {
+        if (event.phase === "recognizing") pageStart = performance.now();
+        if (event.phase === "completed") pageTimesMs.push(Math.round(performance.now() - pageStart));
         if (event.phase === "completed" && event.completed === 5) queue.cancel();
       } });
-      return { ...result, prompts, maxDelayMs: Math.round(maxDelayMs) };
+      return { ...result, prompts, maxDelayMs: Math.round(maxDelayMs), elapsedMs: Math.round(performance.now() - started), pageTimesMs };
     } finally { clearInterval(timer); }
   },
   async resume() {
     const queue = await LocalOcrQueue.restore();
-    const result = await queue.run({ confirmDownload: async () => { throw new Error("Model should already be cached"); } });
+    let maxDelayMs = 0; let previous = performance.now(); let pageStart = 0;
+    const started = performance.now(); const pageTimesMs: number[] = [];
+    const timer = setInterval(() => { const now = performance.now(); maxDelayMs = Math.max(maxDelayMs, now - previous - 50); previous = now; }, 50);
+    let result;
+    try {
+      result = await queue.run({ confirmDownload: async () => { throw new Error("Model should already be cached"); }, onProgress: (event) => {
+        if (event.phase === "recognizing") pageStart = performance.now();
+        if (event.phase === "completed") pageTimesMs.push(Math.round(performance.now() - pageStart));
+      } });
+    } finally { clearInterval(timer); }
     let normalizedWords = 0;
     for (const job of jobs()) {
       if (!(await getLocalImage(job.sourceHash))) throw new Error("Image lost on reload");
@@ -61,7 +81,11 @@ async function repeat() {
         normalizedWords++;
       }
     }
-    return { ...result, normalizedWords };
+    return { ...result, normalizedWords, maxDelayMs: Math.round(maxDelayMs), elapsedMs: Math.round(performance.now() - started), pageTimesMs };
+  },
+  async interleaved() {
+    const queue = new LocalOcrQueue(); queue.enqueue(jobs()[0]);
+    return queue.run({ confirmDownload: async () => { throw new Error("Unexpected download"); } });
   },
   repeat,
   async offline() {

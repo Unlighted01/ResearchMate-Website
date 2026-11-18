@@ -161,7 +161,8 @@ export async function importQuestionsToBank(
 ): Promise<QuestionImportResult> {
   const { rawQuestions, sourceFile, defaultPage } = params;
   const subject = (params.subject && params.subject.trim()) || sanitizeDefaultSubject(sourceFile);
-  const origin: QuestionOrigin = params.origin || "pdf_import";
+  const isImageSource = /\.(?:png|jpe?g|webp|gif|bmp|tiff?|heic)$/i.test(sourceFile);
+  const origin: QuestionOrigin = isImageSource ? "ocr_import" : (params.origin || "pdf_import");
 
   const batchId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const now = Date.now();
@@ -186,7 +187,7 @@ export async function importQuestionsToBank(
       options,
       correctIndex: typeof item.correctIndex === "number" ? item.correctIndex : -1,
       correctLetter: item.correctLetter,
-      keyProvenance: item.keyProvenance,
+      keyProvenance: item.keyProvenance ?? (origin === "ocr_import" ? "none" : undefined),
       keyConfirmation: item.keyConfirmation,
       sourceHash: item.sourceHash,
       sourceCrop: item.sourceCrop,

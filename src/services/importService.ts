@@ -44,21 +44,23 @@ export async function readFileAsDataUrl(file: File): Promise<string> {
  * Import a single image locally. The flagged B1 path may then run local OCR.
  */
 export async function importImageFile(file: File, options: {
+  tags?: string[];
+  deviceSource?: StorageItem["deviceSource"];
   language?: OcrLanguage;
   confirmModelDownload?: (request: ModelDownloadPrompt) => Promise<boolean>;
   onOcrProgress?: (event: LocalOcrProgress) => void;
-} = {}): Promise<void> {
+} = {}): Promise<StorageItem> {
   const asset = await saveLocalImage(file, file.name);
   const item = addLocalItem({
     sourceTitle: file.name.replace(/\.[^/.]+$/, "") || "Visual Note",
     text: "Image awaiting OCR review",
     localAssetHash: asset.hash,
     storageScope: "local",
-    deviceSource: "smart_pen",
-    tags: ["image", "imported-source", "needs-review"],
+    deviceSource: options.deviceSource || "smart_pen",
+    tags: [...new Set([...(options.tags || []), "image", "imported-source", "needs-review"])],
   });
 
-  if (!OCR_B1_ENABLED) return;
+  if (!OCR_B1_ENABLED) return item;
   const job = { sourceHash: asset.hash, pageNumber: 1, language: options.language || "eng", preprocess: "original" as const };
   const queue = new LocalOcrQueue();
   queue.enqueue(job);
@@ -71,13 +73,16 @@ export async function importImageFile(file: File, options: {
   });
   const page = await getLocalOcrPage(ocrCacheKey(job, "tesseract.js@7.0.0"));
   if (page?.text.trim()) {
-    await updateItem(item.id, {
+    const updates = {
       text: page.text.trim(),
       ocrText: page.text.trim(),
       ocrConfidence: page.confidence,
-      tags: ["image", "ocr", "imported-source", "needs-review"],
-    });
+      tags: [...new Set([...item.tags, "ocr"])],
+    };
+    await updateItem(item.id, updates);
+    return { ...item, ...updates };
   }
+  return item;
 }
 
 /**

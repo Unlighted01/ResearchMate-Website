@@ -1,4 +1,4 @@
-import { getLocalImage, getLocalOcrPage, isModelReady, markModelReady, saveLocalOcrPage, saveOcrQueueJobs, loadOcrQueueJobs, type LocalOcrPage } from "./localOcrStore";
+import { getLocalImage, getLocalOcrPage, isModelReady, markModelReady, saveLocalOcrPage, saveOcrQueueJobs, loadOcrQueueState, type LocalOcrPage } from "./localOcrStore";
 import { OCR_UNCALIBRATED_ROUTE } from "./ocrB1Config";
 import type { LocalOcrEngine, OcrLanguage, OcrPreprocess } from "./localOcrEngine";
 import { TesseractLocalOcrEngine } from "./tesseractLocalOcrEngine";
@@ -38,8 +38,9 @@ export function ocrCacheKey(job: LocalOcrJob, engineVersion: string): string {
 export class LocalOcrQueue {
   private static active = false;
   static async restore(): Promise<LocalOcrQueue> {
-    const queue = new LocalOcrQueue();
-    for (const job of await loadOcrQueueJobs()) queue.enqueue(job);
+    const state = await loadOcrQueueState();
+    const queue = new LocalOcrQueue(undefined, state?.id);
+    for (const job of state?.jobs || []) queue.enqueue(job);
     return queue;
   }
   private readonly jobs: LocalOcrJob[] = [];
@@ -47,7 +48,7 @@ export class LocalOcrQueue {
   private running = false;
   private cancelRequested = false;
 
-  constructor(private readonly engineFactory: () => LocalOcrEngine = () => new TesseractLocalOcrEngine()) {}
+  constructor(private readonly engineFactory: () => LocalOcrEngine = () => new TesseractLocalOcrEngine(), private readonly queueId: string = crypto.randomUUID()) {}
 
   enqueue(job: LocalOcrJob): void {
     if (this.running) throw new Error("Wait for the running queue before adding images.");
@@ -68,13 +69,14 @@ export class LocalOcrQueue {
     this.running = true;
     LocalOcrQueue.active = true;
     this.cancelRequested = false;
-    let engine = this.engineFactory();
+    let engine: LocalOcrEngine | undefined;
     let activeLanguage: OcrLanguage | null = null;
     const emit = (job: LocalOcrJob, phase: LocalOcrProgress["phase"], progress?: number) =>
       options.onProgress?.({ completed: this.completed.size, total: this.jobs.length, phase, job, progress });
 
     try {
-      await saveOcrQueueJobs(this.jobs);
+      engine = this.engineFactory();
+      await saveOcrQueueJobs(this.jobs, this.queueId);
       for (const job of this.jobs) {
         if (this.cancelRequested) break;
         const asset = await getLocalImage(job.sourceHash);
@@ -130,11 +132,11 @@ export class LocalOcrQueue {
         this.completed.add(cacheKey);
         emit(job, "completed");
       }
-      await saveOcrQueueJobs(this.jobs.filter((job) => !this.completed.has(ocrCacheKey(job, engine.version))));
+      await saveOcrQueueJobs(this.jobs.filter((job) => !this.completed.has(ocrCacheKey(job, engine.version))), this.queueId);
       if (this.cancelRequested && this.jobs.length > 0) emit(this.jobs.find((job) => !this.completed.has(ocrCacheKey(job, engine.version))) || this.jobs.at(-1)!, "cancelled");
       return { completed: this.completed.size, total: this.jobs.length, cancelled: this.cancelRequested };
     } finally {
-      try { await engine.dispose(); } finally { this.running = false; LocalOcrQueue.active = false; }
+      try { await engine?.dispose(); } finally { this.running = false; LocalOcrQueue.active = false; }
     }
   }
 }

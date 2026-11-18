@@ -29,6 +29,19 @@ const confirmation: KeyConfirmation = {
 };
 
 describe("OCR key safety", () => {
+  it("rejects an image-derived key even when its optional provenance was omitted", async () => {
+    clearQuestionBank();
+    const { keyProvenance, sourceHash, sourceCrop, ...unmarked } = plausibleOcrQuestion;
+    await importQuestionsToBank({ rawQuestions: [unmarked], sourceFile: "scan.png" });
+    expect(getGradableQuestions(getUserQuestions())).toHaveLength(0);
+    clearQuestionBank();
+  });
+  it("does not share mutable source crops with the confirmation record", () => {
+    const source = { ...plausibleOcrQuestion, sourceCrop: { ...confirmation.crop } };
+    const confirmed = confirmOcrKey(source, { ...confirmation, crop: source.sourceCrop });
+    confirmed.sourceCrop!.x = 0.3;
+    expect(getGradableQuestions([confirmed])).toHaveLength(0);
+  });
   it("preserves OCR provenance through bank import, serialization, and edits", async () => {
     clearQuestionBank();
     await importQuestionsToBank({ rawQuestions: [plausibleOcrQuestion], sourceFile: "ocr.png" });

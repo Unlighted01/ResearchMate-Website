@@ -146,12 +146,26 @@ export async function markModelReady(language: string, version: string): Promise
   await putRecord(MODELS, { id: `${version}:${language}`, readyAt: new Date().toISOString() });
 }
 
-export async function saveOcrQueueJobs(jobs: import("./localOcrQueue").LocalOcrJob[]): Promise<void> {
-  await putRecord(QUEUE, { id: "pending", jobs });
+export async function saveOcrQueueJobs(jobs: import("./localOcrQueue").LocalOcrJob[], id: string): Promise<void> {
+  if (jobs.length) { await putRecord(QUEUE, { id, jobs }); return; }
+  const db = await openDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(QUEUE, "readwrite"); tx.objectStore(QUEUE).delete(id);
+      tx.oncomplete = () => resolve(); tx.onabort = tx.onerror = () => reject(tx.error);
+    });
+  } finally { db.close(); }
 }
 
-export async function loadOcrQueueJobs(): Promise<import("./localOcrQueue").LocalOcrJob[]> {
-  return (await getRecord<{ jobs: import("./localOcrQueue").LocalOcrJob[] }>(QUEUE, "pending"))?.jobs || [];
+export async function loadOcrQueueState(): Promise<{ id: string; jobs: import("./localOcrQueue").LocalOcrJob[] } | undefined> {
+  const db = await openDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = db.transaction(QUEUE, "readonly").objectStore(QUEUE).getAll();
+      request.onsuccess = () => resolve(request.result.find((state) => state.jobs?.length));
+      request.onerror = () => reject(request.error);
+    });
+  } finally { db.close(); }
 }
 
 /** B1 has no upload action. The preview exposes exactly what a later sync flow must review. */

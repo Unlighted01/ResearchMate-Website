@@ -16,6 +16,7 @@ export interface KeyConfirmation {
 }
 
 export interface ProvenanceBoundKey {
+  origin?: string;
   correctIndex: number;
   options: string[];
   keyProvenance?: KeyProvenance;
@@ -45,17 +46,17 @@ export function hasValidKeyConfirmation(question: ProvenanceBoundKey): boolean {
   if (!/^[a-f0-9]{64}$/i.test(question.sourceHash || "") || confirmation.sourceHash !== question.sourceHash) return false;
   if (!Number.isInteger(question.sourcePage) || question.sourcePage! < 1 || confirmation.page !== question.sourcePage) return false;
   if (!Number.isFinite(Date.parse(confirmation.time))) return false;
-  if (confirmation.value.trim().toUpperCase() !== keyLetter(question)) return false;
+  if (typeof confirmation.value !== "string" || !keyLetter(question) || confirmation.value.trim().toUpperCase() !== keyLetter(question)) return false;
   return crop.x === confirmation.crop.x && crop.y === confirmation.crop.y &&
     crop.width === confirmation.crop.width && crop.height === confirmation.crop.height;
 }
 
 /** Legacy questions predate this field; any source-hashed question needs explicit provenance. */
 export function hasTrustedKey(question: ProvenanceBoundKey): boolean {
-  if (question.keyProvenance === undefined) return !question.sourceHash;
-  if (question.keyProvenance === "text_layer") return true;
+  if (question.keyProvenance === undefined) return !question.sourceHash && !question.sourceCrop && !question.keyConfirmation && question.origin !== "ocr_import";
+  if (question.keyProvenance === "text_layer") return question.origin !== "ocr_import";
   if (question.keyProvenance === "none") return false;
-  return hasValidKeyConfirmation(question);
+  return (question.keyProvenance === "ocr_confirmed" || question.keyProvenance === "human_entered") && hasValidKeyConfirmation(question);
 }
 
 export function isSkewedKeyPage(questions: ProvenanceBoundKey[]): boolean {
@@ -67,7 +68,8 @@ export function isSkewedKeyPage(questions: ProvenanceBoundKey[]): boolean {
 }
 
 export function confirmOcrKey<T extends ProvenanceBoundKey>(question: T, record: KeyConfirmation): T {
-  const confirmed = { ...question, keyProvenance: "ocr_confirmed" as const, keyConfirmation: record };
+  const confirmed = { ...question, sourceCrop: question.sourceCrop && { ...question.sourceCrop },
+    keyProvenance: "ocr_confirmed" as const, keyConfirmation: { ...record, crop: { ...record.crop } } };
   if (!hasValidKeyConfirmation(confirmed)) throw new Error("Confirmation must match the key and source crop.");
   return confirmed;
 }

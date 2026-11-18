@@ -265,28 +265,15 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
               ...prev,
               files: prev.files.map((f) =>
                 f.id === fileId
-                  ? { ...f, status: "ocr", percent: 50, statusMessage: "Running Vision OCR..." }
+                  ? { ...f, status: "ocr", percent: 50, statusMessage: "Saving image on this device..." }
                   : f
               ),
             }));
 
-            const { readFileAsDataUrl, runOcr } = await import("../services/importService");
-            const base64DataUrl = await readFileAsDataUrl(file);
-            const data = await runOcr(base64DataUrl, false);
-
-            if (!data.ocrText?.trim()) {
-              throw new Error("No readable text found in image.");
-            }
-
-            savedItem = await addItem({
-              sourceTitle: file.name.replace(/\.[^/.]+$/, "") || "Visual Note",
-              text: data.ocrText.trim(),
-              ocrText: data.ocrText.trim(),
-              aiSummary: data.aiSummary || null,
-              imageUrl: base64DataUrl,
+            const { importImageFile } = await import("../services/importService");
+            savedItem = await importImageFile(file, {
               deviceSource: options?.deviceSource || "smart_pen",
-              ocrConfidence: data.ocrConfidence ?? null,
-              tags: options?.tags || ["image", "ocr", "imported-source"],
+              tags: options?.tags,
             });
           } else if (materialKind === "text") {
             // Text or Markdown
