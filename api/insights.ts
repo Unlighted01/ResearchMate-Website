@@ -260,16 +260,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const rawResponse = await runWithFallbacks(TAG_PROMPT, text, keyToUse, 0.3, 100);
       const tags = parseTags(rawResponse);
 
-      let creditsRemaining: number | string = "Unlimited";
-      if (isFreeTier && userId) {
-        creditsRemaining = await deductCredit(userId);
-        creditDeducted = true;
-        deductedUserId = userId;
-      }
-
       return res.status(200).json({
         tags,
-        credits_remaining: creditsRemaining,
+        credits_remaining: "Unlimited",
       });
     }
 
@@ -304,12 +297,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error("Unable to parse source identification response.");
       }
 
-      if (isFreeTier && userId) {
-        await deductCredit(userId);
-        creditDeducted = true;
-        deductedUserId = userId;
-      }
-
       return res.status(200).json(parsedResult);
     }
 
@@ -318,20 +305,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ----------------------------------------------------
     const insights = await runWithFallbacks(INSIGHTS_PROMPT, text, keyToUse, 0.5, 1024);
 
-    let creditsRemaining: number | string = "Unlimited";
-    if (isFreeTier && userId) {
-      creditsRemaining = await deductCredit(userId);
-      creditDeducted = true;
-      deductedUserId = userId;
-    }
-
     return res.status(200).json({
       insights,
-      credits_remaining: creditsRemaining,
+      credits_remaining: "Unlimited",
     });
   } catch (error: any) {
     console.error("Unified Insights API Error:", error);
-    if (creditDeducted && deductedUserId) await refundCredit(deductedUserId);
     return res.status(500).json({ error: error?.message || "An internal error occurred." });
   }
 }

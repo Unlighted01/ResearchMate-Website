@@ -10,7 +10,7 @@ The full-stack web platform for ResearchMate - part of the ResearchMate ecosyste
 - **Document Studio** - Split-screen PDF reader with in-text citation pins, note highlights, and LaTeX formula manuscript editing (TipTap).
 - **AI Research Assistant & RAG** - Multi-paper literature review synthesis matrix, hybrid vector search, and document-scoped chat.
 - **Multimodal & Smart Pen OCR** - Ingest handwritten notebook and whiteboard derivations directly into LaTeX math and editable review items.
-- **Real-Time Sync & Monetization** - Supabase real-time sync with browser extension, mobile app, and PayMongo tier checkout.
+- **Real-Time Multi-Device Sync** - Supabase real-time sync with browser extension and mobile app; 100% free Academic Edition.
 
 ## 📋 Prerequisites
 

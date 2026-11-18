@@ -139,7 +139,6 @@ Researchmate Website/
 | `pdfService.ts` | Client-side PDF.js rendering engine with coordinate-aware text extraction. |
 | `ragService.ts` | Retrieval-augmented generation engine managing document context injection. |
 | `citationService.ts` | Citation parser and formatter supporting APA, MLA, Chicago, and IEEE. |
-| `paymongoService.ts` | Client-side PayMongo payment integration for subscription upgrades. |
 | `supabaseClient.ts` | Supabase authentication, database queries, and real-time sync client. |
 | `geminiService.ts` | Google Gemini API integration for chat, summarization, and vision OCR. |
 
@@ -174,9 +173,7 @@ Researchmate Website/
 | :--- | :--- |
 | `ocr.ts` | Gemini Vision OCR endpoint converting physical note scans into text and LaTeX. |
 | `literature-matrix.ts` | Generates comparative synthesis matrices across multiple ingested research papers. |
-| `checkout.ts` | Creates PayMongo checkout sessions for user subscription tiers. |
-| `paymongo-webhook.ts` | Webhook receiver upgrading user accounts upon payment verification. |
-| `chat.ts` | Streaming chat endpoint with document-scoped system prompts. |
+| `chat.ts` | Streaming chat endpoint with document-scoped system prompts and model routing. |
 | `embed.ts` | Vector embedding generation for semantic document search. |
 | `summarize.ts` | Extractive and abstractive research paper summarization. |
 

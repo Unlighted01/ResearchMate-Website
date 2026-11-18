@@ -3,6 +3,8 @@ import { getGradableQuestions } from "../src/services/examQuestionPolicy";
 import { getLocalAttempts, saveLocalAttempts, type Question } from "../src/services/examService";
 import { confirmOcrKey, confirmOcrPage, isSkewedKeyPage, type KeyConfirmation } from "../src/services/keyProvenance";
 import { changeConfirmedOcrKey } from "../src/services/ocrKeyConfirmationService";
+import { importQuestionsToBank } from "../src/services/questionImportService";
+import { clearQuestionBank, getUserQuestions, updateQuestion, sampleSprintQuestions } from "../src/services/questionBankService";
 
 const plausibleOcrQuestion = {
   id: "ocr-1",
@@ -27,6 +29,20 @@ const confirmation: KeyConfirmation = {
 };
 
 describe("OCR key safety", () => {
+  it("preserves OCR provenance through bank import, serialization, and edits", async () => {
+    clearQuestionBank();
+    await importQuestionsToBank({ rawQuestions: [plausibleOcrQuestion], sourceFile: "ocr.png" });
+    let stored = getUserQuestions().find((q) => q.id === "ocr-1")!;
+    expect(stored.keyProvenance).toBe("none");
+    expect(getGradableQuestions([JSON.parse(JSON.stringify(stored))])).toHaveLength(0);
+    expect(sampleSprintQuestions(1)).toHaveLength(0);
+    updateQuestion(stored.id, confirmOcrKey(stored, confirmation));
+    stored = getUserQuestions().find((q) => q.id === "ocr-1")!;
+    expect(getGradableQuestions([JSON.parse(JSON.stringify(stored))])).toHaveLength(1);
+    updateQuestion(stored.id, { correctIndex: 2 });
+    expect(getGradableQuestions(getUserQuestions())).toHaveLength(0);
+    clearQuestionBank();
+  });
   it("keeps a plausible OCR key ungradable before confirmation", () => {
     expect(getGradableQuestions([plausibleOcrQuestion])).toHaveLength(0);
     expect(getGradableQuestions([{ ...plausibleOcrQuestion, keyProvenance: undefined }])).toHaveLength(0);

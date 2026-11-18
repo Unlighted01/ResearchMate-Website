@@ -153,34 +153,11 @@ const requireAuthAndCredits = async (req, res, next) => {
         .json({ error: "Invalid or expired session token" });
     }
 
-    // 4. Check Credits in Database
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("ai_credits")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError) {
-      console.error("Profile fetch error:", profileError);
-      return res.status(500).json({ error: "Failed to fetch user profile" });
-    }
-
-    // Default to 0 if null
-    const credits = profile ? profile.ai_credits || 0 : 0;
-
-    if (credits <= 0) {
-      return res.status(403).json({
-        error: "Out of AI Credits",
-        code: "NO_CREDITS",
-        credits: 0,
-      });
-    }
-
-    // 5. Attach User & System Key to Request
+    // 4. Attach User & System Key (Unmetered Free Access)
     req.user = user;
-    req.currentCredits = credits;
+    req.currentCredits = "Unlimited";
     req.geminiKey = getRandomKey(); // Use one of our pooled keys
-    req.isFreeTier = true; // Mark to deduct credit later
+    req.isFreeTier = false;
 
     if (!req.geminiKey) {
       return res
@@ -235,18 +212,10 @@ async function callGeminiAPI(prompt, apiKey, options = {}) {
 }
 
 // --------------------------------------------
-// UTILITY: Deduct Credit
+// UTILITY: Deduct Credit (De-SaaSified)
 // --------------------------------------------
-async function deductCredit(userId, currentCredits) {
-  // Simple update for now. In production, use an RPC or transaction for thread safety.
-  const { error } = await supabase
-    .from("profiles")
-    .update({ ai_credits: Math.max(0, currentCredits - 1) })
-    .eq("id", userId);
-
-  if (error)
-    console.error(`Failed to deduct credit for user ${userId}:`, error);
-  return currentCredits - 1;
+async function deductCredit(_userId, _currentCredits) {
+  return "Unlimited";
 }
 
 // ============================================

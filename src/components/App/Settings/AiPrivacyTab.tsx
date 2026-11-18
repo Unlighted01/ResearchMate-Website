@@ -44,30 +44,20 @@ const AiPrivacyTab: React.FC<AiPrivacyTabProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      {/* Credits Card */}
-      <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-100 dark:border-blue-800">
-        <h3 className="text-lg font-semibold mb-2 flex items-center gap-2 text-blue-700 dark:text-blue-300">
-          <Zap className="w-5 h-5" /> AI Credits
+      {/* Free Academic Access Card */}
+      <Card className="p-6 bg-gradient-to-r from-emerald-50 to-indigo-50 dark:from-emerald-950/20 dark:to-indigo-950/20 border-emerald-100 dark:border-emerald-800">
+        <h3 className="text-lg font-semibold mb-2 flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+          <Sparkles className="w-5 h-5 text-emerald-500" /> Free Academic Access
         </h3>
         <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-          Your remaining balance for AI features
+          All AI features, flagship models, and exam generators are 100% free for students
         </p>
         <div className="flex items-end gap-2">
-          <span className="text-4xl font-bold text-gray-900 dark:text-white">
-            {stats.ai_credits}
+          <span className="text-3xl font-extrabold text-gray-900 dark:text-white">
+            Unlimited
           </span>
-          <span className="text-gray-500 mb-1">credits remaining</span>
+          <span className="text-gray-500 mb-1">queries & derivations</span>
         </div>
-        {/* Low Credit Warning with Reset Timer */}
-        {stats.ai_credits < 20 && (
-          <div className="mt-4 flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg border border-orange-100 dark:border-orange-900">
-            <Clock className="w-4 h-4" />
-            <span>
-              Free refills in <strong>{getTimeUntilReset()}</strong>{" "}
-              (Midnight UTC)
-            </span>
-          </div>
-        )}
       </Card>
 
       {/* Backend Status */}

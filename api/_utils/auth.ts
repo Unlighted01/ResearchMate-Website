@@ -47,7 +47,7 @@ export interface AuthResult {
   user: AuthenticatedUser | null;
   error?: string;
   statusCode?: number;
-  isFreeTier: boolean; // True if using credits, False if BYOK
+  isFreeTier?: boolean;
   customKey?: string;
 }
 
@@ -128,176 +128,46 @@ export async function authenticateUser(
       };
     }
 
-    // 3. Check for Custom API Key (BYOK) — only AFTER JWT is verified.
-    //    BYOK skips credit deduction but NOT identity or rate limiting.
-    const customKey = req.cookies?.custom_gemini_key;
-    if (customKey && customKey.startsWith("AIz")) {
-      if (!checkRateLimit(user.id)) {
-        return {
-          error: "Too many requests. Please wait a moment before trying again.",
-          statusCode: 429,
-          user: null,
-          isFreeTier: false,
-        };
-      }
-      console.log(`⚡ BYOK user ${user.id} using custom Gemini key`);
-      return {
-        user: { id: user.id, email: user.email },
-        isFreeTier: false,
-        customKey,
-      };
-    }
-
-    // 4. Check Credits in Database
-    // Use maybeSingle() to avoid PGRST116 error if row missing
-    let { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("ai_credits")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    // CASE A: User has NO profile (Old user from before migration)
-    if (!profile && !profileError) {
-      console.log(`⚠️ User ${user.id} has no profile. Creating one...`);
-      const { error: insertError } = await supabase
-        .from("profiles")
-        .insert({ id: user.id, ai_credits: 50 });
-
-      if (insertError) {
-        console.error("Failed to auto-create profile:", insertError);
-        return {
-          error: "Failed to create user profile",
-          statusCode: 500,
-          user: null,
-          isFreeTier: true,
-        };
-      }
-      profile = { ai_credits: 50 };
-    }
-
-    // CASE B: User has profile, but ai_credits is NULL (Migration didn't backfill?)
-    if (profile && profile.ai_credits === null) {
-      console.log(`⚠️ User ${user.id} has NULL credits. Setting to 50...`);
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ ai_credits: 50 })
-        .eq("id", user.id);
-
-      if (updateError) {
-        console.error("Failed to init credits:", updateError);
-      }
-      profile.ai_credits = 50;
-    }
-
-    if (profileError) {
-      console.error("Profile fetch error:", profileError);
-      return {
-        error: "Failed to fetch user profile",
-        statusCode: 500,
-        user: null,
-        isFreeTier: true,
-      };
-    }
-
-    const credits = profile?.ai_credits ?? 0;
-
-    // Enforce credit limits for free tier accounts without BYOK
-    if (credits <= 0) {
-      return {
-        error: "Out of AI Credits. Upgrade to Student Pro or configure your own Gemini API key in Settings.",
-        statusCode: 403,
-        user: null,
-        isFreeTier: true,
-      };
-    }
-
+    // 3. Rate limiting check (DoS protection)
     if (!checkRateLimit(user.id)) {
       return {
         error: "Too many requests. Please wait a moment before trying again.",
         statusCode: 429,
         user: null,
-        isFreeTier: true,
       };
     }
 
-    return { user: { id: user.id, email: user.email }, isFreeTier: true };
+    // 4. Check for Custom API Key (BYOK)
+    const customKey = req.cookies?.custom_gemini_key;
+    if (customKey && customKey.startsWith("AIz")) {
+      console.log(`⚡ BYOK user ${user.id} using custom Gemini key`);
+    }
+
+    // All authenticated users have 100% free, unmetered access
+    return {
+      user: { id: user.id, email: user.email },
+      isFreeTier: false,
+      customKey,
+    };
   } catch (error) {
     console.error("Auth Error:", error);
     return {
       error: "Authentication failed",
       statusCode: 500,
       user: null,
-      isFreeTier: true,
     };
   }
 }
 
 // ============================================
-// CREDIT DEDUCTION HELPER (Atomic)
+// CREDIT DEDUCTION & REFUND HELPERS (DE-SAASIFIED STUBS)
 // ============================================
-// Uses a single UPDATE with ai_credits - 1 and a WHERE guard to prevent
-// race conditions. Falls back to read-then-write if RPC is not available.
-export async function deductCredit(userId: string): Promise<number | string> {
-  // Atomic: decrement in one statement, return the new value
-  const { data, error } = await supabase.rpc("deduct_credit", {
-    p_user_id: userId,
-  });
-
-  // If the RPC exists and worked, `data` is the new credit count (or -1 if insufficient).
-  if (!error && data !== null && data !== undefined) {
-    if (data < 0) {
-      console.warn(`User ${userId} tried to deduct but has 0 credits`);
-      return 0;
-    }
-    return data as number;
-  }
-
-  // Fallback for deployments where the RPC migration hasn't been applied yet.
-  if (error) {
-    console.warn("deduct_credit RPC unavailable, using fallback:", error.message);
-  }
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("ai_credits")
-    .eq("id", userId)
-    .single();
-
-  const currentCredits = profile ? profile.ai_credits : 0;
-  const newCredits = Math.max(0, currentCredits - 1);
-
-  await supabase
-    .from("profiles")
-    .update({ ai_credits: newCredits })
-    .eq("id", userId);
-
-  return newCredits;
+// ResearchMate is 100% free and unmetered. These stubs preserve
+// backward-compatibility without database writes or artificial quotas.
+export async function deductCredit(_userId: string): Promise<number | string> {
+  return 9999;
 }
 
-// ============================================
-// CREDIT REFUND HELPER (Atomic)
-// ============================================
-// Call this in the catch block of any AI endpoint to restore
-// a credit when the provider call fails after deduction.
-export async function refundCredit(userId: string): Promise<void> {
-  // Atomic: increment in one statement
-  const { error } = await supabase.rpc("refund_credit", {
-    p_user_id: userId,
-  });
-
-  if (!error) return;
-
-  // Fallback
-  console.warn("refund_credit RPC unavailable, using fallback:", error.message);
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("ai_credits")
-    .eq("id", userId)
-    .single();
-
-  if (!profile) return;
-
-  await supabase
-    .from("profiles")
-    .update({ ai_credits: profile.ai_credits + 1 })
-    .eq("id", userId);
+export async function refundCredit(_userId: string): Promise<void> {
+  // No-op: all features are free and unmetered
 }

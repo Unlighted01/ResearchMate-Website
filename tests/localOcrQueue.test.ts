@@ -5,6 +5,8 @@ import type { LocalOcrEngine, OcrLanguage } from "../src/services/localOcrEngine
 const pages = new Map<string, unknown>();
 let modelReady = false;
 vi.mock("../src/services/localOcrStore", () => ({
+  saveOcrQueueJobs: vi.fn(async () => {}),
+  loadOcrQueueJobs: vi.fn(async () => []),
   getLocalImage: vi.fn(async () => ({ blob: new Blob(["image"], { type: "image/png" }) })),
   getLocalOcrPage: vi.fn(async (key: string) => pages.get(key)),
   saveLocalOcrPage: vi.fn(async (page: { cacheKey: string }) => { pages.set(page.cacheKey, page); }),
@@ -18,6 +20,13 @@ const job = (pageNumber: number): LocalOcrJob => ({
 
 describe("local OCR queue", () => {
   beforeEach(() => { pages.clear(); modelReady = false; });
+  it("does not initialize after cancellation while the download prompt is open", async () => {
+    const initialize = vi.fn();
+    const queue = new LocalOcrQueue(() => ({ version: "test", initialize, recognize: vi.fn(), dispose: async () => {} }));
+    queue.enqueue(job(1));
+    await queue.run({ confirmDownload: async () => { queue.cancel(); return true; } });
+    expect(initialize).not.toHaveBeenCalled();
+  });
 
   it("runs locally, caches by source and params, and resumes after cancel", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");

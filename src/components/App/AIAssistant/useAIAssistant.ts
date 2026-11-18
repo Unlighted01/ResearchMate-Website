@@ -134,8 +134,8 @@ const useAIAssistant = (
   const [selectedItem, setSelectedItem] = useState<StorageItem | null>(null);
   const [summaryMode, setSummaryMode] = useState<SummaryMode>("standard");
 
-  // Credits
-  const [credits, setCredits] = useState<number | string>("...");
+  // Credits (De-SaaSified / Unlimited)
+  const [credits, setCredits] = useState<number | string>("Unlimited");
 
   // Drawer & Multi-Thread State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -291,23 +291,6 @@ const useAIAssistant = (
     }
     handleNewChat();
   }, [activeThreadId, refreshConversations, handleNewChat]);
-
-  // Fetch credits on mount
-  useEffect(() => {
-    const fetchCredits = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("ai_credits")
-        .eq("id", session.user.id)
-        .single();
-      if (profile) setCredits(profile.ai_credits ?? 0);
-    };
-    fetchCredits();
-  }, []);
 
   // Debounce search query (300ms)
   useEffect(() => {
@@ -699,15 +682,12 @@ const useAIAssistant = (
           id: (Date.now() + 1).toString(),
           role: "ai",
           text:
-            result.reason === "no_credits"
-              ? "⚠️ **Out of AI Credits**. Please wait for your monthly refill or add your own API Key in Settings."
-              : result.reason === "aborted"
-                ? "Request was cancelled."
-                : `Error: ${result.error}`,
+            result.reason === "aborted"
+              ? "Request was cancelled."
+              : `Error: ${result.error}`,
           timestamp: Date.now(),
         };
         setChatHistory((prev) => [...prev, errorMsg]);
-        if (result.reason === "no_credits") setCredits(0);
       }
     } catch (error) {
       clearTimeout(timeoutId);

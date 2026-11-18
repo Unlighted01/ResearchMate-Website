@@ -1,10 +1,11 @@
 import type { SourceCrop } from "./keyProvenance";
 
 const DB_NAME = "researchmate_local_ocr_b1";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const ASSETS = "assets";
 const PAGES = "pages";
 const MODELS = "models";
+const QUEUE = "queue";
 
 export interface LocalImageAsset {
   hash: string;
@@ -46,6 +47,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(ASSETS)) db.createObjectStore(ASSETS, { keyPath: "hash" });
       if (!db.objectStoreNames.contains(PAGES)) db.createObjectStore(PAGES, { keyPath: "cacheKey" });
       if (!db.objectStoreNames.contains(MODELS)) db.createObjectStore(MODELS, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(QUEUE)) db.createObjectStore(QUEUE, { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("Could not open local OCR storage."));
@@ -117,11 +119,39 @@ export async function saveLocalOcrPage(page: LocalOcrPage): Promise<void> {
 }
 
 export async function isModelReady(language: string, version: string): Promise<boolean> {
-  return Boolean(await getRecord(MODELS, `${version}:${language}`));
+  if (version !== "tesseract.js@7.0.0") return false;
+  // Tesseract 7's browser adapter uses idb-keyval's default store. Count keys,
+  // rather than loading multi-megabyte model values onto the main thread.
+  return new Promise((resolve) => {
+    const request = indexedDB.open("keyval-store");
+    request.onupgradeneeded = () => request.transaction?.abort();
+    request.onerror = () => resolve(false);
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("keyval")) { db.close(); resolve(false); return; }
+      const transaction = db.transaction("keyval", "readonly");
+      let present = 0;
+      const languages = language.split("+");
+      for (const lang of languages) {
+        const count = transaction.objectStore("keyval").count(`researchmate-ocr-7.0.0/${lang}.traineddata`);
+        count.onsuccess = () => { present += count.result; };
+      }
+      transaction.oncomplete = () => { db.close(); resolve(present === languages.length); };
+      transaction.onabort = transaction.onerror = () => { db.close(); resolve(false); };
+    };
+  });
 }
 
 export async function markModelReady(language: string, version: string): Promise<void> {
   await putRecord(MODELS, { id: `${version}:${language}`, readyAt: new Date().toISOString() });
+}
+
+export async function saveOcrQueueJobs(jobs: import("./localOcrQueue").LocalOcrJob[]): Promise<void> {
+  await putRecord(QUEUE, { id: "pending", jobs });
+}
+
+export async function loadOcrQueueJobs(): Promise<import("./localOcrQueue").LocalOcrJob[]> {
+  return (await getRecord<{ jobs: import("./localOcrQueue").LocalOcrJob[] }>(QUEUE, "pending"))?.jobs || [];
 }
 
 /** B1 has no upload action. The preview exposes exactly what a later sync flow must review. */

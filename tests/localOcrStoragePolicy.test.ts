@@ -13,6 +13,11 @@ vi.mock("../src/services/supabaseClient", () => ({
 
 describe("local OCR storage policy", () => {
   afterEach(() => vi.unstubAllGlobals());
+  it("reports metadata quota failure instead of claiming the import succeeded", async () => {
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => { throw new DOMException("Full", "QuotaExceededError"); } });
+    await expect(addItem({ text: "image", storageScope: "local" })).rejects.toThrow();
+  });
 
   it("never migrates a local-only image on sign-in", async () => {
     const records = new Map<string, string>();

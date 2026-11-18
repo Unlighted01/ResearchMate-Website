@@ -363,6 +363,11 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
         topicTag: q.chapter || subjectName,
         reviewStatus: q.reviewStatus,
         sourceQuote: q.sourceQuote,
+        keyProvenance: q.keyProvenance,
+        keyConfirmation: q.keyConfirmation,
+        sourceHash: q.sourceHash,
+        sourcePage: q.sourcePage,
+        sourceCrop: q.sourceCrop,
       })));
 
       const docCleanTitle = (fileName || subjectName || "Imported Material").replace(/\.[^/.]+$/, "").trim();

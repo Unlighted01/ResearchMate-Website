@@ -219,13 +219,6 @@ ${excerpt}
       });
     }
 
-    // Deduct credit
-    if (authResult.isFreeTier && authResult.user?.id) {
-      await deductCredit(authResult.user.id);
-      creditDeducted = true;
-      deductedUserId = authResult.user.id;
-    }
-
     return res.status(200).json({
       success: true,
       provider: providerUsed,
@@ -233,9 +226,6 @@ ${excerpt}
     });
   } catch (error) {
     console.error("Matrix handler exception:", error);
-    if (creditDeducted && deductedUserId) {
-      await refundCredit(deductedUserId);
-    }
     return res.status(500).json({
       error: (error as Error).message || "An unexpected error occurred generating the literature matrix.",
     });

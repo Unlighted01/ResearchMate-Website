@@ -402,15 +402,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isGeminiPro = model === "gemini-pro";
     const isDeepSeek = model === "deepseek-r1";
     const isLlama = model === "llama-3.3-70b";
-    const isProModel = isClaude || isGeminiPro;
-
-    // Enforce Pro restriction on flagship models (Claude 3.5 & Gemini 1.5 Pro) for free tier accounts without BYOK
-    if (isProModel && isFreeTier && !customKey) {
-      return res.status(403).json({
-        error: "Claude 3.5 Sonnet and Gemini 1.5 Pro are exclusive to Student Pro members. Upgrade to unlock!",
-        code: "PRO_REQUIRED",
-      });
-    }
 
     let actualModelUsed = "gemini-2.5-flash";
     const isExamMode = mode === "exam";
@@ -522,22 +513,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error(`All providers failed. Logs: ${errors.join(" | ")}`);
     }
 
-    // 4. Deduct Credit (Only if success)
-    let creditsRemaining: number | string = "Unlimited";
-    if (isFreeTier && userId) {
-      creditsRemaining = await deductCredit(userId);
-      creditDeducted = true;
-      deductedUserId = userId;
-    }
-
     return res.status(200).json({
       response: responseText,
       model_used: actualModelUsed,
-      credits_remaining: creditsRemaining,
+      credits_remaining: "Unlimited",
     });
   } catch (error) {
     console.error("Chat API Error:", error);
-    if (creditDeducted && deductedUserId) await refundCredit(deductedUserId);
     return res.status(500).json({ error: "An internal error occurred. Please try again." });
   }
 }

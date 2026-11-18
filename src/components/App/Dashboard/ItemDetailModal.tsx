@@ -43,7 +43,6 @@ import {
   saveItemConversation,
   clearItemConversation,
 } from "../../../services/conversationService";
-import { initiateStudentProCheckout, getUserSubscriptionStatus } from "../../../services/paymongoService";
 import { generateAiResponse, generateChatResponse, generateEmbedding, runMathOcr } from "../../../services/geminiService";
 import { chunkText, findTopKChunks, findTopKChunksHybrid, embedChunks, buildChatContext } from "../../../services/ragService";
 import { extractPdfContent } from "../../../services/pdfService";
@@ -57,6 +56,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
+import { useLocalImageUrl } from "../../../hooks/useLocalImageUrl";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -124,10 +124,13 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onItemUpdated,
 }) => {
   const { addNotification } = useNotifications();
+  const localImage = useLocalImageUrl(item?.localAssetHash);
+  const displayedImageUrl = localImage.url || item?.imageUrl;
   const displayText = item ? (item.text || item.ocrText || "") : "";
   const isPdfOrDocument = Boolean(
     item?.tags?.includes("pdf") ||
     item?.imageUrl ||
+    item?.localAssetHash ||
     item?.sourceTitle?.toLowerCase().endsWith(".pdf") ||
     (displayText && displayText.length > 2000)
   );
@@ -149,24 +152,14 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>("gemini-flash");
-  const [isPro, setIsPro] = useState(false);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [isUpgrading, setIsUpgrading] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load user subscription status to configure model access
-  useEffect(() => {
-    getUserSubscriptionStatus().then((status) => {
-      setIsPro(status.isPro);
-    }).catch(() => {});
-  }, []);
-
   const formatModelBadge = (modelId?: string) => {
     if (!modelId) return "Gemini 2.5 Flash";
-    if (modelId.includes("claude")) return "Claude 3.5 Sonnet (Pro)";
-    if (modelId.includes("1.5-pro") || modelId.includes("gemini-pro")) return "Gemini 1.5 Pro (Pro)";
+    if (modelId.includes("claude")) return "Claude 3.5 Sonnet";
+    if (modelId.includes("1.5-pro") || modelId.includes("gemini-pro")) return "Gemini 1.5 Pro";
     if (modelId.includes("deepseek")) return "DeepSeek-R1 Math";
     if (modelId.includes("llama")) return "Llama 3.3 70B";
     if (modelId.includes("grok")) return "Grok (OpenRouter)";
@@ -536,21 +529,13 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           await saveCachedProblemSolution(item.sourceTitle, query, chatRes.response);
         }
       } else {
-        if (chatRes.reason === "no_credits" || chatRes.error?.toLowerCase().includes("credit")) {
-          setShowUpgradeModal(true);
-        }
         throw new Error(chatRes.error || "No response from AI assistant");
       }
     } catch (err: any) {
       console.warn("AI chat error:", err);
-      if (err.message?.toLowerCase().includes("credit")) {
-        setShowUpgradeModal(true);
-      }
       appendMessage({
         sender: "ai",
-        text: err.message?.toLowerCase().includes("credit")
-          ? `⚠️ You have used all your free AI credits. You can add your personal free Google key in Settings for unlimited studying, or upgrade to Student Pro!`
-          : `I had trouble connecting to the AI service. If this document was recently uploaded without text, click **Re-parse PDF** above to re-index its pages.`,
+        text: `I had trouble connecting to the AI service. If this document was recently uploaded without text, click **Re-parse PDF** above to re-index its pages.`,
       });
     } finally {
       setIsAiThinking(false);
@@ -771,10 +756,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       <div className="bg-gradient-to-b from-indigo-50/50 via-white to-slate-50 dark:from-slate-900/60 dark:via-slate-900/40 dark:to-slate-950/60 rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-200/60 dark:border-slate-800/60 shadow-xs flex flex-col items-center text-center">
                         
                         {/* Visual Cover: Rendered Page 1 Image or Elegant Academic Cover Plate */}
-                        {item.imageUrl ? (
+                        {localImage.error && <p role="alert">{localImage.error}</p>}
+                        {displayedImageUrl ? (
                           <div className="relative group rounded-2xl overflow-hidden shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-w-[200px] sm:max-w-[240px] max-h-[300px] sm:max-h-[340px] mb-4 sm:mb-5 transition-transform duration-300 hover:scale-[1.02]">
                             <img
-                              src={item.imageUrl}
+                              src={displayedImageUrl}
                               alt={`${item.sourceTitle || "Document"} Cover`}
                               className="w-full h-auto max-h-[300px] sm:max-h-[340px] object-contain rounded-xl"
                             />
@@ -956,14 +942,14 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   </div>
 
                   {/* Premium Framed Image Preview (shown when not on cover tab) */}
-                  {item.imageUrl && activeLeftTab !== "cover" && (
+                  {displayedImageUrl && activeLeftTab !== "cover" && (
                     <div className="bg-white/40 dark:bg-slate-900/30 backdrop-blur-md rounded-2xl p-4 border border-slate-200/40 dark:border-slate-800/40">
                       <h4 className="text-xs font-mono font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
                         Attached Media
                       </h4>
                       <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 flex items-center justify-center p-2">
                         <img
-                          src={item.imageUrl}
+                          src={displayedImageUrl}
                           alt="Source Visual Representation"
                           className="rounded-lg w-full max-h-[300px] object-contain transition-transform duration-500 group-hover:scale-101"
                         />
@@ -1017,43 +1003,24 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <select
                       value={selectedModel}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const isProOption = val === "claude-3.5-sonnet" || val === "gemini-pro";
-                        if (isProOption && !isPro) {
-                          setShowUpgradeModal(true);
-                          return;
-                        }
-                        setSelectedModel(val);
-                      }}
+                      onChange={(e) => setSelectedModel(e.target.value)}
                       className="text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg px-2 sm:px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs max-w-[140px] sm:max-w-none"
                       title="Select AI Reasoning Model"
                     >
-                      <option value="gemini-flash">⚡ Gemini 2.5 Flash (Free)</option>
-                      <option value="llama-3.3-70b">🚀 Llama 3.3 70B (Free)</option>
-                      <option value="deepseek-r1">📐 DeepSeek-R1 Math (Free)</option>
-                      <option value="claude-3.5-sonnet">{isPro ? "🎓 Claude 3.5 Sonnet" : "🔒 Claude 3.5 (Pro)"}</option>
-                      <option value="gemini-pro">{isPro ? "📚 Gemini 1.5 Pro" : "🔒 Gemini 1.5 Pro (Pro)"}</option>
+                      <option value="gemini-flash">⚡ Gemini 2.5 Flash</option>
+                      <option value="llama-3.3-70b">🚀 Llama 3.3 70B</option>
+                      <option value="deepseek-r1">📐 DeepSeek-R1 Math</option>
+                      <option value="claude-3.5-sonnet">🎓 Claude 3.5 Sonnet</option>
+                      <option value="gemini-pro">📚 Gemini 1.5 Pro</option>
                     </select>
 
-                    {isPro ? (
-                      <div
-                        className="px-2 py-1.5 bg-gradient-to-r from-amber-500/15 via-indigo-500/15 to-purple-500/15 border border-amber-500/30 text-[11px] font-extrabold text-amber-600 dark:text-amber-400 rounded-lg flex items-center gap-1 shadow-2xs shrink-0 cursor-default"
-                        title="Student Pro Active • All Flagship Reasoning Unlocked"
-                      >
-                        <Sparkles className="w-3 h-3 text-amber-500" />
-                        <span>PRO</span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowUpgradeModal(true)}
-                        className="px-2 py-1.5 bg-gradient-to-r from-amber-500/10 to-indigo-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500/20 transition-all shadow-2xs flex items-center gap-1 shrink-0 cursor-pointer"
-                        title="Upgrade to Student Pro for Claude 3.5, DeepSeek-R1 & Gemini 1.5 Pro"
-                      >
-                        <Zap className="w-3 h-3 text-amber-500" />
-                        <span className="hidden xs:inline">Upgrade</span>
-                      </button>
-                    )}
+                    <div
+                      className="px-2 py-1.5 bg-gradient-to-r from-emerald-500/15 to-indigo-500/15 border border-emerald-500/30 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 rounded-lg flex items-center gap-1 shadow-2xs shrink-0 cursor-default"
+                      title="Academic Edition • All Flagship Reasoning Unlocked"
+                    >
+                      <Sparkles className="w-3 h-3 text-emerald-500" />
+                      <span>FREE</span>
+                    </div>
 
                     {messages.length > 0 && (
                       <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-700 pl-1.5 ml-0.5">
@@ -1315,112 +1282,6 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
             </div>
           </motion.div>
-
-          {/* Low-Credit / Upgrade to Student Pro Dialog */}
-          <AnimatePresence>
-            {showUpgradeModal && (
-              <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-6 relative"
-                >
-                  <button
-                    onClick={() => setShowUpgradeModal(false)}
-                    className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
-                    aria-label="Close dialog"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-indigo-500/10 text-indigo-500 rounded-xl">
-                      <Sparkles className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-white" style={{ fontFamily: "var(--font-title)" }}>
-                        Student Pro & Free Access
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Choose how you want to power your studying on ResearchMate
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Option 1: Free Forever via BYOK */}
-                    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col justify-between space-y-3">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">100% Free Forever</span>
-                        </div>
-                        <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 mt-2">Bring Your Own Key</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                          Get a free Gemini API key from Google AI Studio and paste it in Settings. Unlimited studying, zero fees forever.
-                        </p>
-                      </div>
-                      <a
-                        href="#/app/settings"
-                        onClick={() => {
-                          setShowUpgradeModal(false);
-                          onClose();
-                        }}
-                        className="w-full py-2 px-3 text-center bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-lg transition-colors block shadow-2xs"
-                      >
-                        Open Settings →
-                      </a>
-                    </div>
-
-                    {/* Option 2: Student Pro Subscription */}
-                    <div className="p-4 rounded-xl border-2 border-indigo-500/40 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 dark:bg-slate-800/50 flex flex-col justify-between space-y-3 relative overflow-hidden">
-                      <div className="absolute top-2 right-2 px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-bold rounded-full uppercase">
-                        Recommended
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Student Pro</span>
-                        <div className="flex items-baseline gap-1 mt-1">
-                          <span className="text-xl font-extrabold text-slate-900 dark:text-white">₱199</span>
-                          <span className="text-xs text-slate-400">/mo ($4.99)</span>
-                        </div>
-                        <ul className="text-xs text-slate-600 dark:text-slate-300 mt-2 space-y-1">
-                          <li className="flex items-center gap-1.5">✓ Claude 3.5 Sonnet unlocked</li>
-                          <li className="flex items-center gap-1.5">✓ DeepSeek-R1 Math Reasoner</li>
-                          <li className="flex items-center gap-1.5">✓ Gemini Pro 2M Token Context</li>
-                          <li className="flex items-center gap-1.5">✓ Unlimited high-speed AI queries</li>
-                        </ul>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          setIsUpgrading(true);
-                          try {
-                            await initiateStudentProCheckout();
-                          } catch (err: any) {
-                            setIsUpgrading(false);
-                            alert(err?.message || "Failed to start PayMongo checkout.");
-                          }
-                        }}
-                        disabled={isUpgrading}
-                        className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors shadow-xs flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        {isUpgrading ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Connecting PayMongo...</span>
-                          </>
-                        ) : (
-                          <>
-                            <CreditCard className="w-3.5 h-3.5" />
-                            <span>Upgrade with GCash / Maya (₱199)</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
 
           {/* Screenshot Enlarge Modal */}
           {enlargedImageUrl && (

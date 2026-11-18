@@ -32,8 +32,13 @@ import {
   getLocalFlashcardDecks,
   deleteFlashcardDeck,
 } from "./examService";
+import type { KeyConfirmation, KeyProvenance, SourceCrop } from "./keyProvenance";
 
 export interface RawImportQuestionItem {
+  keyProvenance?: KeyProvenance;
+  keyConfirmation?: KeyConfirmation;
+  sourceHash?: string;
+  sourceCrop?: SourceCrop;
   id?: string;
   stem?: string;
   question?: string;
@@ -181,6 +186,10 @@ export async function importQuestionsToBank(
       options,
       correctIndex: typeof item.correctIndex === "number" ? item.correctIndex : -1,
       correctLetter: item.correctLetter,
+      keyProvenance: item.keyProvenance,
+      keyConfirmation: item.keyConfirmation,
+      sourceHash: item.sourceHash,
+      sourceCrop: item.sourceCrop,
       explanation: item.explanation || "",
       subject,
       topic,

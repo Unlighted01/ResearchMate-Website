@@ -215,19 +215,13 @@ export const useSettingsData = (showToast: ShowToast): UseSettingsDataReturn => 
       .eq("user_id", user.id)
       .not("ai_summary", "is", null);
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("ai_credits, plan, subscription_status")
-      .eq("id", user.id)
-      .maybeSingle();
-
     setStats({
       items: itemCount || 0,
       collections: collectionCount || 0,
       summaries: summaryCount || 0,
-      ai_credits: profile?.ai_credits || 0,
-      plan: profile?.plan || "free",
-      subscription_status: profile?.subscription_status || "inactive",
+      ai_credits: 9999,
+      plan: "academic",
+      subscription_status: "active",
     });
   };
 

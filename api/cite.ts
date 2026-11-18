@@ -567,9 +567,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Check OpenAlex
       const openAlexData = await lookupOpenAlexByURL(urlString);
       if (openAlexData?.author) {
-        if (authResult.isFreeTier && authResult.user?.id) {
-          await deductCredit(authResult.user.id);
-        }
         return res.status(200).json({
           success: true,
           metadata: { ...openAlexData, accessDate: new Date().toISOString() },
@@ -599,9 +596,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (foundDoi) {
         const academicData = await lookupDOI(foundDoi);
         if (academicData?.author) {
-          if (authResult.isFreeTier && authResult.user?.id) {
-            await deductCredit(authResult.user.id);
-          }
           return res.status(200).json({
             success: true,
             metadata: { ...academicData, url: urlString, accessDate: new Date().toISOString() },
@@ -613,9 +607,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (preloadedMetadata?.authors?.length > 0) {
-        if (authResult.isFreeTier && authResult.user?.id) {
-          await deductCredit(authResult.user.id);
-        }
         return res.status(200).json({
           success: true,
           metadata: {
@@ -654,12 +645,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         metadata.title = validUrl.pathname.split("/").filter(Boolean).pop() || "Web Page";
       }
 
-      if (authResult.isFreeTier && authResult.user?.id) {
-        await deductCredit(authResult.user.id);
-        creditDeducted = true;
-        deductedUserId = authResult.user.id;
-      }
-
       return res.status(200).json({
         success: true,
         metadata: { ...metadata, accessDate: new Date().toISOString() },
@@ -689,16 +674,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: "Citation data not found." });
     }
 
-    if (authResult.isFreeTier && authResult.user?.id) {
-      await deductCredit(authResult.user.id);
-      creditDeducted = true;
-      deductedUserId = authResult.user.id;
-    }
-
     return res.status(200).json(result);
   } catch (error) {
     console.error("Citation error:", error);
-    if (creditDeducted && deductedUserId) await refundCredit(deductedUserId);
     return res.status(500).json({ error: (error as Error).message });
   }
 }

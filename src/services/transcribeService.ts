@@ -25,7 +25,6 @@ export interface TranscribeResult {
 // ============================================
 
 export const TRANSCRIBE_MAX_BYTES = 18 * 1024 * 1024; // 18 MB — matches server cap
-export const TRANSCRIBE_CREDIT_COST = 3;
 
 export const ACCEPTED_AUDIO_TYPES = [
   "audio/mpeg",

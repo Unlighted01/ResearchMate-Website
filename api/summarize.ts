@@ -388,13 +388,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error("Supabase env vars not found for item summary DB write");
       }
 
-      // Charge credit if on free tier
-      if (isFreeTier && userId) {
-        await deductCredit(userId);
-        creditDeducted = true;
-        deductedUserId = userId;
-      }
-
       return res.status(200).json({ success: true, summary });
     }
 
@@ -463,21 +456,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Deduct credit
-    let creditsRemaining: number | string = "Unlimited";
-    if (isFreeTier && userId) {
-      creditsRemaining = await deductCredit(userId);
-      creditDeducted = true;
-      deductedUserId = userId;
-    }
-
     return res.status(200).json({
       summary: summary,
-      credits_remaining: creditsRemaining,
+      credits_remaining: "Unlimited",
     });
   } catch (error) {
     console.error("Summarize API Error:", error);
-    if (creditDeducted && deductedUserId) await refundCredit(deductedUserId);
     return res.status(500).json({ error: "An internal error occurred. Please try again." });
   }
 }

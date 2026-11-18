@@ -123,7 +123,7 @@ function setLocalItems(items: StorageItem[]): void {
       });
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(prunedItems));
     } catch (retryError) {
-      console.error("❌ LocalStorage critically full. Recommend signing in to persist full documents in Cloud.", retryError);
+      throw new Error("Local storage is full. Free device storage and retry; this change was not saved.", { cause: retryError });
     }
   }
 }

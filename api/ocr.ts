@@ -508,13 +508,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       summary = await generateSummary(ocrResult.text);
     }
 
-    // Charge credit if on free tier
-    if (authResult.isFreeTier && authResult.user?.id) {
-      await deductCredit(authResult.user.id);
-      creditDeducted = true;
-      deductedUserId = authResult.user.id;
-    }
-
     // Calculate confidence using provider + text quality
     const ocrConfidence = calculateOcrConfidence(ocrResult.text, ocrResult.provider ?? "");
 
@@ -531,7 +524,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     console.error("OCR handler error:", error);
-    if (creditDeducted && deductedUserId) await refundCredit(deductedUserId);
     return res.status(500).json({ error: "An internal error occurred. Please try again." });
   }
 }
