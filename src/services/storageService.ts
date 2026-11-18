@@ -36,6 +36,8 @@ export interface StorageItem {
   imageUrl?: string;
   ocrText?: string;
   ocrConfidence?: number;
+  localAssetHash?: string;
+  storageScope?: "local" | "cloud";
 }
 
 export interface AddItemInput {
@@ -54,6 +56,8 @@ export interface AddItemInput {
   imageUrl?: string;
   ocrText?: string;
   ocrConfidence?: number;
+  localAssetHash?: string;
+  storageScope?: "local" | "cloud";
 }
 
 export interface UpdateItemInput {
@@ -219,7 +223,7 @@ function transformToDatabase(
   if (item.collectionId) dbRow.collection_id = item.collectionId;
   if (item.citation) dbRow.citation = item.citation;
   if (item.citationFormat) dbRow.citation_format = item.citationFormat;
-  if (item.imageUrl) dbRow.image_url = item.imageUrl;
+  if (item.imageUrl && !item.imageUrl.startsWith("data:")) dbRow.image_url = item.imageUrl;
   if (item.ocrText) dbRow.ocr_text = item.ocrText;
   if (typeof item.ocrConfidence === "number") dbRow.ocr_confidence = item.ocrConfidence;
 
@@ -301,6 +305,7 @@ export async function getAllItems(
  * Saves to cloud if authenticated, otherwise to local storage
  */
 export async function addItem(item: AddItemInput): Promise<StorageItem> {
+  if (item.storageScope === "local") return addLocalItem(item);
   const authenticated = !isSessionKnownInvalid() && (await isAuthenticated());
 
   // If logged in, save to cloud
@@ -358,6 +363,28 @@ export async function addItem(item: AddItemInput): Promise<StorageItem> {
     collectionId: item.collectionId,
   };
 
+  items.unshift(newItem);
+  setLocalItems(items);
+  return newItem;
+}
+
+/** Saves local-only metadata without consulting auth or writing to Supabase. */
+export function addLocalItem(item: AddItemInput): StorageItem {
+  const items = getLocalItems();
+  const newItem: StorageItem = {
+    id: `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    text: item.text,
+    tags: item.tags || [],
+    note: item.note || "",
+    sourceUrl: item.sourceUrl || "",
+    sourceTitle: item.sourceTitle || "",
+    createdAt: new Date().toISOString(),
+    deviceSource: item.deviceSource || "web",
+    localAssetHash: item.localAssetHash,
+    storageScope: "local",
+    ocrText: item.ocrText,
+    ocrConfidence: item.ocrConfidence,
+  };
   items.unshift(newItem);
   setLocalItems(items);
   return newItem;
@@ -437,7 +464,7 @@ export async function updateItem(
       updateData.preferred_view = updates.preferredView;
     if (updates.text !== undefined) updateData.text = updates.text;
     if (updates.ocrText !== undefined) updateData.ocr_text = updates.ocrText;
-    if (updates.imageUrl !== undefined) updateData.image_url = updates.imageUrl;
+    if (updates.imageUrl !== undefined && !updates.imageUrl.startsWith("data:")) updateData.image_url = updates.imageUrl;
     if (updates.ocrConfidence !== undefined) updateData.ocr_confidence = updates.ocrConfidence;
     // @ts-ignore
     if (updates.sourceTitle !== undefined)
@@ -672,19 +699,20 @@ export async function getItemsByCollection(
  */
 export async function migrateLocalToCloud(): Promise<MigrationResult> {
   const localItems = getLocalItems();
+  const migratable = localItems.filter((item) => item.storageScope !== "local");
   const authenticated = !isSessionKnownInvalid() && (await isAuthenticated());
 
   if (!authenticated) {
     throw new Error("Must be signed in to migrate");
   }
 
-  if (localItems.length === 0) {
+  if (migratable.length === 0) {
     return { success: 0, failed: 0 };
   }
 
   const results: MigrationResult = { success: 0, failed: 0 };
 
-  for (const item of localItems) {
+  for (const item of migratable) {
     try {
       await addItem({
         text: item.text,
@@ -704,7 +732,7 @@ export async function migrateLocalToCloud(): Promise<MigrationResult> {
 
   // Clear local items if all succeeded
   if (results.failed === 0) {
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    setLocalItems(localItems.filter((item) => item.storageScope === "local"));
   }
 
   return results;
@@ -714,7 +742,7 @@ export async function migrateLocalToCloud(): Promise<MigrationResult> {
  * Get count of local items (for migration prompt)
  */
 export function getLocalItemsCount(): number {
-  return getLocalItems().length;
+  return getLocalItems().filter((item) => item.storageScope !== "local").length;
 }
 
 // ============================================

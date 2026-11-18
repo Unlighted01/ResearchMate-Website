@@ -1,4 +1,5 @@
 import type { Flashcard, Question } from "./examService";
+import { hasTrustedKey } from "./keyProvenance";
 
 /** Only complete, reviewed questions may contribute to a scored answer key. */
 export function getGradableQuestions(questions: Question[]): Question[] {
@@ -8,6 +9,7 @@ export function getGradableQuestions(questions: Question[]): Question[] {
     if (!Array.isArray(question.options) || question.options.length < 2) return false;
     if (question.options.some((option) => !option.trim() || /^\[?option [a-h]\]?$/i.test(option.trim()))) return false;
     if (question.options.every((option) => /^[a-h]$/i.test(option.trim()))) return false;
+    if (!hasTrustedKey(question)) return false;
     return Number.isInteger(question.correctIndex) &&
       question.correctIndex >= 0 && question.correctIndex < question.options.length;
   });

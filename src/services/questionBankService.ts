@@ -17,6 +17,7 @@ import {
   StoredExam,
 } from "./examService";
 import { setSyncStatus, isAuthenticated, supabase } from "./supabaseClient";
+import { hasTrustedKey } from "./keyProvenance";
 import {
   OptionPickStats,
   recordOptionPickAndAnalyze,
@@ -856,7 +857,7 @@ export function sampleSprintQuestions(
   ).filter((q) => {
     if (q.isGradable === false || q.questionType === "prompt") return false;
     // Multiple-choice questions with 2+ choices
-    if (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2)) return true;
+    if (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2)) return hasTrustedKey(q);
     // Free-response items that DO have a verified key (e.g. Age Problems)
     if (q.questionType === "free_response") {
       return Boolean(
@@ -913,7 +914,7 @@ export function assembleExamFromBank(
   const verified = getVerifiedQuestions(filter);
   const eligible = verified.filter((q) => {
     if (q.isGradable === false || q.questionType === "prompt") return false;
-    if (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2)) return true;
+    if (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2)) return hasTrustedKey(q);
     if (filter?.allowFreeResponse && q.questionType === "free_response") {
       return Boolean(
         (q.explanation && q.explanation.length > 5 && !q.explanation.toLowerCase().includes("not explicitly indexed")) ||

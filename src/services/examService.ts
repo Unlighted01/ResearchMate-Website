@@ -18,6 +18,7 @@ import { sanitizeCurrencyAndMath } from "./examParser";
 import { StorageItem } from "./storageService";
 import { lintDistractorQuality } from "./distractorQualityService";
 import { assertPublicExamReady, assertPublicFlashcardsReady } from "./examQuestionPolicy";
+import type { KeyConfirmation, KeyProvenance, SourceCrop } from "./keyProvenance";
 import {
   ExamSeedRecord,
   createSeededExam,
@@ -50,6 +51,11 @@ export interface Question {
   suspiciousReasons?: string[];
   publicationRights?: "original" | "licensed";
   rightsEvidence?: string;
+  keyProvenance?: KeyProvenance;
+  keyConfirmation?: KeyConfirmation;
+  sourceHash?: string;
+  sourcePage?: number;
+  sourceCrop?: SourceCrop;
 }
 
 export interface ExamSectionConfig {
@@ -97,6 +103,7 @@ export interface ExamAttemptRecord {
   duration_seconds?: number;
   passed: boolean;
   created_at: string;
+  gradedWithEarlierKey?: boolean;
 }
 
 export interface Flashcard {
@@ -632,7 +639,10 @@ export async function getExamAttempts(examId?: string): Promise<ExamAttemptRecor
 
       const { data, error } = await query;
       if (!error && data) {
-        return data;
+        const localMarkers = new Set(getLocalAttempts().filter((attempt) => attempt.gradedWithEarlierKey).map((attempt) => attempt.id));
+        return data.map((attempt) => localMarkers.has(attempt.id)
+          ? { ...attempt, gradedWithEarlierKey: true }
+          : attempt);
       }
     } catch (err) {
       console.warn("Failed to fetch attempts from Supabase, using local cache:", err);

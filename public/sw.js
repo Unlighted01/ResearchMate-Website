@@ -3,7 +3,9 @@
 // Lightweight network-first caching with graceful fallbacks
 // ============================================
 
-const CACHE_NAME = "researchmate-cache-v2";
+const CACHE_OWNER = "researchmate-sw-";
+const SHELL_CACHE = `${CACHE_OWNER}shell-v3`;
+const OCR_CACHE = `${CACHE_OWNER}ocr-runtime-v7`;
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
@@ -14,7 +16,7 @@ const ASSETS_TO_CACHE = [
 // Install event - caching core shell assets safely
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(async (cache) => {
+    caches.open(SHELL_CACHE).then(async (cache) => {
       await Promise.allSettled(
         ASSETS_TO_CACHE.map((asset) =>
           cache.add(asset).catch((err) => {
@@ -33,7 +35,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          if ((key.startsWith(CACHE_OWNER) || key === "researchmate-cache-v2") && key !== SHELL_CACHE && key !== OCR_CACHE) {
             return caches.delete(key);
           }
         })
@@ -44,6 +46,23 @@ self.addEventListener("activate", (event) => {
 
 // Fetch event - network-first caching strategy
 self.addEventListener("fetch", (event) => {
+  // OCR assets are versioned and finite; model files use Tesseract's IndexedDB cache.
+  const url = new URL(event.request.url);
+  if (url.origin === self.location.origin && url.pathname.startsWith("/ocr/")) {
+    // Language models have one canonical cache: Tesseract's IndexedDB model cache.
+    if (url.pathname.includes("/lang/")) return;
+    const allowed = /^\/ocr\/7\.0\.0\/(worker\.min\.js|core\/tesseract-core-(?:lstm|simd-lstm|relaxedsimd-lstm)\.wasm(?:\.js)?)$/.test(url.pathname);
+    if (allowed && event.request.method === "GET") {
+      event.respondWith(caches.open(OCR_CACHE).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        const response = await fetch(event.request);
+        if (response.ok) await cache.put(event.request, response.clone());
+        return response;
+      }));
+    }
+    return;
+  }
   // Let browser extensions and API requests bypass service worker cache
   if (
     event.request.url.startsWith("chrome-extension://") ||
@@ -61,7 +80,7 @@ self.addEventListener("fetch", (event) => {
         // Cache valid responses dynamically
         if (response && response.status === 200 && response.type === "basic") {
           const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
+          caches.open(SHELL_CACHE).then((cache) => {
             cache.put(event.request, responseToCache);
           });
         }

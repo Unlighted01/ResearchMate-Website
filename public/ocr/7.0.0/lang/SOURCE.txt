@@ -1,0 +1,1 @@
+English and Tagalog traineddata from https://github.com/tesseract-ocr/tessdata, Apache-2.0. Pin and replace with reviewed model files when updating OCR version.

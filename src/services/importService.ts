@@ -7,10 +7,14 @@
 // ============================================
 
 import { supabase } from "./supabaseClient";
-import { addItem, StorageItem } from "./storageService";
+import { addItem, addLocalItem, updateItem, StorageItem } from "./storageService";
 import { extractPdfContent } from "./pdfService";
 import { imageMimeFromSignature } from "./materialFileType";
 import { runOcr } from "./ocrService";
+import { OCR_B1_ENABLED } from "./ocrB1Config";
+import { getLocalOcrPage, saveLocalImage } from "./localOcrStore";
+import { LocalOcrQueue, ocrCacheKey, type LocalOcrProgress, type ModelDownloadPrompt } from "./localOcrQueue";
+import type { OcrLanguage } from "./localOcrEngine";
 export { runOcr } from "./ocrService";
 export type { OcrResult } from "./ocrService";
 
@@ -37,26 +41,43 @@ export async function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 /**
- * Import a single image file: run OCR and insert to DB/IndexedDB.
+ * Import a single image locally. The flagged B1 path may then run local OCR.
  */
-export async function importImageFile(file: File): Promise<void> {
-  const base64DataUrl = await readFileAsDataUrl(file);
-  const data = await runOcr(base64DataUrl, false);
-
-  if (!data.ocrText?.trim()) {
-    throw new Error("No readable text found in image.");
-  }
-
-  await addItem({
+export async function importImageFile(file: File, options: {
+  language?: OcrLanguage;
+  confirmModelDownload?: (request: ModelDownloadPrompt) => Promise<boolean>;
+  onOcrProgress?: (event: LocalOcrProgress) => void;
+} = {}): Promise<void> {
+  const asset = await saveLocalImage(file, file.name);
+  const item = addLocalItem({
     sourceTitle: file.name.replace(/\.[^/.]+$/, "") || "Visual Note",
-    text: data.ocrText.trim(),
-    ocrText: data.ocrText.trim(),
-    aiSummary: data.aiSummary || null,
-    imageUrl: base64DataUrl,
+    text: "Image awaiting OCR review",
+    localAssetHash: asset.hash,
+    storageScope: "local",
     deviceSource: "smart_pen",
-    ocrConfidence: data.ocrConfidence ?? null,
-    tags: ["image", "ocr", "imported-source"],
+    tags: ["image", "imported-source", "needs-review"],
   });
+
+  if (!OCR_B1_ENABLED) return;
+  const job = { sourceHash: asset.hash, pageNumber: 1, language: options.language || "eng", preprocess: "original" as const };
+  const queue = new LocalOcrQueue();
+  queue.enqueue(job);
+  await queue.run({
+    confirmDownload: options.confirmModelDownload || (async (request) =>
+      typeof window !== "undefined" && window.confirm(
+        `Download ${request.language} local OCR files (about ${request.estimatedMiB.toFixed(1)} MiB)?`,
+      )),
+    onProgress: options.onOcrProgress,
+  });
+  const page = await getLocalOcrPage(ocrCacheKey(job, "tesseract.js@7.0.0"));
+  if (page?.text.trim()) {
+    await updateItem(item.id, {
+      text: page.text.trim(),
+      ocrText: page.text.trim(),
+      ocrConfidence: page.confidence,
+      tags: ["image", "ocr", "imported-source", "needs-review"],
+    });
+  }
 }
 
 /**

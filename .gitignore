@@ -12,6 +12,8 @@ dist
 dist-ssr
 build
 *.local
+public/ocr/7.0.0/core/
+public/ocr/7.0.0/worker.min.js
 
 # Environment variables (IMPORTANT!)
 .env
