@@ -149,7 +149,7 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
       <label>OCR language <select aria-label="OCR language" className={control} value={language} disabled={busy} onChange={(event) => {
         const value = event.target.value as OcrLanguage; setLanguage(value); localStorage.setItem(`pdf-ocr-language:${sourceHash}`, value); setPreview(undefined); setCrop(undefined); setPhase("");
       }}><option value="eng">English</option><option value="tgl">Tagalog</option><option value="eng+tgl">English + Tagalog</option></select></label>
-      <button className={control} disabled={!job || busy || job.status === "completed"} onClick={run}>{busy ? "OCR running…" : job?.completedPages.length || job?.status === "paused" || job?.status === "error" || job?.status === "running" ? "Resume local OCR" : "Start local OCR"}</button>
+      <button className={control} disabled={!job || busy || job.status === "completed"} onClick={run}>{busy ? "OCR running…" : job?.status === "completed" ? "Local OCR complete" : job?.completedPages.length || job?.status === "paused" || job?.status === "error" || job?.status === "running" ? "Resume local OCR" : "Start local OCR"}</button>
       {busy && <button className={control} onClick={pause} disabled={pausing}>{pausing ? "Pausing after active step…" : "Pause OCR"}</button>}
     </div>
     {download && <div role="dialog" aria-label="Download OCR model" className="rounded-lg bg-indigo-50 dark:bg-indigo-950 p-3 space-y-2">
