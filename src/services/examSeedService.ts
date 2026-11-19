@@ -7,6 +7,7 @@
 
 import { Question, generateUUID } from "./examService";
 import { filterEnemyItems } from "./distractorQualityService";
+import { hasValidKeyConfirmation } from "./keyProvenance";
 
 export const EXAM_FORMAT_VERSION = 2;
 
@@ -261,12 +262,15 @@ export function createSeededExam(
     orderedQuestionIds.push(q.id);
 
     const choiceCount = q.options.length;
-    const targetCorrectSlot = balancedSlots[qIdx] % choiceCount;
+    // A source confirmation names the printed option letter. Preserve that
+    // presentation instead of invalidating or rewriting human confirmation.
+    const preserveSourceOrder = (q.keyProvenance === "ocr_confirmed" || q.keyProvenance === "human_entered") && hasValidKeyConfirmation(q);
+    const targetCorrectSlot = preserveSourceOrder ? q.correctIndex : balancedSlots[qIdx] % choiceCount;
 
     // Remaining distractor original indices
     const origDistractorIndices = Array.from({ length: choiceCount }, (_, i) => i)
       .filter((idx) => idx !== q.correctIndex);
-    const shuffledDistractors = seededShuffle(origDistractorIndices, rng);
+    const shuffledDistractors = preserveSourceOrder ? origDistractorIndices : seededShuffle(origDistractorIndices, rng);
 
     // Assemble permutedIndices placing q.correctIndex at targetCorrectSlot
     const permutedIndices: number[] = new Array(choiceCount);

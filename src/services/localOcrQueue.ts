@@ -2,6 +2,7 @@ import { getLocalImage, getLocalOcrPage, isModelReady, markModelReady, saveLocal
 import { OCR_UNCALIBRATED_ROUTE } from "./ocrB1Config";
 import type { LocalOcrEngine, OcrLanguage, OcrPreprocess } from "./localOcrEngine";
 import { TesseractLocalOcrEngine } from "./tesseractLocalOcrEngine";
+import { withLocalOcrLock } from "./localOcrLock";
 
 export interface LocalOcrJob {
   sourceHash: string;
@@ -62,6 +63,13 @@ export class LocalOcrQueue {
   }
 
   async run(options: {
+    confirmDownload: (request: ModelDownloadPrompt) => Promise<boolean>;
+    onProgress?: (event: LocalOcrProgress) => void;
+  }): Promise<{ completed: number; total: number; cancelled: boolean }> {
+    return withLocalOcrLock(() => this.runLocked(options));
+  }
+
+  private async runLocked(options: {
     confirmDownload: (request: ModelDownloadPrompt) => Promise<boolean>;
     onProgress?: (event: LocalOcrProgress) => void;
   }): Promise<{ completed: number; total: number; cancelled: boolean }> {

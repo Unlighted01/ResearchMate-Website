@@ -42,11 +42,15 @@ async function prepareImage(blob: Blob, preprocess: OcrPreprocess): Promise<{ im
 export class TesseractLocalOcrEngine implements LocalOcrEngine {
   readonly version = "tesseract.js@7.0.0";
   private worker: TesseractWorker | null = null;
+  private generation = 0;
 
   async initialize(language: OcrLanguage, onProgress?: (progress: number) => void): Promise<void> {
     if (this.worker) throw new Error("OCR worker is already running.");
+    const generation = ++this.generation;
     const { createWorker, OEM } = await import("tesseract.js");
-    this.worker = await createWorker(language, OEM.LSTM_ONLY, {
+    let rejectStartup: (error: Error) => void;
+    const startupFailure = new Promise<never>((_, reject) => { rejectStartup = reject; });
+    const pending = createWorker(language, OEM.LSTM_ONLY, {
       workerPath: `${ASSET_ROOT}/worker.min.js`,
       corePath: `${ASSET_ROOT}/core`,
       langPath: `${ASSET_ROOT}/lang`,
@@ -55,7 +59,12 @@ export class TesseractLocalOcrEngine implements LocalOcrEngine {
       cacheMethod: "write",
       cachePath: "researchmate-ocr-7.0.0",
       logger: (message) => onProgress?.(message.progress || 0),
+      errorHandler: (message) => rejectStartup(new Error(`Local OCR worker failed: ${message}`)),
     });
+    pending.then((worker) => { if (this.generation !== generation) void worker.terminate(); }, () => {});
+    const worker = await Promise.race([pending, startupFailure]);
+    if (this.generation !== generation) throw new Error("Local OCR loading was cancelled.");
+    this.worker = worker;
   }
 
   async recognize(blob: Blob, preprocess: OcrPreprocess): Promise<OcrEngineResult> {
@@ -70,6 +79,7 @@ export class TesseractLocalOcrEngine implements LocalOcrEngine {
   }
 
   async dispose(): Promise<void> {
+    this.generation++;
     const worker = this.worker;
     this.worker = null;
     if (worker) await worker.terminate();

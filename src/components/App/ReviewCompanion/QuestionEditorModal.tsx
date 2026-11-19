@@ -38,7 +38,7 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
       setStatement(questionToEdit.question || "");
       const opts = [...questionToEdit.options];
       while (opts.length < 4) opts.push("");
-      setOptions(opts.slice(0, 4));
+      setOptions(opts);
       setCorrectIndex(questionToEdit.correctIndex ?? -1);
       setExplanation(questionToEdit.explanation || "");
       setTopicTag(questionToEdit.topicTag || defaultTopic);
@@ -94,6 +94,7 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
     }
 
     const finalQuestion: Question = {
+      ...questionToEdit,
       id: questionToEdit?.id || generateUUID(),
       question: statement.trim(),
       options: finalOptions,
@@ -104,6 +105,12 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
       reviewStatus: needsSourceReview && !confirmedAnswer ? "needs_review" : "verified",
       suspiciousReasons: needsSourceReview && confirmedAnswer ? [] : questionToEdit?.suspiciousReasons,
     };
+    if (questionToEdit?.sourceHash && (statement.trim() !== questionToEdit.question ||
+      JSON.stringify(finalOptions) !== JSON.stringify(questionToEdit.options) || finalCorrectIndex !== questionToEdit.correctIndex)) {
+      finalQuestion.keyProvenance = "none";
+      finalQuestion.keyConfirmation = undefined;
+      finalQuestion.reviewStatus = "needs_review";
+    }
 
     onSave(finalQuestion);
     onClose();

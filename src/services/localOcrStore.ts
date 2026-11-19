@@ -1,11 +1,12 @@
 import type { SourceCrop } from "./keyProvenance";
 
 const DB_NAME = "researchmate_local_ocr_b1";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const ASSETS = "assets";
 const PAGES = "pages";
 const MODELS = "models";
 const QUEUE = "queue";
+const PDF_JOBS = "pdfJobs";
 
 export interface LocalImageAsset {
   hash: string;
@@ -24,6 +25,8 @@ export interface OcrWord {
 }
 
 export interface LocalOcrPage {
+  rasterDpi?: number;
+  keyProvenance?: "none";
   cacheKey: string;
   sourceHash: string;
   pageNumber: number;
@@ -48,6 +51,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(PAGES)) db.createObjectStore(PAGES, { keyPath: "cacheKey" });
       if (!db.objectStoreNames.contains(MODELS)) db.createObjectStore(MODELS, { keyPath: "id" });
       if (!db.objectStoreNames.contains(QUEUE)) db.createObjectStore(QUEUE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(PDF_JOBS)) db.createObjectStore(PDF_JOBS, { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("Could not open local OCR storage."));
@@ -116,6 +120,14 @@ export function getLocalOcrPage(cacheKey: string): Promise<LocalOcrPage | undefi
 export async function saveLocalOcrPage(page: LocalOcrPage): Promise<void> {
   if (page.route !== "FAIR" || page.storageScope !== "local") throw new Error("Uncalibrated OCR pages must remain local FAIR review material.");
   await putRecord(PAGES, page);
+}
+
+export function getPdfOcrJob(id: string): Promise<import("./pdfLocalOcrService").PdfOcrJob | undefined> {
+  return getRecord(PDF_JOBS, id);
+}
+
+export function savePdfOcrJob(job: import("./pdfLocalOcrService").PdfOcrJob): Promise<void> {
+  return putRecord(PDF_JOBS, job);
 }
 
 export async function isModelReady(language: string, version: string): Promise<boolean> {

@@ -18,6 +18,7 @@ import {
 } from "./examService";
 import { setSyncStatus, isAuthenticated, supabase } from "./supabaseClient";
 import { hasTrustedKey } from "./keyProvenance";
+import { markAttemptsWithEarlierKey } from "./ocrKeyConfirmationService";
 import {
   OptionPickStats,
   recordOptionPickAndAnalyze,
@@ -670,13 +671,14 @@ export function updateQuestion(
   const updatedStem = updates.question !== undefined ? updates.question : current.question;
   const updatedOptions = updates.options !== undefined ? updates.options : current.options;
   const updatedCorrectIdx = updates.correctIndex !== undefined ? updates.correctIndex : current.correctIndex;
+  if (updatedCorrectIdx !== current.correctIndex) markAttemptsWithEarlierKey(current);
 
   const newHash = hashNormalizedText(updatedStem);
   const newReviewStatus = computeReviewStatus(
     updatedOptions,
     updatedCorrectIdx,
     updates.reviewStatus || current.reviewStatus,
-    current.questionType
+    updates.questionType || current.questionType
   );
 
   all[idx] = {
@@ -856,6 +858,7 @@ export function sampleSprintQuestions(
       ? { topic: preferredTopic }
       : undefined
   ).filter((q) => {
+    if (q.origin === "ocr_import" && !hasTrustedKey(q)) return false;
     if (q.isGradable === false || q.questionType === "prompt") return false;
     // Multiple-choice questions with 2+ choices
     if (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2)) return hasTrustedKey(q);
@@ -914,6 +917,7 @@ export function assembleExamFromBank(
 } {
   const verified = getVerifiedQuestions(filter);
   const eligible = verified.filter((q) => {
+    if (q.origin === "ocr_import" && !hasTrustedKey(q)) return false;
     if (q.isGradable === false || q.questionType === "prompt") return false;
     if (q.questionType === "mcq" || (!q.questionType && q.options && q.options.length >= 2)) return hasTrustedKey(q);
     if (filter?.allowFreeResponse && q.questionType === "free_response") {

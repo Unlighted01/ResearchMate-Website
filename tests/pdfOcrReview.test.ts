@@ -1,0 +1,23 @@
+import { afterEach, expect, it } from "vitest";
+import { confirmPdfOcrDraft } from "../src/services/pdfOcrReviewService";
+import { clearQuestionBank, getUserQuestions, saveQuestionsToBank, updateQuestion } from "../src/services/questionBankService";
+import { getGradableQuestions } from "../src/services/examQuestionPolicy";
+import { saveLocalAttempts, getLocalAttempts } from "../src/services/examService";
+import { createSeededExam } from "../src/services/examSeedService";
+afterEach(() => { clearQuestionBank(); saveLocalAttempts([]); });
+it("grades only after explicit review and a key bound to a PDF crop, then invalidates changed keys", () => {
+  clearQuestionBank();
+  saveQuestionsToBank([{ id: "ocr-crop", question: "What is the sum of two and two?", options: ["Three", "Four", "Five", "Six"], correctIndex: 1, explanation: "Two plus two equals four.", topicTag: "Math", origin: "ocr_import", sourceHash: "a".repeat(64), keyProvenance: "none", reviewStatus: "needs_review" }], "scan.pdf");
+  expect(getGradableQuestions(getUserQuestions())).toHaveLength(0);
+  const input = { id: "ocr-crop", sourceHash: "a".repeat(64), page: 3, crop: { x: 0.1, y: 0.2, width: 0.3, height: 0.1 }, correctIndex: 1, reviewedQuestion: true };
+  expect(() => confirmPdfOcrDraft({ ...input, reviewedQuestion: false })).toThrow(/Check the question/);
+  expect(() => confirmPdfOcrDraft({ ...input, crop: { ...input.crop, width: 0 } })).toThrow();
+  confirmPdfOcrDraft(input);
+  expect(getGradableQuestions(getUserQuestions())).toHaveLength(1);
+  const seeded = createSeededExam(getUserQuestions(), { totalQuestions: 1, choicesPerItem: 4 }, "PDF-OCR-KEY", "pdf-ocr-seed");
+  expect(getGradableQuestions(seeded.orderedQuestions)).toHaveLength(1);
+  saveLocalAttempts([{ id: "earlier", exam_id: null, score: 1, total: 1, percentage: 100, answers: { "ocr-crop": 1 }, questions_snapshot: getUserQuestions(), passed: true, created_at: new Date().toISOString() }]);
+  updateQuestion("ocr-crop", { correctIndex: 2 });
+  expect(getGradableQuestions(getUserQuestions())).toHaveLength(0);
+  expect(getLocalAttempts()[0]).toMatchObject({ gradedWithEarlierKey: true, score: 1, percentage: 100 });
+});
