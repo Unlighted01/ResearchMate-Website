@@ -1,3 +1,4 @@
+import { corpusFile } from "./helpers/corpusFile";
 import { describe, it } from "vitest";
 import fs from "fs";
 import { extractAllPagesWithLayout } from "../src/services/pdfService";
@@ -5,7 +6,7 @@ import { parseTwoPassQuestionsAndAnswersDetailed, detectParserProfile } from "..
 
 describe("Print 10 samples per reason", () => {
   it("samples 501 Synonym", async () => {
-    const pdfPath = "C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Vocabulary (for prof and subprof)/(Skill Builder in Focus) LearningExpress Editors - 501 Synonym and Antonym Questions-Learningexpress, Llc (2007).pdf";
+    const pdfPath = corpusFile("C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Vocabulary (for prof and subprof)/(Skill Builder in Focus) LearningExpress Editors - 501 Synonym and Antonym Questions-Learningexpress, Llc (2007).pdf");
     const layout = await extractAllPagesWithLayout(fs.readFileSync(pdfPath));
     const det = detectParserProfile(layout.pages);
     const result = parseTwoPassQuestionsAndAnswersDetailed(layout.pages, { profile: det.profile });
@@ -27,7 +28,7 @@ describe("Print 10 samples per reason", () => {
   });
 
   it("samples Grammar Essentials", async () => {
-    const pdfPath = "C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Grammar (for prof and subprof)/Grammar Essentials, 3rd Edition.pdf";
+    const pdfPath = corpusFile("C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Grammar (for prof and subprof)/Grammar Essentials, 3rd Edition.pdf");
     const layout = await extractAllPagesWithLayout(fs.readFileSync(pdfPath));
     const det = detectParserProfile(layout.pages);
     const result = parseTwoPassQuestionsAndAnswersDetailed(layout.pages, { profile: det.profile });

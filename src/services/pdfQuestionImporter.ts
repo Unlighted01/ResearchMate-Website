@@ -1711,7 +1711,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
           options: options.slice(0, config.maxOptionsCount),
           questionType: "mcq",
           chapter: effectiveChapter,
-          pageNumber: currentPage,
+          pageNumber: currentNumPage,
           inlineAnswer: inlineAnswerData,
         };
         currentRunMap.set(key, itemData);
@@ -1728,7 +1728,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
           options: [],
           questionType: "free_response",
           chapter: effectiveChapter,
-          pageNumber: currentPage,
+          pageNumber: currentNumPage,
         };
         currentRunMap.set(key, itemData);
         hasFoundFirstQuestion = true;
@@ -1747,7 +1747,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
           options: [],
           questionType: "figure_based",
           chapter: effectiveChapter,
-          pageNumber: currentPage,
+          pageNumber: currentNumPage,
         };
         currentRunMap.set(key, itemData);
       } else {
@@ -1762,7 +1762,7 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
             questionType: "prompt",
             isUnparseableStub: true,
             chapter: effectiveChapter,
-            pageNumber: currentPage,
+            pageNumber: currentNumPage,
           };
           currentRunMap.set(key, itemData);
         }
@@ -2075,13 +2075,13 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
       }
 
       // Condition 9(b): Block keys require letter count == range length, else reject
-      const blockMatches = Array.from(trimmed.matchAll(/(?:^|\s+)(\d{1,4})\s*(?:to|-)\s*(\d{1,4})\s*:\s*([A-Ea-e]{2,20})\b/g));
+      const blockMatches = Array.from(trimmed.matchAll(/(?:^|\s+)(\d{1,4})\s*(?:to|-)\s*(\d{1,4})\s*:\s*([A-Ea-e]+(?:[ \t]+[A-Ea-e]+)*)(?=\s*(?:\d{1,4}\s*(?:to|-)|$))/g));
       if (blockMatches.length > 0) {
         flush();
         for (const bm of blockMatches) {
           const startNum = parseInt(bm[1], 10);
           const endNum = parseInt(bm[2], 10);
-          const letters = bm[3];
+          const letters = bm[3].replace(/[ \t]/g, "");
           const rangeLength = endNum - startNum + 1;
           if (letters.length === rangeLength && rangeLength > 1) {
             for (let idx = 0; idx < letters.length; idx++) {
@@ -2233,15 +2233,28 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
 
   // Numeric key pages are independent. A page is accepted only when every key
   // number advances by one and has a matching question in the selected run.
-  for (const pageKeys of numericKeyPages.values()) {
+  for (const [keyPage, pageKeys] of numericKeyPages) {
+    // Shared question/key pages (keys at either top or bottom) must agree on
+    // the complete number set on that page, not borrow numbers from another.
+    const pageQuestions = questionsToProcess.filter((question) => question.pageNumber === keyPage);
+    if (pageQuestions.length && (pageQuestions.length !== pageKeys.length ||
+      pageQuestions.some((question) => !pageKeys.some((entry) => entry.number === question.number)))) continue;
+    const matchedQuestions = pageKeys.map((entry) => {
+      const candidates = questionsToProcess.filter((question) => question.number === entry.number);
+      const scoped = candidates.filter((question) => question.chapter === entry.chapter);
+      const matches = scoped.length ? scoped : candidates;
+      return matches.length === 1 ? matches[0] : undefined;
+    });
     if (pageKeys.length < 2 || pageKeys.some((entry, index) =>
       (index > 0 && entry.number !== pageKeys[index - 1].number + 1) ||
-      !questionsToProcess.some((question) => question.number === entry.number && question.options.length > 0)
+      !matchedQuestions[index] || entry.letter.charCodeAt(0) - 97 >= matchedQuestions[index]!.options.length ||
+      /^Choice (?:[A-E]|[1-5])$/.test(matchedQuestions[index]?.options[entry.letter.charCodeAt(0) - 97]?.trim() || "")
     )) continue;
-    for (const data of pageKeys) {
-      const answerData = { number: data.number, letter: data.letter, explanation: data.explanation, chapter: data.chapter };
-      answersMap.set(`${data.chapter}::${data.number}`, answerData);
-      answersMap.set(String(data.number), answerData);
+    for (const [index, data] of pageKeys.entries()) {
+      const chapter = matchedQuestions[index]!.chapter;
+      const answerData = { number: data.number, letter: data.letter, explanation: data.explanation, chapter };
+      answersMap.set(`${chapter}::${data.number}`, answerData);
+      if (questionsToProcess.filter((question) => question.number === data.number).length === 1) answersMap.set(String(data.number), answerData);
     }
   }
 

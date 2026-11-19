@@ -1,3 +1,4 @@
+import { corpusFile } from "./helpers/corpusFile";
 import { describe, it } from "vitest";
 import fs from "fs";
 import { extractAllPagesWithLayout } from "../src/services/pdfService";
@@ -5,7 +6,7 @@ import { parseTwoPassQuestionsAndAnswersDetailed, detectParserProfile } from "..
 
 describe("Inspect Grammar Essentials", () => {
   it("inspects pages and layout of Grammar Essentials", async () => {
-    const pdfPath = "C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Grammar (for prof and subprof)/Grammar Essentials, 3rd Edition.pdf";
+    const pdfPath = corpusFile("C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Grammar (for prof and subprof)/Grammar Essentials, 3rd Edition.pdf");
     const layout = await extractAllPagesWithLayout(fs.readFileSync(pdfPath));
     console.log("Total pages:", layout.pages.length);
     const det = detectParserProfile(layout.pages);

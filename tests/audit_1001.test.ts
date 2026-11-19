@@ -1,3 +1,4 @@
+import { corpusFile } from "./helpers/corpusFile";
 import { describe, it, expect } from "vitest";
 import fs from "fs";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -9,7 +10,7 @@ import {
 } from "../src/services/pdfQuestionImporter";
 import { PdfPageWithLayout, PdfLayoutItem } from "../src/services/pdfService";
 
-const pdfPath = "c:\\Users\\netne\\Documents\\CSC REVIEWER 2027\\📝 2027 CSE Reviewer\\Math Word Problems (for prof and subprof )\\1001 Math Problems.pdf";
+const pdfPath = corpusFile("c:\\Users\\netne\\Documents\\CSC REVIEWER 2027\\📝 2027 CSE Reviewer\\Math Word Problems (for prof and subprof )\\1001 Math Problems.pdf");
 
 describe("1001 Math Problems Real PDF Audit", () => {
   it("audits the real 1001 Math Problems PDF", async () => {

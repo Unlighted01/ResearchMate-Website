@@ -1,3 +1,4 @@
+import { corpusFile } from "./helpers/corpusFile";
 import { describe, it } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -8,7 +9,7 @@ describe("300-item reconstruction audit", () => {
   it("prints requested numbered items", async () => {
     const base = "C:/Users/netne/Documents/CSC REVIEWER 2027";
     const corpusRoot = path.join(base, fs.readdirSync(base).find((name) => name.includes("CSE Reviewer"))!);
-    const pdfPath = path.join(corpusRoot, "Practice Tests with Answer Keys", "300 items Mathematics Reviewer with Detailed Solutions.pdf");
+    const pdfPath = corpusFile(path.join(corpusRoot, "Practice Tests with Answer Keys", "300 items Mathematics Reviewer with Detailed Solutions.pdf"));
     const layout = await extractAllPagesWithLayout(fs.readFileSync(pdfPath));
     const detection = detectParserProfile(layout.pages);
     const result = parseTwoPassQuestionsAndAnswersDetailed(layout.pages, { profile: detection.profile });

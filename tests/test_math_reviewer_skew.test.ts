@@ -1,3 +1,4 @@
+import { corpusFile } from "./helpers/corpusFile";
 import { describe, it } from "vitest";
 import fs from "fs";
 import { extractAllPagesWithLayout } from "../src/services/pdfService";
@@ -5,7 +6,7 @@ import { parseTwoPassQuestionsAndAnswersDetailed, detectParserProfile } from "..
 
 describe("Test Math Reviewer for Civil Service Exam Skew", () => {
   it("verifies skew demotion on Math Reviewer for Civil Service Exam", async () => {
-    const pdfPath = "C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Practice Tests with Answer Keys/Math Reviewer for Civil Service Exam.pdf";
+    const pdfPath = corpusFile("C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Practice Tests with Answer Keys/Math Reviewer for Civil Service Exam.pdf");
     const layout = await extractAllPagesWithLayout(fs.readFileSync(pdfPath));
     const det = detectParserProfile(layout.pages);
     const result = parseTwoPassQuestionsAndAnswersDetailed(layout.pages, { profile: det.profile });

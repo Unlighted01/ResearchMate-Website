@@ -489,9 +489,10 @@ async function main() {
     const fileKey = path.join(relFolder, fileName);
 
     if (frozenHeldoutFiles.has(fileName)) {
-      const frozenRow = frozenRows.get(fileKey) || completedRows.get(fileKey);
+      const nameMatches = [...frozenRows.values()].filter((row) => row.file === fileName);
+      const frozenRow = frozenRows.get(fileKey) || completedRows.get(fileKey) || (nameMatches.length === 1 ? nameMatches[0] : undefined);
       if (!frozenRow) throw new Error(`Frozen held-out counts are unavailable for ${fileName}; refusing to open its PDF`);
-      rows.push(frozenRow);
+      rows.push({ ...frozenRow, folder: relFolder });
       console.log(`[${index}/${targetPdfs.length}] Frozen counts only "${fileKey}" -> ${frozenRow.status}`);
       continue;
     }

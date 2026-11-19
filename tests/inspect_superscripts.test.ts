@@ -1,3 +1,4 @@
+import { corpusFile } from "./helpers/corpusFile";
 import { describe, it } from "vitest";
 import fs from "fs";
 import { extractAllPagesWithLayout } from "../src/services/pdfService";
@@ -5,7 +6,7 @@ import { parseTwoPassQuestionsAndAnswersDetailed, detectParserProfile } from "..
 
 describe("Inspect superscripts", () => {
   it("prints items with lost superscripts flag in 1001 Math", async () => {
-    const pdfPath = "C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Math Word Problems (for prof and subprof )/1001 Math Problems.pdf";
+    const pdfPath = corpusFile("C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Math Word Problems (for prof and subprof )/1001 Math Problems.pdf");
     const layout = await extractAllPagesWithLayout(fs.readFileSync(pdfPath));
     const det = detectParserProfile(layout.pages);
     const result = parseTwoPassQuestionsAndAnswersDetailed(layout.pages, { profile: det.profile });

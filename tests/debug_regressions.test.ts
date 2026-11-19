@@ -1,3 +1,4 @@
+import { corpusFile } from "./helpers/corpusFile";
 import { describe, it, expect } from "vitest";
 import fs from "fs";
 import { extractAllPagesWithLayout } from "../src/services/pdfService";
@@ -22,7 +23,7 @@ function printReasonTable(label: string, reasonCounts: Record<string, number>) {
 
 describe("Debug Regressions in 1001 Math and 501 Math Word Problems", () => {
   it("counts reasons for 1001 Math Problems", async () => {
-    const pdfPath = "C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Math Word Problems (for prof and subprof )/1001 Math Problems.pdf";
+    const pdfPath = corpusFile("C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Math Word Problems (for prof and subprof )/1001 Math Problems.pdf");
     const layout = await extractAllPagesWithLayout(fs.readFileSync(pdfPath));
     const det = detectParserProfile(layout.pages);
     const result = parseTwoPassQuestionsAndAnswersDetailed(layout.pages, { profile: det.profile });
@@ -46,7 +47,7 @@ describe("Debug Regressions in 1001 Math and 501 Math Word Problems", () => {
   }, 30000);
 
   it("counts reasons for 501 Math Word Problems", async () => {
-    const pdfPath = "C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Math Word Problems (for prof and subprof )/501 Math Word Problems.pdf";
+    const pdfPath = corpusFile("C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Math Word Problems (for prof and subprof )/501 Math Word Problems.pdf");
     const layout = await extractAllPagesWithLayout(fs.readFileSync(pdfPath));
     const det = detectParserProfile(layout.pages);
     const result = parseTwoPassQuestionsAndAnswersDetailed(layout.pages, { profile: det.profile });

@@ -1,3 +1,4 @@
+import { corpusFile } from "./helpers/corpusFile";
 import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -18,8 +19,8 @@ import { EXAM_SYSTEM_INSTRUCTION } from "../api/chat";
 const corpusDir = "C:/Users/netne/Documents/CSC REVIEWER 2027/📝 2027 CSE Reviewer/Practice Tests with Answer Keys";
 
 describe("Reviewer Triage Audit & Importer Hardening", () => {
-  const mathPdfPath = path.join(corpusDir, "300 items Mathematics Reviewer with Detailed Solutions.pdf");
-  const csePdfPath = path.join(corpusDir, "CSE MOCK EXAM.pdf");
+  const mathPdfPath = corpusFile(path.join(corpusDir, "300 items Mathematics Reviewer with Detailed Solutions.pdf"));
+  const csePdfPath = corpusFile(path.join(corpusDir, "CSE MOCK EXAM.pdf"));
 
   describe("1. 300 items Mathematics Reviewer with Detailed Solutions", () => {
     it("extracts 300 questions, preserves letter counts, passes spot checks, and flags review items", async () => {
