@@ -11,6 +11,20 @@ import { createRepresentativeSnippet } from "./ragService";
 
 export { createRepresentativeSnippet };
 
+class PdfReadDeadlineError extends Error {}
+
+/** Bound worker/network waits; the caller destroys the document on failure. */
+async function boundedPdfWait<T>(task: Promise<T>, deadline: number, stage: string, limitMs = 15_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const remaining = Math.min(limitMs, deadline - Date.now());
+  if (remaining <= 0) throw new PdfReadDeadlineError(`PDF import timed out while ${stage}. Try a smaller page range.`);
+  try {
+    return await Promise.race([task, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new PdfReadDeadlineError(`PDF import timed out while ${stage}. Try a smaller page range.`)), remaining);
+    })]);
+  } finally { clearTimeout(timer!); }
+}
+
 // Configure same-origin bundled worker (bypasses unpkg CORS and Brave Shield blocks)
 if (typeof window !== "undefined") {
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -306,6 +320,8 @@ export async function extractPdfContent(
   options?: {
     maxPages?: number;
     maxOcrPages?: number;
+    generateSummary?: boolean;
+    renderCover?: boolean;
     resume?: { text: string; fingerprint: string; blankPages?: number[] };
     onProgress?: (page: number, total: number, message?: string) => void;
   }
@@ -329,18 +345,18 @@ export async function extractPdfContent(
   let textLayerPageCount = 0;
   const pagesData: { pageNum: number; text: string; isScanned?: boolean }[] = [];
   const sparsePageNumbers: number[] = [];
+  const deadline = Date.now() + 60_000;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
 
   try {
-    const loadingTask = pdfjsLib.getDocument({
-      data: arrayBuffer,
-    });
-    const pdf = await loadingTask.promise;
+    options?.onProgress?.(0, 0, "Opening PDF...");
+    const pdf = await boundedPdfWait(loadingTask.promise, deadline, "opening the document");
     pageCount = pdf.numPages;
 
     // 1. Generate crisp Page 1 Cover Snapshot (rendered to client canvas)
-    if (pageCount > 0 && typeof document !== "undefined") {
+    if (options?.renderCover && pageCount > 0 && typeof document !== "undefined") {
       try {
-        const firstPage = await pdf.getPage(1);
+        const firstPage = await boundedPdfWait(pdf.getPage(1), deadline, "opening the cover");
         const unscaledViewport = firstPage.getViewport({ scale: 1.0 });
         const targetWidth = 520;
         const scale = Math.min(Math.max(targetWidth / unscaledViewport.width, 0.75), 1.8);
@@ -351,7 +367,7 @@ export async function extractPdfContent(
         canvas.height = Math.floor(viewport.height);
         const ctx = canvas.getContext("2d");
         if (ctx) {
-          await firstPage.render({ canvasContext: ctx, viewport } as any).promise;
+          await boundedPdfWait(firstPage.render({ canvasContext: ctx, viewport } as any).promise, deadline, "rendering the cover");
           coverImageUrl = canvas.toDataURL("image/jpeg", 0.85);
         }
       } catch (coverErr) {
@@ -364,16 +380,18 @@ export async function extractPdfContent(
     processedPageCount = maxPages;
     for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
       let pageText = "";
+      options?.onProgress?.(pageNum - 1, maxPages, `Reading document page ${pageNum}/${maxPages}`);
       try {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
+        const page = await boundedPdfWait(pdf.getPage(pageNum), deadline, `opening page ${pageNum}`);
+        const textContent = await boundedPdfWait(page.getTextContent(), deadline, `reading page ${pageNum}`);
         for (const item of textContent.items as any[]) {
           if (!item.str && !item.hasEOL) continue;
           pageText += (item.str || "") + (item.hasEOL ? "\n" : " ");
         }
         pageText = pageText.trim();
+        page.cleanup?.();
       } catch (pageErr) {
-        console.warn(`Error reading page ${pageNum}:`, pageErr);
+        throw new Error(`Could not read PDF page ${pageNum}: ${pageErr instanceof Error ? pageErr.message : pageErr}`, { cause: pageErr });
       }
 
       // Detect pages with negligible text (scanned page, handwriting, diagram, formula sheet)
@@ -391,8 +409,8 @@ export async function extractPdfContent(
         isScanned: isSparse && !priorOcrText && !blankOcrPages.has(pageNum),
       });
 
-      if (options?.onProgress) {
-        options.onProgress(pageNum, maxPages, `Reading document pages: ${pageNum}/${maxPages}`);
+      if (pageNum % 8 === 0 || pageNum === maxPages) {
+        options?.onProgress?.(pageNum, maxPages, `Reading document pages: ${pageNum}/${maxPages}`);
         await new Promise((r) => setTimeout(r, 0));
       }
     }
@@ -404,7 +422,7 @@ export async function extractPdfContent(
     isScannedDocument =
       textLayerPageCount === 0 || (maxPages >= 3 && textLayerPageCount / maxPages < 0.2);
 
-    const maxOcrPages = Math.max(0, Math.floor(options?.maxOcrPages ?? 15));
+    const maxOcrPages = Math.max(0, Math.floor(options?.maxOcrPages ?? 0));
     const pagesToOcr = isScannedDocument ? sparsePageNumbers.slice(0, maxOcrPages) : [];
 
     if (pagesToOcr.length > 0 && typeof document !== "undefined") {
@@ -428,7 +446,7 @@ export async function extractPdfContent(
         }
 
         try {
-          const page = await pdf.getPage(pageNum);
+          const page = await boundedPdfWait(pdf.getPage(pageNum), deadline, `opening scanned page ${pageNum}`);
           const unscaledViewport = page.getViewport({ scale: 1.0 });
           // Scale to 1200px width for high OCR clarity
           const targetOcrWidth = 1200;
@@ -440,9 +458,9 @@ export async function extractPdfContent(
           canvas.height = Math.floor(viewport.height);
           const ctx = canvas.getContext("2d");
           if (ctx) {
-            await page.render({ canvasContext: ctx, viewport } as any).promise;
+            await boundedPdfWait(page.render({ canvasContext: ctx, viewport } as any).promise, deadline, `rendering scanned page ${pageNum}`);
             const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-            const ocr = await runOcr(dataUrl, false);
+            const ocr = await boundedPdfWait(runOcr(dataUrl, false), deadline, `reading scanned page ${pageNum}`, 20_000);
             const ocrContent = ocr.ocrText?.trim() || "";
             if (ocrContent) {
               const targetSlot = pagesData.find((p) => p.pageNum === pageNum);
@@ -462,6 +480,7 @@ export async function extractPdfContent(
             }
           }
         } catch (ocrErr: any) {
+          if (ocrErr instanceof PdfReadDeadlineError) throw ocrErr;
           consecutiveOcrFailures++;
           console.warn(`Vision OCR fallback bypassed for page ${pageNum}:`, ocrErr?.message || ocrErr);
           if (String(ocrErr?.message).includes("429")) {
@@ -474,7 +493,10 @@ export async function extractPdfContent(
       }
     }
   } catch (pdfErr) {
-    console.error("PDF parse error:", pdfErr);
+    throw pdfErr;
+  } finally {
+    // Release worker resources on success, deadline, and corrupt-document errors.
+    void loadingTask.destroy?.().catch(() => {});
   }
 
   // 4. Assemble the complete document corpus
@@ -493,13 +515,13 @@ export async function extractPdfContent(
   // sample beginning, middle, and concluding sections if document is long.
   let summary = "";
   try {
-    if (options?.onProgress) {
+    if (options?.generateSummary && options?.onProgress) {
       options.onProgress(pageCount, pageCount, `Synthesizing study summary...`);
       await new Promise((r) => setTimeout(r, 0));
     }
-    if (cleanText) {
+    if (options?.generateSummary && cleanText) {
       const summaryExcerpt = createRepresentativeSnippet(cleanText, 6000);
-      summary = await generateSummary(summaryExcerpt);
+      summary = await boundedPdfWait(generateSummary(summaryExcerpt), Date.now() + 8_000, "generating summary", 8_000);
     }
   } catch {
     summary = "";

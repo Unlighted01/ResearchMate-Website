@@ -73,6 +73,7 @@ describe("scanned PDF OCR continuation", () => {
     expect(first.blankOcrPages).toEqual([1, 2]);
     expect(first.pendingOcrPages).toEqual([3]);
     const second = await extractPdfContent(pdf, {
+      maxOcrPages: 15,
       resume: { text: first.text, fingerprint: first.sourceFingerprint!, blankPages: first.blankOcrPages },
     });
     expect(mocks.runOcr).toHaveBeenCalledTimes(3);

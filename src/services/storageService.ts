@@ -37,6 +37,7 @@ export interface StorageItem {
   ocrText?: string;
   ocrConfidence?: number;
   localAssetHash?: string;
+  localPdfHash?: string;
   storageScope?: "local" | "cloud";
 }
 
@@ -57,6 +58,7 @@ export interface AddItemInput {
   ocrText?: string;
   ocrConfidence?: number;
   localAssetHash?: string;
+  localPdfHash?: string;
   storageScope?: "local" | "cloud";
 }
 
@@ -381,6 +383,7 @@ export function addLocalItem(item: AddItemInput): StorageItem {
     createdAt: new Date().toISOString(),
     deviceSource: item.deviceSource || "web",
     localAssetHash: item.localAssetHash,
+    localPdfHash: item.localPdfHash,
     storageScope: "local",
     ocrText: item.ocrText,
     ocrConfidence: item.ocrConfidence,

@@ -95,6 +95,18 @@ export async function importPdfFile(
 ): Promise<StorageItem> {
   const extracted = await extractPdfContent(file, { onProgress });
   if (!extracted.text.trim()) {
+    if (extracted.pendingOcrPages.length > 0) {
+      const asset = await saveLocalImage(file, file.name);
+      return addLocalItem({
+        sourceTitle: file.name.replace(/\.pdf$/i, ""),
+        text: "",
+        note: `Scanned PDF: ${extracted.pageCount} pages. OCR is required before study material can be generated. The original PDF is saved on this device.`,
+        localPdfHash: asset.hash,
+        storageScope: "local",
+        deviceSource: "web",
+        tags: ["pdf", "imported-source", "ocr-required", "partial-ocr", "needs-review", `pdf-sha256:${asset.hash}`],
+      });
+    }
     throw new Error("No readable source text was found. Run OCR or review the scanned pages before generating study material.");
   }
 

@@ -125,6 +125,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 }) => {
   const { addNotification } = useNotifications();
   const localImage = useLocalImageUrl(item?.localAssetHash);
+  const localPdf = useLocalImageUrl(item?.localPdfHash);
   const displayedImageUrl = localImage.url || item?.imageUrl;
   const displayText = item ? (item.text || item.ocrText || "") : "";
   const isPdfOrDocument = Boolean(
@@ -266,7 +267,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         throw new Error("This older partial import has no PDF fingerprint. Upload the PDF as a new material to start a safe OCR run.");
       }
       const extracted = await extractPdfContent(file, isContinuingOcr
-        ? { resume: { text: item.text, fingerprint: fingerprint!, blankPages } }
+        ? { maxOcrPages: 15, resume: { text: item.text, fingerprint: fingerprint!, blankPages } }
         : undefined);
       if (!extracted.text.trim()) throw new Error("No readable text was extracted; the stored source was left unchanged.");
       const pendingCount = extracted.pendingOcrPages.length + extracted.pageCount - extracted.processedPageCount;
@@ -756,7 +757,9 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       <div className="bg-gradient-to-b from-indigo-50/50 via-white to-slate-50 dark:from-slate-900/60 dark:via-slate-900/40 dark:to-slate-950/60 rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-200/60 dark:border-slate-800/60 shadow-xs flex flex-col items-center text-center">
                         
                         {/* Visual Cover: Rendered Page 1 Image or Elegant Academic Cover Plate */}
-                        {localImage.error && <p role="alert">{localImage.error}</p>}
+                        {localPdf.url && <p><a href={localPdf.url} target="_blank" rel="noopener noreferrer">Open original PDF saved on this device</a></p>}
+                        {item.tags.includes("ocr-required") && <p>Scanned PDF saved locally. OCR is required before generating study material.</p>}
+                        {(localImage.error || localPdf.error) && <p role="alert">{localImage.error || localPdf.error}</p>}
                         {displayedImageUrl ? (
                           <div className="relative group rounded-2xl overflow-hidden shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-w-[200px] sm:max-w-[240px] max-h-[300px] sm:max-h-[340px] mb-4 sm:mb-5 transition-transform duration-300 hover:scale-[1.02]">
                             <img

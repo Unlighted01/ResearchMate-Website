@@ -24,8 +24,7 @@ import {
 } from "lucide-react";
 import { addItem } from "../../../services/storageService";
 import { runMathOcr, generateSummary } from "../../../services/geminiService";
-import { extractPdfContent } from "../../../services/pdfService";
-import { importImageFile } from "../../../services/importService";
+import { importImageFile, importPdfFile } from "../../../services/importService";
 import { detectMaterialKind } from "../../../services/materialFileType";
 import { detectQaBookLikelihood } from "../../../services/pdfQuestionImporter";
 import LatexRenderer from "../../shared/LatexRenderer";
@@ -137,10 +136,9 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
           successCount++;
         } else if (materialKind === "pdf") {
           setStatusText(`Parsing PDF text & formulas from ${filename}...`);
-          const extracted = await extractPdfContent(file);
-          if (!extracted.text.trim()) throw new Error("No readable text found in PDF.");
+          const saved = await importPdfFile(file);
 
-          const qaCheck = detectQaBookLikelihood(extracted.text);
+          const qaCheck = detectQaBookLikelihood(saved.text);
           if (qaCheck.isLikelyQa) {
             setDetectedQaBook({
               fileName: filename,
@@ -149,22 +147,9 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
             });
           }
 
-          await addItem({
-            sourceTitle: filename.replace(/\.pdf$/i, ""),
-            text: extracted.text,
-            aiSummary: extracted.summary,
-            deviceSource: "web",
-            tags: [
-              "pdf",
-              "review-material",
-              ...(extracted.sourceFingerprint ? [`pdf-sha256:${extracted.sourceFingerprint}`] : []),
-              ...(extracted.blankOcrPages.length > 0 ? [`pdf-blank-pages:${extracted.blankOcrPages.join(",")}`] : []),
-              ...(extracted.pendingOcrPages.length > 0 || extracted.processedPageCount < extracted.pageCount ? ["partial-ocr"] : []),
-            ],
-          });
-          if (extracted.pendingOcrPages.length > 0) {
+          if (saved.tags.includes("partial-ocr")) {
             partialCount++;
-            showToast(`${filename}: ${extracted.pendingOcrPages.length} scanned page(s) still need OCR. Study content is incomplete.`, "info");
+            showToast(`${filename}: saved locally; scanned pages still need OCR before study generation.`, "info");
           }
           successCount++;
         } else if (materialKind === "image") {
