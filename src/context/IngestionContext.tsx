@@ -301,7 +301,7 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
             throw new Error("Unsupported format");
           }
 
-          const needsMoreOcr = savedItem?.tags.includes("partial-ocr") || false;
+          const needsMoreOcr = savedItem?.tags.some(tag => tag === "partial-ocr" || tag === "pdf-text-pending") || false;
           if (needsMoreOcr) partialCount++;
           successCount++;
           if (savedItem && options?.onItemSuccess) {
@@ -316,7 +316,7 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
                     ...f,
                     status: "completed" as IngestionFileStatus,
                     percent: 100,
-                    statusMessage: needsMoreOcr ? "Imported with OCR pages still pending" : "Imported successfully",
+                    statusMessage: needsMoreOcr ? "Saved locally; open material for extraction progress" : "Imported successfully",
                   }
                 : f
             );
@@ -362,7 +362,7 @@ export const IngestionProvider: React.FC<{ children: React.ReactNode }> = ({
         statusMessage: hasErrors
           ? `Ingested ${successCount} of ${totalCount} file(s) with ${errors.length} issue(s)`
           : partialCount > 0
-          ? `Ingested ${successCount} material(s); ${partialCount} still need OCR pages`
+          ? `Saved ${successCount} material(s); ${partialCount} have extraction pending`
           : `Successfully ingested all ${successCount} study material(s)!`,
       }));
 

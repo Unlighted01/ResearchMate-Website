@@ -8,7 +8,7 @@
 
 import { supabase } from "./supabaseClient";
 import { addItem, addLocalItem, updateItem, StorageItem } from "./storageService";
-import { extractPdfContent } from "./pdfService";
+import { queuePdfTextExtraction } from "./pdfTextQueue";
 import { imageMimeFromSignature } from "./materialFileType";
 import { runOcr } from "./ocrService";
 import { OCR_B1_ENABLED } from "./ocrB1Config";
@@ -86,45 +86,25 @@ export async function importImageFile(file: File, options: {
 }
 
 /**
- * Import a PDF file: extract text via pdfService and insert to DB/storage.
+ * Save a PDF locally before queuing text-only extraction.
  */
 export async function importPdfFile(
   file: File,
   userId?: string,
   onProgress?: (page: number, total: number, message?: string) => void,
 ): Promise<StorageItem> {
-  const extracted = await extractPdfContent(file, { onProgress });
-  if (!extracted.text.trim()) {
-    if (extracted.pendingOcrPages.length > 0) {
-      const asset = await saveLocalImage(file, file.name);
-      return addLocalItem({
-        sourceTitle: file.name.replace(/\.pdf$/i, ""),
-        text: "",
-        note: `Scanned PDF: ${extracted.pageCount} pages. OCR is required before study material can be generated. The original PDF is saved on this device.`,
-        localPdfHash: asset.hash,
-        storageScope: "local",
-        deviceSource: "web",
-        tags: ["pdf", "imported-source", "ocr-required", "partial-ocr", "needs-review", `pdf-sha256:${asset.hash}`],
-      });
-    }
-    throw new Error("No readable source text was found. Run OCR or review the scanned pages before generating study material.");
-  }
-
-  const item = await addItem({
+  const asset = await saveLocalImage(file, file.name);
+  const item = addLocalItem({
     sourceTitle: file.name.replace(/\.pdf$/i, ""),
-    text: extracted.text,
-    aiSummary: extracted.summary,
-    imageUrl: extracted.coverImageUrl,
+    text: "",
+    localPdfHash: asset.hash,
+    storageScope: "local",
     deviceSource: "web",
-    tags: [
-      "pdf",
-      "imported-source",
-      ...(extracted.sourceFingerprint ? [`pdf-sha256:${extracted.sourceFingerprint}`] : []),
-      ...(extracted.blankOcrPages.length > 0 ? [`pdf-blank-pages:${extracted.blankOcrPages.join(",")}`] : []),
-      ...(extracted.pendingOcrPages.length > 0 || extracted.processedPageCount < extracted.pageCount ? ["partial-ocr"] : []),
-    ],
+    tags: ["pdf", "imported-source", "pdf-text-pending", `pdf-sha256:${asset.hash}`],
   });
-
+  // The durable original is usable immediately; text-only extraction runs separately.
+  void queuePdfTextExtraction(item.id);
+  onProgress?.(0, 0, "PDF saved locally. Text extraction queued; OCR remains opt-in.");
   return item;
 }
 

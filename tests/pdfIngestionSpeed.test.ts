@@ -13,6 +13,7 @@ vi.mock("../src/services/ocrService", () => ({ runOcr: mocks.ocr }));
 vi.mock("../src/services/ragService", () => ({ createRepresentativeSnippet: (text: string) => text }));
 vi.mock("../src/services/localOcrStore", () => ({ saveLocalImage: mocks.save }));
 vi.mock("../src/services/storageService", () => ({ addItem: mocks.add, addLocalItem: mocks.local }));
+vi.mock("../src/services/pdfTextQueue", () => ({ queuePdfTextExtraction: vi.fn() }));
 import { extractPdfContent } from "../src/services/pdfService";
 import { importPdfFile } from "../src/services/importService";
 beforeEach(() => {
@@ -37,14 +38,14 @@ it("leaves scans pending without automatic OCR", async () => {
   expect(result.pendingOcrPages).toEqual([1, 2]);
   expect(mocks.ocr).not.toHaveBeenCalled();
 });
-it("retains a scanned original locally as OCR-required without inventing source text", async () => {
+it("retains an original locally as text-pending without inventing source text", async () => {
   mocks.text.mockResolvedValue({ items: [] });
   mocks.save.mockResolvedValue({ hash: "a".repeat(64) });
   mocks.local.mockImplementation((item) => item);
   const item = await importPdfFile(file());
   expect(item.text).toBe("");
   expect(item.localPdfHash).toBe("a".repeat(64));
-  expect(item.tags).toContain("ocr-required");
+  expect(item.tags).toContain("pdf-text-pending");
   expect(item.storageScope).toBe("local");
   expect(mocks.add).not.toHaveBeenCalled();
 });

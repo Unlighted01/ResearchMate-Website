@@ -20,6 +20,7 @@ it("shows completion rather than offering to resume a finished PDF", async () =>
   const complete = await screen.findByRole("button", { name: "Local OCR complete" });
   expect(complete.hasAttribute("disabled")).toBe(true);
   expect(mocks.run).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Start reviewed PDF exam" }).hasAttribute("disabled")).toBe(true);
 });
 it("requires Start and download consent; declining leaves the job paused", async () => {
   mocks.run.mockImplementation(async (job, options) => {
@@ -36,4 +37,20 @@ it("requires Start and download consent; declining leaves the job paused", async
   fireEvent.click(screen.getByRole("button", { name: "Not now" }));
   await screen.findByRole("button", { name: "Resume local OCR" });
   expect(mocks.run).toHaveBeenCalledTimes(1);
+});
+it("allows review and draft extraction from saved pages while OCR is running", async () => {
+  let finish!: (value: unknown) => void;
+  mocks.run.mockImplementation((job, options) => {
+    options.onProgress({phase:"recognizing",job:{...job,pageCount:156,completedPages:[1],status:"running"}});
+    return new Promise(resolve => { finish = resolve; });
+  });
+  render(<PdfLocalOcrPanel sourceHash={"a".repeat(64)} name="scan.pdf" />);
+  await waitFor(() => expect(screen.getByRole("button",{name:"Start local OCR"}).hasAttribute("disabled")).toBe(false));
+  fireEvent.click(screen.getByRole("button",{name:"Start local OCR"}));
+  await screen.findByRole("button",{name:"Pause OCR"});
+  expect(screen.getByRole("button",{name:"Review page"}).hasAttribute("disabled")).toBe(false);
+  expect(screen.getByRole("button",{name:"Extract ungraded question drafts"}).hasAttribute("disabled")).toBe(false);
+  expect(screen.getByText(/0 eligible for grading/)).toBeTruthy();
+  finish({pageCount:156,completedPages:[1],status:"paused"});
+  await screen.findByRole("button",{name:"Resume local OCR"});
 });

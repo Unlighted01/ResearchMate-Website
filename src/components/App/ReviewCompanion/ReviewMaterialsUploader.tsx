@@ -22,7 +22,8 @@ import {
   FileCode,
   ArrowRight,
 } from "lucide-react";
-import { addItem } from "../../../services/storageService";
+import { addItem, getItemById } from "../../../services/storageService";
+import { subscribePdfTextProgress, getPdfTextProgress } from "../../../services/pdfTextQueue";
 import { runMathOcr, generateSummary } from "../../../services/geminiService";
 import { importImageFile, importPdfFile } from "../../../services/importService";
 import { detectMaterialKind } from "../../../services/materialFileType";
@@ -60,6 +61,19 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = subscribePdfTextProgress(id => {
+      if (getPdfTextProgress(id)?.status !== "complete") return;
+      void getItemById(id).then(item => {
+        if (!active || !item) return;
+        const check = detectQaBookLikelihood(item.text);
+        if (check.isLikelyQa) setDetectedQaBook({ fileName: item.sourceTitle || "PDF", questionCount: check.estimatedQuestionCount, confidence: check.sampleConfidence });
+        onMaterialUploaded?.();
+      });
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [onMaterialUploaded]);
 
   // Support pasting screenshots directly via Ctrl+V anywhere on the page
   useEffect(() => {
@@ -147,9 +161,9 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
             });
           }
 
-          if (saved.tags.includes("partial-ocr")) {
+          if (saved.tags.includes("partial-ocr") || saved.tags.includes("pdf-text-pending")) {
             partialCount++;
-            showToast(`${filename}: saved locally; scanned pages still need OCR before study generation.`, "info");
+            showToast(`${filename}: saved locally; open the material for extraction progress.`, "info");
           }
           successCount++;
         } else if (materialKind === "image") {
@@ -185,7 +199,7 @@ export const ReviewMaterialsUploader: React.FC<ReviewMaterialsUploaderProps> = (
     if (fileInputRef.current) fileInputRef.current.value = "";
 
     if (successCount > 0) {
-      showToast(`Ingested ${successCount} study material(s)${partialCount ? `; ${partialCount} still need OCR pages` : ""}.`, partialCount ? "info" : "success");
+      showToast(`Saved ${successCount} study material(s)${partialCount ? `; ${partialCount} have extraction pending` : ""}.`, partialCount ? "info" : "success");
       addNotification({
         type: "ocr_job",
         title: "Materials Ingested",

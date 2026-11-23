@@ -5,21 +5,32 @@ import { confirmOcrKey, type SourceCrop } from "./keyProvenance";
 import { changeConfirmedOcrKey } from "./ocrKeyConfirmationService";
 import { hasValidKeyConfirmation } from "./keyProvenance";
 import { pdfOcrPages, type PdfOcrJob } from "./pdfLocalOcrService";
+import { getGradableQuestions } from "./examQuestionPolicy";
+import { saveExam } from "./examService";
+
+export async function createReviewedPdfExam(sourceHash: string, name: string) {
+  await initQuestionBank();
+  const questions = getGradableQuestions(pdfOcrDrafts(sourceHash));
+  if (!questions.length) throw new Error("Confirm at least one question against its original key before starting an exam.");
+  return saveExam({ title: `${name} — reviewed questions`, source_document_title: name, questions, visibility: "private" });
+}
 
 export function pdfOcrDrafts(hash: string): StoredQuestion[] {
   return getUserQuestions().filter((question) => question.origin === "ocr_import" && question.sourceHash === hash);
 }
 
 export async function createPdfOcrDrafts(job: PdfOcrJob) {
+  const snapshot = { ...job, completedPages: [...job.completedPages] };
   await initQuestionBank();
-  const pages = await pdfOcrPages(job);
+  const pages = await pdfOcrPages(snapshot);
   if (!pages.length) throw new Error("OCR at least one page before extracting review drafts.");
   const parsed = parseTwoPassQuestionsAndAnswersDetailed(pages.map((page) => ({ pageNumber: page.pageNumber, text: page.text, items: [], extractionMethod: "ocr" as const })));
   if (!parsed.items.length) throw new Error("No structured questions were detected. Review the OCR text as notes; no questions or keys were invented.");
-  return importQuestionsToBank({ sourceFile: job.name, origin: "ocr_import", rawQuestions: parsed.items.map((item) => ({
+  const result = await importQuestionsToBank({ sourceFile: job.name, origin: "ocr_import", rawQuestions: parsed.items.map((item) => ({
     ...item, sourcePage: item.sourcePage || item.pageNumber, sourceHash: job.sourceHash,
     keyProvenance: "none", keyConfirmation: undefined, reviewStatus: "needs_review",
   })) });
+  return { ...result, sourcePages: pages.map(page => page.pageNumber), totalPages: snapshot.pageCount };
 }
 
 /** Explicit entry-by-entry confirmation. No bulk key promotion or regrading. */

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { loadPdfOcrJob, PdfLocalOcrTask, pdfOcrPageKey, type PdfOcrJob, type PdfOcrProgress } from "../../../services/pdfLocalOcrService";
 import { getLocalImage, getLocalOcrPage } from "../../../services/localOcrStore";
 import { openPdfOcrRenderer } from "../../../services/pdfOcrRenderer";
-import { createPdfOcrDrafts, pdfOcrDrafts, confirmPdfOcrDraft } from "../../../services/pdfOcrReviewService";
+import { createPdfOcrDrafts, pdfOcrDrafts, confirmPdfOcrDraft, createReviewedPdfExam } from "../../../services/pdfOcrReviewService";
 import type { OcrLanguage } from "../../../services/localOcrEngine";
 import type { ModelDownloadPrompt } from "../../../services/localOcrQueue";
 import type { SourceCrop } from "../../../services/keyProvenance";
@@ -46,12 +46,14 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
   const [pageNumber, setPageNumber] = useState(1);
   const [preview, setPreview] = useState<{ url: string; page: number; text: string }>();
   const [previewBusy, setPreviewBusy] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [crop, setCrop] = useState<SourceCrop>();
   const [drafts, setDrafts] = useState<StoredQuestion[]>([]);
   const [draftId, setDraftId] = useState("");
   const [keyIndex, setKeyIndex] = useState(-1);
   const [checked, setChecked] = useState(false);
   const [editing, setEditing] = useState<StoredQuestion>();
+  const [startingExam, setStartingExam] = useState(false);
   const controller = useRef<PdfLocalOcrTask | undefined>(undefined);
   const answerDownload = useRef<((accepted: boolean) => void) | undefined>(undefined);
   const mounted = useRef(true);
@@ -126,12 +128,14 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
     finally { await renderer?.dispose(); if (mounted.current) setPreviewBusy(false); }
   };
   const extractDrafts = async () => {
-    if (!job) return;
+    if (!job || extracting) return;
+    setExtracting(true);
     setError("");
     try {
       const result = await createPdfOcrDrafts(job); refreshDrafts();
-      setMessage(`${result.importedCount} local drafts added; ${result.duplicatesSkipped} duplicates skipped. Every new key needs confirmation.`);
+      setMessage(`${result.importedCount} local drafts added; ${result.duplicatesSkipped} duplicates skipped. Source pages: ${result.sourcePages.join(", ")} (${result.sourcePages.length} of ${result.totalPages}). Every new key needs confirmation.`);
     } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    finally { setExtracting(false); }
   };
   const confirmKey = () => {
     if (!selected || !preview || !crop) return;
@@ -162,10 +166,18 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
     {message && <p role="status" className="text-sm">{message}</p>}
     {job && job.pageCount > 0 && <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2"><label>PDF page <input aria-label="PDF page to review" className={control + " w-24"} type="number" min={1} max={job.pageCount} value={pageNumber} onChange={(event) => setPageNumber(Number(event.target.value))} /></label>
-        <button className={control} disabled={previewBusy || busy} onClick={reviewPage}>{previewBusy ? "Opening page…" : "Review page"}</button>
-        <button className={control} disabled={busy || !job.completedPages.length} onClick={extractDrafts}>Extract ungraded question drafts</button>
+        <button className={control} disabled={previewBusy} onClick={reviewPage}>{previewBusy ? "Opening page…" : "Review page"}</button>
+        <button className={control} disabled={extracting || !job.completedPages.length} onClick={extractDrafts}>Extract ungraded question drafts</button>
       </div>
       <p className="text-sm">{drafts.length} question drafts; {getGradableQuestions(drafts).length} eligible for grading. Unconfirmed OCR keys cannot grade.</p>
+      <button className={control} disabled={busy || startingExam || getGradableQuestions(drafts).length === 0} onClick={async () => {
+        setStartingExam(true); setError("");
+        try {
+          const exam = await createReviewedPdfExam(sourceHash, name);
+          window.location.hash = `/app/exams?examId=${encodeURIComponent(exam.id)}`;
+        } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+        finally { setStartingExam(false); }
+      }}>{startingExam ? "Opening reviewed exam…" : "Start reviewed PDF exam"}</button>
       {preview && <div className="grid md:grid-cols-2 gap-3">
         <div><p className="text-sm font-medium">Original PDF page {preview.page}. Drag over the printed key to select its region.</p>
           <a href={preview.url} target="_blank" rel="noopener noreferrer" className="underline text-sm">Open page at full size</a>
@@ -199,7 +211,7 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
           <p className="text-sm">Review the original page containing this key, then select its region above.</p>
           <label>Printed correct answer <select aria-label="Printed correct answer" className={control} value={keyIndex} onChange={(event) => { setKeyIndex(Number(event.target.value)); setChecked(false); }}><option value={-1}>Select the key you read</option>{selected.options.map((_, index) => <option key={index} value={index}>{String.fromCharCode(65 + index)}</option>)}</select></label>
           <label className="flex gap-2 text-sm"><input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />I checked the question, every choice, the explanation, and this key against the original PDF.</label>
-          <button className={control} disabled={!preview || !crop || keyIndex < 0 || !checked || busy} onClick={confirmKey}>Confirm this key and question</button>
+          <button className={control} disabled={!preview || !crop || keyIndex < 0 || !checked} onClick={confirmKey}>Confirm this key and question</button>
         </>}
       </div>}
     </div>}

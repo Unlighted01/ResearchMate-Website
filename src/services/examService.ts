@@ -40,6 +40,7 @@ export type WriteSyncResult<T> = T & {
 };
 
 export interface Question {
+  origin?: import("./questionBankService").QuestionOrigin;
   id: string; // crypto.randomUUID()
   question: string;
   options: string[]; // exactly 4 choices [A, B, C, D]
@@ -300,7 +301,7 @@ export async function saveExam(
   const validSourceItemIds = (record.source_item_ids || []).filter((id) => UUID_REGEX.test(id));
 
   // 1. Unauthenticated / Offline: LocalStorage is source of truth
-  if (!isAuth || !user) {
+  if (!isAuth || !user || record.questions.some((question) => question.origin === "ocr_import")) {
     const local = getLocalExams().filter((e) => e.id !== record.id);
     const updatedLocal = [record, ...local];
     saveLocalExams(updatedLocal);
@@ -554,7 +555,7 @@ export async function saveExamAttempt(
   };
 
   // 1. Unauthenticated: save locally
-  if (!isAuth || !user) {
+  if (!isAuth || !user || attempt.questions_snapshot?.some((question) => question.origin === "ocr_import")) {
     const local = getLocalAttempts().filter((a) => a.id !== attempt.id);
     const updated = [attempt, ...local];
     saveLocalAttempts(updated);

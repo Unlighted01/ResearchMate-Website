@@ -58,6 +58,7 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { useLocalImageUrl } from "../../../hooks/useLocalImageUrl";
 import { PdfLocalOcrPanel } from "./PdfLocalOcrPanel";
+import { PdfTextStatus } from "./PdfTextStatus";
 
 // ============================================
 // PART 2: TYPE DEFINITIONS
@@ -751,7 +752,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
                 {/* Main Content Workspace Sheet */}
                 <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 min-h-0">
-                  {item.localPdfHash && <PdfLocalOcrPanel key={item.localPdfHash} sourceHash={item.localPdfHash} name={item.sourceTitle || "Scanned PDF"} />}
+                  {item.localPdfHash && <><PdfTextStatus key={item.id} item={item} onUpdated={onItemUpdated} /><PdfLocalOcrPanel key={item.localPdfHash} sourceHash={item.localPdfHash} name={item.sourceTitle || "Scanned PDF"} /></>}
                   
                   {activeLeftTab === "cover" ? (
                     <div className="space-y-6">
