@@ -29,6 +29,66 @@ const job = () => loadPdfOcrJob("a".repeat(64), "scan.pdf", "eng");
 beforeEach(() => { state.pages.clear(); state.jobs.clear(); state.model = false; state.corrupt = false; state.missing = false; state.full = false; });
 afterEach(() => vi.useRealTimers());
 describe("opt-in PDF local OCR", () => {
+  it("bounds recognition at two workers and drains the batch before pausing", async () => {
+    state.model = true;
+    let active = 0, peak = 0, created = 0;
+    const dispose = vi.fn(async () => { expect(active).toBe(0); });
+    const instance = new PdfLocalOcrTask({
+      engine: () => { created++; return { version: PDF_OCR_ENGINE, initialize: async () => {}, dispose,
+        recognize: async () => { active++; peak = Math.max(peak, active); await new Promise(resolve => setTimeout(resolve, 10)); active--; return {text:"source",words:[],confidence:90}; } }; },
+      renderer: async () => ({pageCount:3,render:async()=>new Blob(["page"]),dispose:async()=>{}}),
+    });
+    const paused = await instance.run(await job(), { concurrency:2,confirmDownload:async()=>true,
+      onProgress:({phase})=>{if(phase==="saved") instance.pause();} });
+    expect(created).toBe(2); expect(peak).toBe(2); expect(dispose).toHaveBeenCalledTimes(2);
+    expect(paused.completedPages).toEqual([1,2]); expect(paused.status).toBe("paused");
+    const resumed=task();
+    await resumed.instance.run(await job(),{concurrency:1,confirmDownload:async()=>true});
+    expect(resumed.recognize).toHaveBeenCalledTimes(1);
+  });
+  it("preserves a successful peer page when the other worker fails", async () => {
+    let slot=0;
+    const instance=new PdfLocalOcrTask({engine:()=>{const own=slot++;return {version:PDF_OCR_ENGINE,initialize:async()=>{},dispose:async()=>{},recognize:async()=>{if(own===0) throw new Error("page failure");return {text:"saved peer",words:[],confidence:90};}};},renderer:async()=>({pageCount:2,render:async()=>new Blob(["page"]),dispose:async()=>{}})});
+    await expect(instance.run(await job(),{concurrency:2,confirmDownload:async()=>true})).rejects.toThrow("page failure");
+    expect((await job()).completedPages).toEqual([2]);
+    expect([...state.pages.values()][0].keyProvenance).toBe("none");
+  });
+  it("does not start more pages when paused during parallel recognition", async () => {
+    let started = 0;
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const recognize = vi.fn(async () => {
+      if (++started === 2) { instance.pause(); release(); }
+      await barrier;
+      return {text:"unconfirmed key B",words:[],confidence:99};
+    });
+    const instance = new PdfLocalOcrTask({
+      engine: () => ({version:PDF_OCR_ENGINE,initialize:async()=>{},recognize,dispose:async()=>{}}),
+      renderer: async () => ({pageCount:4,render:async()=>new Blob(["page"]),dispose:async()=>{}}),
+    });
+    const result = await instance.run(await job(), {concurrency:2,confirmDownload:async()=>true});
+    expect(result.status).toBe("paused");
+    expect(result.completedPages).toEqual([1,2]);
+    expect(recognize).toHaveBeenCalledTimes(2);
+    expect([...state.pages.values()].every(page => page.keyProvenance === "none" && page.route === "FAIR")).toBe(true);
+  });
+  it("disposes both workers and the renderer even when one worker cleanup fails", async () => {
+    let created = 0;
+    const disposed: number[] = [];
+    const rendererDispose = vi.fn(async () => {});
+    const instance = new PdfLocalOcrTask({
+      engine: () => {
+        const slot = created++;
+        return {version:PDF_OCR_ENGINE,initialize:async()=>{},
+          recognize:async()=>({text:"source",words:[],confidence:90}),
+          dispose:async()=>{disposed.push(slot);if(slot===0) throw new Error("cleanup failed");}};
+      },
+      renderer: async () => ({pageCount:2,render:async()=>new Blob(["page"]),dispose:rendererDispose}),
+    });
+    await expect(instance.run(await job(), {concurrency:2,confirmDownload:async()=>true})).rejects.toThrow("cleanup failed");
+    expect(disposed).toEqual([0,1]);
+    expect(rendererDispose).toHaveBeenCalledTimes(1);
+  });
   it("restores paused progress, skips saved pages, and never calls AI", async () => {
     const fetch = vi.spyOn(globalThis, "fetch");
     const first = task();

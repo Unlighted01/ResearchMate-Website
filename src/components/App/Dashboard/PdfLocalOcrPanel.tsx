@@ -38,6 +38,7 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
   const [language, setLanguage] = useState<OcrLanguage>(() => (localStorage.getItem(`pdf-ocr-language:${sourceHash}`) as OcrLanguage) || "eng");
   const [job, setJob] = useState<PdfOcrJob>();
   const [busy, setBusy] = useState(false);
+  const [concurrency, setConcurrency] = useState<1 | 2>(1);
   const [pausing, setPausing] = useState(false);
   const [phase, setPhase] = useState<string>("");
   const [download, setDownload] = useState<ModelDownloadPrompt>();
@@ -85,6 +86,7 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
     const task = new PdfLocalOcrTask(); controller.current = task;
     try {
       const result = await task.run(job, {
+        concurrency,
         confirmDownload: (request) => !mounted.current ? Promise.resolve(false) : new Promise<boolean>((resolve) => { answerDownload.current = resolve; setDownload(request); }),
         onProgress: (event: PdfOcrProgress) => {
           if (!mounted.current) return;
@@ -147,9 +149,12 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
 
   return <section aria-label="Local PDF OCR" className="rounded-xl border border-indigo-200 dark:border-indigo-800 p-4 space-y-3 text-slate-900 dark:text-slate-100">
     <h3 className="font-semibold">Read scanned PDF on this device</h3>
-    <p className="text-sm">OCR starts only when you choose Start. Your PDF and results stay on this device. Close this view to pause after the active page; reopen it to resume. All text needs full review.</p>
+    <p className="text-sm">OCR starts only when you choose Start. Your PDF and results stay on this device. Close this view to pause after the active pages finish; reopen it to resume. All text needs full review.</p>
     <p className="text-sm">Results are saved separately for each language. OCR continues only while this app is open.</p>
     <div className="flex flex-wrap gap-2 items-center">
+      <label>OCR speed <select aria-label="OCR speed" className={control} value={concurrency} disabled={busy} onChange={event => setConcurrency(event.target.value === "2" ? 2 : 1)}>
+        <option value="1">Standard — lower memory</option><option value="2">Faster — two workers, more memory</option>
+      </select></label>
       <label>OCR language <select aria-label="OCR language" className={control} value={language} disabled={busy} onChange={(event) => {
         const value = event.target.value as OcrLanguage; setLanguage(value); localStorage.setItem(`pdf-ocr-language:${sourceHash}`, value); setPreview(undefined); setCrop(undefined); setPhase("");
       }}><option value="eng">English</option><option value="tgl">Tagalog</option><option value="eng+tgl">English + Tagalog</option></select></label>

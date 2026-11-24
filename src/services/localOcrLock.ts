@@ -1,6 +1,6 @@
 let active = false;
 
-/** Keep one OCR worker active across features and, where supported, across tabs. */
+/** Keep one OCR job active across features and, where supported, across tabs. */
 export async function withLocalOcrLock<T>(run: () => Promise<T>): Promise<T> {
   const guarded = async () => {
     if (active) throw new Error("Another local OCR job is running. Pause it before starting this one.");

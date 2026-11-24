@@ -24,6 +24,7 @@ it("shows completion rather than offering to resume a finished PDF", async () =>
 });
 it("requires Start and download consent; declining leaves the job paused", async () => {
   mocks.run.mockImplementation(async (job, options) => {
+    expect(options.concurrency).toBe(1);
     const accepted = await options.confirmDownload({ language: "eng", version: "test", estimatedMiB: 4.24 });
     expect(accepted).toBe(false);
     return { ...job, status: "paused" };
@@ -37,6 +38,25 @@ it("requires Start and download consent; declining leaves the job paused", async
   fireEvent.click(screen.getByRole("button", { name: "Not now" }));
   await screen.findByRole("button", { name: "Resume local OCR" });
   expect(mocks.run).toHaveBeenCalledTimes(1);
+});
+it("uses two workers only when explicitly selected and locks the setting while running", async () => {
+  let finish!: (value: unknown) => void;
+  mocks.run.mockImplementation((job, options) => {
+    expect(options.concurrency).toBe(2);
+    return new Promise(resolve => { finish = () => resolve({...job, status: "paused"}); });
+  });
+  render(<PdfLocalOcrPanel sourceHash={"a".repeat(64)} name="scan.pdf" />);
+  await waitFor(() => expect(screen.getByRole("button", {name:"Start local OCR"}).hasAttribute("disabled")).toBe(false));
+  const speed = screen.getByRole("combobox", {name:"OCR speed"}) as HTMLSelectElement;
+  expect(speed.value).toBe("1");
+  expect(mocks.run).not.toHaveBeenCalled();
+  fireEvent.change(speed, {target:{value:"2"}});
+  fireEvent.click(screen.getByRole("button", {name:"Start local OCR"}));
+  await screen.findByRole("button", {name:"Pause OCR"});
+  expect(speed.disabled).toBe(true);
+  finish(undefined);
+  await screen.findByRole("button", {name:"Resume local OCR"});
+  expect(speed.disabled).toBe(false);
 });
 it("allows review and draft extraction from saved pages while OCR is running", async () => {
   let finish!: (value: unknown) => void;

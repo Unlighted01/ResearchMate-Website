@@ -51,7 +51,7 @@ async function timed<T>(operation: Promise<T>, message: string): Promise<T> {
   } finally { clearTimeout(timer!); }
 }
 
-/** Persists each page before advancing. Closing a view pauses after the active page. */
+/** Persists each page before advancing. Closing a view drains at most two active pages. */
 export class PdfLocalOcrTask {
   private paused = false;
   constructor(private readonly dependencies: {
@@ -64,12 +64,14 @@ export class PdfLocalOcrTask {
   async run(initial: PdfOcrJob, options: {
     confirmDownload: (request: ModelDownloadPrompt) => Promise<boolean>;
     onProgress?: (event: PdfOcrProgress) => void;
+    concurrency?: 1 | 2;
   }): Promise<PdfOcrJob> {
     return withLocalOcrLock(async () => {
       this.paused = false;
       let job: PdfOcrJob = { ...initial, completedPages: [...initial.completedPages], error: undefined };
       let renderer: PdfOcrRenderer | undefined;
-      let engine: LocalOcrEngine | undefined;
+      const engines: LocalOcrEngine[] = [];
+      const concurrency = options.concurrency === 2 ? 2 : 1;
       const emit = (phase: PdfOcrProgress["phase"], progress?: number) => options.onProgress?.({ job: { ...job, completedPages: [...job.completedPages] }, phase, progress });
       const persist = async () => { job.updatedAt = new Date().toISOString(); await savePdfOcrJob(job); };
       try {
@@ -97,33 +99,45 @@ export class PdfLocalOcrTask {
         job.completedPages = job.completedPages.filter((page) => page >= 1 && page <= job.pageCount);
         job.status = "running";
         await persist();
-        for (let pageNumber = 1; pageNumber <= job.pageCount; pageNumber++) {
-          if (this.paused) break;
-          job.currentPage = pageNumber;
+        const processPage = async (pageNumber: number, slot: number): Promise<boolean> => {
           const cached = await getLocalOcrPage(pdfOcrPageKey(job, pageNumber));
-          if (!matchesPage(cached, job, pageNumber)) {
-            if (!engine) {
-              engine = this.dependencies.engine();
-              if (engine.version !== PDF_OCR_ENGINE) throw new Error("Unexpected OCR engine version.");
-              emit("loading");
-              let initializing = true;
-              await timed(engine.initialize(job.language, (progress) => emit(initializing ? "loading" : "recognizing", progress)), "Loading local OCR timed out. Check the model download and resume.");
-              initializing = false;
+          if (matchesPage(cached, job, pageNumber)) return true;
+          if (this.paused) return false;
+          if (!engines[slot]) {
+            const engine = this.dependencies.engine(); engines[slot] = engine;
+            if (engine.version !== PDF_OCR_ENGINE) throw new Error("Unexpected OCR engine version.");
+            emit("loading");
+            let initializing = true;
+            await timed(engine.initialize(job.language, (progress) => emit(initializing ? "loading" : "recognizing", progress)), "Loading local OCR timed out. Check the model download and resume.");
+            initializing = false;
+          }
+          if (this.paused) return false;
+          emit("rendering");
+          const image = await timed(renderer!.render(pageNumber, job.dpi), `Rendering page ${pageNumber} timed out. Resume to retry.`);
+          if (this.paused) return false;
+          emit("recognizing");
+          const result = await timed(engines[slot].recognize(image, "original"), `OCR page ${pageNumber} timed out. Saved pages are retained; resume to retry.`);
+          await saveLocalOcrPage({ cacheKey: pdfOcrPageKey(job, pageNumber), sourceHash: job.sourceHash, pageNumber,
+            text: result.text, words: result.words, confidence: result.confidence, engineVersion: PDF_OCR_ENGINE,
+            language: job.language, preprocess: "original", rasterDpi: job.dpi,
+            route: "FAIR", storageScope: "local", keyProvenance: "none", createdAt: new Date().toISOString() });
+          return true;
+        };
+        for (let first = 1; first <= job.pageCount && !this.paused; first += concurrency) {
+          job.currentPage = first;
+          const numbers = Array.from({length: Math.min(concurrency, job.pageCount - first + 1)}, (_, slot) => first + slot);
+          // Drain the bounded batch before pausing, disposing workers, or reporting errors.
+          const results = await Promise.allSettled(numbers.map((page, slot) => processPage(page, slot)));
+          let failure: PromiseRejectedResult | undefined;
+          for (let slot = 0; slot < results.length; slot++) {
+            const result = results[slot];
+            if (result.status === "rejected") { failure ||= result; continue; }
+            if (result.value && !job.completedPages.includes(numbers[slot])) {
+              job.completedPages.push(numbers[slot]); job.completedPages.sort((a, b) => a - b);
+              await persist(); emit("saved");
             }
-            if (this.paused) break;
-            emit("rendering"); const image = await timed(renderer.render(pageNumber, job.dpi), `Rendering page ${pageNumber} timed out. Resume to retry.`);
-            if (this.paused) break;
-            emit("recognizing");
-            const result = await timed(engine.recognize(image, "original"), `OCR page ${pageNumber} timed out. Saved pages are retained; resume to retry.`);
-            await saveLocalOcrPage({ cacheKey: pdfOcrPageKey(job, pageNumber), sourceHash: job.sourceHash, pageNumber,
-              text: result.text, words: result.words, confidence: result.confidence, engineVersion: PDF_OCR_ENGINE,
-              language: job.language, preprocess: "original", rasterDpi: job.dpi,
-              route: "FAIR", storageScope: "local", keyProvenance: "none", createdAt: new Date().toISOString() });
           }
-          if (!job.completedPages.includes(pageNumber)) {
-            job.completedPages.push(pageNumber); job.completedPages.sort((a, b) => a - b);
-            await persist(); emit("saved");
-          }
+          if (failure) throw failure.reason;
         }
         job.status = job.completedPages.length === job.pageCount ? "completed" : "paused";
         await persist(); emit(job.status === "completed" ? "completed" : "paused");
@@ -132,7 +146,11 @@ export class PdfLocalOcrTask {
         job.status = "error"; job.error = error instanceof Error ? error.message : String(error);
         await persist(); throw error;
       } finally {
-        try { await engine?.dispose(); } finally { await renderer?.dispose(); }
+        try {
+          const disposed = await Promise.allSettled(engines.map(engine => engine.dispose()));
+          const failure = disposed.find(result => result.status === "rejected") as PromiseRejectedResult | undefined;
+          if (failure) throw failure.reason;
+        } finally { await renderer?.dispose(); }
       }
     });
   }
