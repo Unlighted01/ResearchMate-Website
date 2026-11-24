@@ -1804,7 +1804,10 @@ export function parseTwoPassQuestionsAndAnswersDetailed(
     const isBeforeFirstChapterOrQuestion = !hasExplicitChapters && !hasFoundFirstQuestion;
     if (isBeforeFirstChapterOrQuestion && /(?:^|\s)(?:TABLE OF CONTENTS|CONTENTS|Library of Congress|Cataloging-in-Publication|PREFACE|FOREWORD)\b/i.test(trimmed)) {
       inFrontMatter = true;
-      if (/^(?:TABLE OF CONTENTS|CONTENTS)\b/i.test(trimmed)) {
+      // Use the same boundary as front-matter detection. OCR margin noise can
+      // precede this heading; otherwise inFrontMatter becomes true without the
+      // contents state that lets a numbered exercise end front matter.
+      if (/(?:^|\s)(?:TABLE OF CONTENTS|CONTENTS)\b/i.test(trimmed)) {
         inContents = true;
         inIntroduction = false;
         continue;

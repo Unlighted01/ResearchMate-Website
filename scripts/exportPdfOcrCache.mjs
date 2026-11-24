@@ -11,8 +11,9 @@ const result = JSON.parse(await readFile(process.argv[2] || join(root, ".tmp/pdf
 const destination = resolve(process.argv[3] || join(tmpdir(), "msa-accuracy-work", "browser-ocr.json"));
 const inside = (parent, target) => { const rel = relative(parent, target); return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel)); };
 if (inside(root, destination)) throw new Error("OCR output must stay outside the repository.");
-const profile = dirname(result.screenshot);
-if (!inside(tmpdir(), profile) || !basename(profile).startsWith("rm-pdf-ocr-workflow-")) throw new Error("Expected an isolated benchmark profile under OS temp.");
+const profile = process.argv[4] ? resolve(process.argv[4]) : dirname(result.screenshot);
+const source = result.source || { file: result.file, sourceHash: result.sourceHash };
+if (!inside(tmpdir(), profile) || !/^(rm-pdf-ocr-workflow-|rm-ocr-speed-)/.test(basename(profile))) throw new Error("Expected an isolated benchmark profile under OS temp.");
 const databases = (await readdir(join(profile, "Default", "IndexedDB"))).filter((name) => /^http_127\.0\.0\.1_\d+\.indexeddb\.leveldb$/.test(name));
 if (databases.length !== 1) throw new Error("Benchmark origin is ambiguous or missing.");
 const originPort = Number(databases[0].match(/_(\d+)\.indexeddb/)[1]);
@@ -63,9 +64,9 @@ try {
     };
   })` });
   if (exported.exceptionDetails) throw new Error(JSON.stringify(exported.exceptionDetails));
-  const pages = exported.result.value.filter((page) => page.sourceHash === result.source.sourceHash && page.engineVersion === "tesseract.js@7.0.0" && page.language === "eng" && page.rasterDpi === 144).sort((a, b) => a.pageNumber - b.pageNumber);
+  const pages = exported.result.value.filter((page) => page.sourceHash === source.sourceHash && page.engineVersion === "tesseract.js@7.0.0" && page.language === "eng" && page.rasterDpi === 144).sort((a, b) => a.pageNumber - b.pageNumber);
   if (pages.length !== 156 || pages.some((page, index) => page.pageNumber !== index + 1)) throw new Error("Expected the exact 156-page browser OCR cache.");
   await mkdir(dirname(destination), { recursive: true });
-  await writeFile(destination, JSON.stringify({ source: result.source, engineVersion: "tesseract.js@7.0.0", language: "eng", dpi: 144, pages }, null, 2), { flag: "wx" });
+  await writeFile(destination, JSON.stringify({ source, engineVersion: "tesseract.js@7.0.0", language: "eng", dpi: 144, pages }, null, 2), { flag: "wx" });
   console.log(`Exported ${pages.length} saved browser OCR pages to ${destination}`);
 } finally { socket?.close(); chrome.kill(); server.closeAllConnections(); server.close(); }
