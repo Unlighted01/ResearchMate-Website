@@ -1,12 +1,13 @@
 import type { SourceCrop } from "./keyProvenance";
 
 const DB_NAME = "researchmate_local_ocr_b1";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const ASSETS = "assets";
 const PAGES = "pages";
 const MODELS = "models";
 const QUEUE = "queue";
 const PDF_JOBS = "pdfJobs";
+const QUESTION_IMPORTS = "questionImports";
 
 export interface LocalImageAsset {
   hash: string;
@@ -52,6 +53,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(MODELS)) db.createObjectStore(MODELS, { keyPath: "id" });
       if (!db.objectStoreNames.contains(QUEUE)) db.createObjectStore(QUEUE, { keyPath: "id" });
       if (!db.objectStoreNames.contains(PDF_JOBS)) db.createObjectStore(PDF_JOBS, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(QUESTION_IMPORTS)) db.createObjectStore(QUESTION_IMPORTS, { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("Could not open local OCR storage."));
@@ -128,6 +130,14 @@ export function getPdfOcrJob(id: string): Promise<import("./pdfLocalOcrService")
 
 export function savePdfOcrJob(job: import("./pdfLocalOcrService").PdfOcrJob): Promise<void> {
   return putRecord(PDF_JOBS, job);
+}
+
+export function getQuestionPdfImport(): Promise<import("./questionPdfImportService").QuestionPdfImport | undefined> {
+  return getRecord(QUESTION_IMPORTS, "latest");
+}
+
+export function saveQuestionPdfImport(job: import("./questionPdfImportService").QuestionPdfImport): Promise<void> {
+  return putRecord(QUESTION_IMPORTS, job);
 }
 
 export async function isModelReady(language: string, version: string): Promise<boolean> {

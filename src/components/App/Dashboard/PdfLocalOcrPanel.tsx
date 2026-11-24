@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { loadPdfOcrJob, PdfLocalOcrTask, pdfOcrPageKey, type PdfOcrJob, type PdfOcrProgress } from "../../../services/pdfLocalOcrService";
+import { loadPdfOcrJob, pdfOcrPageKey, type PdfOcrJob } from "../../../services/pdfLocalOcrService";
+import { getPdfOcrSession, subscribePdfOcrSessions, startPdfOcrSession, pausePdfOcrSession } from "../../../services/pdfLocalOcrSession";
 import { getLocalImage, getLocalOcrPage } from "../../../services/localOcrStore";
 import { openPdfOcrRenderer } from "../../../services/pdfOcrRenderer";
 import { createPdfOcrDrafts, pdfOcrDrafts, confirmPdfOcrDraft, createReviewedPdfExam } from "../../../services/pdfOcrReviewService";
@@ -55,7 +56,6 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
   const [checked, setChecked] = useState(false);
   const [editing, setEditing] = useState<StoredQuestion>();
   const [startingExam, setStartingExam] = useState(false);
-  const controller = useRef<PdfLocalOcrTask | undefined>(undefined);
   const answerDownload = useRef<((accepted: boolean) => void) | undefined>(undefined);
   const mounted = useRef(true);
   const imageUrl = useRef<string | undefined>(undefined);
@@ -67,32 +67,40 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
   useEffect(() => {
     mounted.current = true;
     return () => {
-      mounted.current = false; controller.current?.pause(); answerDownload.current?.(false);
+      mounted.current = false; answerDownload.current?.(false);
       if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
     };
   }, []);
   useEffect(() => {
     let cancelled = false;
+    const refreshSession = () => {
+      const session = getPdfOcrSession(sourceHash, language);
+      if (!session || cancelled) return;
+      setJob(session.event.job); setBusy(session.running); busyRef.current = session.running; setPausing(session.pausing);
+      const event = session.event;
+      setPhase(({ opening: "Opening PDF", download: "Waiting for download consent", loading: "Loading local OCR", rendering: "Rendering page", recognizing: "Reading page locally", saved: "Page saved", paused: "Paused", completed: "OCR complete" })[event.phase] + (event.progress === undefined ? "" : ` ${Math.round(event.progress * 100)}%`));
+      setError(session.error || "");
+    };
+    const unsubscribe = subscribePdfOcrSessions(refreshSession);
+    refreshSession();
     Promise.all([loadPdfOcrJob(sourceHash, name, language), initQuestionBank()]).then(([stored]) => {
-      if (!cancelled) { setJob(stored); setPageNumber(stored.currentPage || 1); refreshDrafts(); }
+      if (!cancelled) {
+        if (!getPdfOcrSession(sourceHash, language)) { setJob(stored); setBusy(false); busyRef.current = false; setPausing(false); setPhase(""); }
+        else refreshSession();
+        setPageNumber(stored.currentPage || 1); refreshDrafts();
+      }
     }).catch((error) => { if (!cancelled) setError(String(error)); });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; unsubscribe(); };
   }, [sourceHash, language]);
   useEffect(() => { setChecked(false); setKeyIndex(-1); }, [draftId, preview?.page, crop, selected?.question, selected?.explanation, selected?.correctIndex, JSON.stringify(selected?.options)]);
 
   const run = async () => {
     if (!job || busyRef.current) return;
     busyRef.current = true; setBusy(true); setPausing(false); setError(""); setMessage("");
-    const task = new PdfLocalOcrTask(); controller.current = task;
     try {
-      const result = await task.run(job, {
+      const result = await startPdfOcrSession(job, {
         concurrency,
         confirmDownload: (request) => !mounted.current ? Promise.resolve(false) : new Promise<boolean>((resolve) => { answerDownload.current = resolve; setDownload(request); }),
-        onProgress: (event: PdfOcrProgress) => {
-          if (!mounted.current) return;
-          setJob(event.job);
-          setPhase(({ opening: "Opening PDF", download: "Waiting for download consent", loading: "Loading local OCR", rendering: "Rendering page", recognizing: "Reading page locally", saved: "Page saved", paused: "Paused", completed: "OCR complete" })[event.phase] + (event.progress === undefined ? "" : ` ${Math.round(event.progress * 100)}%`));
-        },
       });
       if (mounted.current) setJob(result);
     } catch (error) {
@@ -107,7 +115,7 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
     }
   };
   const pause = () => {
-    controller.current?.pause(); setPausing(true);
+    pausePdfOcrSession(sourceHash, language); setPausing(true);
     answerDownload.current?.(false); setDownload(undefined);
   };
   const decideDownload = (accept: boolean) => { setDownload(undefined); answerDownload.current?.(accept); answerDownload.current = undefined; };
@@ -149,8 +157,8 @@ export function PdfLocalOcrPanel({ sourceHash, name }: { sourceHash: string; nam
 
   return <section aria-label="Local PDF OCR" className="rounded-xl border border-indigo-200 dark:border-indigo-800 p-4 space-y-3 text-slate-900 dark:text-slate-100">
     <h3 className="font-semibold">Read scanned PDF on this device</h3>
-    <p className="text-sm">OCR starts only when you choose Start. Your PDF and results stay on this device. Close this view to pause after the active pages finish; reopen it to resume. All text needs full review.</p>
-    <p className="text-sm">Results are saved separately for each language. OCR continues only while this app is open.</p>
+    <p className="text-sm">OCR starts only when you choose Start. Your PDF and results stay on this device. You can switch views while OCR continues. Use Pause OCR to stop after the active pages finish. All text needs full review.</p>
+    <p className="text-sm">Results are saved separately for each language. Closing or reloading the app interrupts OCR; reopen this PDF and choose Resume to continue from saved pages.</p>
     <div className="flex flex-wrap gap-2 items-center">
       <label>OCR speed <select aria-label="OCR speed" className={control} value={concurrency} disabled={busy} onChange={event => setConcurrency(event.target.value === "2" ? 2 : 1)}>
         <option value="1">Standard — lower memory</option><option value="2">Faster — two workers, more memory</option>

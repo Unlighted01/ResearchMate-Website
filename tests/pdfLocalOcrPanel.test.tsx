@@ -74,3 +74,33 @@ it("allows review and draft extraction from saved pages while OCR is running", a
   finish({pageCount:156,completedPages:[1],status:"paused"});
   await screen.findByRole("button",{name:"Resume local OCR"});
 });
+it("keeps OCR running across navigation and reconnects progress without starting a second worker", async () => {
+  let finish!: (value: unknown) => void;
+  let progress!: (event: any) => void;
+  let current: any;
+  mocks.run.mockImplementation((job, options) => {
+    current = {...job,pageCount:156,completedPages:[1],status:"running"};
+    progress = options.onProgress;
+    progress({phase:"saved",job:current});
+    return new Promise(resolve => { finish = resolve; });
+  });
+  const first = render(<PdfLocalOcrPanel sourceHash={"a".repeat(64)} name="scan.pdf" />);
+  await waitFor(() => expect(screen.getByRole("button",{name:"Start local OCR"}).hasAttribute("disabled")).toBe(false));
+  fireEvent.click(screen.getByRole("button",{name:"Start local OCR"}));
+  await screen.findByRole("button",{name:"Pause OCR"});
+  first.unmount();
+  try {
+    expect(mocks.pause).not.toHaveBeenCalled();
+    current = {...current,completedPages:[1,2]};
+    progress({phase:"saved",job:current});
+    render(<PdfLocalOcrPanel sourceHash={"a".repeat(64)} name="scan.pdf" />);
+    await screen.findByRole("button",{name:"Pause OCR"});
+    expect(screen.getByText(/2 \/ 156 pages saved/)).toBeTruthy();
+    expect(mocks.run).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button",{name:"Pause OCR"}));
+    expect(mocks.pause).toHaveBeenCalledTimes(1);
+  } finally {
+    finish({...current,status:"paused"});
+    await waitFor(() => expect(screen.queryByRole("button",{name:"OCR running…"})).toBeNull());
+  }
+});

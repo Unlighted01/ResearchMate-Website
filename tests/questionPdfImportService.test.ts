@@ -1,0 +1,76 @@
+import { beforeEach, expect, it, vi } from "vitest";
+const mocks = vi.hoisted(() => ({extract:vi.fn(),save:vi.fn(),read:vi.fn(),asset:vi.fn(),add:vi.fn(),get:vi.fn(),update:vi.fn()}));
+vi.mock("../src/services/pdfService",()=>({extractAllPagesWithLayout:mocks.extract}));
+vi.mock("../src/services/localOcrStore",()=>({saveLocalImage:async()=>({hash:"a".repeat(64)}),getLocalImage:mocks.asset,getQuestionPdfImport:mocks.read,saveQuestionPdfImport:mocks.save}));
+vi.mock("../src/services/storageService",()=>({addLocalItem:mocks.add,getItemById:mocks.get,updateItem:mocks.update}));
+beforeEach(()=>{
+  vi.resetModules(); vi.resetAllMocks();
+  mocks.save.mockResolvedValue(undefined);
+  mocks.add.mockReturnValue({id:"local-material"});
+  mocks.get.mockResolvedValue({id:"local-material",tags:["pdf","question-import-pending"]});
+  mocks.asset.mockResolvedValue({name:"scan.pdf",blob:new Blob(["scan"])});
+});
+const file=()=>new File(["scan"],"scan.pdf",{type:"application/pdf"});
+const scan={pageCount:156,pages:Array.from({length:156},(_,i)=>({pageNumber:i+1,text:"",items:[],extractionMethod:"unreadable"})),fullText:""};
+it("saves first, survives unsubscribing, and never requests automatic OCR for a scan",async()=>{
+  const service=await import("../src/services/questionPdfImportService");
+  let finish!: (value:unknown)=>void;
+  mocks.extract.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+  const listener=vi.fn(); const unsubscribe=service.subscribeQuestionPdfImport(listener);
+  const running=service.startQuestionPdfImport(file());
+  await vi.waitFor(()=>expect(mocks.extract).toHaveBeenCalledTimes(1));
+  expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({sourceHash:"a".repeat(64),status:"reading"}));
+  expect(mocks.add).toHaveBeenCalledWith(expect.objectContaining({storageScope:"local",localPdfHash:"a".repeat(64)}));
+  expect(mocks.extract.mock.calls[0][2]).toEqual({ocrSparsePages:false,maxOcrPages:0});
+  unsubscribe();
+  expect(service.startQuestionPdfImport(file())).toBe(running);
+  finish(scan); await running;
+  expect(service.getQuestionPdfImportSnapshot()).toMatchObject({status:"ready",parsed:[],pendingOcrPages:Array.from({length:156},(_,i)=>i+1)});
+  expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({status:"ready"}));
+  expect(mocks.update).toHaveBeenCalledWith("local-material",expect.objectContaining({tags:expect.arrayContaining(["ocr-required","needs-review"])}));
+});
+it("restores a ready preview without extraction and retries interrupted work from the saved original",async()=>{
+  const stored={id:"latest",name:"scan.pdf",sourceHash:"a".repeat(64),status:"ready",parsed:[],pendingOcrPages:[1],current:1,total:1};
+  mocks.read.mockResolvedValue(stored);
+  let service=await import("../src/services/questionPdfImportService");
+  await service.restoreQuestionPdfImport();
+  expect(service.getQuestionPdfImportSnapshot()).toEqual(stored);
+  expect(mocks.extract).not.toHaveBeenCalled();
+  vi.resetModules();
+  mocks.read.mockResolvedValue({...stored,status:"reading"});
+  mocks.extract.mockResolvedValue(scan);
+  service=await import("../src/services/questionPdfImportService");
+  await service.restoreQuestionPdfImport();
+  expect(service.getQuestionPdfImportSnapshot()?.status).toBe("interrupted");
+  await service.startQuestionPdfImport();
+  expect(mocks.asset).toHaveBeenCalledWith(stored.sourceHash);
+  expect(service.getQuestionPdfImportSnapshot()?.status).toBe("ready");
+  expect(mocks.add).not.toHaveBeenCalled();
+});
+it("keeps an error visible and retains the original for retry",async()=>{
+  const service=await import("../src/services/questionPdfImportService");
+  mocks.extract.mockRejectedValue(new Error("PDF worker failed"));
+  await service.startQuestionPdfImport(file());
+  expect(service.getQuestionPdfImportSnapshot()).toMatchObject({status:"error",error:"PDF worker failed",sourceHash:"a".repeat(64)});
+  expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({status:"error"}));
+});
+it("preserves selectable question text and explicit keys in the durable preview",async()=>{
+  const text="1. Which number is even?\na) Three\nb) Four\nc) Five\nd) Seven\n2. Which number is odd?\na) Nine\nb) Ten\nc) Twelve\nd) Fourteen\nAnswers\n1. B\n2. A";
+  mocks.extract.mockResolvedValue({pageCount:1,pages:[{pageNumber:1,text,items:[],extractionMethod:"text_layer"}],fullText:text});
+  const service=await import("../src/services/questionPdfImportService");
+  await service.startQuestionPdfImport(file());
+  const snapshot=service.getQuestionPdfImportSnapshot()!;
+  expect(snapshot.status).toBe("ready");
+  expect(snapshot.pendingOcrPages).toEqual([]);
+  expect(snapshot.parsed.map(item=>item.correctIndex)).toEqual([1,0]);
+  expect(snapshot.parsed.map(item=>item.stem)).toEqual(["Which number is even?","Which number is odd?"]);
+  expect(mocks.save).toHaveBeenLastCalledWith(snapshot);
+  expect(mocks.update).toHaveBeenCalledWith("local-material",{text,tags:["pdf"]});
+});
+it("does not begin extraction if the durable job cannot be saved",async()=>{
+  mocks.save.mockRejectedValue(new Error("Storage quota exceeded"));
+  const service=await import("../src/services/questionPdfImportService");
+  await service.startQuestionPdfImport(file());
+  expect(mocks.extract).not.toHaveBeenCalled();
+  expect(service.getQuestionPdfImportSnapshot()).toMatchObject({status:"error",error:"Storage quota exceeded"});
+});

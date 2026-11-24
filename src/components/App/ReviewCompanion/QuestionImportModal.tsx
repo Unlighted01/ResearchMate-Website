@@ -4,7 +4,10 @@
 // High-craft, anti-slop interface with chapter filters, math rendering, and instant verification.
 // ============================================
 
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { getQuestionPdfImportSnapshot, subscribeQuestionPdfImport, restoreQuestionPdfImport, startQuestionPdfImport } from "../../../services/questionPdfImportService";
+import { PdfLocalOcrPanel } from "../Dashboard/PdfLocalOcrPanel";
 import {
   X,
   Upload,
@@ -24,9 +27,7 @@ import {
 } from "lucide-react";
 import { Question, Flashcard, saveFlashcardDeck, saveExam, generateUUID } from "../../../services/examService";
 import { parsePlainTextQuestions, parseCsvQuestions, ParseResult } from "../../../services/examParser";
-import { extractAllPagesWithLayout } from "../../../services/pdfService";
 import {
-  parseTwoPassQuestionsAndAnswers,
   toFlashcards,
   ParsedQaItem,
 } from "../../../services/pdfQuestionImporter";
@@ -65,7 +66,6 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
-  const [isExtractingPdf, setIsExtractingPdf] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
   const [parsedQaList, setParsedQaList] = useState<ParsedQaItem[]>([]);
   const [isSavingFlashcards, setIsSavingFlashcards] = useState(false);
@@ -74,6 +74,47 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
   const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const pdfJob = useSyncExternalStore(subscribeQuestionPdfImport, getQuestionPdfImportSnapshot, getQuestionPdfImportSnapshot);
+  const isExtractingPdf = activeTab === "pdf" && Boolean(pdfJob && ["saving", "reading", "parsing"].includes(pdfJob.status));
+  useEffect(() => { void restoreQuestionPdfImport().catch(error => setImportError(String(error))); }, []);
+  useEffect(() => {
+    if (activeTab !== "pdf" || !pdfJob) return;
+    setFileName(pdfJob.name);
+    setSubjectName(sanitizeDefaultSubject(pdfJob.name));
+    setPdfProgress({current:pdfJob.current,total:pdfJob.total});
+    setParsedQaList(pdfJob.parsed);
+    setImportError(pdfJob.error || null);
+    if (pdfJob.status !== "ready") { setParseResult(null); return; }
+    const parsed = pdfJob.parsed;
+    setParseResult(parsed.length ? {
+      items:parsed.map(item => ({question:{id:item.id,question:item.stem,options:item.options,correctIndex:item.correctIndex,
+        explanation:item.explanation,topicTag:item.chapter || defaultTopic},
+        isValid:item.options.length >= 2 && item.correctIndex >= 0 && item.reviewStatus === "verified",
+        warnings:item.hasIncompleteAnswer || item.questionType === "prompt" ? ["No verified answer key; review required"] : []})),
+      totalParsed:parsed.length,
+      validCount:parsed.filter(item => item.questionType !== "prompt" && item.correctIndex >= 0 && !item.hasIncompleteAnswer && item.reviewStatus === "verified").length,
+      warningCount:parsed.filter(item => item.reviewStatus !== "verified" || item.correctIndex < 0).length,
+    } : pdfJob.fallback || null);
+  }, [pdfJob, activeTab]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); onClose(); }
+      if (event.key !== "Tab") return;
+      const nodes = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') || []).filter(node => node.getClientRects().length);
+      const first = nodes[0], last = nodes[nodes.length - 1];
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogRef.current)) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown",onKey);
+    return () => { document.body.style.overflow = overflow; document.removeEventListener("keydown",onKey); previous?.focus(); };
+  }, [isOpen, onClose]);
 
   // Extract unique chapters for filtering
   const chapters = useMemo(() => {
@@ -134,6 +175,8 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
         questionType: item.questionType,
         reviewStatus: item.reviewStatus,
         suspiciousReasons: item.suspiciousReasons,
+        keyProvenance: "text_layer" as const,
+        sourceHash: pdfJob?.sourceHash,
       }));
     }
     if (parseResult) {
@@ -147,7 +190,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
       }));
     }
     return [];
-  }, [parsedQaList, parseResult]);
+  }, [parsedQaList, parseResult, pdfJob?.sourceHash]);
 
   const previewSummary = useMemo(() => {
     return computeImportPreview(
@@ -192,6 +235,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
 
   const handleTextChange = (text: string) => {
     setPastedText(text);
+    setParsedQaList([]);
     if (!text.trim()) {
       setParseResult(null);
       setParsedQaList([]);
@@ -201,76 +245,9 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
     setParseResult(res);
   };
 
-  const handlePdfFile = async (file: File) => {
-    setFileName(file.name);
-    setSubjectName(sanitizeDefaultSubject(file.name));
-    setActiveTab("pdf");
-    setIsExtractingPdf(true);
-    setPdfProgress({ current: 0, total: 1 });
-    setSelectedChapter("ALL");
-    setSearchQuery("");
-
-    try {
-      const layoutResult = await extractAllPagesWithLayout(file, (curr, tot) => {
-        setPdfProgress({ current: curr, total: tot });
-      }, { ocrSparsePages: true });
-
-      const parsed = parseTwoPassQuestionsAndAnswers(layoutResult.pages);
-      const ocrPageSet = new Set(layoutResult.ocrPages || []);
-      parsed.forEach((item) => {
-        if (item.sourcePage !== undefined && ocrPageSet.has(item.sourcePage)) {
-          item.reviewStatus = "needs_review";
-          item.isSuspicious = true;
-          item.suspiciousReasons = [...(item.suspiciousReasons || []), "OCR source page: verify question text and answer against the image"];
-        }
-      });
-      if (layoutResult.pendingOcrPages?.length) {
-        setImportError(`${layoutResult.pendingOcrPages.length} scanned pages still need OCR. This is a partial extraction; review the original PDF before importing.`);
-      } else if (layoutResult.unreadablePages?.length && layoutResult.ocrPages?.length) {
-        setImportError(`${layoutResult.unreadablePages.length} pages remained unreadable after OCR. Review the original PDF before importing.`);
-      } else if (!layoutResult.fullText.trim()) {
-        setImportError("No readable text was found. Review the scanned pages before importing questions.");
-      } else if (parsed.length === 0) {
-        setImportError("No structured questions were found. Upload this PDF to Materials to generate study cards from its concepts.");
-      } else {
-        setImportError(null);
-      }
-      setParsedQaList(parsed);
-
-      if (parsed.length > 0) {
-        const gradableCount = parsed.filter(
-          (p) => p.questionType !== "prompt" && p.correctIndex >= 0 && !p.hasIncompleteAnswer && p.reviewStatus === "verified"
-        ).length;
-        setParseResult({
-          items: parsed.map((item) => ({
-            question: {
-              id: item.id,
-              question: item.stem,
-              options: item.options,
-              correctIndex: item.correctIndex,
-              explanation: item.explanation,
-              topicTag: item.chapter || defaultTopic,
-            },
-            isValid: item.options.length >= 2 && item.correctIndex >= 0 && item.reviewStatus === "verified",
-            warnings: item.hasIncompleteAnswer || item.questionType === "prompt"
-              ? ["Answer key not explicitly indexed in section (self-check prompt, ungradable)"]
-              : [],
-          })),
-          totalParsed: parsed.length,
-          validCount: gradableCount,
-          warningCount: parsed.filter((p) => p.hasIncompleteAnswer || p.questionType === "prompt" || p.correctIndex < 0 || p.reviewStatus !== "verified").length,
-        });
-      } else {
-        // Fallback: parse plain text if two-pass format not detected
-        const plainRes = parsePlainTextQuestions(layoutResult.fullText, defaultTopic);
-        setParseResult(plainRes);
-      }
-    } catch (err) {
-      console.error("PDF question extraction failed:", err);
-    } finally {
-      setIsExtractingPdf(false);
-      setPdfProgress(null);
-    }
+  const handlePdfFile = (file: File) => {
+    setActiveTab("pdf"); setSelectedChapter("ALL"); setSearchQuery(""); setImportError(null);
+    void startQuestionPdfImport(file).catch(error => setImportError(String(error)));
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -284,6 +261,8 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
 
     setFileName(file.name);
     setSubjectName(sanitizeDefaultSubject(file.name));
+    setParsedQaList([]);
+    setParseResult(null);
     const reader = new FileReader();
 
     reader.onload = (evt) => {
@@ -316,7 +295,9 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
     } else {
       setFileName(file.name);
       setSubjectName(sanitizeDefaultSubject(file.name));
-      const reader = new FileReader();
+      setParsedQaList([]);
+    setParseResult(null);
+    const reader = new FileReader();
       reader.onload = (evt) => {
         const content = evt.target?.result as string;
         if (!content) return;
@@ -479,9 +460,9 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
 
   const hasLoadedQuestions = Boolean(parseResult && parseResult.totalParsed > 0);
 
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-5xl w-full h-[90vh] shadow-2xl flex flex-col overflow-hidden">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] bg-slate-900/25 dark:bg-slate-950/60 flex items-center justify-center p-3 sm:p-6 overflow-hidden" data-testid="question-import-overlay">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="question-import-title" tabIndex={-1} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-5xl w-full h-[90vh] shadow-2xl flex flex-col overflow-hidden">
         
         {/* Modal Top Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between shrink-0 bg-white/50 dark:bg-slate-900/50 backdrop-blur-xs">
@@ -490,7 +471,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
               <BookOpen className="w-4 h-4 text-indigo-500" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white font-title tracking-tight flex items-center gap-2">
+              <h3 id="question-import-title" className="text-sm font-bold text-slate-900 dark:text-white font-title tracking-tight flex items-center gap-2">
                 Document Question Importer
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-semibold">
                   Client Engine • $0 AI Cost
@@ -506,6 +487,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             title="Close (Esc)"
+            aria-label="Close importer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -603,7 +585,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
                   <span>PDF Review Book</span>
                 </button>
                 <button
-                  onClick={() => setActiveTab("paste")}
+                  onClick={() => { setActiveTab("paste"); setParsedQaList([]); setParseResult(pastedText.trim() ? parsePlainTextQuestions(pastedText, defaultTopic) : null); }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                     activeTab === "paste"
                       ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
@@ -614,7 +596,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
                   <span>Formatted Text</span>
                 </button>
                 <button
-                  onClick={() => setActiveTab("csv")}
+                  onClick={() => { setActiveTab("csv"); setParsedQaList([]); setParseResult(null); }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                     activeTab === "csv"
                       ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
@@ -648,13 +630,27 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
         <input
           ref={fileInputRef}
           type="file"
+          aria-label="Choose material file"
           accept=".pdf,.txt,.csv"
           onChange={handleFileUpload}
           className="hidden"
         />
 
         {/* Content Body Area */}
-        <div className="flex-1 min-h-0 flex flex-col p-6 overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col p-6 overflow-y-auto">
+          {activeTab === "pdf" && pdfJob && <div className="mb-4 text-sm text-slate-700 dark:text-slate-200" role="status">
+            <p className="break-words font-medium">{pdfJob.name}</p>
+            <p>{pdfJob.sourceHash ? "PDF saved on this device." : "Saving original PDF…"} Closing this importer won't stop background work.</p>
+            {pdfJob.pendingOcrPages.length > 0 && <p>{pdfJob.pendingOcrPages.length} pages need optional local OCR. Keys require confirmation before grading.</p>}
+            {pdfJob.sourceHash && ["interrupted", "error"].includes(pdfJob.status) && <button className="underline py-2" onClick={() => void startQuestionPdfImport().catch(error => setImportError(String(error)))}>Retry saved PDF extraction</button>}
+          </div>}
+          {activeTab === "pdf" && pdfJob?.status === "ready" && pdfJob.sourceHash && pdfJob.pendingOcrPages.length > 0 && <div className="mb-4 shrink-0">
+            <PdfLocalOcrPanel key={pdfJob.sourceHash} sourceHash={pdfJob.sourceHash} name={pdfJob.name} />
+          </div>}
+          {activeTab === "pdf" && pdfJob?.sourceHash && !isExtractingPdf && <div className="mb-4 shrink-0">
+            {!hasLoadedQuestions && !pdfJob.pendingOcrPages.length && pdfJob.status === "ready" && <p className="text-sm text-slate-700 dark:text-slate-200">No structured questions detected. The original remains available in your Dashboard for review.</p>}
+            <button className="text-sm text-indigo-700 dark:text-indigo-300 underline py-2" onClick={() => fileInputRef.current?.click()}>Choose another PDF</button>
+          </div>}
           {/* Active Extraction Progress Bar */}
           {isExtractingPdf && (
             <div className="my-auto py-12 px-6 max-w-md mx-auto text-center space-y-4">
@@ -663,13 +659,13 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
               </div>
               <div>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white font-title">
-                  Parsing Document & Correlating Keys...
+                  {pdfJob?.status === "saving" ? "Saving PDF…" : pdfJob?.status === "parsing" ? "Finding questions and printed keys…" : "Reading PDF text…"}
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Extracting vector text, stacked fractions into LaTeX, and matching chapter answer keys.
+                  Text extraction only. Scanned pages wait for you to start local OCR.
                 </p>
               </div>
-              {pdfProgress && (
+              {pdfProgress && pdfProgress.total > 0 && (
                 <div className="space-y-2 pt-2">
                   <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-200 dark:border-slate-700">
                     <div
@@ -689,7 +685,7 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
           )}
 
           {/* Empty State / Ingest Area (Shown only when no questions loaded yet and not extracting) */}
-          {!hasLoadedQuestions && !isExtractingPdf && (
+          {!hasLoadedQuestions && !isExtractingPdf && !(activeTab === "pdf" && pdfJob?.sourceHash) && (
             <div className="flex-1 flex flex-col justify-center">
               {activeTab === "pdf" && (
                 <div
@@ -1015,7 +1011,7 @@ Answers and Explanations
               onClick={onClose}
               className="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
-              Cancel
+              {isExtractingPdf ? "Continue in background" : "Close"}
             </button>
 
             {/* Flashcard Export */}
@@ -1048,7 +1044,7 @@ Answers and Explanations
         </div>
 
       </div>
-    </div>
+    </div>, document.body
   );
 };
 

@@ -14,7 +14,7 @@ vi.mock("../src/services/ragService", () => ({ createRepresentativeSnippet: (tex
 vi.mock("../src/services/localOcrStore", () => ({ saveLocalImage: mocks.save }));
 vi.mock("../src/services/storageService", () => ({ addItem: mocks.add, addLocalItem: mocks.local }));
 vi.mock("../src/services/pdfTextQueue", () => ({ queuePdfTextExtraction: vi.fn() }));
-import { extractPdfContent } from "../src/services/pdfService";
+import { extractPdfContent, extractAllPagesWithLayout } from "../src/services/pdfService";
 import { importPdfFile } from "../src/services/importService";
 beforeEach(() => {
   vi.stubGlobal("crypto", undefined);
@@ -55,4 +55,17 @@ it("terminates a stalled page and reports a bounded error instead of saving inco
   await vi.advanceTimersByTimeAsync(16000);
   await assertion;
   expect(mocks.destroy).toHaveBeenCalledTimes(1);
+});
+it("bounds layout extraction waits and releases its worker on failure", async () => {
+  vi.useFakeTimers(); mocks.text.mockImplementation(() => new Promise(() => {}));
+  const assertion = expect(extractAllPagesWithLayout(file(), undefined, {ocrSparsePages:false,maxOcrPages:0})).rejects.toThrow(/timed out.*layout page 1/i);
+  await vi.advanceTimersByTimeAsync(16000); await assertion;
+  expect(mocks.destroy).toHaveBeenCalledTimes(1);
+  expect(mocks.ocr).not.toHaveBeenCalled();
+});
+it("releases layout workers after successful text-only extraction", async () => {
+  const result = await extractAllPagesWithLayout(file(),undefined,{ocrSparsePages:false,maxOcrPages:0});
+  expect(result.pages).toHaveLength(2);
+  expect(mocks.destroy).toHaveBeenCalledTimes(1);
+  expect(mocks.ocr).not.toHaveBeenCalled();
 });

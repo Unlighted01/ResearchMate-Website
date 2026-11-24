@@ -157,16 +157,18 @@ export async function extractAllPagesWithLayout(
       ? fileOrBuffer.buffer
       : await fileOrBuffer.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-  const pdf = await loadingTask.promise;
+  const deadline = Date.now() + 60_000;
+  try {
+  const pdf = await boundedPdfWait(loadingTask.promise, deadline, "opening PDF layout");
   const pageCount = pdf.numPages;
   const pages: PdfPageWithLayout[] = [];
 
   for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
     try {
-      const page = await pdf.getPage(pageNum);
+      const page = await boundedPdfWait(pdf.getPage(pageNum), deadline, `opening layout page ${pageNum}`);
       const viewport = page.getViewport({ scale: 1.0 });
       const pageHeight = viewport.height || 792;
-      const textContent = await page.getTextContent();
+      const textContent = await boundedPdfWait(page.getTextContent(), deadline, `reading layout page ${pageNum}`);
       const items: PdfLayoutItem[] = [];
 
       for (const item of textContent.items as any[]) {
@@ -271,6 +273,7 @@ export async function extractAllPagesWithLayout(
       });
 
     } catch (pageErr) {
+      if (pageErr instanceof PdfReadDeadlineError) throw pageErr;
       console.warn(`Error extracting layout for page ${pageNum}:`, pageErr);
     }
 
@@ -309,6 +312,7 @@ export async function extractAllPagesWithLayout(
     pendingOcrPages: typeof document === "undefined" ? [...ocrPlan.selected, ...ocrPlan.pending] : ocrPlan.pending,
     unreadablePages: pages.filter((page) => page.extractionMethod === "unreadable" && page.extractionError).map((page) => page.pageNumber),
   };
+  } finally { await loadingTask.destroy?.(); }
 }
 
 /**
