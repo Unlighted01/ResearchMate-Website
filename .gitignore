@@ -89,3 +89,6 @@ coverage
 
 # Local corpus audit report; keep in docs without publishing it
 /docs/corpus_round3_report.md
+
+# Local AI handover; copy/paste only, never publish
+/docs/handover_prompt.md
